@@ -1,0 +1,1195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Reno to Sold &mdash; GTA Renovation Estimator</title>
+<meta name="description" content="Renovate Smart. Sell For More. Renovation estimates for Ontario GTA properties.">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a0a0a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Reno to Sold">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Dancing+Script:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* Reno to Sold black & gold */
+    --bg:#0a0a0a;
+    --panel:#15151a;
+    --panel-2:#1c1c22;
+    --ink:#f5f1e6;
+    --ink-strong:#ffffff;
+    --muted:#8a8579;
+    --line:#2a2a30;
+    --line-strong:#3a3a42;
+    --gold:#d4af6a;
+    --gold-bright:#e8c989;
+    --gold-deep:#a8853f;
+    --gold-grad:linear-gradient(135deg,#e8c989 0%,#d4af6a 45%,#a8853f 100%);
+    --danger:#e26d6d;
+    --labour:#d4af6a;     /* gold for labour */
+    --material:#f5f1e6;   /* cream for material */
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.5);
+    --gold-glow:0 0 0 1px rgba(212,175,106,.25), 0 6px 20px rgba(212,175,106,.08);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;font-family:'Montserrat',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);letter-spacing:.01em;}
+  body{background:radial-gradient(ellipse at top,#161616 0%,#0a0a0a 60%) fixed;}
+  .app{max-width:1100px;margin:0 auto;padding:24px;}
+
+  /* Brand bar */
+  .brandbar{background:#000;border:1px solid var(--line-strong);border-radius:14px;padding:22px 28px;margin-bottom:18px;box-shadow:var(--shadow);position:relative;overflow:hidden;}
+  .brandbar::before{content:"";position:absolute;inset:0;background:linear-gradient(120deg,transparent 40%,rgba(212,175,106,.04) 60%,transparent 80%);pointer-events:none;}
+  .brandbar-row{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;position:relative;}
+  .logo{display:flex;align-items:center;gap:0;flex-wrap:nowrap;}
+  .logo-reno{font-family:'Montserrat',sans-serif;font-weight:900;font-size:42px;color:#fff;letter-spacing:.01em;line-height:1;}
+  .logo-to{font-family:'Dancing Script',cursive;font-weight:700;font-size:46px;background:var(--gold-grad);-webkit-background-clip:text;background-clip:text;color:transparent;margin:0 8px 0 12px;line-height:1;font-style:italic;transform:translateY(-2px);}
+  .logo-sign{width:64px;height:62px;flex-shrink:0;}
+  .tagline{margin-top:14px;font-size:13px;letter-spacing:.18em;color:#fff;font-weight:500;text-transform:uppercase;text-align:center;position:relative;}
+  .tagline .accent{color:var(--gold-bright);font-weight:600;}
+  .tagline-rule{display:flex;align-items:center;gap:10px;justify-content:center;margin-top:6px;}
+  .tagline-rule::before,.tagline-rule::after{content:"";height:1px;width:24px;background:var(--gold);}
+  .tagline-line{font-size:11px;letter-spacing:.22em;color:var(--gold-bright);font-weight:600;text-transform:uppercase;}
+
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;}
+  button{font:inherit;cursor:pointer;border:1px solid var(--line-strong);background:transparent;color:var(--ink);padding:9px 16px;border-radius:8px;transition:all .15s;font-weight:500;font-size:13px;letter-spacing:.03em;}
+  button:hover{background:var(--panel-2);border-color:var(--gold-deep);color:var(--gold-bright);}
+  button.primary{background:var(--gold-grad);color:#0a0a0a;border:none;font-weight:700;}
+  button.primary:hover{filter:brightness(1.08);color:#0a0a0a;}
+  button.danger{color:var(--danger);}
+  button.danger:hover{color:var(--danger);border-color:var(--danger);}
+  button.ghost{background:transparent;border-color:transparent;color:var(--muted);}
+  button.ghost:hover{background:transparent;color:var(--gold-bright);}
+
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);margin-bottom:16px;}
+  .panel h2{font-size:12px;margin:0;padding:14px 20px;border-bottom:1px solid var(--line);font-weight:700;display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--gold-bright);text-transform:uppercase;letter-spacing:.18em;}
+  .panel-body{padding:18px 20px;}
+  .grid{display:grid;gap:12px;}
+  .grid-2{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .grid-3{grid-template-columns:repeat(3,minmax(0,1fr));}
+  @media (max-width:680px){.grid-2,.grid-3{grid-template-columns:1fr;}.logo-reno{font-size:32px;}.logo-to{font-size:36px;}.logo-sign{width:50px;height:48px;}}
+  label{display:block;font-size:11px;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.1em;font-weight:600;}
+  input[type="text"],input[type="number"],select{width:100%;padding:10px 12px;border:1px solid var(--line-strong);border-radius:8px;font:inherit;background:#0d0d11;color:var(--ink);font-size:14px;}
+  input::placeholder{color:#5a5750;}
+  input:focus,select:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 2px rgba(212,175,106,.18);}
+  select option{background:#0d0d11;color:var(--ink);}
+
+  .cat{border:1px solid var(--line);border-radius:10px;margin-bottom:10px;overflow:hidden;background:var(--panel);transition:border-color .15s, box-shadow .15s;}
+  .cat.on{border-color:var(--gold-deep);box-shadow:var(--gold-glow);}
+  .cat-head{display:flex;align-items:center;gap:14px;padding:14px 16px;background:var(--panel-2);cursor:pointer;user-select:none;transition:background .15s;}
+  .cat-head:hover{background:#22222a;}
+  .cat-toggle{display:flex;align-items:center;gap:12px;flex:1;}
+  .switch{position:relative;width:40px;height:22px;background:#3a3a42;border-radius:22px;transition:.2s;flex-shrink:0;cursor:pointer;}
+  .switch::after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.4);}
+  input.switch-input{display:none;}
+  input.switch-input:checked + .switch{background:var(--gold-grad);}
+  input.switch-input:checked + .switch::after{left:20px;background:#fff;}
+  .cat-title{font-weight:700;font-size:14px;color:var(--ink-strong);letter-spacing:.04em;text-transform:uppercase;}
+  .cat-sub{color:var(--muted);font-size:11px;letter-spacing:.05em;text-transform:uppercase;margin-top:2px;}
+  .cat-total{font-weight:700;font-size:15px;text-align:right;min-width:120px;color:var(--gold-bright);font-variant-numeric:tabular-nums;}
+  .cat-body{padding:18px;border-top:1px solid var(--line);background:var(--panel);}
+  .cat-body.hidden{display:none;}
+
+  .tier-row{display:flex;gap:0;background:#0a0a0e;border:1px solid var(--line-strong);padding:3px;border-radius:8px;width:fit-content;margin-bottom:16px;}
+  .tier-row label{margin:0;cursor:pointer;padding:0;font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.12em;}
+  .tier-row input{display:none;}
+  .tier-row label span{display:block;padding:7px 18px;border-radius:6px;transition:all .15s;}
+  .tier-row input:checked + span{background:var(--gold-grad);color:#0a0a0a;}
+
+  .breakdown{display:flex;justify-content:space-between;padding:9px 0;border-top:1px solid var(--line);font-size:13px;font-variant-numeric:tabular-nums;}
+  .breakdown:first-of-type{border-top:none;padding-top:0;}
+  .pill{display:inline-block;font-size:10px;padding:3px 9px;border-radius:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;}
+  .pill-l{background:rgba(212,175,106,.18);color:var(--gold-bright);border:1px solid rgba(212,175,106,.35);}
+  .pill-m{background:rgba(245,241,230,.08);color:var(--ink);border:1px solid rgba(245,241,230,.2);}
+
+  .total-card{position:sticky;top:0;z-index:10;background:#000;border:1px solid var(--gold-deep);border-radius:14px;padding:22px 26px;margin-bottom:18px;box-shadow:var(--gold-glow), var(--shadow);overflow:hidden;}
+  .total-card::before{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:var(--gold-grad);}
+  .total-card{position:sticky;}
+  .total-card .row{display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;}
+  .total-card .grand{font-size:36px;font-weight:800;color:var(--gold-bright);font-variant-numeric:tabular-nums;line-height:1.1;letter-spacing:-.01em;}
+  .total-card .meta{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.15em;font-weight:600;}
+  .total-card .prop{color:#fff;font-size:14px;font-weight:600;margin-top:2px;letter-spacing:.05em;}
+  .split-bar{display:flex;height:6px;border-radius:3px;overflow:hidden;margin-top:14px;background:rgba(255,255,255,.08);}
+  .split-bar .l{background:var(--gold-grad);transition:width .2s;}
+  .split-bar .m{background:#f5f1e6;transition:width .2s;}
+  .split-legend{display:flex;gap:20px;font-size:12px;margin-top:10px;color:var(--ink);font-variant-numeric:tabular-nums;}
+  .split-legend .dot{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:7px;vertical-align:middle;}
+  .split-legend strong{color:var(--gold-bright);margin-left:4px;}
+
+  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:100;padding:20px;}
+  .modal-bg.show{display:flex;}
+  .modal{background:var(--panel);border:1px solid var(--gold-deep);border-radius:12px;max-width:720px;width:100%;max-height:90vh;overflow:auto;box-shadow:var(--shadow);}
+  .modal h3{margin:0;padding:18px 22px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;color:var(--gold-bright);font-size:13px;text-transform:uppercase;letter-spacing:.18em;font-weight:700;}
+  .modal-body{padding:20px 22px;}
+
+  .saved-list{list-style:none;padding:0;margin:0;}
+  .saved-list li{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--line);}
+  .saved-list li:last-child{border-bottom:none;}
+  .saved-list .info{flex:1;}
+  .saved-list .name{font-weight:600;color:var(--ink-strong);}
+  .saved-list .when{color:var(--muted);font-size:12px;margin-top:2px;}
+
+  .price-edit-row{display:grid;grid-template-columns:1fr 110px 110px;gap:10px;align-items:center;padding:7px 0;}
+  .price-edit-row.head{font-weight:700;font-size:10px;color:var(--gold-bright);text-transform:uppercase;letter-spacing:.15em;border-bottom:1px solid var(--gold-deep);padding-bottom:8px;margin-bottom:6px;}
+  .price-edit-row .lbl{font-size:13px;color:var(--ink);}
+  .price-edit-row input{padding:7px 10px;font-size:13px;}
+  .section-title{font-weight:700;font-size:11px;margin-top:18px;margin-bottom:8px;color:var(--gold-bright);text-transform:uppercase;letter-spacing:.18em;border-top:1px solid var(--line);padding-top:14px;}
+  .section-title:first-child{margin-top:0;border-top:none;padding-top:0;}
+  .footnote{color:var(--muted);font-size:11px;margin-top:8px;line-height:1.5;}
+  .small-stack{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+  .add-btn{padding:7px 12px;font-size:12px;}
+
+  /* Address autocomplete */
+  .ac-wrap{position:relative;}
+  .ac-list{position:absolute;top:calc(100% + 4px);left:0;right:0;background:#0d0d11;border:1px solid var(--gold-deep);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.6);z-index:50;max-height:280px;overflow-y:auto;display:none;}
+  .ac-list.show{display:block;}
+  .ac-item{padding:10px 12px;cursor:pointer;border-bottom:1px solid var(--line);font-size:13px;color:var(--ink);transition:background .1s;}
+  .ac-item:last-child{border-bottom:none;}
+  .ac-item:hover,.ac-item.active{background:rgba(212,175,106,.12);color:var(--gold-bright);}
+  .ac-item .ac-main{font-weight:600;color:var(--ink-strong);}
+  .ac-item:hover .ac-main,.ac-item.active .ac-main{color:var(--gold-bright);}
+  .ac-item .ac-sub{font-size:11px;color:var(--muted);margin-top:2px;}
+  .ac-loading{padding:10px 12px;font-size:12px;color:var(--muted);font-style:italic;}
+  .ac-credit{padding:6px 12px;font-size:10px;color:var(--muted);text-align:right;border-top:1px solid var(--line);background:#0a0a0e;letter-spacing:.05em;}
+
+  /* Discount + totals lines */
+  .totals-detail{margin-top:14px;padding-top:14px;border-top:1px solid rgba(212,175,106,.25);display:grid;grid-template-columns:1fr auto;gap:6px 16px;font-size:13px;font-variant-numeric:tabular-nums;}
+  .totals-detail .lbl{color:var(--muted);text-transform:uppercase;font-size:11px;letter-spacing:.12em;font-weight:600;align-self:center;}
+  .totals-detail .val{color:var(--ink);text-align:right;align-self:center;}
+  .totals-detail .val.discount{color:#ff9b6a;font-weight:600;}
+  .totals-detail .lbl.final,.totals-detail .val.final{color:var(--gold-bright);font-weight:700;font-size:13px;border-top:1px solid rgba(212,175,106,.3);padding-top:8px;margin-top:4px;}
+
+  .bath-row{border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:10px;background:var(--panel-2);}
+  .bath-row .grid{align-items:end;}
+  .check-row{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--ink);cursor:pointer;}
+  .check-row input{accent-color:var(--gold);width:16px;height:16px;}
+
+  /* Print */
+  @media print{
+    body{background:#fff;color:#000;}
+    .app{padding:0;}
+    .brandbar{background:#000 !important;color:#fff !important;border-radius:0;border:none;}
+    .toolbar,.panel-body .add-btn,.no-print,.modal-bg,.cat-head .switch,header .toolbar{display:none !important;}
+    .total-card{background:#fff !important;color:#000 !important;border:2px solid #000 !important;box-shadow:none !important;}
+    .total-card .grand{color:#000 !important;}
+    .total-card .meta,.total-card .prop{color:#000 !important;}
+    .split-bar{background:#eee;}
+    .panel{box-shadow:none;border-color:#000;background:#fff;color:#000;page-break-inside:avoid;}
+    .panel h2{color:#000;border-color:#000;}
+    .cat{background:#fff;border-color:#000;}
+    .cat-head{background:#f5f5f5;}
+    .cat-title,.cat-total{color:#000;}
+    .cat-body.hidden{display:block !important;}
+    .cat-body{border-top:1px solid #000;background:#fff;color:#000;}
+    .pill-l{background:#fce8c4;color:#000;border-color:#000;}
+    .pill-m{background:#f5f5f5;color:#000;border-color:#000;}
+    button{display:none;}
+    input,select{border-color:#000;background:#fff;color:#000;}
+    .ac-list{display:none !important;}
+    .totals-detail{border-top-color:#000;}
+    .totals-detail .lbl,.totals-detail .val{color:#000 !important;}
+    .totals-detail .val.discount{color:#a32a2a !important;font-weight:700;}
+    .totals-detail .lbl.final,.totals-detail .val.final{color:#000 !important;border-top-color:#000;font-size:16px;}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="brandbar">
+    <div class="brandbar-row">
+      <div class="logo">
+        <span class="logo-reno">RENO</span>
+        <span class="logo-to">to</span>
+        <svg class="logo-sign" viewBox="0 0 64 62" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <defs>
+            <linearGradient id="goldG" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#e8c989"/>
+              <stop offset="50%" stop-color="#d4af6a"/>
+              <stop offset="100%" stop-color="#a8853f"/>
+            </linearGradient>
+          </defs>
+          <!-- Post -->
+          <rect x="6" y="2" width="3.2" height="58" fill="url(#goldG)"/>
+          <!-- Top arm -->
+          <rect x="6" y="2" width="50" height="3.2" fill="url(#goldG)"/>
+          <!-- Chains -->
+          <line x1="20" y1="6" x2="20" y2="14" stroke="url(#goldG)" stroke-width="1.4"/>
+          <line x1="50" y1="6" x2="50" y2="14" stroke="url(#goldG)" stroke-width="1.4"/>
+          <!-- Sign frame -->
+          <rect x="14" y="14" width="42" height="32" fill="none" stroke="url(#goldG)" stroke-width="2.2"/>
+          <!-- Diagonal SOLD banner -->
+          <polygon points="14,38 56,18 56,28 14,46" fill="url(#goldG)"/>
+          <text x="35" y="34" transform="rotate(-25 35 34)" font-family="Montserrat,Arial,sans-serif" font-size="8" font-weight="900" fill="#000" text-anchor="middle" letter-spacing="0.5">SOLD</text>
+        </svg>
+      </div>
+      <div class="toolbar no-print">
+        <button onclick="newEstimate()">+ New</button>
+        <button onclick="openSavedModal()">Saved</button>
+        <button onclick="saveEstimate()">Save</button>
+        <button onclick="openSettings()">Pricing</button>
+        <button class="primary" onclick="window.print()">Print / PDF</button>
+      </div>
+    </div>
+    <div class="tagline-rule"><span class="tagline-line">Renovation Estimator &middot; Ontario GTA</span></div>
+    <div class="tagline">Renovate Smart. Sell For More.<br><span class="accent">Fully Managed From Start To Sold.</span></div>
+  </div>
+
+  <!-- Live Total -->
+  <div class="total-card" id="totalCard">
+    <div class="row">
+      <div>
+        <div class="meta">Estimate Total</div>
+        <div class="grand" id="grandTotal">$0</div>
+        <div class="prop" id="propTitle">Untitled property</div>
+      </div>
+      <div class="split-legend" style="margin-top:0;">
+        <span><span class="dot" style="background:var(--labour)"></span>Labour <strong id="labourTotal">$0</strong></span>
+        <span><span class="dot" style="background:var(--material)"></span>Material <strong id="materialTotal">$0</strong></span>
+      </div>
+    </div>
+    <div class="split-bar">
+      <div class="l" id="splitL" style="width:0%"></div>
+      <div class="m" id="splitM" style="width:0%"></div>
+    </div>
+    <div class="totals-detail">
+      <div class="lbl">Subtotal</div><div class="val" id="td-sub">$0</div>
+      <div class="lbl" id="td-disc-row" style="display:none">Client Discount <span id="td-disc-note" style="text-transform:none;letter-spacing:normal;font-weight:400;color:var(--muted);"></span></div><div class="val discount" id="td-disc" style="display:none">-$0</div>
+      <div class="lbl" id="td-after-row" style="display:none">After Discount</div><div class="val" id="td-after" style="display:none">$0</div>
+      <div class="lbl">HST (13%)</div><div class="val" id="td-hst">$0</div>
+      <div class="lbl final">Total</div><div class="val final" id="td-total">$0</div>
+    </div>
+  </div>
+
+  <!-- Property info -->
+  <div class="panel">
+    <h2>Property Info</h2>
+    <div class="panel-body">
+      <div class="grid grid-3">
+        <div>
+          <label>Property name / nickname</label>
+          <input type="text" id="propName" placeholder="e.g. 12 Maple Ave" oninput="renderTotals()">
+        </div>
+        <div>
+          <label>Address</label>
+          <div class="ac-wrap">
+            <input type="text" id="propAddress" placeholder="Start typing a GTA address..." autocomplete="off" oninput="onAddressInput(this.value)" onblur="hideAcSoon()" onkeydown="onAddressKey(event)">
+            <div class="ac-list" id="acList"></div>
+          </div>
+        </div>
+        <div>
+          <label>Total property sqft</label>
+          <input type="number" id="propSqft" min="0" placeholder="e.g. 1600" oninput="renderTotals()">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Categories -->
+  <div id="categories"></div>
+
+  <!-- Client Discount -->
+  <div class="panel">
+    <h2>Client Discount <span style="font-weight:400;color:var(--muted);text-transform:none;letter-spacing:normal;font-size:12px;" id="discPreview">No discount applied</span></h2>
+    <div class="panel-body">
+      <div class="grid grid-3">
+        <div>
+          <label>Type</label>
+          <select id="discType" onchange="state.discount.type=this.value;renderDiscPlaceholder();renderTotals()">
+            <option value="percent">Percentage (%)</option>
+            <option value="amount">Flat amount ($)</option>
+          </select>
+        </div>
+        <div>
+          <label>Amount</label>
+          <input type="number" id="discValue" min="0" step="0.01" placeholder="0" oninput="state.discount.value=this.value;renderTotals()">
+        </div>
+        <div>
+          <label>Note (optional)</label>
+          <input type="text" id="discNote" placeholder="e.g. Repeat client, package deal" oninput="state.discount.note=this.value;renderTotals()">
+        </div>
+      </div>
+      <p class="footnote">Discount is applied to the subtotal <i>before</i> HST. The final total will reflect the savings clearly for your client.</p>
+    </div>
+  </div>
+
+  <p class="footnote no-print" style="text-align:center;margin-top:18px;">Built-in averages reflect 2026 GTA market data. Tap <b style="color:var(--gold-bright)">Pricing</b> to align with your contractor quotes. Estimates save locally to this browser.</p>
+  <p class="footnote no-print" style="text-align:center;margin-top:6px;letter-spacing:.18em;text-transform:uppercase;font-size:10px;color:var(--gold-deep);">Reno to Sold &middot; Renovate Smart &middot; Sell For More</p>
+</div>
+
+<!-- Saved estimates modal -->
+<div class="modal-bg" id="savedModal" onclick="if(event.target===this)closeSavedModal()">
+  <div class="modal">
+    <h3>Saved Estimates <button class="ghost" onclick="closeSavedModal()">Close</button></h3>
+    <div class="modal-body">
+      <ul class="saved-list" id="savedList"></ul>
+      <p id="savedEmpty" class="footnote" style="display:none">No saved estimates yet.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Pricing settings modal -->
+<div class="modal-bg" id="settingsModal" onclick="if(event.target===this)closeSettings()">
+  <div class="modal">
+    <h3>
+      <span>Edit Unit Pricing (GTA defaults)</span>
+      <span class="small-stack">
+        <button class="ghost" onclick="resetPricing()">Reset to defaults</button>
+        <button class="primary" onclick="closeSettings()">Done</button>
+      </span>
+    </h3>
+    <div class="modal-body" id="pricingEditor"></div>
+  </div>
+</div>
+
+<script>
+/* ---------- Default GTA pricing (CAD) ---------- */
+const DEFAULT_PRICES = {
+  painting: {
+    standard: { labour: 1.90, material: 0.60 },     // walls/trim only $/sqft of property
+    premium:  { labour: 2.65, material: 0.85 },
+    ceiling: {
+      standard: { labour: 0.75, material: 0.30 },   // $/sqft of ceiling (flat, 8-9ft)
+      premium:  { labour: 1.10, material: 0.45 }    // textured / vaulted / two-coat
+    }
+  },
+  flooring: {
+    standard: { labour: 2.50, material: 3.00 },     // $/sqft (laminate / LVP)
+    premium:  { labour: 4.00, material: 7.00 },     // $/sqft (engineered hardwood)
+    removal:  { labour: 1.40, material: 0.35 }      // $/sqft strip + haul + disposal
+  },
+  tiling: {
+    standard: { labour: 7.00, material: 5.00 },     // $/sqft (ceramic)
+    premium:  { labour: 10.00, material: 8.00 }     // $/sqft (porcelain)
+  },
+  kitchen: {
+    // lump sums by size; labour vs material split (~ 35 / 65)
+    small:  { standard:{labour:8750,  material:16250}, premium:{labour:15750, material:29250} },
+    medium: { standard:{labour:15750, material:29250}, premium:{labour:26250, material:48750} },
+    large:  { standard:{labour:22750, material:42250}, premium:{labour:35000, material:65000} }
+  },
+  bathroom: {
+    base: {
+      "3": { standard:{labour:4000, material:5000}, premium:{labour:6300, material:7700} },
+      "4": { standard:{labour:5800, material:7200}, premium:{labour:9000, material:11000} },
+      "5": { standard:{labour:7600, material:9400}, premium:{labour:11250, material:13750} }
+    },
+    tilingPerSqft: {
+      standard: { labour: 7.00, material: 5.00 },
+      premium:  { labour: 10.00, material: 8.00 }
+    },
+    standUpShower: {
+      standard: { labour: 2200, material: 2800 },
+      premium:  { labour: 4000, material: 5000 }
+    }
+  },
+  potlights: {
+    standard: { labour: 130, material: 70 },        // $/light
+    premium:  { labour: 180, material: 120 }
+  }
+};
+
+const CATEGORY_META = {
+  painting:  { title:"Painting",        sub:"Per sqft of property" },
+  flooring:  { title:"Flooring",        sub:"Per sqft of space" },
+  tiling:    { title:"Tiling",          sub:"Per sqft of space" },
+  kitchen:   { title:"Kitchen",         sub:"By kitchen size" },
+  bathroom:  { title:"Bathrooms",       sub:"By pieces, tiling sqft & shower" },
+  potlights: { title:"Pot Lights",      sub:"Per light installed" }
+};
+
+/* ---------- State ---------- */
+let prices = loadPrices();
+let state = freshState();
+
+function freshState(){
+  return {
+    propName: "",
+    propAddress: "",
+    propSqft: "",
+    enabled: { painting:false, flooring:false, tiling:false, kitchen:false, bathroom:false, potlights:false },
+    painting:  { tier:"standard", ceiling:false, ceilingTier:"standard", ceilingSqft:"" },
+    flooring:  { tier:"standard", sqft:"", removeOld:false, removalSqft:"" },
+    tiling:    { tier:"standard", sqft:"" },
+    kitchen:   { tier:"standard", size:"medium" },
+    bathroom:  { rooms:[ defaultBath() ] },
+    potlights: { tier:"standard", count:"" },
+    discount:  { type:"percent", value:"", note:"" }
+  };
+}
+function defaultBath(){
+  return { tier:"standard", pieces:"4", tilingSqft:"", standUpShower:false };
+}
+
+/* ---------- Storage ---------- */
+function deepMerge(base, over){
+  // base is mutated; returns base with `over` merged in (only objects merge deep, leaves overwrite)
+  if(!over) return base;
+  Object.keys(over).forEach(k => {
+    const bv = base[k], ov = over[k];
+    if(bv && typeof bv === "object" && !Array.isArray(bv) && ov && typeof ov === "object" && !Array.isArray(ov)){
+      deepMerge(bv, ov);
+    } else {
+      base[k] = ov;
+    }
+  });
+  return base;
+}
+function loadPrices(){
+  const fresh = JSON.parse(JSON.stringify(DEFAULT_PRICES));
+  try{
+    const raw = localStorage.getItem("reno_prices_v1");
+    if(raw){ deepMerge(fresh, JSON.parse(raw)); }
+  }catch(e){}
+  return fresh;
+}
+function savePrices(){ localStorage.setItem("reno_prices_v1", JSON.stringify(prices)); }
+function resetPricing(){
+  if(!confirm("Reset all unit prices to GTA defaults?")) return;
+  prices = JSON.parse(JSON.stringify(DEFAULT_PRICES));
+  savePrices();
+  renderPricingEditor();
+  renderTotals();
+}
+function loadSavedList(){ try{ return JSON.parse(localStorage.getItem("reno_estimates_v1")||"[]"); }catch(e){ return []; } }
+function persistSavedList(arr){ localStorage.setItem("reno_estimates_v1", JSON.stringify(arr)); }
+
+function saveEstimate(){
+  const list = loadSavedList();
+  const name = state.propName.trim() || "Untitled property";
+  const id = state._id || ("e_"+Date.now());
+  state._id = id;
+  const idx = list.findIndex(x=>x.id===id);
+  const entry = { id, name, savedAt: new Date().toISOString(), state: JSON.parse(JSON.stringify(state)) };
+  if(idx>=0) list[idx] = entry; else list.unshift(entry);
+  persistSavedList(list);
+  flash("Saved estimate: " + name);
+}
+function loadEstimate(id){
+  const list = loadSavedList();
+  const e = list.find(x=>x.id===id);
+  if(!e) return;
+  state = e.state; state._id = id;
+  renderAll();
+  closeSavedModal();
+}
+function deleteEstimate(id){
+  if(!confirm("Delete this estimate?")) return;
+  const list = loadSavedList().filter(x=>x.id!==id);
+  persistSavedList(list);
+  renderSavedList();
+}
+function newEstimate(){
+  if(!confirm("Start a new estimate? Unsaved changes will be lost.")) return;
+  state = freshState();
+  renderAll();
+}
+
+/* ---------- Calculations ---------- */
+function num(v){ const n = parseFloat(v); return isFinite(n) && n>0 ? n : 0; }
+
+function computeCategory(cat){
+  let labour = 0, material = 0;
+  const s = state[cat], p = prices[cat];
+  if(!state.enabled[cat]) return {labour:0, material:0};
+
+  if(cat === "painting"){
+    const sqft = num(state.propSqft);
+    const r = p[s.tier];
+    labour = sqft * r.labour;
+    material = sqft * r.material;
+    if(s.ceiling && p.ceiling){
+      const cSqft = num(s.ceilingSqft) || sqft; // default to property sqft if blank
+      const cr = p.ceiling[s.ceilingTier || s.tier] || p.ceiling.standard;
+      labour += cSqft * cr.labour;
+      material += cSqft * cr.material;
+    }
+  }
+  else if(cat === "flooring"){
+    const sqft = num(s.sqft);
+    const r = p[s.tier];
+    labour = sqft * r.labour;
+    material = sqft * r.material;
+    if(s.removeOld && p.removal){
+      const rSqft = num(s.removalSqft) || sqft;
+      labour += rSqft * p.removal.labour;
+      material += rSqft * p.removal.material;
+    }
+  }
+  else if(cat === "tiling"){
+    const sqft = num(s.sqft);
+    const r = p[s.tier];
+    labour = sqft * r.labour;
+    material = sqft * r.material;
+  }
+  else if(cat === "kitchen"){
+    const r = p[s.size][s.tier];
+    labour = r.labour; material = r.material;
+  }
+  else if(cat === "bathroom"){
+    s.rooms.forEach(b => {
+      const base = p.base[b.pieces][b.tier];
+      labour += base.labour; material += base.material;
+      const t = num(b.tilingSqft);
+      const tr = p.tilingPerSqft[b.tier];
+      labour += t * tr.labour; material += t * tr.material;
+      if(b.standUpShower){
+        const ss = p.standUpShower[b.tier];
+        labour += ss.labour; material += ss.material;
+      }
+    });
+  }
+  else if(cat === "potlights"){
+    const n = num(s.count);
+    const r = p[s.tier];
+    labour = n * r.labour;
+    material = n * r.material;
+  }
+  return { labour, material };
+}
+
+function computeTotals(){
+  let L = 0, M = 0;
+  const perCat = {};
+  Object.keys(CATEGORY_META).forEach(cat => {
+    const r = computeCategory(cat);
+    perCat[cat] = r;
+    L += r.labour; M += r.material;
+  });
+  const sub = L + M;
+  const d = state.discount || { type:"percent", value:"" };
+  let discount = 0;
+  if(d.type === "percent"){
+    const pct = num(d.value);
+    discount = sub * (Math.min(pct,100)/100);
+  } else {
+    discount = num(d.value);
+  }
+  discount = Math.min(discount, sub); // cap so we never go negative
+  const afterDisc = sub - discount;
+  const hst = afterDisc * 0.13;
+  const total = afterDisc + hst;
+  return { perCat, labour:L, material:M, subtotal:sub, discount, afterDisc, hst, total };
+}
+
+function fmt(n){
+  if(!isFinite(n)) n = 0;
+  return "$" + Math.round(n).toLocaleString("en-CA");
+}
+
+/* ---------- Render ---------- */
+function renderAll(){
+  document.getElementById("propName").value = state.propName || "";
+  document.getElementById("propAddress").value = state.propAddress || "";
+  document.getElementById("propSqft").value = state.propSqft || "";
+  if(!state.discount) state.discount = { type:"percent", value:"", note:"" };
+  document.getElementById("discType").value = state.discount.type || "percent";
+  document.getElementById("discValue").value = state.discount.value || "";
+  document.getElementById("discNote").value = state.discount.note || "";
+  renderDiscPlaceholder();
+  renderCategories();
+  renderTotals();
+}
+
+function renderDiscPlaceholder(){
+  const v = document.getElementById("discValue");
+  v.placeholder = state.discount.type === "percent" ? "e.g. 5" : "e.g. 1000";
+  v.step = state.discount.type === "percent" ? "0.5" : "50";
+}
+
+function renderTotals(){
+  state.propName = document.getElementById("propName").value;
+  state.propAddress = document.getElementById("propAddress").value;
+  state.propSqft = document.getElementById("propSqft").value;
+  const t = computeTotals();
+  document.getElementById("propTitle").textContent = state.propName.trim() || "Untitled property";
+  document.getElementById("grandTotal").textContent = fmt(t.total);
+  document.getElementById("labourTotal").textContent = fmt(t.labour);
+  document.getElementById("materialTotal").textContent = fmt(t.material);
+  const sub = t.subtotal || 1;
+  document.getElementById("splitL").style.width = (t.labour/sub*100) + "%";
+  document.getElementById("splitM").style.width = (t.material/sub*100) + "%";
+
+  // Detailed totals breakdown
+  document.getElementById("td-sub").textContent = fmt(t.subtotal);
+  document.getElementById("td-hst").textContent = fmt(t.hst);
+  document.getElementById("td-total").textContent = fmt(t.total);
+  const showDisc = t.discount > 0;
+  const dRow = document.getElementById("td-disc-row");
+  const dVal = document.getElementById("td-disc");
+  const aRow = document.getElementById("td-after-row");
+  const aVal = document.getElementById("td-after");
+  if(showDisc){
+    dRow.style.display = ""; dVal.style.display = "";
+    aRow.style.display = ""; aVal.style.display = "";
+    let label = "Client Discount";
+    const d = state.discount;
+    if(d.type === "percent" && num(d.value) > 0) label += ` (${num(d.value)}%)`;
+    document.getElementById("td-disc-row").firstChild.textContent = label + " ";
+    const note = (d.note || "").trim();
+    document.getElementById("td-disc-note").textContent = note ? `· ${note}` : "";
+    dVal.textContent = "−" + fmt(t.discount);
+    aVal.textContent = fmt(t.afterDisc);
+  } else {
+    dRow.style.display = "none"; dVal.style.display = "none";
+    aRow.style.display = "none"; aVal.style.display = "none";
+  }
+  // Discount panel header preview
+  const dPrev = document.getElementById("discPreview");
+  if(dPrev){
+    if(showDisc){
+      const d = state.discount;
+      const label = d.type === "percent" ? `${num(d.value)}% off` : `${fmt(num(d.value))} off`;
+      dPrev.textContent = `· ${label} = saving ${fmt(t.discount)}`;
+      dPrev.style.color = "var(--gold-bright)";
+    } else {
+      dPrev.textContent = "No discount applied";
+      dPrev.style.color = "var(--muted)";
+    }
+  }
+  // update per-category totals shown in headers
+  Object.keys(CATEGORY_META).forEach(cat => {
+    const el = document.getElementById("cat-total-"+cat);
+    if(el){
+      const r = t.perCat[cat];
+      el.textContent = state.enabled[cat] ? fmt(r.labour + r.material) : "—";
+      el.style.color = state.enabled[cat] ? "" : "var(--muted)";
+    }
+    const bd = document.getElementById("cat-breakdown-"+cat);
+    if(bd){
+      const r = t.perCat[cat];
+      bd.querySelector(".bd-l").textContent = fmt(r.labour);
+      bd.querySelector(".bd-m").textContent = fmt(r.material);
+      bd.querySelector(".bd-t").textContent = fmt(r.labour + r.material);
+    }
+  });
+}
+
+function renderCategories(){
+  const root = document.getElementById("categories");
+  root.innerHTML = "";
+  Object.keys(CATEGORY_META).forEach(cat => {
+    const meta = CATEGORY_META[cat];
+    const open = state.enabled[cat];
+    const el = document.createElement("div");
+    el.className = "cat" + (open ? " on" : "");
+    el.id = "cat-"+cat;
+    el.innerHTML = `
+      <div class="cat-head" onclick="toggleCat('${cat}', event)">
+        <div class="cat-toggle">
+          <input type="checkbox" class="switch-input" id="sw-${cat}" ${open?"checked":""} onchange="setEnabled('${cat}', this.checked)" onclick="event.stopPropagation()">
+          <label for="sw-${cat}" class="switch" onclick="event.stopPropagation()"></label>
+          <div>
+            <div class="cat-title">${meta.title}</div>
+            <div class="cat-sub">${meta.sub}</div>
+          </div>
+        </div>
+        <div class="cat-total" id="cat-total-${cat}">—</div>
+      </div>
+      <div class="cat-body ${open?'':'hidden'}" id="cat-body-${cat}">
+        ${renderCatBody(cat)}
+      </div>
+    `;
+    root.appendChild(el);
+  });
+}
+
+function tierToggle(cat, current){
+  return `
+    <div class="tier-row">
+      <label><input type="radio" name="tier-${cat}" value="standard" ${current==="standard"?"checked":""} onchange="setTier('${cat}','standard')"><span>Standard</span></label>
+      <label><input type="radio" name="tier-${cat}" value="premium" ${current==="premium"?"checked":""} onchange="setTier('${cat}','premium')"><span>Premium</span></label>
+    </div>
+  `;
+}
+
+function breakdownRows(cat){
+  return `
+    <div id="cat-breakdown-${cat}">
+      <div class="breakdown"><span><span class="pill pill-l">Labour</span></span><span class="bd-l">$0</span></div>
+      <div class="breakdown"><span><span class="pill pill-m">Material</span></span><span class="bd-m">$0</span></div>
+      <div class="breakdown" style="font-weight:600"><span>Subtotal</span><span class="bd-t">$0</span></div>
+    </div>
+  `;
+}
+
+function renderCatBody(cat){
+  const s = state[cat];
+  if(cat === "painting"){
+    const cTier = s.ceilingTier || s.tier || "standard";
+    return `
+      ${tierToggle(cat, s.tier)}
+      <div class="footnote" style="margin-bottom:14px;">Walls, trim &amp; doors only. Calculated from total property sqft above. Standard = contractor-grade prep + paint. Premium = full prep, two-coat, premium paint. <b style="color:var(--gold-bright)">Ceilings are not included</b> &mdash; add them below if needed.</div>
+      <div style="border:1px dashed var(--line-strong);border-radius:8px;padding:12px;background:var(--panel-2);margin-bottom:14px;">
+        <label class="check-row" style="margin-bottom:10px;">
+          <input type="checkbox" ${s.ceiling?'checked':''} onchange="state.painting.ceiling=this.checked;renderCatBodyOnly('painting');renderTotals()">
+          <span style="font-weight:600;color:var(--ink-strong);text-transform:uppercase;letter-spacing:.08em;font-size:12px;">Add ceiling painting</span>
+        </label>
+        ${s.ceiling ? `
+          <div class="grid grid-2">
+            <div>
+              <label>Ceiling tier</label>
+              <select onchange="state.painting.ceilingTier=this.value;renderTotals()">
+                <option value="standard" ${cTier==='standard'?'selected':''}>Standard (8&ndash;9ft, flat)</option>
+                <option value="premium"  ${cTier==='premium' ?'selected':''}>Premium (textured / vaulted / 10ft+)</option>
+              </select>
+            </div>
+            <div>
+              <label>Ceiling sqft <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(blank = use property sqft)</span></label>
+              <input type="number" min="0" value="${s.ceilingSqft||""}" placeholder="defaults to property sqft" oninput="state.painting.ceilingSqft=this.value;renderTotals()">
+            </div>
+          </div>
+        ` : ""}
+      </div>
+      <div>${breakdownRows(cat)}</div>
+    `;
+  }
+  if(cat === "flooring"){
+    return `
+      ${tierToggle(cat, s.tier)}
+      <div class="grid grid-2">
+        <div>
+          <label>Sqft of space to floor</label>
+          <input type="number" min="0" value="${s.sqft||""}" oninput="state.flooring.sqft=this.value;renderTotals()">
+        </div>
+      </div>
+      <div class="footnote" style="margin-top:10px;margin-bottom:14px;">Standard = laminate / LVP. Premium = engineered hardwood.</div>
+      <div style="border:1px dashed var(--line-strong);border-radius:8px;padding:12px;background:var(--panel-2);">
+        <label class="check-row" style="margin-bottom:${s.removeOld?'10px':'0'};">
+          <input type="checkbox" ${s.removeOld?'checked':''} onchange="state.flooring.removeOld=this.checked;renderCatBodyOnly('flooring');renderTotals()">
+          <span style="font-weight:600;color:var(--ink-strong);text-transform:uppercase;letter-spacing:.08em;font-size:12px;">Remove &amp; dispose of existing flooring</span>
+        </label>
+        ${s.removeOld ? `
+          <div class="grid grid-2">
+            <div>
+              <label>Removal sqft <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(blank = same as new floor sqft)</span></label>
+              <input type="number" min="0" value="${s.removalSqft||""}" placeholder="defaults to flooring sqft" oninput="state.flooring.removalSqft=this.value;renderTotals()">
+            </div>
+          </div>
+          <div class="footnote" style="margin-top:8px;">Includes labour to strip old flooring + haul-away &amp; dump fees. GTA going rate ~$1.50&ndash;$2.00/sqft.</div>
+        ` : ""}
+      </div>
+      <div style="margin-top:14px">${breakdownRows(cat)}</div>
+    `;
+  }
+  if(cat === "tiling"){
+    return `
+      ${tierToggle(cat, s.tier)}
+      <div class="grid grid-2">
+        <div>
+          <label>Sqft of space to tile</label>
+          <input type="number" min="0" value="${s.sqft||""}" oninput="state.tiling.sqft=this.value;renderTotals()">
+        </div>
+      </div>
+      <div class="footnote">Standard = ceramic. Premium = large-format porcelain. Use this for non-bathroom areas (entryway, laundry, kitchen floor, etc.). Bathroom tile is captured in the Bathrooms section.</div>
+      <div style="margin-top:14px">${breakdownRows(cat)}</div>
+    `;
+  }
+  if(cat === "kitchen"){
+    return `
+      ${tierToggle(cat, s.tier)}
+      <div class="grid grid-3">
+        <div>
+          <label>Kitchen size</label>
+          <select onchange="state.kitchen.size=this.value;renderTotals()">
+            <option value="small"  ${s.size==='small'?'selected':''}>Small (under 70 sqft)</option>
+            <option value="medium" ${s.size==='medium'?'selected':''}>Medium (70 – 150 sqft)</option>
+            <option value="large"  ${s.size==='large'?'selected':''}>Large (150+ sqft)</option>
+          </select>
+        </div>
+      </div>
+      <div class="footnote">Includes cabinets, countertop, basic appliance install, sink, plumbing & electrical. Standard = stock cabinets + quartz. Premium = semi-custom cabinets, premium quartz, upgraded fixtures.</div>
+      <div style="margin-top:14px">${breakdownRows(cat)}</div>
+    `;
+  }
+  if(cat === "bathroom"){
+    return `
+      <div id="bath-rooms">${renderBathrooms()}</div>
+      <button class="add-btn no-print" onclick="addBath()">+ Add another bathroom</button>
+      <div style="margin-top:14px">${breakdownRows(cat)}</div>
+    `;
+  }
+  if(cat === "potlights"){
+    return `
+      ${tierToggle(cat, s.tier)}
+      <div class="grid grid-2">
+        <div>
+          <label>How many pot lights</label>
+          <input type="number" min="0" value="${s.count||""}" oninput="state.potlights.count=this.value;renderTotals()">
+        </div>
+      </div>
+      <div class="footnote">Standard = basic LED, slim recessed, single switch. Premium = dimmable / smart LEDs, multiple zones.</div>
+      <div style="margin-top:14px">${breakdownRows(cat)}</div>
+    `;
+  }
+  return "";
+}
+
+function renderBathrooms(){
+  return state.bathroom.rooms.map((b,i)=>`
+    <div class="bath-row">
+      <div class="grid grid-3">
+        <div>
+          <label>Bathroom #${i+1} pieces</label>
+          <select onchange="state.bathroom.rooms[${i}].pieces=this.value;renderTotals()">
+            <option value="3" ${b.pieces==='3'?'selected':''}>3-piece (toilet, sink, tub or shower)</option>
+            <option value="4" ${b.pieces==='4'?'selected':''}>4-piece (toilet, sink, tub, shower)</option>
+            <option value="5" ${b.pieces==='5'?'selected':''}>5-piece (toilet, sink, tub, shower, dbl vanity)</option>
+          </select>
+        </div>
+        <div>
+          <label>Tier</label>
+          <select onchange="state.bathroom.rooms[${i}].tier=this.value;renderTotals()">
+            <option value="standard" ${b.tier==='standard'?'selected':''}>Standard</option>
+            <option value="premium"  ${b.tier==='premium'?'selected':''}>Premium</option>
+          </select>
+        </div>
+        <div>
+          <label>Tiling required (sqft)</label>
+          <input type="number" min="0" value="${b.tilingSqft||""}" oninput="state.bathroom.rooms[${i}].tilingSqft=this.value;renderTotals()">
+        </div>
+      </div>
+      <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <label class="check-row">
+          <input type="checkbox" ${b.standUpShower?'checked':''} onchange="state.bathroom.rooms[${i}].standUpShower=this.checked;renderTotals()">
+          Add stand-up shower (waterproofing, glass enclosure, fixtures)
+        </label>
+        ${state.bathroom.rooms.length>1 ? `<button class="ghost danger no-print" onclick="removeBath(${i})">Remove</button>`:""}
+      </div>
+    </div>
+  `).join("");
+}
+
+function addBath(){ state.bathroom.rooms.push(defaultBath()); renderBathBody(); }
+function removeBath(i){ state.bathroom.rooms.splice(i,1); renderBathBody(); }
+function renderBathBody(){
+  document.getElementById("bath-rooms").innerHTML = renderBathrooms();
+  renderTotals();
+}
+function renderCatBodyOnly(cat){
+  const body = document.getElementById("cat-body-"+cat);
+  if(body) body.innerHTML = renderCatBody(cat);
+}
+
+function setEnabled(cat, val){
+  state.enabled[cat] = val;
+  const body = document.getElementById("cat-body-"+cat);
+  if(body) body.classList.toggle("hidden", !val);
+  const card = document.getElementById("cat-"+cat);
+  if(card) card.classList.toggle("on", !!val);
+  renderTotals();
+}
+function toggleCat(cat, ev){
+  // toggle body collapse without flipping the switch
+  if(ev && (ev.target.tagName === "INPUT" || ev.target.tagName === "LABEL")) return;
+  const body = document.getElementById("cat-body-"+cat);
+  if(!body) return;
+  if(!state.enabled[cat]){
+    setEnabled(cat, true);
+    document.getElementById("sw-"+cat).checked = true;
+  } else {
+    body.classList.toggle("hidden");
+  }
+}
+function setTier(cat, tier){
+  state[cat].tier = tier;
+  renderTotals();
+}
+
+/* ---------- Saved modal ---------- */
+function openSavedModal(){
+  renderSavedList();
+  document.getElementById("savedModal").classList.add("show");
+}
+function closeSavedModal(){ document.getElementById("savedModal").classList.remove("show"); }
+function renderSavedList(){
+  const list = loadSavedList();
+  const ul = document.getElementById("savedList");
+  const empty = document.getElementById("savedEmpty");
+  ul.innerHTML = "";
+  if(!list.length){ empty.style.display=""; return; }
+  empty.style.display="none";
+  list.forEach(e => {
+    const li = document.createElement("li");
+    li.innerHTML = `
+      <div class="info">
+        <div class="name">${escapeHtml(e.name)}</div>
+        <div class="when">${new Date(e.savedAt).toLocaleString()}</div>
+      </div>
+      <button onclick="loadEstimate('${e.id}')">Open</button>
+      <button class="ghost danger" onclick="deleteEstimate('${e.id}')">Delete</button>
+    `;
+    ul.appendChild(li);
+  });
+}
+function escapeHtml(s){ return (s||"").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+/* ---------- Pricing editor ---------- */
+function openSettings(){
+  renderPricingEditor();
+  document.getElementById("settingsModal").classList.add("show");
+}
+function closeSettings(){ document.getElementById("settingsModal").classList.remove("show"); }
+
+function priceInput(path, val, step){
+  return `<input type="number" step="${step||0.01}" value="${val}" onchange="setPrice('${path}', this.value)">`;
+}
+function setPrice(path, val){
+  const v = parseFloat(val);
+  if(!isFinite(v) || v<0) return;
+  const parts = path.split(".");
+  let o = prices;
+  for(let i=0;i<parts.length-1;i++){ o = o[parts[i]]; }
+  o[parts[parts.length-1]] = v;
+  savePrices();
+  renderTotals();
+}
+
+function renderPricingEditor(){
+  const e = document.getElementById("pricingEditor");
+  let html = "";
+  // Painting
+  html += `<div class="section-title">Painting &mdash; walls/trim (per sqft of property)</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
+  ["standard","premium"].forEach(t=>{
+    html += `<div class="price-edit-row">
+      <div class="lbl">${cap(t)}</div>
+      <div>${priceInput("painting."+t+".labour", prices.painting[t].labour)}</div>
+      <div>${priceInput("painting."+t+".material", prices.painting[t].material)}</div>
+    </div>`;
+  });
+  // Painting -- ceiling add-on
+  html += `<div class="section-title">Painting &mdash; ceiling add-on (per sqft of ceiling)</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
+  ["standard","premium"].forEach(t=>{
+    html += `<div class="price-edit-row">
+      <div class="lbl">${cap(t)}</div>
+      <div>${priceInput("painting.ceiling."+t+".labour", prices.painting.ceiling[t].labour)}</div>
+      <div>${priceInput("painting.ceiling."+t+".material", prices.painting.ceiling[t].material)}</div>
+    </div>`;
+  });
+  // Flooring
+  html += `<div class="section-title">Flooring &mdash; install (per sqft)</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
+  ["standard","premium"].forEach(t=>{
+    html += `<div class="price-edit-row">
+      <div class="lbl">${cap(t)}</div>
+      <div>${priceInput("flooring."+t+".labour", prices.flooring[t].labour)}</div>
+      <div>${priceInput("flooring."+t+".material", prices.flooring[t].material)}</div>
+    </div>`;
+  });
+  // Flooring -- removal & disposal
+  html += `<div class="section-title">Flooring &mdash; old flooring removal &amp; disposal (per sqft)</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Disposal $</div></div>
+    <div class="price-edit-row">
+      <div class="lbl">Removal &amp; haul-away</div>
+      <div>${priceInput("flooring.removal.labour", prices.flooring.removal.labour)}</div>
+      <div>${priceInput("flooring.removal.material", prices.flooring.removal.material)}</div>
+    </div>`;
+  // Tiling
+  html += `<div class="section-title">Tiling (per sqft)</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
+  ["standard","premium"].forEach(t=>{
+    html += `<div class="price-edit-row">
+      <div class="lbl">${cap(t)}</div>
+      <div>${priceInput("tiling."+t+".labour", prices.tiling[t].labour)}</div>
+      <div>${priceInput("tiling."+t+".material", prices.tiling[t].material)}</div>
+    </div>`;
+  });
+  // Kitchen
+  html += `<div class="section-title">Kitchen (lump sum by size)</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
+  ["small","medium","large"].forEach(sz=>{
+    ["standard","premium"].forEach(t=>{
+      html += `<div class="price-edit-row">
+        <div class="lbl">${cap(sz)} &middot; ${cap(t)}</div>
+        <div>${priceInput("kitchen."+sz+"."+t+".labour", prices.kitchen[sz][t].labour, 50)}</div>
+        <div>${priceInput("kitchen."+sz+"."+t+".material", prices.kitchen[sz][t].material, 50)}</div>
+      </div>`;
+    });
+  });
+  // Bathroom base
+  html += `<div class="section-title">Bathroom base (excludes tiling &amp; shower add)</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
+  ["3","4","5"].forEach(p=>{
+    ["standard","premium"].forEach(t=>{
+      html += `<div class="price-edit-row">
+        <div class="lbl">${p}-piece &middot; ${cap(t)}</div>
+        <div>${priceInput("bathroom.base."+p+"."+t+".labour", prices.bathroom.base[p][t].labour, 50)}</div>
+        <div>${priceInput("bathroom.base."+p+"."+t+".material", prices.bathroom.base[p][t].material, 50)}</div>
+      </div>`;
+    });
+  });
+  // Bathroom tiling
+  html += `<div class="section-title">Bathroom tiling (per sqft)</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
+  ["standard","premium"].forEach(t=>{
+    html += `<div class="price-edit-row">
+      <div class="lbl">${cap(t)}</div>
+      <div>${priceInput("bathroom.tilingPerSqft."+t+".labour", prices.bathroom.tilingPerSqft[t].labour)}</div>
+      <div>${priceInput("bathroom.tilingPerSqft."+t+".material", prices.bathroom.tilingPerSqft[t].material)}</div>
+    </div>`;
+  });
+  // Stand-up shower
+  html += `<div class="section-title">Stand-up shower add-on (per bathroom)</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
+  ["standard","premium"].forEach(t=>{
+    html += `<div class="price-edit-row">
+      <div class="lbl">${cap(t)}</div>
+      <div>${priceInput("bathroom.standUpShower."+t+".labour", prices.bathroom.standUpShower[t].labour, 50)}</div>
+      <div>${priceInput("bathroom.standUpShower."+t+".material", prices.bathroom.standUpShower[t].material, 50)}</div>
+    </div>`;
+  });
+  // Pot lights
+  html += `<div class="section-title">Pot lights (per fixture)</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
+  ["standard","premium"].forEach(t=>{
+    html += `<div class="price-edit-row">
+      <div class="lbl">${cap(t)}</div>
+      <div>${priceInput("potlights."+t+".labour", prices.potlights[t].labour, 5)}</div>
+      <div>${priceInput("potlights."+t+".material", prices.potlights[t].material, 5)}</div>
+    </div>`;
+  });
+  e.innerHTML = html;
+}
+function cap(s){ return s.charAt(0).toUpperCase()+s.slice(1); }
+
+/* ---------- Toast ---------- */
+function flash(msg){
+  const t = document.createElement("div");
+  t.textContent = msg;
+  t.style.cssText = "position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#000;color:#e8c989;padding:11px 22px;border:1px solid #d4af6a;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.5);z-index:200;font-size:12px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;";
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(), 1800);
+}
+
+/* ---------- Address autocomplete (Nominatim, GTA-bounded) ---------- */
+let acTimer = null;
+let acAbort = null;
+let acResults = [];
+let acIdx = -1;
+const GTA_VIEWBOX = "-80.30,44.50,-78.40,43.30"; // left,top,right,bottom (covers Mississauga, Toronto, Markham, Pickering, Oakville, Brampton, Vaughan)
+
+function onAddressInput(value){
+  state.propAddress = value;
+  const q = value.trim();
+  if(acTimer) clearTimeout(acTimer);
+  if(acAbort){ try{acAbort.abort();}catch(e){} }
+  if(q.length < 3){ hideAcList(); return; }
+  showAcLoading();
+  acTimer = setTimeout(() => fetchAcSuggestions(q), 320);
+}
+
+async function fetchAcSuggestions(q){
+  acAbort = new AbortController();
+  const url = "https://nominatim.openstreetmap.org/search"
+    + "?format=json&addressdetails=1&limit=6"
+    + "&countrycodes=ca"
+    + "&viewbox=" + GTA_VIEWBOX
+    + "&bounded=1"
+    + "&q=" + encodeURIComponent(q);
+  try{
+    const res = await fetch(url, {
+      signal: acAbort.signal,
+      headers: { "Accept":"application/json" }
+    });
+    if(!res.ok) throw new Error("Lookup failed");
+    const data = await res.json();
+    // Filter to Ontario only (extra safety)
+    acResults = (data || []).filter(r =>
+      r.address && (r.address.state === "Ontario" || r.address["ISO3166-2-lvl4"] === "CA-ON")
+    );
+    acIdx = -1;
+    renderAcList();
+  } catch(e){
+    if(e.name !== "AbortError"){
+      acResults = [];
+      hideAcList();
+    }
+  }
+}
+
+function formatAcLabel(r){
+  const a = r.address || {};
+  const houseNum = a.house_number || "";
+  const road = a.road || a.pedestrian || a.footway || "";
+  const main = (houseNum + " " + road).trim() || (r.display_name || "").split(",")[0];
+  const city = a.city || a.town || a.village || a.municipality || a.suburb || a.county || "";
+  const postcode = a.postcode || "";
+  const sub = [city, "ON", postcode].filter(Boolean).join(", ");
+  return { main, sub, full: [main, city, "ON", postcode].filter(Boolean).join(", ") };
+}
+
+function renderAcList(){
+  const list = document.getElementById("acList");
+  if(!acResults.length){
+    list.innerHTML = `<div class="ac-loading">No GTA matches found</div><div class="ac-credit">© OpenStreetMap</div>`;
+    list.classList.add("show");
+    return;
+  }
+  let html = acResults.map((r,i) => {
+    const f = formatAcLabel(r);
+    return `<div class="ac-item ${i===acIdx?'active':''}" data-i="${i}" onmousedown="pickAc(${i})">
+      <div class="ac-main">${escapeHtml(f.main)}</div>
+      <div class="ac-sub">${escapeHtml(f.sub)}</div>
+    </div>`;
+  }).join("");
+  html += `<div class="ac-credit">© OpenStreetMap contributors</div>`;
+  list.innerHTML = html;
+  list.classList.add("show");
+}
+
+function showAcLoading(){
+  const list = document.getElementById("acList");
+  list.innerHTML = `<div class="ac-loading">Searching GTA addresses…</div>`;
+  list.classList.add("show");
+}
+
+function hideAcList(){
+  const list = document.getElementById("acList");
+  list.classList.remove("show");
+  list.innerHTML = "";
+  acResults = []; acIdx = -1;
+}
+
+function hideAcSoon(){
+  // Delay so click on item registers before hide
+  setTimeout(hideAcList, 180);
+}
+
+function pickAc(i){
+  const r = acResults[i]; if(!r) return;
+  const f = formatAcLabel(r);
+  document.getElementById("propAddress").value = f.full;
+  state.propAddress = f.full;
+  hideAcList();
+  renderTotals();
+}
+
+function onAddressKey(ev){
+  const list = document.getElementById("acList");
+  if(!list.classList.contains("show") || !acResults.length) return;
+  if(ev.key === "ArrowDown"){
+    ev.preventDefault();
+    acIdx = (acIdx + 1) % acResults.length;
+    renderAcList();
+  } else if(ev.key === "ArrowUp"){
+    ev.preventDefault();
+    acIdx = (acIdx - 1 + acResults.length) % acResults.length;
+    renderAcList();
+  } else if(ev.key === "Enter"){
+    if(acIdx >= 0){ ev.preventDefault(); pickAc(acIdx); }
+  } else if(ev.key === "Escape"){
+    hideAcList();
+  }
+}
+
+/* ---------- Init ---------- */
+renderAll();
+</script>
+</body>
+</html>
