@@ -46,10 +46,8 @@
   .brandbar{background:#000;border:1px solid var(--line-strong);border-radius:14px;padding:22px 28px;margin-bottom:18px;box-shadow:var(--shadow);position:relative;overflow:hidden;}
   .brandbar::before{content:"";position:absolute;inset:0;background:linear-gradient(120deg,transparent 40%,rgba(212,175,106,.04) 60%,transparent 80%);pointer-events:none;}
   .brandbar-row{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;position:relative;}
-  .logo{display:flex;align-items:center;gap:0;flex-wrap:nowrap;}
-  .logo-reno{font-family:'Montserrat',sans-serif;font-weight:900;font-size:42px;color:#fff;letter-spacing:.01em;line-height:1;}
-  .logo-to{font-family:'Dancing Script',cursive;font-weight:700;font-size:46px;background:var(--gold-grad);-webkit-background-clip:text;background-clip:text;color:transparent;margin:0 8px 0 12px;line-height:1;font-style:italic;transform:translateY(-2px);}
-  .logo-sign{width:64px;height:62px;flex-shrink:0;}
+  .logo{display:flex;align-items:center;gap:0;flex-wrap:nowrap;flex:1;min-width:0;}
+  .logo-img{display:block;width:100%;max-width:560px;height:auto;max-height:140px;object-fit:contain;object-position:left center;}
   .tagline{margin-top:14px;font-size:13px;letter-spacing:.18em;color:#fff;font-weight:500;text-transform:uppercase;text-align:center;position:relative;}
   .tagline .accent{color:var(--gold-bright);font-weight:600;}
   .tagline-rule{display:flex;align-items:center;gap:10px;justify-content:center;margin-top:6px;}
@@ -72,7 +70,7 @@
   .grid{display:grid;gap:12px;}
   .grid-2{grid-template-columns:repeat(2,minmax(0,1fr));}
   .grid-3{grid-template-columns:repeat(3,minmax(0,1fr));}
-  @media (max-width:680px){.grid-2,.grid-3{grid-template-columns:1fr;}.logo-reno{font-size:32px;}.logo-to{font-size:36px;}.logo-sign{width:50px;height:48px;}}
+  @media (max-width:680px){.grid-2,.grid-3{grid-template-columns:1fr;}.logo-img{max-height:90px;}}
   label{display:block;font-size:11px;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.1em;font-weight:600;}
   input[type="text"],input[type="number"],select{width:100%;padding:10px 12px;border:1px solid var(--line-strong);border-radius:8px;font:inherit;background:#0d0d11;color:var(--ink);font-size:14px;}
   input::placeholder{color:#5a5750;}
@@ -202,31 +200,9 @@
 <div class="app">
   <div class="brandbar">
     <div class="brandbar-row">
-      <div class="logo">
-        <span class="logo-reno">RENO</span>
-        <span class="logo-to">to</span>
-        <svg class="logo-sign" viewBox="0 0 64 62" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-          <defs>
-            <linearGradient id="goldG" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stop-color="#e8c989"/>
-              <stop offset="50%" stop-color="#d4af6a"/>
-              <stop offset="100%" stop-color="#a8853f"/>
-            </linearGradient>
-          </defs>
-          <!-- Post -->
-          <rect x="6" y="2" width="3.2" height="58" fill="url(#goldG)"/>
-          <!-- Top arm -->
-          <rect x="6" y="2" width="50" height="3.2" fill="url(#goldG)"/>
-          <!-- Chains -->
-          <line x1="20" y1="6" x2="20" y2="14" stroke="url(#goldG)" stroke-width="1.4"/>
-          <line x1="50" y1="6" x2="50" y2="14" stroke="url(#goldG)" stroke-width="1.4"/>
-          <!-- Sign frame -->
-          <rect x="14" y="14" width="42" height="32" fill="none" stroke="url(#goldG)" stroke-width="2.2"/>
-          <!-- Diagonal SOLD banner -->
-          <polygon points="14,38 56,18 56,28 14,46" fill="url(#goldG)"/>
-          <text x="35" y="34" transform="rotate(-25 35 34)" font-family="Montserrat,Arial,sans-serif" font-size="8" font-weight="900" fill="#000" text-anchor="middle" letter-spacing="0.5">SOLD</text>
-        </svg>
-      </div>
+      <a href="./" class="logo" aria-label="Reno to Sold home">
+        <img src="logo.png" alt="Reno to Sold &mdash; Renovate Smart. Sell For More. Fully Managed From Start To Sold." class="logo-img">
+      </a>
       <div class="toolbar no-print">
         <button onclick="newEstimate()">+ New</button>
         <button onclick="openSavedModal()">Saved</button>
@@ -236,7 +212,6 @@
       </div>
     </div>
     <div class="tagline-rule"><span class="tagline-line">Renovation Estimator &middot; Ontario GTA</span></div>
-    <div class="tagline">Renovate Smart. Sell For More.<br><span class="accent">Fully Managed From Start To Sold.</span></div>
   </div>
 
   <!-- Live Total -->
