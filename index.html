@@ -48,11 +48,6 @@
   .brandbar-row{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;position:relative;}
   .logo{display:flex;align-items:center;gap:0;flex-wrap:nowrap;flex:1;min-width:0;}
   .logo-img{display:block;width:100%;max-width:560px;height:auto;max-height:140px;object-fit:contain;object-position:left center;}
-  .tagline{margin-top:14px;font-size:13px;letter-spacing:.18em;color:#fff;font-weight:500;text-transform:uppercase;text-align:center;position:relative;}
-  .tagline .accent{color:var(--gold-bright);font-weight:600;}
-  .tagline-rule{display:flex;align-items:center;gap:10px;justify-content:center;margin-top:6px;}
-  .tagline-rule::before,.tagline-rule::after{content:"";height:1px;width:24px;background:var#ffffff;}
-  .tagline-line{font-size:11px;letter-spacing:.22em;color:#ffffff;(white);font-weight:600;text-transform:uppercase;}
 
   .toolbar{display:flex;gap:8px;flex-wrap:wrap;}
   button{font:inherit;cursor:pointer;border:1px solid var(--line-strong);background:transparent;color:var(--ink);padding:9px 16px;border-radius:8px;transition:all .15s;font-weight:500;font-size:13px;letter-spacing:.03em;}
@@ -93,7 +88,7 @@
   .cat-body{padding:18px;border-top:1px solid var(--line);background:var(--panel);}
   .cat-body.hidden{display:none;}
 
-  .tier-row{display:flex;gap:0;background:#0a0a0e;border:1px solid var(--line-strong);padding:3px;border-radius:8px;width:fit-content;margin-bottom:16px;}
+  .tier-row{display:flex;gap:0;background:#0a0a0e;border:1px solid var(--line-strong);padding:3px;border-radius:8px;width:fit-content;margin-bottom:16px;flex-wrap:wrap;}
   .tier-row label{margin:0;cursor:pointer;padding:0;font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.12em;}
   .tier-row input{display:none;}
   .tier-row label span{display:block;padding:7px 18px;border-radius:6px;transition:all .15s;}
@@ -136,6 +131,7 @@
   .price-edit-row.head{font-weight:700;font-size:10px;color:var(--gold-bright);text-transform:uppercase;letter-spacing:.15em;border-bottom:1px solid var(--gold-deep);padding-bottom:8px;margin-bottom:6px;}
   .price-edit-row .lbl{font-size:13px;color:var(--ink);}
   .price-edit-row input{padding:7px 10px;font-size:13px;}
+  .price-edit-row.single{grid-template-columns:1fr 110px;}
   .section-title{font-weight:700;font-size:11px;margin-top:18px;margin-bottom:8px;color:var(--gold-bright);text-transform:uppercase;letter-spacing:.18em;border-top:1px solid var(--line);padding-top:14px;}
   .section-title:first-child{margin-top:0;border-top:none;padding-top:0;}
   .footnote{color:var(--muted);font-size:11px;margin-top:8px;line-height:1.5;}
@@ -167,6 +163,19 @@
   .check-row{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--ink);cursor:pointer;}
   .check-row input{accent-color:var(--gold);width:16px;height:16px;}
 
+  /* Listing discount toggle row */
+  .disc-toggle-row{display:flex;align-items:center;gap:14px;padding:14px 16px;background:var(--panel-2);border:1px solid var(--line-strong);border-radius:10px;}
+  .disc-toggle-row .toggle-info{flex:1;}
+  .disc-toggle-row .cat-title{font-size:13px;}
+  .disc-toggle-row .cat-sub{color:var(--muted);font-size:11px;letter-spacing:.05em;text-transform:uppercase;margin-top:3px;}
+
+  /* Add-on card (used inside categories) */
+  .addon{border:1px dashed var(--line-strong);border-radius:8px;padding:12px;background:var(--panel-2);margin-bottom:12px;}
+  .addon.last{margin-bottom:0;}
+  .addon-head{display:flex;align-items:center;gap:9px;}
+  .addon-title{font-weight:600;color:var(--ink-strong);text-transform:uppercase;letter-spacing:.08em;font-size:12px;}
+  .info-readout{display:inline-block;background:rgba(212,175,106,.12);border:1px solid rgba(212,175,106,.3);color:var(--gold-bright);font-size:11px;padding:6px 10px;border-radius:6px;margin-top:6px;letter-spacing:.04em;font-weight:600;}
+
   /* Print */
   @media print{
     body{background:#fff;color:#000;}
@@ -193,6 +202,9 @@
     .totals-detail .lbl,.totals-detail .val{color:#000 !important;}
     .totals-detail .val.discount{color:#a32a2a !important;font-weight:700;}
     .totals-detail .lbl.final,.totals-detail .val.final{color:#000 !important;border-top-color:#000;font-size:16px;}
+    .disc-toggle-row{background:#fff;border-color:#000;}
+    .addon{background:#fff;border-color:#000;}
+    .info-readout{background:#fff;border-color:#000;color:#000;}
   }
 </style>
 </head>
@@ -211,7 +223,6 @@
         <button class="primary" onclick="window.print()">Print / PDF</button>
       </div>
     </div>
-    <div class="tagline-rule"><span class="tagline-line">Renovation Estimator </span></div>
   </div>
 
   <!-- Live Total -->
@@ -233,7 +244,8 @@
     </div>
     <div class="totals-detail">
       <div class="lbl">Subtotal</div><div class="val" id="td-sub">$0</div>
-      <div class="lbl" id="td-disc-row" style="display:none">Client Discount <span id="td-disc-note" style="text-transform:none;letter-spacing:normal;font-weight:400;color:var(--muted);"></span></div><div class="val discount" id="td-disc" style="display:none">-$0</div>
+      <div class="lbl" id="td-disc-listing-row" style="display:none">Listing Discount <span id="td-disc-listing-pct" style="text-transform:none;letter-spacing:normal;font-weight:400;color:var(--muted);"></span></div><div class="val discount" id="td-disc-listing" style="display:none">−$0</div>
+      <div class="lbl" id="td-disc-custom-row" style="display:none">Custom Discount <span id="td-disc-custom-note" style="text-transform:none;letter-spacing:normal;font-weight:400;color:var(--muted);"></span></div><div class="val discount" id="td-disc-custom" style="display:none">−$0</div>
       <div class="lbl" id="td-after-row" style="display:none">After Discount</div><div class="val" id="td-after" style="display:none">$0</div>
       <div class="lbl">HST (13%)</div><div class="val" id="td-hst">$0</div>
       <div class="lbl final">Total</div><div class="val final" id="td-total">$0</div>
@@ -267,28 +279,38 @@
   <!-- Categories -->
   <div id="categories"></div>
 
-  <!-- Client Discount -->
+  <!-- Discount -->
   <div class="panel">
-    <h2>Client Discount <span style="font-weight:400;color:var(--muted);text-transform:none;letter-spacing:normal;font-size:12px;" id="discPreview">No discount applied</span></h2>
+    <h2>Discount <span style="font-weight:400;color:var(--muted);text-transform:none;letter-spacing:normal;font-size:12px;" id="discPreview">No discount applied</span></h2>
     <div class="panel-body">
+      <div class="disc-toggle-row">
+        <input type="checkbox" class="switch-input" id="sw-listing" onchange="state.discount.listing=this.checked;renderTotals()">
+        <label for="sw-listing" class="switch"></label>
+        <div class="toggle-info">
+          <div class="cat-title">Listing Discount</div>
+          <div class="cat-sub">Standard <span id="listingPctLabel">10</span>% off subtotal for listing clients</div>
+        </div>
+      </div>
+
+      <div class="section-title">Custom Discount (optional)</div>
       <div class="grid grid-3">
         <div>
           <label>Type</label>
-          <select id="discType" onchange="state.discount.type=this.value;renderDiscPlaceholder();renderTotals()">
+          <select id="discCustomType" onchange="state.discount.customType=this.value;renderDiscPlaceholder();renderTotals()">
             <option value="percent">Percentage (%)</option>
             <option value="amount">Flat amount ($)</option>
           </select>
         </div>
         <div>
           <label>Amount</label>
-          <input type="number" id="discValue" min="0" step="0.01" placeholder="0" oninput="state.discount.value=this.value;renderTotals()">
+          <input type="number" id="discCustomValue" min="0" step="0.5" placeholder="0" oninput="state.discount.customValue=this.value;renderTotals()">
         </div>
         <div>
-          <label>Note (optional)</label>
-          <input type="text" id="discNote" placeholder="e.g. Repeat client, package deal" oninput="state.discount.note=this.value;renderTotals()">
+          <label>Note (required for custom)</label>
+          <input type="text" id="discCustomNote" placeholder="e.g. Repeat client, package deal" oninput="state.discount.customNote=this.value;renderTotals()">
         </div>
       </div>
-      <p class="footnote">Discount is applied to the subtotal <i>before</i> HST. The final total will reflect the savings clearly for your client.</p>
+      <p class="footnote">Discounts are applied to the subtotal <i>before</i> HST. Listing &amp; custom discounts stack if both are used.</p>
     </div>
   </div>
 
@@ -322,59 +344,106 @@
 </div>
 
 <script>
-/* ---------- Default GTA pricing (CAD) ---------- */
+/* ---------- Default GTA pricing — 2026 averages (CAD) ---------- */
 const DEFAULT_PRICES = {
   painting: {
-    standard: { labour: 1.90, material: 0.60 },     // walls/trim only $/sqft of property
-    premium:  { labour: 2.65, material: 0.85 },
+    // walls + trim (NOT ceiling) per sqft of property — premium paint, full prep both
+    walls: {
+      one: { labour: 1.50, material: 0.85 },        // 1 coat (light->similar light)
+      two: { labour: 2.30, material: 1.25 }         // 2 coats (dark->lighter)
+    },
     ceiling: {
       standard: { labour: 0.75, material: 0.30 },   // $/sqft of ceiling (flat, 8-9ft)
-      premium:  { labour: 1.10, material: 0.45 }    // textured / vaulted / two-coat
-    }
+      premium:  { labour: 1.10, material: 0.45 }    // textured / vaulted
+    },
+    // Baseboards & trim — paint refresh per linear foot
+    trim: { labour: 1.75, material: 0.50 },         // $/lin ft
+    // Doors — paint per interior door
+    door: { labour: 65, material: 25 }              // $/door
   },
   flooring: {
-    standard: { labour: 2.50, material: 3.00 },     // $/sqft (laminate / LVP)
-    premium:  { labour: 4.00, material: 7.00 },     // $/sqft (engineered hardwood)
-    removal:  { labour: 1.40, material: 0.35 }      // $/sqft strip + haul + disposal
+    // Per sqft installed — labour is per sqft of space, material is per sqft × waste factor
+    vinyl:      { labour: 1.80, material: 2.20 },
+    laminate:   { labour: 2.20, material: 3.50 },   // waterproof laminate
+    engineered: { labour: 3.50, material: 6.00 },
+    hardwood:   { labour: 4.50, material: 8.50 },   // solid hardwood
+    removal:    { labour: 1.40, material: 0.35 },   // strip + haul + dump
+    baseboards: { labour: 2.50, material: 1.50 }    // new baseboards installed $/lin ft
   },
   tiling: {
-    standard: { labour: 7.00, material: 5.00 },     // $/sqft (ceramic)
-    premium:  { labour: 10.00, material: 8.00 }     // $/sqft (porcelain)
+    standard: { labour: 7.00, material: 5.00 },     // $/sqft ceramic
+    premium:  { labour: 10.00, material: 8.00 }     // $/sqft porcelain large-format
   },
   kitchen: {
-    // lump sums by size; labour vs material split (~ 35 / 65)
-    small:  { standard:{labour:8750,  material:16250}, premium:{labour:15750, material:29250} },
-    medium: { standard:{labour:15750, material:29250}, premium:{labour:26250, material:48750} },
-    large:  { standard:{labour:22750, material:42250}, premium:{labour:35000, material:65000} }
+    // Base — cabinets + sink/faucet + plumbing adjustments + all hardware + install
+    base: {
+      small:  { standard:{labour:7000,  material:12500}, custom:{labour:13500, material:23500} },
+      medium: { standard:{labour:13000, material:24000}, custom:{labour:23500, material:42500} },
+      large:  { standard:{labour:19000, material:34500}, custom:{labour:32500, material:58500} }
+    },
+    // Countertops — by kitchen size, tier follows kitchen tier
+    counter: {
+      small:  { standard:{labour:600,  material:1400}, custom:{labour:1000, material:2900} },
+      medium: { standard:{labour:1000, material:2400}, custom:{labour:1600, material:4900} },
+      large:  { standard:{labour:1500, material:3500}, custom:{labour:2200, material:7400} }
+    },
+    // Island add-on (priced by tier only — sizing follows kitchen size)
+    island: {
+      standard: { labour: 1800, material: 3500 },
+      custom:   { labour: 3500, material: 7500 }
+    },
+    // Under-cabinet lighting — typical run, flat
+    undercab: { labour: 350, material: 450 }
   },
   bathroom: {
+    // Base by piece count, tier = Builder grade or Premium
     base: {
-      "3": { standard:{labour:4000, material:5000}, premium:{labour:6300, material:7700} },
-      "4": { standard:{labour:5800, material:7200}, premium:{labour:9000, material:11000} },
-      "5": { standard:{labour:7600, material:9400}, premium:{labour:11250, material:13750} }
+      "2": { builder:{labour:2400, material:2500}, premium:{labour:3800, material:4000} },
+      "3": { builder:{labour:4000, material:5000}, premium:{labour:6500, material:8000} },
+      "4": { builder:{labour:5800, material:7200}, premium:{labour:9000, material:11000} },
+      "5": { builder:{labour:7600, material:9400}, premium:{labour:11250, material:13750} }
     },
-    tilingPerSqft: {
-      standard: { labour: 7.00, material: 5.00 },
-      premium:  { labour: 10.00, material: 8.00 }
+    floorTile: {
+      builder: { labour: 7.00, material: 5.00 },
+      premium: { labour: 10.00, material: 8.00 }
+    },
+    wallTile: {
+      builder: { labour: 8.50, material: 5.50 },    // more cuts, around plumbing
+      premium: { labour: 12.00, material: 9.00 }
     },
     standUpShower: {
-      standard: { labour: 2200, material: 2800 },
-      premium:  { labour: 4000, material: 5000 }
+      builder: { labour: 2200, material: 2800 },
+      premium: { labour: 4000, material: 5000 }
     }
   },
   potlights: {
     standard: { labour: 130, material: 70 },        // $/light
     premium:  { labour: 180, material: 120 }
-  }
+  },
+  // Listing discount percent (applies to subtotal when toggle is on)
+  listingDiscount: { percent: 10 }
 };
 
 const CATEGORY_META = {
-  painting:  { title:"Painting",        sub:"Per sqft of property" },
-  flooring:  { title:"Flooring",        sub:"Per sqft of space" },
-  tiling:    { title:"Tiling",          sub:"Per sqft of space" },
-  kitchen:   { title:"Kitchen",         sub:"By kitchen size" },
-  bathroom:  { title:"Bathrooms",       sub:"By pieces, tiling sqft & shower" },
-  potlights: { title:"Pot Lights",      sub:"Per light installed" }
+  painting:  { title:"Painting",   sub:"Walls, trim, ceilings, doors" },
+  flooring:  { title:"Flooring",   sub:"Per sqft of space + baseboards" },
+  tiling:    { title:"Tiling",     sub:"Per sqft of space" },
+  kitchen:   { title:"Kitchen",    sub:"Base + counters + island + lighting" },
+  bathroom:  { title:"Bathrooms",  sub:"Pieces, tiling, shower" },
+  potlights: { title:"Pot Lights", sub:"Per light installed" }
+};
+
+const FLOORING_LABELS = {
+  vinyl:      "Vinyl (Luxury Vinyl Plank)",
+  laminate:   "Waterproof Laminate",
+  engineered: "Engineered Hardwood",
+  hardwood:   "Solid Hardwood"
+};
+const WASTE_FACTORS = {
+  vinyl: 1.07,
+  laminate: 1.08,
+  engineered: 1.10,
+  hardwood: 1.12
 };
 
 /* ---------- State ---------- */
@@ -387,22 +456,39 @@ function freshState(){
     propAddress: "",
     propSqft: "",
     enabled: { painting:false, flooring:false, tiling:false, kitchen:false, bathroom:false, potlights:false },
-    painting:  { tier:"standard", ceiling:false, ceilingTier:"standard", ceilingSqft:"" },
-    flooring:  { tier:"standard", sqft:"", removeOld:false, removalSqft:"" },
+    painting:  {
+      coats: "one",          // "one" | "two"
+      scope: "whole",        // "whole" | "custom"
+      sqft: "",              // when scope==="custom"
+      ceiling: false, ceilingTier: "standard", ceilingSqft: "",
+      trim: false, trimLinFt: "",
+      doors: false, doorCount: ""
+    },
+    flooring:  {
+      type: "vinyl",         // vinyl | laminate | engineered | hardwood
+      sqft: "",
+      removeOld: false, removalSqft: "",
+      baseboards: false, baseboardLinFt: ""
+    },
     tiling:    { tier:"standard", sqft:"" },
-    kitchen:   { tier:"standard", size:"medium" },
+    kitchen:   {
+      tier: "standard",      // standard | custom
+      size: "medium",
+      counter: true,         // default on
+      island: false,
+      undercabLighting: false
+    },
     bathroom:  { rooms:[ defaultBath() ] },
     potlights: { tier:"standard", count:"" },
-    discount:  { type:"percent", value:"", note:"" }
+    discount:  { listing:false, customType:"percent", customValue:"", customNote:"" }
   };
 }
 function defaultBath(){
-  return { tier:"standard", pieces:"4", tilingSqft:"", standUpShower:false };
+  return { tier:"builder", pieces:"4", floorTileSqft:"", wallTileSqft:"", standUpShower:false };
 }
 
 /* ---------- Storage ---------- */
 function deepMerge(base, over){
-  // base is mutated; returns base with `over` merged in (only objects merge deep, leaves overwrite)
   if(!over) return base;
   Object.keys(over).forEach(k => {
     const bv = base[k], ov = over[k];
@@ -417,12 +503,12 @@ function deepMerge(base, over){
 function loadPrices(){
   const fresh = JSON.parse(JSON.stringify(DEFAULT_PRICES));
   try{
-    const raw = localStorage.getItem("reno_prices_v1");
+    const raw = localStorage.getItem("reno_prices_v2");
     if(raw){ deepMerge(fresh, JSON.parse(raw)); }
   }catch(e){}
   return fresh;
 }
-function savePrices(){ localStorage.setItem("reno_prices_v1", JSON.stringify(prices)); }
+function savePrices(){ localStorage.setItem("reno_prices_v2", JSON.stringify(prices)); }
 function resetPricing(){
   if(!confirm("Reset all unit prices to GTA defaults?")) return;
   prices = JSON.parse(JSON.stringify(DEFAULT_PRICES));
@@ -448,9 +534,48 @@ function loadEstimate(id){
   const list = loadSavedList();
   const e = list.find(x=>x.id===id);
   if(!e) return;
-  state = e.state; state._id = id;
+  // Merge stored state over fresh defaults so newer fields populate
+  const merged = freshState();
+  deepMerge(merged, e.state || {});
+  migrateOldEstimate(merged);
+  state = merged; state._id = id;
   renderAll();
   closeSavedModal();
+}
+function migrateOldEstimate(m){
+  // Painting: old tier (standard/premium) -> coats (one/two)
+  if(m.painting && m.painting.tier && !m.painting.__migrated){
+    if(!m.painting.coats || (m.painting.coats!=="one" && m.painting.coats!=="two")){
+      m.painting.coats = m.painting.tier === "premium" ? "two" : "one";
+    }
+    m.painting.__migrated = true;
+  }
+  // Flooring: old tier (standard/premium) -> type
+  if(m.flooring && m.flooring.tier && (!m.flooring.type || !FLOORING_LABELS[m.flooring.type])){
+    m.flooring.type = m.flooring.tier === "premium" ? "engineered" : "laminate";
+  }
+  // Kitchen: premium -> custom
+  if(m.kitchen && m.kitchen.tier === "premium"){
+    m.kitchen.tier = "custom";
+  }
+  // Bathroom: standard -> builder, old tilingSqft -> floorTileSqft
+  if(m.bathroom && Array.isArray(m.bathroom.rooms)){
+    m.bathroom.rooms.forEach(b => {
+      if(b.tier === "standard") b.tier = "builder";
+      if(!b.tier) b.tier = "builder";
+      if(b.tilingSqft && !b.floorTileSqft){
+        b.floorTileSqft = b.tilingSqft;
+        b.wallTileSqft = b.wallTileSqft || "";
+      }
+    });
+  }
+  // Discount schema migration
+  if(m.discount){
+    if(m.discount.type && !m.discount.customType) m.discount.customType = m.discount.type;
+    if(m.discount.value && !m.discount.customValue) m.discount.customValue = m.discount.value;
+    if(m.discount.note && !m.discount.customNote)  m.discount.customNote  = m.discount.note;
+    if(typeof m.discount.listing !== "boolean") m.discount.listing = false;
+  }
 }
 function deleteEstimate(id){
   if(!confirm("Delete this estimate?")) return;
@@ -467,60 +592,114 @@ function newEstimate(){
 /* ---------- Calculations ---------- */
 function num(v){ const n = parseFloat(v); return isFinite(n) && n>0 ? n : 0; }
 
+function paintingSqft(){
+  const s = state.painting;
+  return s.scope === "custom" ? num(s.sqft) : num(state.propSqft);
+}
+
+function flooringMaterialQty(){
+  const sqft = num(state.flooring.sqft);
+  if(!sqft) return null;
+  const type = state.flooring.type || "vinyl";
+  const waste = WASTE_FACTORS[type] || 1.10;
+  return { sqft, qty: sqft * waste, pct: Math.round((waste-1)*100) };
+}
+
 function computeCategory(cat){
   let labour = 0, material = 0;
   const s = state[cat], p = prices[cat];
   if(!state.enabled[cat]) return {labour:0, material:0};
 
   if(cat === "painting"){
-    const sqft = num(state.propSqft);
-    const r = p[s.tier];
-    labour = sqft * r.labour;
-    material = sqft * r.material;
+    const sqft = paintingSqft();
+    const r = p.walls[s.coats || "one"] || p.walls.one;
+    labour += sqft * r.labour;
+    material += sqft * r.material;
     if(s.ceiling && p.ceiling){
-      const cSqft = num(s.ceilingSqft) || sqft; // default to property sqft if blank
-      const cr = p.ceiling[s.ceilingTier || s.tier] || p.ceiling.standard;
+      const cSqft = num(s.ceilingSqft) || sqft;
+      const cr = p.ceiling[s.ceilingTier || "standard"] || p.ceiling.standard;
       labour += cSqft * cr.labour;
       material += cSqft * cr.material;
+    }
+    if(s.trim && p.trim){
+      const lf = num(s.trimLinFt);
+      labour += lf * p.trim.labour;
+      material += lf * p.trim.material;
+    }
+    if(s.doors && p.door){
+      const dc = num(s.doorCount);
+      labour += dc * p.door.labour;
+      material += dc * p.door.material;
     }
   }
   else if(cat === "flooring"){
     const sqft = num(s.sqft);
-    const r = p[s.tier];
-    labour = sqft * r.labour;
-    material = sqft * r.material;
+    const type = s.type || "vinyl";
+    const r = p[type];
+    const waste = WASTE_FACTORS[type] || 1.10;
+    if(r){
+      labour += sqft * r.labour;
+      material += sqft * waste * r.material;
+    }
     if(s.removeOld && p.removal){
       const rSqft = num(s.removalSqft) || sqft;
       labour += rSqft * p.removal.labour;
       material += rSqft * p.removal.material;
     }
+    if(s.baseboards && p.baseboards){
+      const lf = num(s.baseboardLinFt);
+      labour += lf * p.baseboards.labour;
+      material += lf * p.baseboards.material;
+    }
   }
   else if(cat === "tiling"){
     const sqft = num(s.sqft);
-    const r = p[s.tier];
+    const r = p[s.tier] || p.standard;
     labour = sqft * r.labour;
     material = sqft * r.material;
   }
   else if(cat === "kitchen"){
-    const r = p[s.size][s.tier];
-    labour = r.labour; material = r.material;
+    const tier = s.tier || "standard";
+    const size = s.size || "medium";
+    const baseR = p.base[size][tier];
+    labour += baseR.labour; material += baseR.material;
+    if(s.counter && p.counter && p.counter[size] && p.counter[size][tier]){
+      const cr = p.counter[size][tier];
+      labour += cr.labour; material += cr.material;
+    }
+    if(s.island && p.island && p.island[tier]){
+      const ir = p.island[tier];
+      labour += ir.labour; material += ir.material;
+    }
+    if(s.undercabLighting && p.undercab){
+      labour += p.undercab.labour;
+      material += p.undercab.material;
+    }
   }
   else if(cat === "bathroom"){
     s.rooms.forEach(b => {
-      const base = p.base[b.pieces][b.tier];
-      labour += base.labour; material += base.material;
-      const t = num(b.tilingSqft);
-      const tr = p.tilingPerSqft[b.tier];
-      labour += t * tr.labour; material += t * tr.material;
-      if(b.standUpShower){
-        const ss = p.standUpShower[b.tier];
-        labour += ss.labour; material += ss.material;
+      const tier = b.tier || "builder";
+      const pieces = b.pieces || "4";
+      const baseRow = p.base[pieces];
+      if(baseRow && baseRow[tier]){
+        labour += baseRow[tier].labour;
+        material += baseRow[tier].material;
+      }
+      const ft = num(b.floorTileSqft);
+      const ftR = p.floorTile && p.floorTile[tier];
+      if(ftR){ labour += ft * ftR.labour; material += ft * ftR.material; }
+      const wt = num(b.wallTileSqft);
+      const wtR = p.wallTile && p.wallTile[tier];
+      if(wtR){ labour += wt * wtR.labour; material += wt * wtR.material; }
+      if(b.standUpShower && p.standUpShower && p.standUpShower[tier]){
+        labour += p.standUpShower[tier].labour;
+        material += p.standUpShower[tier].material;
       }
     });
   }
   else if(cat === "potlights"){
     const n = num(s.count);
-    const r = p[s.tier];
+    const r = p[s.tier] || p.standard;
     labour = n * r.labour;
     material = n * r.material;
   }
@@ -536,19 +715,29 @@ function computeTotals(){
     L += r.labour; M += r.material;
   });
   const sub = L + M;
-  const d = state.discount || { type:"percent", value:"" };
-  let discount = 0;
-  if(d.type === "percent"){
-    const pct = num(d.value);
-    discount = sub * (Math.min(pct,100)/100);
-  } else {
-    discount = num(d.value);
+  const d = state.discount || {};
+  let listingDisc = 0, customDisc = 0;
+  if(d.listing){
+    const pct = num(prices.listingDiscount && prices.listingDiscount.percent);
+    listingDisc = sub * (Math.min(pct,100)/100);
   }
-  discount = Math.min(discount, sub); // cap so we never go negative
+  if(d.customType === "percent"){
+    const pct = num(d.customValue);
+    customDisc = sub * (Math.min(pct,100)/100);
+  } else {
+    customDisc = num(d.customValue);
+  }
+  let discount = listingDisc + customDisc;
+  discount = Math.min(discount, sub);
+  // proportionally scale if combined > sub
+  if(listingDisc + customDisc > sub && listingDisc + customDisc > 0){
+    const scale = sub / (listingDisc + customDisc);
+    listingDisc *= scale; customDisc *= scale;
+  }
   const afterDisc = sub - discount;
   const hst = afterDisc * 0.13;
   const total = afterDisc + hst;
-  return { perCat, labour:L, material:M, subtotal:sub, discount, afterDisc, hst, total };
+  return { perCat, labour:L, material:M, subtotal:sub, listingDisc, customDisc, discount, afterDisc, hst, total };
 }
 
 function fmt(n){
@@ -561,19 +750,21 @@ function renderAll(){
   document.getElementById("propName").value = state.propName || "";
   document.getElementById("propAddress").value = state.propAddress || "";
   document.getElementById("propSqft").value = state.propSqft || "";
-  if(!state.discount) state.discount = { type:"percent", value:"", note:"" };
-  document.getElementById("discType").value = state.discount.type || "percent";
-  document.getElementById("discValue").value = state.discount.value || "";
-  document.getElementById("discNote").value = state.discount.note || "";
+  if(!state.discount) state.discount = { listing:false, customType:"percent", customValue:"", customNote:"" };
+  document.getElementById("sw-listing").checked = !!state.discount.listing;
+  document.getElementById("discCustomType").value = state.discount.customType || "percent";
+  document.getElementById("discCustomValue").value = state.discount.customValue || "";
+  document.getElementById("discCustomNote").value = state.discount.customNote || "";
+  document.getElementById("listingPctLabel").textContent = num(prices.listingDiscount && prices.listingDiscount.percent) || 0;
   renderDiscPlaceholder();
   renderCategories();
   renderTotals();
 }
 
 function renderDiscPlaceholder(){
-  const v = document.getElementById("discValue");
-  v.placeholder = state.discount.type === "percent" ? "e.g. 5" : "e.g. 1000";
-  v.step = state.discount.type === "percent" ? "0.5" : "50";
+  const v = document.getElementById("discCustomValue");
+  v.placeholder = state.discount.customType === "percent" ? "e.g. 5" : "e.g. 1000";
+  v.step = state.discount.customType === "percent" ? "0.5" : "50";
 }
 
 function renderTotals(){
@@ -589,44 +780,56 @@ function renderTotals(){
   document.getElementById("splitL").style.width = (t.labour/sub*100) + "%";
   document.getElementById("splitM").style.width = (t.material/sub*100) + "%";
 
-  // Detailed totals breakdown
+  // Detail breakdown
   document.getElementById("td-sub").textContent = fmt(t.subtotal);
   document.getElementById("td-hst").textContent = fmt(t.hst);
   document.getElementById("td-total").textContent = fmt(t.total);
-  const showDisc = t.discount > 0;
-  const dRow = document.getElementById("td-disc-row");
-  const dVal = document.getElementById("td-disc");
-  const aRow = document.getElementById("td-after-row");
-  const aVal = document.getElementById("td-after");
-  if(showDisc){
-    dRow.style.display = ""; dVal.style.display = "";
-    aRow.style.display = ""; aVal.style.display = "";
-    let label = "Client Discount";
-    const d = state.discount;
-    if(d.type === "percent" && num(d.value) > 0) label += ` (${num(d.value)}%)`;
-    document.getElementById("td-disc-row").firstChild.textContent = label + " ";
-    const note = (d.note || "").trim();
-    document.getElementById("td-disc-note").textContent = note ? `· ${note}` : "";
-    dVal.textContent = "−" + fmt(t.discount);
-    aVal.textContent = fmt(t.afterDisc);
+
+  // Listing discount line
+  const showListing = t.listingDisc > 0;
+  const lRow = document.getElementById("td-disc-listing-row");
+  const lVal = document.getElementById("td-disc-listing");
+  if(showListing){
+    lRow.style.display = ""; lVal.style.display = "";
+    document.getElementById("td-disc-listing-pct").textContent = "(" + (num(prices.listingDiscount && prices.listingDiscount.percent)||0) + "%)";
+    lVal.textContent = "−" + fmt(t.listingDisc);
   } else {
-    dRow.style.display = "none"; dVal.style.display = "none";
-    aRow.style.display = "none"; aVal.style.display = "none";
+    lRow.style.display = "none"; lVal.style.display = "none";
   }
-  // Discount panel header preview
+
+  // Custom discount line
+  const showCustom = t.customDisc > 0;
+  const cRow = document.getElementById("td-disc-custom-row");
+  const cVal = document.getElementById("td-disc-custom");
+  if(showCustom){
+    cRow.style.display = ""; cVal.style.display = "";
+    const d = state.discount;
+    const tag = d.customType === "percent" && num(d.customValue) > 0 ? `(${num(d.customValue)}%)` : "";
+    document.getElementById("td-disc-custom-note").textContent = tag + ((d.customNote||"").trim() ? ` · ${d.customNote.trim()}` : "");
+    cVal.textContent = "−" + fmt(t.customDisc);
+  } else {
+    cRow.style.display = "none"; cVal.style.display = "none";
+  }
+
+  // After-discount line
+  const showAfter = t.discount > 0;
+  document.getElementById("td-after-row").style.display = showAfter ? "" : "none";
+  document.getElementById("td-after").style.display = showAfter ? "" : "none";
+  document.getElementById("td-after").textContent = fmt(t.afterDisc);
+
+  // Discount header preview
   const dPrev = document.getElementById("discPreview");
   if(dPrev){
-    if(showDisc){
-      const d = state.discount;
-      const label = d.type === "percent" ? `${num(d.value)}% off` : `${fmt(num(d.value))} off`;
-      dPrev.textContent = `· ${label} = saving ${fmt(t.discount)}`;
+    if(t.discount > 0){
+      dPrev.textContent = `· saving ${fmt(t.discount)}`;
       dPrev.style.color = "var(--gold-bright)";
     } else {
       dPrev.textContent = "No discount applied";
       dPrev.style.color = "var(--muted)";
     }
   }
-  // update per-category totals shown in headers
+
+  // Per-category totals
   Object.keys(CATEGORY_META).forEach(cat => {
     const el = document.getElementById("cat-total-"+cat);
     if(el){
@@ -642,6 +845,18 @@ function renderTotals(){
       bd.querySelector(".bd-t").textContent = fmt(r.labour + r.material);
     }
   });
+
+  // Live flooring material readout
+  const fmro = document.getElementById("floor-mat-readout");
+  if(fmro){
+    const q = flooringMaterialQty();
+    if(q){
+      fmro.style.display = "";
+      fmro.textContent = `≈ ${Math.ceil(q.qty).toLocaleString("en-CA")} sqft of material to order (${q.sqft.toLocaleString("en-CA")} + ${q.pct}% waste)`;
+    } else {
+      fmro.style.display = "none";
+    }
+  }
 }
 
 function renderCategories(){
@@ -673,11 +888,11 @@ function renderCategories(){
   });
 }
 
-function tierToggle(cat, current){
+function tierToggle(cat, current, opts){
+  // opts = [{value, label}, {value, label}, ...]
   return `
     <div class="tier-row">
-      <label><input type="radio" name="tier-${cat}" value="standard" ${current==="standard"?"checked":""} onchange="setTier('${cat}','standard')"><span>Standard</span></label>
-      <label><input type="radio" name="tier-${cat}" value="premium" ${current==="premium"?"checked":""} onchange="setTier('${cat}','premium')"><span>Premium</span></label>
+      ${opts.map(o => `<label><input type="radio" name="tier-${cat}" value="${o.value}" ${current===o.value?"checked":""} onchange="setTier('${cat}','${o.value}')"><span>${o.label}</span></label>`).join("")}
     </div>
   `;
 }
@@ -695,48 +910,124 @@ function breakdownRows(cat){
 function renderCatBody(cat){
   const s = state[cat];
   if(cat === "painting"){
-    const cTier = s.ceilingTier || s.tier || "standard";
     return `
-      ${tierToggle(cat, s.tier)}
-      <div class="footnote" style="margin-bottom:14px;">Walls, trim &amp; doors only. Calculated from total property sqft above. Standard = contractor-grade prep + paint. Premium = full prep, two-coat, premium paint. <b style="color:var(--gold-bright)">Ceilings are not included</b> &mdash; add them below if needed.</div>
-      <div style="border:1px dashed var(--line-strong);border-radius:8px;padding:12px;background:var(--panel-2);margin-bottom:14px;">
-        <label class="check-row" style="margin-bottom:10px;">
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start;margin-bottom:14px;">
+        <div>
+          <label style="margin-bottom:6px;">Coats</label>
+          ${tierToggle("painting", s.coats, [{value:"one",label:"1 Coat"},{value:"two",label:"2 Coats"}])}
+        </div>
+      </div>
+      <div class="grid grid-2" style="margin-bottom:12px;">
+        <div>
+          <label>Painting scope</label>
+          <select onchange="state.painting.scope=this.value;renderCatBodyOnly('painting');renderTotals()">
+            <option value="whole"  ${s.scope==='whole'?'selected':''}>Entire property (use property sqft)</option>
+            <option value="custom" ${s.scope==='custom'?'selected':''}>Specific area (enter sqft below)</option>
+          </select>
+        </div>
+        ${s.scope==='custom' ? `
+          <div>
+            <label>Painting sqft</label>
+            <input type="number" min="0" value="${s.sqft||''}" oninput="state.painting.sqft=this.value;renderTotals()">
+          </div>
+        ` : ''}
+      </div>
+      <div class="footnote" style="margin-bottom:14px;">
+        Walls only — premium paint + full prep (patching, sanding, priming) included in both options.
+        <b style="color:var(--gold-bright)">1 coat</b> works for light-to-similar-light repaints.
+        <b style="color:var(--gold-bright)">2 coats</b> required when going from a dark colour to a lighter one.
+        Ceilings, trim &amp; doors are extras below.
+      </div>
+
+      <!-- Ceiling add-on -->
+      <div class="addon">
+        <label class="check-row" style="margin-bottom:${s.ceiling?'10px':'0'};">
           <input type="checkbox" ${s.ceiling?'checked':''} onchange="state.painting.ceiling=this.checked;renderCatBodyOnly('painting');renderTotals()">
-          <span style="font-weight:600;color:var(--ink-strong);text-transform:uppercase;letter-spacing:.08em;font-size:12px;">Add ceiling painting</span>
+          <span class="addon-title">Add ceiling painting</span>
         </label>
         ${s.ceiling ? `
           <div class="grid grid-2">
             <div>
               <label>Ceiling tier</label>
               <select onchange="state.painting.ceilingTier=this.value;renderTotals()">
-                <option value="standard" ${cTier==='standard'?'selected':''}>Standard (8&ndash;9ft, flat)</option>
-                <option value="premium"  ${cTier==='premium' ?'selected':''}>Premium (textured / vaulted / 10ft+)</option>
+                <option value="standard" ${(s.ceilingTier||'standard')==='standard'?'selected':''}>Standard (8&ndash;9ft, flat)</option>
+                <option value="premium"  ${s.ceilingTier==='premium' ?'selected':''}>Premium (textured / vaulted / 10ft+)</option>
               </select>
             </div>
             <div>
-              <label>Ceiling sqft <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(blank = use property sqft)</span></label>
-              <input type="number" min="0" value="${s.ceilingSqft||""}" placeholder="defaults to property sqft" oninput="state.painting.ceilingSqft=this.value;renderTotals()">
+              <label>Ceiling sqft <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(blank = use painting sqft)</span></label>
+              <input type="number" min="0" value="${s.ceilingSqft||""}" placeholder="defaults to painting sqft" oninput="state.painting.ceilingSqft=this.value;renderTotals()">
             </div>
           </div>
         ` : ""}
       </div>
-      <div>${breakdownRows(cat)}</div>
+
+      <!-- Trim / baseboards add-on -->
+      <div class="addon">
+        <label class="check-row" style="margin-bottom:${s.trim?'10px':'0'};">
+          <input type="checkbox" ${s.trim?'checked':''} onchange="state.painting.trim=this.checked;renderCatBodyOnly('painting');renderTotals()">
+          <span class="addon-title">Add baseboards &amp; trim painting</span>
+        </label>
+        ${s.trim ? `
+          <div class="grid grid-2">
+            <div>
+              <label>Linear feet of trim</label>
+              <input type="number" min="0" value="${s.trimLinFt||""}" placeholder="e.g. 280" oninput="state.painting.trimLinFt=this.value;renderTotals()">
+            </div>
+          </div>
+          <div class="footnote" style="margin-top:8px;">GTA 2026 going rate ~$2.00&ndash;$2.50/lin ft for refreshed baseboards, door &amp; window casings. A typical 1,500 sqft home has ~250&ndash;300 lin ft.</div>
+        ` : ""}
+      </div>
+
+      <!-- Doors add-on -->
+      <div class="addon last">
+        <label class="check-row" style="margin-bottom:${s.doors?'10px':'0'};">
+          <input type="checkbox" ${s.doors?'checked':''} onchange="state.painting.doors=this.checked;renderCatBodyOnly('painting');renderTotals()">
+          <span class="addon-title">Add door painting</span>
+        </label>
+        ${s.doors ? `
+          <div class="grid grid-2">
+            <div>
+              <label>Number of doors</label>
+              <input type="number" min="0" value="${s.doorCount||""}" placeholder="e.g. 8" oninput="state.painting.doorCount=this.value;renderTotals()">
+            </div>
+          </div>
+          <div class="footnote" style="margin-top:8px;">GTA 2026 going rate ~$85&ndash;$110 per interior door, both sides painted, hardware removed &amp; reinstalled.</div>
+        ` : ""}
+      </div>
+
+      <div style="margin-top:14px">${breakdownRows(cat)}</div>
     `;
   }
   if(cat === "flooring"){
+    const q = flooringMaterialQty();
     return `
-      ${tierToggle(cat, s.tier)}
+      <div style="margin-bottom:14px;">
+        <label style="margin-bottom:6px;">Flooring type</label>
+        ${tierToggle("flooring", s.type, [
+          {value:"vinyl",      label:"Vinyl"},
+          {value:"laminate",   label:"Waterproof Laminate"},
+          {value:"engineered", label:"Engineered Hardwood"},
+          {value:"hardwood",   label:"Solid Hardwood"}
+        ])}
+      </div>
       <div class="grid grid-2">
         <div>
           <label>Sqft of space to floor</label>
           <input type="number" min="0" value="${s.sqft||""}" oninput="state.flooring.sqft=this.value;renderTotals()">
+          <div class="info-readout" id="floor-mat-readout" style="display:${q?'':'none'};">
+            ${q ? `≈ ${Math.ceil(q.qty).toLocaleString("en-CA")} sqft of material to order (${q.sqft.toLocaleString("en-CA")} + ${q.pct}% waste)` : ""}
+          </div>
         </div>
       </div>
-      <div class="footnote" style="margin-top:10px;margin-bottom:14px;">Standard = laminate / LVP. Premium = engineered hardwood.</div>
-      <div style="border:1px dashed var(--line-strong);border-radius:8px;padding:12px;background:var(--panel-2);">
+      <div class="footnote" style="margin-top:10px;margin-bottom:14px;">
+        Material accounts for cutting waste (vinyl 7%, laminate 8%, engineered 10%, solid hardwood 12%). Labour is per sqft of finished space.
+      </div>
+
+      <div class="addon">
         <label class="check-row" style="margin-bottom:${s.removeOld?'10px':'0'};">
           <input type="checkbox" ${s.removeOld?'checked':''} onchange="state.flooring.removeOld=this.checked;renderCatBodyOnly('flooring');renderTotals()">
-          <span style="font-weight:600;color:var(--ink-strong);text-transform:uppercase;letter-spacing:.08em;font-size:12px;">Remove &amp; dispose of existing flooring</span>
+          <span class="addon-title">Remove &amp; dispose of existing flooring</span>
         </label>
         ${s.removeOld ? `
           <div class="grid grid-2">
@@ -745,15 +1036,32 @@ function renderCatBody(cat){
               <input type="number" min="0" value="${s.removalSqft||""}" placeholder="defaults to flooring sqft" oninput="state.flooring.removalSqft=this.value;renderTotals()">
             </div>
           </div>
-          <div class="footnote" style="margin-top:8px;">Includes labour to strip old flooring + haul-away &amp; dump fees. GTA going rate ~$1.50&ndash;$2.00/sqft.</div>
+          <div class="footnote" style="margin-top:8px;">Includes labour to strip old flooring + haul-away &amp; dump fees. GTA 2026 going rate ~$1.50&ndash;$2.00/sqft.</div>
         ` : ""}
       </div>
+
+      <div class="addon last">
+        <label class="check-row" style="margin-bottom:${s.baseboards?'10px':'0'};">
+          <input type="checkbox" ${s.baseboards?'checked':''} onchange="state.flooring.baseboards=this.checked;renderCatBodyOnly('flooring');renderTotals()">
+          <span class="addon-title">Add new baseboards</span>
+        </label>
+        ${s.baseboards ? `
+          <div class="grid grid-2">
+            <div>
+              <label>Linear feet of baseboards</label>
+              <input type="number" min="0" value="${s.baseboardLinFt||""}" placeholder="e.g. 220" oninput="state.flooring.baseboardLinFt=this.value;renderTotals()">
+            </div>
+          </div>
+          <div class="footnote" style="margin-top:8px;">Supply &amp; install of new MDF/poplar baseboards (4&ndash;5"). GTA 2026 going rate ~$4.00/lin ft installed (unpainted).</div>
+        ` : ""}
+      </div>
+
       <div style="margin-top:14px">${breakdownRows(cat)}</div>
     `;
   }
   if(cat === "tiling"){
     return `
-      ${tierToggle(cat, s.tier)}
+      ${tierToggle("tiling", s.tier, [{value:"standard",label:"Standard"},{value:"premium",label:"Premium"}])}
       <div class="grid grid-2">
         <div>
           <label>Sqft of space to tile</label>
@@ -766,18 +1074,50 @@ function renderCatBody(cat){
   }
   if(cat === "kitchen"){
     return `
-      ${tierToggle(cat, s.tier)}
-      <div class="grid grid-3">
+      <div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start;margin-bottom:14px;">
+        <div>
+          <label style="margin-bottom:6px;">Tier</label>
+          ${tierToggle("kitchen", s.tier, [{value:"standard",label:"Standard"},{value:"custom",label:"Custom"}])}
+        </div>
+      </div>
+      <div class="grid grid-3" style="margin-bottom:10px;">
         <div>
           <label>Kitchen size</label>
-          <select onchange="state.kitchen.size=this.value;renderTotals()">
+          <select onchange="state.kitchen.size=this.value;renderCatBodyOnly('kitchen');renderTotals()">
             <option value="small"  ${s.size==='small'?'selected':''}>Small (under 70 sqft)</option>
             <option value="medium" ${s.size==='medium'?'selected':''}>Medium (70 – 150 sqft)</option>
             <option value="large"  ${s.size==='large'?'selected':''}>Large (150+ sqft)</option>
           </select>
         </div>
       </div>
-      <div class="footnote">Includes cabinets, countertop, basic appliance install, sink, plumbing & electrical. Standard = stock cabinets + quartz. Premium = semi-custom cabinets, premium quartz, upgraded fixtures.</div>
+      <div class="footnote" style="margin-bottom:14px;">
+        Base price <b style="color:var(--gold-bright)">includes the sink, faucet, plumbing adjustments, cabinet install &amp; all hardware</b>.
+        <b style="color:var(--gold-bright)">Standard</b> = stock or semi-custom cabinets, builder-grade finishes.
+        <b style="color:var(--gold-bright)">Custom</b> = fully custom cabinets, premium fixtures &amp; finishes.
+        Countertops, island and under-cabinet lighting are separate add-ons below.
+      </div>
+
+      <div class="addon">
+        <label class="check-row" style="margin-bottom:0;">
+          <input type="checkbox" ${s.counter?'checked':''} onchange="state.kitchen.counter=this.checked;renderTotals()">
+          <span class="addon-title">Countertops <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(priced by kitchen size &amp; tier — ${kitchenCounterPriceLabel(s.size, s.tier)})</span></span>
+        </label>
+      </div>
+
+      <div class="addon">
+        <label class="check-row" style="margin-bottom:0;">
+          <input type="checkbox" ${s.island?'checked':''} onchange="state.kitchen.island=this.checked;renderTotals()">
+          <span class="addon-title">Add an island <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(${kitchenIslandPriceLabel(s.tier)})</span></span>
+        </label>
+      </div>
+
+      <div class="addon last">
+        <label class="check-row" style="margin-bottom:0;">
+          <input type="checkbox" ${s.undercabLighting?'checked':''} onchange="state.kitchen.undercabLighting=this.checked;renderTotals()">
+          <span class="addon-title">Under-cabinet lighting <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(${fmt((prices.kitchen.undercab.labour||0)+(prices.kitchen.undercab.material||0))} flat — typical run)</span></span>
+        </label>
+      </div>
+
       <div style="margin-top:14px">${breakdownRows(cat)}</div>
     `;
   }
@@ -785,12 +1125,16 @@ function renderCatBody(cat){
     return `
       <div id="bath-rooms">${renderBathrooms()}</div>
       <button class="add-btn no-print" onclick="addBath()">+ Add another bathroom</button>
+      <div class="footnote" style="margin-top:10px;">
+        <b style="color:var(--gold-bright)">Builder grade</b> = stock vanity, basic toilet/tub/shower, contractor-grade fixtures &amp; finishes.
+        <b style="color:var(--gold-bright)">Premium</b> = upgraded vanity (quartz top), comfort-height toilet, soaker tub or upgraded shower, premium fixtures (Moen / Delta / Riobel).
+      </div>
       <div style="margin-top:14px">${breakdownRows(cat)}</div>
     `;
   }
   if(cat === "potlights"){
     return `
-      ${tierToggle(cat, s.tier)}
+      ${tierToggle("potlights", s.tier, [{value:"standard",label:"Standard"},{value:"premium",label:"Premium"}])}
       <div class="grid grid-2">
         <div>
           <label>How many pot lights</label>
@@ -804,6 +1148,17 @@ function renderCatBody(cat){
   return "";
 }
 
+function kitchenCounterPriceLabel(size, tier){
+  const c = prices.kitchen && prices.kitchen.counter && prices.kitchen.counter[size] && prices.kitchen.counter[size][tier];
+  if(!c) return "";
+  return fmt(c.labour + c.material);
+}
+function kitchenIslandPriceLabel(tier){
+  const i = prices.kitchen && prices.kitchen.island && prices.kitchen.island[tier];
+  if(!i) return "";
+  return fmt(i.labour + i.material);
+}
+
 function renderBathrooms(){
   return state.bathroom.rooms.map((b,i)=>`
     <div class="bath-row">
@@ -811,6 +1166,7 @@ function renderBathrooms(){
         <div>
           <label>Bathroom #${i+1} pieces</label>
           <select onchange="state.bathroom.rooms[${i}].pieces=this.value;renderTotals()">
+            <option value="2" ${b.pieces==='2'?'selected':''}>2-piece (toilet, sink)</option>
             <option value="3" ${b.pieces==='3'?'selected':''}>3-piece (toilet, sink, tub or shower)</option>
             <option value="4" ${b.pieces==='4'?'selected':''}>4-piece (toilet, sink, tub, shower)</option>
             <option value="5" ${b.pieces==='5'?'selected':''}>5-piece (toilet, sink, tub, shower, dbl vanity)</option>
@@ -819,13 +1175,20 @@ function renderBathrooms(){
         <div>
           <label>Tier</label>
           <select onchange="state.bathroom.rooms[${i}].tier=this.value;renderTotals()">
-            <option value="standard" ${b.tier==='standard'?'selected':''}>Standard</option>
-            <option value="premium"  ${b.tier==='premium'?'selected':''}>Premium</option>
+            <option value="builder" ${b.tier==='builder'?'selected':''}>Builder grade</option>
+            <option value="premium" ${b.tier==='premium'?'selected':''}>Premium</option>
           </select>
         </div>
+        <div></div>
+      </div>
+      <div class="grid grid-2" style="margin-top:10px;">
         <div>
-          <label>Tiling required (sqft)</label>
-          <input type="number" min="0" value="${b.tilingSqft||""}" oninput="state.bathroom.rooms[${i}].tilingSqft=this.value;renderTotals()">
+          <label>Floor tiling required (sqft)</label>
+          <input type="number" min="0" value="${b.floorTileSqft||""}" oninput="state.bathroom.rooms[${i}].floorTileSqft=this.value;renderTotals()">
+        </div>
+        <div>
+          <label>Wall tiling required (sqft)</label>
+          <input type="number" min="0" value="${b.wallTileSqft||""}" oninput="state.bathroom.rooms[${i}].wallTileSqft=this.value;renderTotals()">
         </div>
       </div>
       <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
@@ -859,7 +1222,6 @@ function setEnabled(cat, val){
   renderTotals();
 }
 function toggleCat(cat, ev){
-  // toggle body collapse without flipping the switch
   if(ev && (ev.target.tagName === "INPUT" || ev.target.tagName === "LABEL")) return;
   const body = document.getElementById("cat-body-"+cat);
   if(!body) return;
@@ -871,6 +1233,9 @@ function toggleCat(cat, ev){
   }
 }
 function setTier(cat, tier){
+  if(cat === "painting"){ state.painting.coats = tier; renderTotals(); return; }
+  if(cat === "flooring"){ state.flooring.type = tier; renderCatBodyOnly("flooring"); renderTotals(); return; }
+  if(cat === "kitchen"){ state.kitchen.tier = tier; renderCatBodyOnly("kitchen"); renderTotals(); return; }
   state[cat].tier = tier;
   renderTotals();
 }
@@ -921,23 +1286,30 @@ function setPrice(path, val){
   for(let i=0;i<parts.length-1;i++){ o = o[parts[i]]; }
   o[parts[parts.length-1]] = v;
   savePrices();
+  // refresh dependent UI hints/labels
+  document.getElementById("listingPctLabel").textContent = num(prices.listingDiscount && prices.listingDiscount.percent) || 0;
+  if(state.enabled.kitchen) renderCatBodyOnly("kitchen");
   renderTotals();
 }
+
+function cap(s){ return (s||"").charAt(0).toUpperCase()+(s||"").slice(1); }
 
 function renderPricingEditor(){
   const e = document.getElementById("pricingEditor");
   let html = "";
-  // Painting
-  html += `<div class="section-title">Painting &mdash; walls/trim (per sqft of property)</div>
+
+  // Painting — walls
+  html += `<div class="section-title">Painting &mdash; walls (per sqft, premium paint + full prep)</div>
     <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
-  ["standard","premium"].forEach(t=>{
+  [{k:"one",l:"1 Coat"},{k:"two",l:"2 Coats"}].forEach(o=>{
     html += `<div class="price-edit-row">
-      <div class="lbl">${cap(t)}</div>
-      <div>${priceInput("painting."+t+".labour", prices.painting[t].labour)}</div>
-      <div>${priceInput("painting."+t+".material", prices.painting[t].material)}</div>
+      <div class="lbl">${o.l}</div>
+      <div>${priceInput("painting.walls."+o.k+".labour", prices.painting.walls[o.k].labour)}</div>
+      <div>${priceInput("painting.walls."+o.k+".material", prices.painting.walls[o.k].material)}</div>
     </div>`;
   });
-  // Painting -- ceiling add-on
+
+  // Painting — ceiling
   html += `<div class="section-title">Painting &mdash; ceiling add-on (per sqft of ceiling)</div>
     <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
   ["standard","premium"].forEach(t=>{
@@ -947,26 +1319,56 @@ function renderPricingEditor(){
       <div>${priceInput("painting.ceiling."+t+".material", prices.painting.ceiling[t].material)}</div>
     </div>`;
   });
-  // Flooring
+
+  // Painting — trim
+  html += `<div class="section-title">Painting &mdash; baseboards &amp; trim (per linear foot)</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>
+    <div class="price-edit-row">
+      <div class="lbl">Trim refresh</div>
+      <div>${priceInput("painting.trim.labour", prices.painting.trim.labour)}</div>
+      <div>${priceInput("painting.trim.material", prices.painting.trim.material)}</div>
+    </div>`;
+
+  // Painting — doors
+  html += `<div class="section-title">Painting &mdash; interior doors (per door)</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>
+    <div class="price-edit-row">
+      <div class="lbl">Per door</div>
+      <div>${priceInput("painting.door.labour", prices.painting.door.labour, 5)}</div>
+      <div>${priceInput("painting.door.material", prices.painting.door.material, 5)}</div>
+    </div>`;
+
+  // Flooring — types
   html += `<div class="section-title">Flooring &mdash; install (per sqft)</div>
     <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
-  ["standard","premium"].forEach(t=>{
+  ["vinyl","laminate","engineered","hardwood"].forEach(t=>{
     html += `<div class="price-edit-row">
-      <div class="lbl">${cap(t)}</div>
+      <div class="lbl">${FLOORING_LABELS[t]}</div>
       <div>${priceInput("flooring."+t+".labour", prices.flooring[t].labour)}</div>
       <div>${priceInput("flooring."+t+".material", prices.flooring[t].material)}</div>
     </div>`;
   });
-  // Flooring -- removal & disposal
-  html += `<div class="section-title">Flooring &mdash; old flooring removal &amp; disposal (per sqft)</div>
+
+  // Flooring — removal
+  html += `<div class="section-title">Flooring &mdash; old removal &amp; disposal (per sqft)</div>
     <div class="price-edit-row head"><div></div><div>Labour $</div><div>Disposal $</div></div>
     <div class="price-edit-row">
       <div class="lbl">Removal &amp; haul-away</div>
       <div>${priceInput("flooring.removal.labour", prices.flooring.removal.labour)}</div>
       <div>${priceInput("flooring.removal.material", prices.flooring.removal.material)}</div>
     </div>`;
+
+  // Flooring — baseboards
+  html += `<div class="section-title">Flooring &mdash; new baseboards (per linear foot)</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>
+    <div class="price-edit-row">
+      <div class="lbl">Supply &amp; install</div>
+      <div>${priceInput("flooring.baseboards.labour", prices.flooring.baseboards.labour)}</div>
+      <div>${priceInput("flooring.baseboards.material", prices.flooring.baseboards.material)}</div>
+    </div>`;
+
   // Tiling
-  html += `<div class="section-title">Tiling (per sqft)</div>
+  html += `<div class="section-title">Tiling &mdash; non-bathroom (per sqft)</div>
     <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
   ["standard","premium"].forEach(t=>{
     html += `<div class="price-edit-row">
@@ -975,50 +1377,99 @@ function renderPricingEditor(){
       <div>${priceInput("tiling."+t+".material", prices.tiling[t].material)}</div>
     </div>`;
   });
-  // Kitchen
-  html += `<div class="section-title">Kitchen (lump sum by size)</div>
+
+  // Kitchen base
+  html += `<div class="section-title">Kitchen base (cabinets + sink + plumbing + hardware)</div>
     <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
   ["small","medium","large"].forEach(sz=>{
-    ["standard","premium"].forEach(t=>{
+    ["standard","custom"].forEach(t=>{
       html += `<div class="price-edit-row">
         <div class="lbl">${cap(sz)} &middot; ${cap(t)}</div>
-        <div>${priceInput("kitchen."+sz+"."+t+".labour", prices.kitchen[sz][t].labour, 50)}</div>
-        <div>${priceInput("kitchen."+sz+"."+t+".material", prices.kitchen[sz][t].material, 50)}</div>
+        <div>${priceInput("kitchen.base."+sz+"."+t+".labour", prices.kitchen.base[sz][t].labour, 50)}</div>
+        <div>${priceInput("kitchen.base."+sz+"."+t+".material", prices.kitchen.base[sz][t].material, 50)}</div>
       </div>`;
     });
   });
+
+  // Kitchen counters
+  html += `<div class="section-title">Kitchen countertops (by size &amp; tier)</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
+  ["small","medium","large"].forEach(sz=>{
+    ["standard","custom"].forEach(t=>{
+      html += `<div class="price-edit-row">
+        <div class="lbl">${cap(sz)} &middot; ${cap(t)}</div>
+        <div>${priceInput("kitchen.counter."+sz+"."+t+".labour", prices.kitchen.counter[sz][t].labour, 25)}</div>
+        <div>${priceInput("kitchen.counter."+sz+"."+t+".material", prices.kitchen.counter[sz][t].material, 25)}</div>
+      </div>`;
+    });
+  });
+
+  // Kitchen island
+  html += `<div class="section-title">Kitchen island add-on</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
+  ["standard","custom"].forEach(t=>{
+    html += `<div class="price-edit-row">
+      <div class="lbl">${cap(t)}</div>
+      <div>${priceInput("kitchen.island."+t+".labour", prices.kitchen.island[t].labour, 50)}</div>
+      <div>${priceInput("kitchen.island."+t+".material", prices.kitchen.island[t].material, 50)}</div>
+    </div>`;
+  });
+
+  // Under-cab lighting
+  html += `<div class="section-title">Under-cabinet lighting (flat, typical run)</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>
+    <div class="price-edit-row">
+      <div class="lbl">LED strip + driver + install</div>
+      <div>${priceInput("kitchen.undercab.labour", prices.kitchen.undercab.labour, 25)}</div>
+      <div>${priceInput("kitchen.undercab.material", prices.kitchen.undercab.material, 25)}</div>
+    </div>`;
+
   // Bathroom base
   html += `<div class="section-title">Bathroom base (excludes tiling &amp; shower add)</div>
     <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
-  ["3","4","5"].forEach(p=>{
-    ["standard","premium"].forEach(t=>{
+  ["2","3","4","5"].forEach(p=>{
+    ["builder","premium"].forEach(t=>{
       html += `<div class="price-edit-row">
-        <div class="lbl">${p}-piece &middot; ${cap(t)}</div>
+        <div class="lbl">${p}-piece &middot; ${t==="builder"?"Builder grade":"Premium"}</div>
         <div>${priceInput("bathroom.base."+p+"."+t+".labour", prices.bathroom.base[p][t].labour, 50)}</div>
         <div>${priceInput("bathroom.base."+p+"."+t+".material", prices.bathroom.base[p][t].material, 50)}</div>
       </div>`;
     });
   });
-  // Bathroom tiling
-  html += `<div class="section-title">Bathroom tiling (per sqft)</div>
+
+  // Bathroom floor tile
+  html += `<div class="section-title">Bathroom floor tiling (per sqft)</div>
     <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
-  ["standard","premium"].forEach(t=>{
+  ["builder","premium"].forEach(t=>{
     html += `<div class="price-edit-row">
-      <div class="lbl">${cap(t)}</div>
-      <div>${priceInput("bathroom.tilingPerSqft."+t+".labour", prices.bathroom.tilingPerSqft[t].labour)}</div>
-      <div>${priceInput("bathroom.tilingPerSqft."+t+".material", prices.bathroom.tilingPerSqft[t].material)}</div>
+      <div class="lbl">${t==="builder"?"Builder grade":"Premium"}</div>
+      <div>${priceInput("bathroom.floorTile."+t+".labour", prices.bathroom.floorTile[t].labour)}</div>
+      <div>${priceInput("bathroom.floorTile."+t+".material", prices.bathroom.floorTile[t].material)}</div>
     </div>`;
   });
+
+  // Bathroom wall tile
+  html += `<div class="section-title">Bathroom wall tiling (per sqft)</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
+  ["builder","premium"].forEach(t=>{
+    html += `<div class="price-edit-row">
+      <div class="lbl">${t==="builder"?"Builder grade":"Premium"}</div>
+      <div>${priceInput("bathroom.wallTile."+t+".labour", prices.bathroom.wallTile[t].labour)}</div>
+      <div>${priceInput("bathroom.wallTile."+t+".material", prices.bathroom.wallTile[t].material)}</div>
+    </div>`;
+  });
+
   // Stand-up shower
   html += `<div class="section-title">Stand-up shower add-on (per bathroom)</div>
     <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
-  ["standard","premium"].forEach(t=>{
+  ["builder","premium"].forEach(t=>{
     html += `<div class="price-edit-row">
-      <div class="lbl">${cap(t)}</div>
+      <div class="lbl">${t==="builder"?"Builder grade":"Premium"}</div>
       <div>${priceInput("bathroom.standUpShower."+t+".labour", prices.bathroom.standUpShower[t].labour, 50)}</div>
       <div>${priceInput("bathroom.standUpShower."+t+".material", prices.bathroom.standUpShower[t].material, 50)}</div>
     </div>`;
   });
+
   // Pot lights
   html += `<div class="section-title">Pot lights (per fixture)</div>
     <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
@@ -1029,9 +1480,17 @@ function renderPricingEditor(){
       <div>${priceInput("potlights."+t+".material", prices.potlights[t].material, 5)}</div>
     </div>`;
   });
+
+  // Listing discount
+  html += `<div class="section-title">Listing Discount (default %)</div>
+    <div class="price-edit-row single head"><div></div><div>Percent %</div></div>
+    <div class="price-edit-row single">
+      <div class="lbl">Listing client discount</div>
+      <div>${priceInput("listingDiscount.percent", prices.listingDiscount.percent, 0.5)}</div>
+    </div>`;
+
   e.innerHTML = html;
 }
-function cap(s){ return s.charAt(0).toUpperCase()+s.slice(1); }
 
 /* ---------- Toast ---------- */
 function flash(msg){
@@ -1047,7 +1506,7 @@ let acTimer = null;
 let acAbort = null;
 let acResults = [];
 let acIdx = -1;
-const GTA_VIEWBOX = "-80.30,44.50,-78.40,43.30"; // left,top,right,bottom (covers Mississauga, Toronto, Markham, Pickering, Oakville, Brampton, Vaughan)
+const GTA_VIEWBOX = "-80.30,44.50,-78.40,43.30"; // left,top,right,bottom
 
 function onAddressInput(value){
   state.propAddress = value;
@@ -1074,7 +1533,6 @@ async function fetchAcSuggestions(q){
     });
     if(!res.ok) throw new Error("Lookup failed");
     const data = await res.json();
-    // Filter to Ontario only (extra safety)
     acResults = (data || []).filter(r =>
       r.address && (r.address.state === "Ontario" || r.address["ISO3166-2-lvl4"] === "CA-ON")
     );
@@ -1132,7 +1590,6 @@ function hideAcList(){
 }
 
 function hideAcSoon(){
-  // Delay so click on item registers before hide
   setTimeout(hideAcList, 180);
 }
 
