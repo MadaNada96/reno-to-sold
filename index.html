@@ -335,6 +335,215 @@
     text-align:center; padding:60px 20px; color:#999; font-style:italic;
   }
 
+  /* Subtle lock icon button (Internal Mode entry point) */
+  .lock-btn{
+    position:fixed; right:18px; bottom:18px;
+    width:38px; height:38px;
+    border-radius:50%;
+    background:#000;
+    border:1px solid rgba(212,175,106,.30);
+    color:rgba(212,175,106,.50);
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer; transition:all .15s;
+    z-index:60;
+    padding:0;
+    box-shadow:0 2px 10px rgba(0,0,0,.4);
+    opacity:.55;
+  }
+  .lock-btn:hover{
+    color:var(--gold-bright);
+    border-color:var(--gold);
+    opacity:1;
+    transform:translateY(-1px);
+  }
+  .lock-btn.unlocked{
+    color:var(--gold-bright);
+    border-color:var(--gold);
+    opacity:.85;
+  }
+  body.show-contractor .lock-btn,
+  body.show-internal .lock-btn{ display:none !important; }
+
+  /* PIN modal */
+  .pin-modal-input{
+    font-size:20px; letter-spacing:.5em; text-align:center;
+    padding:14px; font-weight:600;
+  }
+  .pin-msg{font-size:12px; color:var(--danger); margin-top:10px; text-align:center; min-height:18px;}
+  .pin-msg.ok{color:var(--gold-bright);}
+
+  /* Internal Mode view (full-screen overlay, dark theme) */
+  .internal-view{
+    display:none;
+    position:fixed; inset:0;
+    z-index:1000;
+    background:radial-gradient(ellipse at top, #161616 0%, #0a0a0a 60%);
+    overflow:auto;
+    color:var(--ink);
+  }
+  body.show-internal{ overflow:hidden; }
+  body.show-internal .internal-view{ display:block; }
+  body.show-internal > .app,
+  body.show-internal > .modal-bg,
+  body.show-internal > .contractor-view{ display:none !important; }
+
+  .internal-toolbar{
+    position:sticky; top:0;
+    background:#000;
+    padding:14px 24px;
+    display:flex; gap:10px; justify-content:space-between; align-items:center;
+    border-bottom:2px solid var(--gold);
+    z-index:10;
+    flex-wrap:wrap;
+  }
+  .internal-toolbar .iv-title{
+    color:var(--gold-bright);
+    font-size:13px; letter-spacing:.18em; text-transform:uppercase; font-weight:700;
+    display:flex; align-items:center; gap:10px;
+  }
+  .internal-toolbar .iv-conf{
+    font-size:9px;
+    color:#e26d6d;
+    padding:3px 8px;
+    border:1px solid #e26d6d;
+    border-radius:4px;
+    letter-spacing:.22em; font-weight:700;
+  }
+  .internal-toolbar .iv-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+
+  .internal-sheet{
+    max-width:1000px;
+    margin:24px auto;
+    padding:0 24px 40px;
+  }
+  @media (max-width:680px){ .internal-sheet{ padding:0 14px 32px; } }
+
+  .iv-meta{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:18px 22px;
+    margin-bottom:14px;
+    display:grid; grid-template-columns:1fr 1fr;
+    gap:10px 24px;
+    font-size:13px;
+    box-shadow:var(--shadow);
+  }
+  @media (max-width:680px){ .iv-meta{ grid-template-columns:1fr; } }
+  .iv-meta strong{
+    display:block; font-size:9px; font-weight:700;
+    text-transform:uppercase; letter-spacing:.18em;
+    color:var(--muted); margin-bottom:3px;
+  }
+
+  .iv-block{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:18px 22px;
+    margin-bottom:14px;
+    box-shadow:var(--shadow);
+    page-break-inside:avoid; break-inside:avoid;
+  }
+  .iv-block-head{
+    display:flex; justify-content:space-between; align-items:center; gap:14px;
+    font-size:12px; letter-spacing:.18em; text-transform:uppercase; font-weight:700;
+    color:var(--gold-bright);
+    padding-bottom:10px;
+    margin-bottom:14px;
+    border-bottom:1px solid var(--line);
+  }
+  .iv-block-head .margin-pill{
+    font-size:11px; color:#9bcca0; font-weight:700; letter-spacing:.05em;
+    background:rgba(155,204,160,.08); border:1px solid rgba(155,204,160,.3);
+    padding:4px 10px; border-radius:12px;
+  }
+  .iv-block-head .margin-pill.low{ color:#e2b06d; background:rgba(226,176,109,.08); border-color:rgba(226,176,109,.3); }
+  .iv-block-head .margin-pill.neg{ color:#e26d6d; background:rgba(226,109,109,.08); border-color:rgba(226,109,109,.3); }
+  .iv-scope-list{
+    list-style:none; padding:0; margin:0 0 14px;
+    font-size:13px; line-height:1.7; color:var(--ink);
+  }
+  .iv-scope-list li{ padding-left:14px; position:relative; }
+  .iv-scope-list li::before{
+    content:""; position:absolute; left:0; top:.65em;
+    width:6px; height:6px; background:var(--gold-deep);
+  }
+  .iv-scope-list li.sub{ padding-left:28px; }
+  .iv-scope-list li.sub::before{ left:14px; }
+  .iv-scope-list li.bath-hdr{ padding-left:0; font-weight:700; margin-top:6px; color:var(--ink-strong); }
+  .iv-scope-list li.bath-hdr::before{ display:none; }
+
+  .iv-money{
+    display:grid;
+    grid-template-columns:120px repeat(3, 1fr);
+    gap:8px 18px;
+    font-size:13px;
+    font-variant-numeric:tabular-nums;
+    padding-top:12px;
+    border-top:1px dashed var(--line);
+  }
+  .iv-money .col-head{
+    font-size:10px; text-transform:uppercase; letter-spacing:.18em; color:var(--muted); font-weight:700;
+    text-align:right;
+  }
+  .iv-money .col-head.first{ text-align:left; }
+  .iv-money .row-label{
+    font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); font-weight:600;
+    align-self:center;
+  }
+  .iv-money .val{ text-align:right; color:var(--ink); align-self:center; }
+  .iv-money .val.client{ color:#fff; font-weight:600; }
+  .iv-money .val.cost{ color:#b8946f; }
+  .iv-money .val.profit{ color:#9bcca0; font-weight:700; }
+  .iv-money .val.profit.low{ color:#e2b06d; }
+  .iv-money .val.profit.neg{ color:#e26d6d; }
+  @media (max-width:680px){
+    .iv-money{ grid-template-columns:auto 1fr 1fr; gap:6px 12px; font-size:12px; }
+    .iv-money .col-head:nth-child(4){ display:none; }
+    .iv-money .val:nth-child(4n){ display:none; }
+  }
+
+  .iv-summary{
+    background:#000;
+    border:1px solid var(--gold-deep);
+    border-radius:12px;
+    padding:22px 26px;
+    margin-top:18px;
+    box-shadow:var(--gold-glow), var(--shadow);
+    page-break-inside:avoid; break-inside:avoid;
+    position:relative;
+    overflow:hidden;
+  }
+  .iv-summary::before{
+    content:""; position:absolute; top:0; left:0; right:0; height:2px;
+    background:var(--gold-grad);
+  }
+  .iv-summary-head{
+    font-size:12px; letter-spacing:.18em; text-transform:uppercase; font-weight:700;
+    color:var(--gold-bright);
+    margin-bottom:18px;
+  }
+  .iv-summary-row{
+    display:flex; justify-content:space-between; align-items:baseline;
+    padding:8px 0;
+    font-size:14px;
+    font-variant-numeric:tabular-nums;
+  }
+  .iv-summary-row + .iv-summary-row{ border-top:1px solid #1f1f1f; }
+  .iv-summary-row .lbl{ color:var(--ink); font-size:12px; letter-spacing:.1em; text-transform:uppercase; font-weight:600; }
+  .iv-summary-row .val{ color:#fff; font-weight:600; }
+  .iv-summary-row.cost-row .val{ color:#b8946f; }
+  .iv-summary-row.profit-row{
+    border-top:2px solid var(--gold-deep);
+    margin-top:8px; padding-top:14px;
+  }
+  .iv-summary-row.profit-row .lbl{ color:var(--gold-bright); font-size:13px; }
+  .iv-summary-row.profit-row .val{ color:#9bcca0; font-weight:800; font-size:22px; }
+  .iv-summary-row.margin-row .val{ color:#9bcca0; font-weight:700; }
+  .iv-summary-row.disc-row .val{ color:#ff9b6a; }
+  .iv-summary-row.divider{ border-top:1px dashed #2a2a30; margin-top:10px; padding-top:14px; }
+
   /* Print */
   @media print{
     body{background:#fff;color:#000;}
@@ -345,7 +554,8 @@
     .total-card .grand{color:#000 !important;}
     .total-card .meta,.total-card .prop{color:#000 !important;}
     .split-bar{background:#eee;}
-    .panel{box-shadow:none;border-color:#000;background:#fff;color:#000;page-break-inside:avoid;}
+    .panel{box-shadow:none;border-color:#000;background:#fff;color:#000;page-break-inside:avoid;break-inside:avoid;}
+    .cat,.bath-row,.total-card,.addon,.disc-toggle-row{page-break-inside:avoid !important;break-inside:avoid !important;}
     .panel h2{color:#000;border-color:#000;}
     .cat{background:#fff;border-color:#000;}
     .cat-head{background:#f5f5f5;}
@@ -383,6 +593,34 @@
     body.show-contractor .summary-title{
       -webkit-print-color-adjust:exact; print-color-adjust:exact;
     }
+
+    /* Internal Mode print — light-on-white, sections kept together */
+    body.show-internal{ background:#fff !important; color:#000 !important; }
+    body.show-internal .internal-view{ position:static !important; background:#fff !important; overflow:visible !important; }
+    body.show-internal .internal-toolbar{ display:none !important; }
+    body.show-internal .internal-sheet{ margin:0 !important; padding:0 !important; max-width:none !important; }
+    body.show-internal .iv-meta,
+    body.show-internal .iv-block,
+    body.show-internal .iv-summary{
+      background:#fff !important; color:#000 !important;
+      border-color:#000 !important; box-shadow:none !important;
+      page-break-inside:avoid !important; break-inside:avoid !important;
+    }
+    body.show-internal .iv-block-head,
+    body.show-internal .iv-summary-head{ color:#000 !important; border-color:#000 !important; }
+    body.show-internal .iv-block-head .margin-pill{ background:#fce8c4 !important; color:#000 !important; border-color:#000 !important; }
+    body.show-internal .iv-scope-list li{ color:#000 !important; }
+    body.show-internal .iv-money .val,
+    body.show-internal .iv-money .row-label,
+    body.show-internal .iv-money .col-head{ color:#000 !important; }
+    body.show-internal .iv-money .val.profit{ color:#0a6a25 !important; font-weight:800; }
+    body.show-internal .iv-money .val.profit.low{ color:#a8650a !important; }
+    body.show-internal .iv-money .val.profit.neg{ color:#a32a2a !important; }
+    body.show-internal .iv-summary-row .lbl,
+    body.show-internal .iv-summary-row .val{ color:#000 !important; }
+    body.show-internal .iv-summary-row.profit-row .val{ color:#0a6a25 !important; }
+    body.show-internal .iv-summary-row.disc-row .val{ color:#a32a2a !important; }
+    body.show-internal .lock-btn{ display:none !important; }
   }
 </style>
 </head>
@@ -508,6 +746,68 @@
   </div>
   <div class="contractor-sheet" id="contractorSheet"></div>
 </div>
+
+<!-- Internal Mode view (full-screen overlay, PIN-gated) -->
+<div id="internalView" class="internal-view">
+  <div class="internal-toolbar no-print">
+    <div class="iv-title">
+      Internal Cost Analysis
+      <span class="iv-conf">Confidential</span>
+    </div>
+    <div class="iv-actions">
+      <button onclick="openContractorPricing()">Contractor Rates</button>
+      <button onclick="closeInternal()">&larr; Back to Estimator</button>
+      <button class="primary" onclick="window.print()">Print Internal</button>
+    </div>
+  </div>
+  <div class="internal-sheet" id="internalSheet"></div>
+</div>
+
+<!-- Contractor pricing modal (Internal only) -->
+<div class="modal-bg" id="contractorPricingModal" onclick="if(event.target===this)closeContractorPricing()">
+  <div class="modal">
+    <h3>
+      <span>Edit Contractor Rates</span>
+      <span class="small-stack">
+        <button class="ghost" onclick="resetContractorPricing()">Reset to 70% of client</button>
+        <button class="primary" onclick="closeContractorPricing()">Done</button>
+      </span>
+    </h3>
+    <div class="modal-body" id="contractorPricingEditor"></div>
+  </div>
+</div>
+
+<!-- PIN modal (gates Internal Mode) -->
+<div class="modal-bg" id="pinModal" onclick="if(event.target===this)closePinModal()">
+  <div class="modal" style="max-width:420px;">
+    <h3>
+      <span id="pinModalTitle">Enter Internal Code</span>
+      <button class="ghost" onclick="closePinModal()">Close</button>
+    </h3>
+    <div class="modal-body">
+      <p class="footnote" id="pinModalIntro" style="margin-top:0;font-size:12px;line-height:1.6;">Enter your code to access Internal Mode.</p>
+      <form onsubmit="event.preventDefault();submitPin();">
+        <input type="password" id="pinInput" class="pin-modal-input" inputmode="numeric" autocomplete="off" maxlength="20" placeholder="Code">
+      </form>
+      <div class="pin-msg" id="pinMsg" style="display:none"></div>
+      <div style="display:flex;gap:8px;margin-top:14px;justify-content:space-between;align-items:center;flex-wrap:wrap;">
+        <button class="ghost" id="pinResetBtn" onclick="resetPinPrompt()" style="display:none;font-size:11px;">Forgot / Reset Code</button>
+        <div style="display:flex;gap:8px;margin-left:auto;">
+          <button class="ghost" onclick="closePinModal()">Cancel</button>
+          <button class="primary" onclick="submitPin()">Unlock</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Floating lock icon (Internal Mode entry) -->
+<button id="lockBtn" class="lock-btn no-print" onclick="onLockClick()" aria-label="Internal mode" title="Internal Mode">
+  <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+  </svg>
+</button>
 
 <!-- Saved estimates modal -->
 <div class="modal-bg" id="savedModal" onclick="if(event.target===this)closeSavedModal()">
@@ -796,10 +1096,12 @@ function flooringMaterialQty(){
   return { sqft, qty: sqft * waste, pct: Math.round((waste-1)*100) };
 }
 
-function computeCategory(cat){
+function computeCategory(cat, priceSet){
+  priceSet = priceSet || prices;
   let labour = 0, material = 0;
-  const s = state[cat], p = prices[cat];
+  const s = state[cat], p = priceSet[cat];
   if(!state.enabled[cat]) return {labour:0, material:0};
+  if(!p) return {labour:0, material:0};
 
   if(cat === "painting"){
     const sqft = paintingSqft();
@@ -1890,6 +2192,512 @@ function flash(msg){
   t.style.cssText = "position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#000;color:#e8c989;padding:11px 22px;border:1px solid #d4af6a;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.5);z-index:200;font-size:12px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;";
   document.body.appendChild(t);
   setTimeout(()=>t.remove(), 1800);
+}
+
+/* ---------- Internal Mode (PIN-gated, cost analysis) ---------- */
+let internalUnlocked = false;
+let contractorPrices = null;
+
+async function sha256(s){
+  const buf = new TextEncoder().encode(s);
+  const hash = await crypto.subtle.digest("SHA-256", buf);
+  return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function pinHashKey(){ return "reno_internal_pin_v1"; }
+function hasPinSet(){ return !!localStorage.getItem(pinHashKey()); }
+
+function onLockClick(){
+  if(internalUnlocked){ openInternal(); }
+  else { openPinModal(); }
+}
+
+function openPinModal(){
+  const setMode = !hasPinSet();
+  document.getElementById("pinModalTitle").textContent = setMode ? "Set Internal Code" : "Enter Internal Code";
+  document.getElementById("pinModalIntro").innerHTML = setMode
+    ? "First-time setup. Choose a 4&ndash;8 digit code. This unlocks Internal Mode &mdash; where you can see contractor costs &amp; margins. The code is stored only on this device."
+    : "Enter your code to access Internal Mode.";
+  document.getElementById("pinInput").value = "";
+  document.getElementById("pinInput").placeholder = setMode ? "Choose 4-8 digits" : "Enter code";
+  document.getElementById("pinResetBtn").style.display = setMode ? "none" : "";
+  const msg = document.getElementById("pinMsg");
+  msg.style.display = "none"; msg.className = "pin-msg"; msg.textContent = "";
+  document.getElementById("pinModal").classList.add("show");
+  setTimeout(() => document.getElementById("pinInput").focus(), 80);
+}
+function closePinModal(){ document.getElementById("pinModal").classList.remove("show"); }
+
+async function submitPin(){
+  const inp = document.getElementById("pinInput");
+  const msg = document.getElementById("pinMsg");
+  const code = (inp.value || "").trim();
+  if(!hasPinSet()){
+    if(!/^\d{4,8}$/.test(code)){
+      msg.style.display = ""; msg.className = "pin-msg"; msg.textContent = "Code must be 4-8 digits.";
+      return;
+    }
+    const h = await sha256(code);
+    localStorage.setItem(pinHashKey(), h);
+    msg.style.display = ""; msg.className = "pin-msg ok"; msg.textContent = "Code set. Unlocking…";
+    setTimeout(() => {
+      internalUnlocked = true;
+      closePinModal();
+      updateLockUI();
+      openInternal();
+    }, 500);
+    return;
+  }
+  const h = await sha256(code);
+  if(h === localStorage.getItem(pinHashKey())){
+    internalUnlocked = true;
+    msg.style.display = "none";
+    closePinModal();
+    updateLockUI();
+    openInternal();
+  } else {
+    msg.style.display = ""; msg.className = "pin-msg"; msg.textContent = "Incorrect code.";
+    inp.value = ""; inp.focus();
+  }
+}
+
+function resetPinPrompt(){
+  if(!confirm("Reset your internal code? You'll set a new one next time you unlock. (Contractor rates are not affected.)")) return;
+  localStorage.removeItem(pinHashKey());
+  internalUnlocked = false;
+  updateLockUI();
+  closePinModal();
+  flash("Internal code reset");
+}
+
+function updateLockUI(){
+  const btn = document.getElementById("lockBtn");
+  if(btn){ btn.classList.toggle("unlocked", internalUnlocked); }
+}
+
+function openInternal(){
+  if(!internalUnlocked){ openPinModal(); return; }
+  loadContractorPrices();
+  renderInternalSheet();
+  document.body.classList.add("show-internal");
+  window.scrollTo(0,0);
+}
+function closeInternal(){ document.body.classList.remove("show-internal"); }
+
+/* Contractor prices — separate set, defaults to 70% of client */
+function scalePrices(o, f){
+  if(typeof o === "number") return +(o * f).toFixed(2);
+  if(o && typeof o === "object" && !Array.isArray(o)){
+    const out = {};
+    Object.keys(o).forEach(k => { out[k] = scalePrices(o[k], f); });
+    return out;
+  }
+  return o;
+}
+function defaultContractorPrices(){
+  const base = JSON.parse(JSON.stringify(DEFAULT_PRICES));
+  delete base.listingDiscount;
+  return scalePrices(base, 0.70);
+}
+function loadContractorPrices(){
+  if(contractorPrices) return contractorPrices;
+  const fresh = defaultContractorPrices();
+  try{
+    const raw = localStorage.getItem("reno_contractor_prices_v1");
+    if(raw) deepMerge(fresh, JSON.parse(raw));
+  }catch(e){}
+  contractorPrices = fresh;
+  return contractorPrices;
+}
+function saveContractorPrices(){
+  localStorage.setItem("reno_contractor_prices_v1", JSON.stringify(contractorPrices));
+}
+function resetContractorPricing(){
+  if(!confirm("Reset all contractor rates to 70% of client defaults?")) return;
+  contractorPrices = defaultContractorPrices();
+  saveContractorPrices();
+  renderContractorPricingEditor();
+  renderInternalSheet();
+}
+function setContractorPrice(path, val){
+  const v = parseFloat(val);
+  if(!isFinite(v) || v < 0) return;
+  const parts = path.split(".");
+  let o = contractorPrices;
+  for(let i=0;i<parts.length-1;i++){ o = o[parts[i]]; }
+  o[parts[parts.length-1]] = v;
+  saveContractorPrices();
+  renderInternalSheet();
+}
+function openContractorPricing(){
+  loadContractorPrices();
+  renderContractorPricingEditor();
+  document.getElementById("contractorPricingModal").classList.add("show");
+}
+function closeContractorPricing(){
+  document.getElementById("contractorPricingModal").classList.remove("show");
+}
+
+/* Contractor pricing editor — mirrors client editor but writes to contractorPrices */
+function ctrPriceInput(path, val, step){
+  return `<input type="number" step="${step||0.01}" value="${val}" onchange="setContractorPrice('${path}', this.value)">`;
+}
+function renderContractorPricingEditor(){
+  const e = document.getElementById("contractorPricingEditor");
+  const cp = contractorPrices;
+  let html = `<p class="footnote" style="margin-top:0;margin-bottom:18px;">These are what <b style="color:var(--gold-bright)">you</b> pay your contractors. Defaults start at 70% of client prices &mdash; adjust to match your actual rates. Editable only from Internal Mode.</p>`;
+
+  // Painting walls
+  html += `<div class="section-title">Painting &mdash; walls (per sqft)</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
+  [{k:"one",l:"1 Coat"},{k:"two",l:"2 Coats"}].forEach(o=>{
+    html += `<div class="price-edit-row">
+      <div class="lbl">${o.l}</div>
+      <div>${ctrPriceInput("painting.walls."+o.k+".labour", cp.painting.walls[o.k].labour)}</div>
+      <div>${ctrPriceInput("painting.walls."+o.k+".material", cp.painting.walls[o.k].material)}</div>
+    </div>`;
+  });
+  // Ceiling
+  html += `<div class="section-title">Painting &mdash; ceiling add-on (per sqft of ceiling)</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
+  ["standard","premium"].forEach(t=>{
+    html += `<div class="price-edit-row">
+      <div class="lbl">${cap(t)}</div>
+      <div>${ctrPriceInput("painting.ceiling."+t+".labour", cp.painting.ceiling[t].labour)}</div>
+      <div>${ctrPriceInput("painting.ceiling."+t+".material", cp.painting.ceiling[t].material)}</div>
+    </div>`;
+  });
+  // Trim
+  html += `<div class="section-title">Painting &mdash; baseboards &amp; trim (per linear foot)</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>
+    <div class="price-edit-row">
+      <div class="lbl">Trim refresh</div>
+      <div>${ctrPriceInput("painting.trim.labour", cp.painting.trim.labour)}</div>
+      <div>${ctrPriceInput("painting.trim.material", cp.painting.trim.material)}</div>
+    </div>`;
+  // Doors
+  html += `<div class="section-title">Painting &mdash; interior doors (per door)</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>
+    <div class="price-edit-row">
+      <div class="lbl">Per door</div>
+      <div>${ctrPriceInput("painting.door.labour", cp.painting.door.labour, 5)}</div>
+      <div>${ctrPriceInput("painting.door.material", cp.painting.door.material, 5)}</div>
+    </div>`;
+  // Flooring types
+  html += `<div class="section-title">Flooring &mdash; install (per sqft)</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
+  ["vinyl","laminate","engineered","hardwood"].forEach(t=>{
+    html += `<div class="price-edit-row">
+      <div class="lbl">${FLOORING_LABELS[t]}</div>
+      <div>${ctrPriceInput("flooring."+t+".labour", cp.flooring[t].labour)}</div>
+      <div>${ctrPriceInput("flooring."+t+".material", cp.flooring[t].material)}</div>
+    </div>`;
+  });
+  // Flooring removal
+  html += `<div class="section-title">Flooring &mdash; removal &amp; disposal (per sqft)</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Disposal $</div></div>
+    <div class="price-edit-row">
+      <div class="lbl">Removal &amp; haul-away</div>
+      <div>${ctrPriceInput("flooring.removal.labour", cp.flooring.removal.labour)}</div>
+      <div>${ctrPriceInput("flooring.removal.material", cp.flooring.removal.material)}</div>
+    </div>`;
+  // Flooring baseboards
+  html += `<div class="section-title">Flooring &mdash; new baseboards (per linear foot)</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>
+    <div class="price-edit-row">
+      <div class="lbl">Supply &amp; install</div>
+      <div>${ctrPriceInput("flooring.baseboards.labour", cp.flooring.baseboards.labour)}</div>
+      <div>${ctrPriceInput("flooring.baseboards.material", cp.flooring.baseboards.material)}</div>
+    </div>`;
+  // Tiling
+  html += `<div class="section-title">Tiling (per sqft)</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
+  ["standard","premium"].forEach(t=>{
+    html += `<div class="price-edit-row">
+      <div class="lbl">${cap(t)}</div>
+      <div>${ctrPriceInput("tiling."+t+".labour", cp.tiling[t].labour)}</div>
+      <div>${ctrPriceInput("tiling."+t+".material", cp.tiling[t].material)}</div>
+    </div>`;
+  });
+  // Kitchen base
+  html += `<div class="section-title">Kitchen base</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
+  ["small","medium","large"].forEach(sz=>{
+    ["standard","custom"].forEach(t=>{
+      html += `<div class="price-edit-row">
+        <div class="lbl">${cap(sz)} &middot; ${cap(t)}</div>
+        <div>${ctrPriceInput("kitchen.base."+sz+"."+t+".labour", cp.kitchen.base[sz][t].labour, 50)}</div>
+        <div>${ctrPriceInput("kitchen.base."+sz+"."+t+".material", cp.kitchen.base[sz][t].material, 50)}</div>
+      </div>`;
+    });
+  });
+  // Kitchen counter
+  html += `<div class="section-title">Kitchen countertops</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
+  ["small","medium","large"].forEach(sz=>{
+    ["standard","custom"].forEach(t=>{
+      html += `<div class="price-edit-row">
+        <div class="lbl">${cap(sz)} &middot; ${cap(t)}</div>
+        <div>${ctrPriceInput("kitchen.counter."+sz+"."+t+".labour", cp.kitchen.counter[sz][t].labour, 25)}</div>
+        <div>${ctrPriceInput("kitchen.counter."+sz+"."+t+".material", cp.kitchen.counter[sz][t].material, 25)}</div>
+      </div>`;
+    });
+  });
+  // Kitchen island
+  html += `<div class="section-title">Kitchen island</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
+  ["standard","custom"].forEach(t=>{
+    html += `<div class="price-edit-row">
+      <div class="lbl">${cap(t)}</div>
+      <div>${ctrPriceInput("kitchen.island."+t+".labour", cp.kitchen.island[t].labour, 50)}</div>
+      <div>${ctrPriceInput("kitchen.island."+t+".material", cp.kitchen.island[t].material, 50)}</div>
+    </div>`;
+  });
+  // Under-cab
+  html += `<div class="section-title">Under-cabinet lighting</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>
+    <div class="price-edit-row">
+      <div class="lbl">LED strip + driver + install</div>
+      <div>${ctrPriceInput("kitchen.undercab.labour", cp.kitchen.undercab.labour, 25)}</div>
+      <div>${ctrPriceInput("kitchen.undercab.material", cp.kitchen.undercab.material, 25)}</div>
+    </div>`;
+  // Bathroom base
+  html += `<div class="section-title">Bathroom base</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
+  ["2","3","4","5"].forEach(p=>{
+    ["builder","premium"].forEach(t=>{
+      html += `<div class="price-edit-row">
+        <div class="lbl">${p}-piece &middot; ${t==="builder"?"Builder grade":"Premium"}</div>
+        <div>${ctrPriceInput("bathroom.base."+p+"."+t+".labour", cp.bathroom.base[p][t].labour, 50)}</div>
+        <div>${ctrPriceInput("bathroom.base."+p+"."+t+".material", cp.bathroom.base[p][t].material, 50)}</div>
+      </div>`;
+    });
+  });
+  // Bath floor tile
+  html += `<div class="section-title">Bathroom floor tile (per sqft)</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
+  ["builder","premium"].forEach(t=>{
+    html += `<div class="price-edit-row">
+      <div class="lbl">${t==="builder"?"Builder grade":"Premium"}</div>
+      <div>${ctrPriceInput("bathroom.floorTile."+t+".labour", cp.bathroom.floorTile[t].labour)}</div>
+      <div>${ctrPriceInput("bathroom.floorTile."+t+".material", cp.bathroom.floorTile[t].material)}</div>
+    </div>`;
+  });
+  // Bath wall tile
+  html += `<div class="section-title">Bathroom wall tile (per sqft)</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
+  ["builder","premium"].forEach(t=>{
+    html += `<div class="price-edit-row">
+      <div class="lbl">${t==="builder"?"Builder grade":"Premium"}</div>
+      <div>${ctrPriceInput("bathroom.wallTile."+t+".labour", cp.bathroom.wallTile[t].labour)}</div>
+      <div>${ctrPriceInput("bathroom.wallTile."+t+".material", cp.bathroom.wallTile[t].material)}</div>
+    </div>`;
+  });
+  // Shower
+  html += `<div class="section-title">Stand-up shower add-on (per bathroom)</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
+  ["builder","premium"].forEach(t=>{
+    html += `<div class="price-edit-row">
+      <div class="lbl">${t==="builder"?"Builder grade":"Premium"}</div>
+      <div>${ctrPriceInput("bathroom.standUpShower."+t+".labour", cp.bathroom.standUpShower[t].labour, 50)}</div>
+      <div>${ctrPriceInput("bathroom.standUpShower."+t+".material", cp.bathroom.standUpShower[t].material, 50)}</div>
+    </div>`;
+  });
+  // Pot lights
+  html += `<div class="section-title">Pot lights (per fixture)</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
+  ["standard","premium"].forEach(t=>{
+    html += `<div class="price-edit-row">
+      <div class="lbl">${cap(t)}</div>
+      <div>${ctrPriceInput("potlights."+t+".labour", cp.potlights[t].labour, 5)}</div>
+      <div>${ctrPriceInput("potlights."+t+".material", cp.potlights[t].material, 5)}</div>
+    </div>`;
+  });
+
+  e.innerHTML = html;
+}
+
+/* ---------- Render Internal Cost Analysis sheet ---------- */
+function marginClass(pct){
+  if(!isFinite(pct) || pct < 0) return "neg";
+  if(pct < 18) return "low";
+  return "";
+}
+
+function renderInternalSheet(){
+  if(!contractorPrices) loadContractorPrices();
+  const el = document.getElementById("internalSheet");
+  const name = (state.propName || "").trim() || "Untitled property";
+  const addr = (state.propAddress || "").trim() || "—";
+  const sqft = state.propSqft || "—";
+  const today = new Date().toLocaleDateString("en-CA", {year:"numeric", month:"long", day:"numeric"});
+
+  let html = `
+    <div class="iv-meta">
+      <div><strong>Property</strong>${escapeHtml(name)}</div>
+      <div><strong>Date</strong>${escapeHtml(today)}</div>
+      <div><strong>Address</strong>${escapeHtml(addr)}</div>
+      <div><strong>Total property sqft</strong>${escapeHtml(String(sqft))}</div>
+    </div>
+  `;
+
+  let totalClient = { labour:0, material:0 };
+  let totalCost   = { labour:0, material:0 };
+  let anyEnabled = false;
+
+  Object.keys(CATEGORY_META).forEach(cat => {
+    if(!state.enabled[cat]) return;
+    anyEnabled = true;
+    const client = computeCategory(cat, prices);
+    const cost   = computeCategory(cat, contractorPrices);
+    totalClient.labour += client.labour;   totalClient.material += client.material;
+    totalCost.labour   += cost.labour;     totalCost.material   += cost.material;
+
+    const clientTotal = client.labour + client.material;
+    const costTotal   = cost.labour + cost.material;
+    const profit      = clientTotal - costTotal;
+    const profitL     = client.labour - cost.labour;
+    const profitM     = client.material - cost.material;
+    const marginPct   = clientTotal > 0 ? (profit / clientTotal) * 100 : 0;
+    const mc          = marginClass(marginPct);
+
+    const items = scopeItemsFor(cat);
+
+    html += `
+      <div class="iv-block">
+        <div class="iv-block-head">
+          <span>${CATEGORY_META[cat].title}</span>
+          <span class="margin-pill ${mc}">${profit >= 0 ? '+':''}${fmt(profit)} &middot; ${marginPct.toFixed(1)}%</span>
+        </div>
+        <ul class="iv-scope-list">${items.map(i=>`<li${i.sub?' class="sub"':(i.hdr?' class="bath-hdr"':'')}>${i.html}</li>`).join("")}</ul>
+        <div class="iv-money">
+          <div class="col-head first">&nbsp;</div>
+          <div class="col-head">Labour</div>
+          <div class="col-head">Material</div>
+          <div class="col-head">Total</div>
+
+          <div class="row-label">Client price</div>
+          <div class="val client">${fmt(client.labour)}</div>
+          <div class="val client">${fmt(client.material)}</div>
+          <div class="val client">${fmt(clientTotal)}</div>
+
+          <div class="row-label">Your cost</div>
+          <div class="val cost">${fmt(cost.labour)}</div>
+          <div class="val cost">${fmt(cost.material)}</div>
+          <div class="val cost">${fmt(costTotal)}</div>
+
+          <div class="row-label">Profit</div>
+          <div class="val profit ${mc}">${fmt(profitL)}</div>
+          <div class="val profit ${mc}">${fmt(profitM)}</div>
+          <div class="val profit ${mc}">${fmt(profit)}</div>
+        </div>
+      </div>
+    `;
+  });
+
+  if(!anyEnabled){
+    html += `<div style="text-align:center;padding:60px 20px;color:var(--muted);font-style:italic;">No categories are enabled. Turn on the categories you want to analyze from the estimator, then come back here.</div>`;
+  } else {
+    // Summary
+    const clientSub = totalClient.labour + totalClient.material;
+    const costSub   = totalCost.labour + totalCost.material;
+    const grossProfit = clientSub - costSub;
+    const grossPct    = clientSub > 0 ? (grossProfit / clientSub) * 100 : 0;
+
+    // Apply client discount (listing + custom)
+    const d = state.discount || {};
+    let listingDisc = 0, customDisc = 0;
+    if(d.listing){
+      const pct = num(prices.listingDiscount && prices.listingDiscount.percent);
+      listingDisc = clientSub * (Math.min(pct,100)/100);
+    }
+    if(d.customType === "percent"){
+      customDisc = clientSub * (Math.min(num(d.customValue),100)/100);
+    } else {
+      customDisc = num(d.customValue);
+    }
+    let totalDisc = Math.min(listingDisc + customDisc, clientSub);
+    const clientAfter = clientSub - totalDisc;
+    const netProfit   = clientAfter - costSub;
+    const netPct      = clientAfter > 0 ? (netProfit / clientAfter) * 100 : 0;
+    const hst = clientAfter * 0.13;
+    const clientFinal = clientAfter + hst;
+
+    html += `
+      <div class="iv-summary">
+        <div class="iv-summary-head">Bottom Line &mdash; Confidential</div>
+        <div class="iv-summary-row"><span class="lbl">Client price (subtotal)</span><span class="val">${fmt(clientSub)}</span></div>
+        <div class="iv-summary-row cost-row"><span class="lbl">Your contractor cost</span><span class="val">${fmt(costSub)}</span></div>
+        <div class="iv-summary-row profit-row"><span class="lbl">Gross profit (pre-discount)</span><span class="val">${fmt(grossProfit)}</span></div>
+        <div class="iv-summary-row margin-row"><span class="lbl">Gross margin</span><span class="val">${grossPct.toFixed(1)}%</span></div>
+        ${totalDisc > 0 ? `
+        <div class="iv-summary-row divider disc-row"><span class="lbl">Client discount applied</span><span class="val">−${fmt(totalDisc)}</span></div>
+        <div class="iv-summary-row"><span class="lbl">Net client price</span><span class="val">${fmt(clientAfter)}</span></div>
+        <div class="iv-summary-row profit-row"><span class="lbl">Net profit (after discount)</span><span class="val">${fmt(netProfit)}</span></div>
+        <div class="iv-summary-row margin-row"><span class="lbl">Net margin</span><span class="val">${netPct.toFixed(1)}%</span></div>
+        ` : ""}
+        <div class="iv-summary-row divider"><span class="lbl">HST (collected &amp; remitted)</span><span class="val">${fmt(hst)}</span></div>
+        <div class="iv-summary-row"><span class="lbl">Total client pays</span><span class="val">${fmt(clientFinal)}</span></div>
+      </div>
+      <p class="footnote" style="text-align:center;margin-top:18px;letter-spacing:.15em;text-transform:uppercase;font-size:10px;color:var(--gold-deep);">Reno to Sold &middot; Internal &middot; Do not share</p>
+    `;
+  }
+
+  el.innerHTML = html;
+}
+
+function scopeItemsFor(cat){
+  // Reuses contractor-sheet item shapes for visual consistency
+  const items = [];
+  const s = state[cat];
+  if(cat === "painting"){
+    const psqft = paintingSqft();
+    items.push({ html:`Walls: <b>${s.coats==="two"?"Two coats":"One coat"}</b>, premium paint + full prep` });
+    items.push({ html:`Area: <b>${s.scope==="custom" ? `Specific area &mdash; ${psqft||'?'} sqft` : `Entire property &mdash; ${psqft||'?'} sqft`}</b>` });
+    if(s.ceiling){
+      const cs = num(s.ceilingSqft) || psqft;
+      items.push({ html:`Ceiling: <b>${s.ceilingTier==="premium"?"Premium":"Standard"}</b> &mdash; ${cs||'?'} sqft` });
+    }
+    if(s.trim){ items.push({ html:`Baseboards &amp; trim: <b>${s.trimLinFt||'?'} lin ft</b>` }); }
+    if(s.doors){ items.push({ html:`Doors: <b>${s.doorCount||'?'}</b>` }); }
+  }
+  else if(cat === "flooring"){
+    items.push({ html:`Type: <b>${FLOORING_LABELS[s.type] || s.type || '?'}</b>` });
+    items.push({ html:`Area: <b>${s.sqft||'?'} sqft</b>` });
+    const q = flooringMaterialQty();
+    if(q) items.push({ html:`Material to order: <b>${Math.ceil(q.qty).toLocaleString("en-CA")} sqft</b> (incl. ${q.pct}% waste)` });
+    if(s.removeOld){
+      const rsq = num(s.removalSqft) || num(s.sqft);
+      items.push({ html:`Removal &amp; disposal: <b>${rsq||'?'} sqft</b>` });
+    }
+    if(s.baseboards){ items.push({ html:`New baseboards: <b>${s.baseboardLinFt||'?'} lin ft</b>` }); }
+  }
+  else if(cat === "tiling"){
+    items.push({ html:`Material: <b>${s.tier==="premium"?"Porcelain (premium)":"Ceramic (standard)"}</b>` });
+    items.push({ html:`Area: <b>${s.sqft||'?'} sqft</b>` });
+  }
+  else if(cat === "kitchen"){
+    const sizeLabel = ({small:"Small (<70 sqft)", medium:"Medium (70-150 sqft)", large:"Large (150+ sqft)"})[s.size] || s.size;
+    items.push({ html:`Tier: <b>${s.tier==="custom"?"Custom":"Standard"}</b>` });
+    items.push({ html:`Size: <b>${sizeLabel}</b>` });
+    items.push({ html:`Base: cabinets + sink + faucet + plumbing + hardware` });
+    if(s.counter) items.push({ html:`+ Countertops (priced by size &amp; tier)` });
+    if(s.island)  items.push({ html:`+ Island (${s.tier==="custom"?"custom":"standard"})` });
+    if(s.undercabLighting) items.push({ html:`+ Under-cabinet lighting` });
+  }
+  else if(cat === "bathroom"){
+    state.bathroom.rooms.forEach((b,i) => {
+      items.push({ hdr:true, html:`Bathroom #${i+1}` });
+      items.push({ sub:true, html:`<b>${b.pieces}-piece</b> &middot; ${b.tier==="premium"?"Premium":"Builder grade"}` });
+      if(num(b.floorTileSqft)) items.push({ sub:true, html:`Floor tile: <b>${b.floorTileSqft} sqft</b>` });
+      if(num(b.wallTileSqft))  items.push({ sub:true, html:`Wall tile: <b>${b.wallTileSqft} sqft</b>` });
+      if(b.standUpShower)      items.push({ sub:true, html:`+ Stand-up shower` });
+    });
+  }
+  else if(cat === "potlights"){
+    items.push({ html:`Tier: <b>${s.tier==="premium"?"Premium dimmable / smart":"Standard slim recessed"}</b>` });
+    items.push({ html:`Quantity: <b>${s.count||'?'}</b>` });
+  }
+  return items;
 }
 
 /* ---------- Address autocomplete (Nominatim, GTA-bounded) ---------- */
