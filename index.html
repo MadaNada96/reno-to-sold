@@ -176,6 +176,165 @@
   .addon-title{font-weight:600;color:var(--ink-strong);text-transform:uppercase;letter-spacing:.08em;font-size:12px;}
   .info-readout{display:inline-block;background:rgba(212,175,106,.12);border:1px solid rgba(212,175,106,.3);color:var(--gold-bright);font-size:11px;padding:6px 10px;border-radius:6px;margin-top:6px;letter-spacing:.04em;font-weight:600;}
 
+  /* Contractor bid sheet view (overlay) */
+  .contractor-view{
+    display:none;
+    position:fixed; inset:0;
+    z-index:1000;
+    background:#1a1814;
+    overflow:auto;
+  }
+  body.show-contractor{ overflow:hidden; }
+  body.show-contractor .contractor-view{ display:block; }
+  body.show-contractor > .app,
+  body.show-contractor > .modal-bg{ display:none !important; }
+
+  .contractor-toolbar{
+    position:sticky; top:0;
+    background:#000;
+    padding:14px 24px;
+    display:flex; gap:10px; justify-content:space-between; align-items:center;
+    border-bottom:2px solid var(--gold);
+    z-index:10;
+    flex-wrap:wrap;
+  }
+  .contractor-toolbar .ct-title{
+    margin:0; color:var(--gold-bright);
+    font-size:13px; letter-spacing:.18em; text-transform:uppercase; font-weight:700;
+  }
+  .contractor-toolbar .ct-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+
+  .contractor-sheet{
+    max-width:880px;
+    margin:24px auto;
+    padding:48px 56px;
+    background:#fff;
+    color:#000;
+    box-shadow:0 4px 24px rgba(0,0,0,.35);
+    font-size:14px;
+    line-height:1.5;
+  }
+  @media (max-width:680px){
+    .contractor-sheet{ padding:28px 22px; margin:14px; }
+  }
+  .contractor-sheet h1{
+    font-size:24px; letter-spacing:.16em; text-transform:uppercase;
+    margin:0; font-weight:900;
+    padding-bottom:8px; border-bottom:3px solid #d4af6a;
+    color:#000;
+  }
+  .contractor-sheet .sheet-sub{
+    font-size:11px; color:#777;
+    text-transform:uppercase; letter-spacing:.18em;
+    margin:6px 0 24px; font-weight:600;
+  }
+  .contractor-sheet .sheet-meta{
+    display:grid; grid-template-columns:1fr 1fr;
+    gap:14px 24px;
+    margin-bottom:14px;
+    font-size:13px;
+  }
+  @media (max-width:680px){ .contractor-sheet .sheet-meta{ grid-template-columns:1fr; } }
+  .contractor-sheet .sheet-meta .cell{ padding-bottom:6px; border-bottom:1px solid #eee; }
+  .contractor-sheet .sheet-meta strong{
+    display:block;
+    font-size:9px; font-weight:700;
+    text-transform:uppercase; letter-spacing:.18em;
+    color:#888; margin-bottom:3px;
+  }
+  .contractor-sheet .intro-note{
+    font-size:12px; color:#666; font-style:italic;
+    margin:14px 0 28px;
+    padding:10px 14px; background:#faf7ec; border-left:3px solid #d4af6a;
+  }
+  .contractor-sheet .scope-section,
+  .contractor-sheet .summary,
+  .contractor-sheet .notes-block,
+  .contractor-sheet .sig-area{ page-break-inside:avoid; margin-bottom:22px; }
+  .contractor-sheet .scope-title,
+  .contractor-sheet .summary-title{
+    font-size:13px; letter-spacing:.18em; text-transform:uppercase; font-weight:800;
+    background:#000; color:#e8c989;
+    padding:9px 16px;
+  }
+  .contractor-sheet .scope-body,
+  .contractor-sheet .summary-body{
+    border:1px solid #ddd; border-top:none;
+    padding:14px 16px 16px;
+  }
+  .contractor-sheet .scope-list{
+    list-style:none; padding:0; margin:0 0 14px;
+    font-size:13px; line-height:1.7;
+  }
+  .contractor-sheet .scope-list li{ padding-left:14px; position:relative; }
+  .contractor-sheet .scope-list li::before{
+    content:""; position:absolute; left:0; top:.65em;
+    width:6px; height:6px; background:#d4af6a;
+  }
+  .contractor-sheet .scope-list li.sub{ padding-left:30px; }
+  .contractor-sheet .scope-list li.sub::before{ left:16px; }
+  .contractor-sheet .scope-list li.bath-hdr{ padding-left:0; font-weight:700; margin-top:6px; }
+  .contractor-sheet .scope-list li.bath-hdr::before{ display:none; }
+  .contractor-sheet .bid-row{
+    display:flex; gap:14px; align-items:flex-end;
+    border-top:1px solid #d4af6a;
+    padding-top:12px; margin-top:6px;
+    flex-wrap:wrap;
+  }
+  .contractor-sheet .bid-cell{ flex:1; min-width:140px; }
+  .contractor-sheet .bid-cell label{
+    display:block; font-size:9px;
+    text-transform:uppercase; letter-spacing:.18em;
+    color:#888; font-weight:700;
+    margin-bottom:4px;
+  }
+  .contractor-sheet .bid-input{
+    display:block; width:100%;
+    border:none; border-bottom:1px solid #000;
+    height:28px;
+    font:inherit; font-size:14px;
+    background:transparent; padding:0 4px;
+    outline:none; color:#000;
+  }
+  .contractor-sheet .summary-row{
+    display:flex; justify-content:space-between; align-items:center;
+    font-size:13px; padding:7px 0;
+    border-bottom:1px dotted #ddd;
+  }
+  .contractor-sheet .summary-row:last-child{ border-bottom:none; }
+  .contractor-sheet .summary-row.total{
+    border-top:2px solid #000;
+    border-bottom:none;
+    font-size:16px; font-weight:800;
+    padding-top:12px; margin-top:6px;
+    text-transform:uppercase; letter-spacing:.1em;
+  }
+  .contractor-sheet .summary-row .bid-input{
+    max-width:180px; text-align:right; font-weight:600;
+  }
+  .contractor-sheet .notes-block .lbl,
+  .contractor-sheet .sig-label{
+    font-size:11px; color:#666;
+    text-transform:uppercase; letter-spacing:.18em;
+    font-weight:700; margin-bottom:10px;
+  }
+  .contractor-sheet .notes-line{ border-bottom:1px solid #ccc; height:24px; }
+  .contractor-sheet .sig-area{
+    margin-top:36px;
+    display:grid; grid-template-columns:1fr 1fr; gap:30px;
+  }
+  @media (max-width:680px){ .contractor-sheet .sig-area{ grid-template-columns:1fr; } }
+  .contractor-sheet .sig-line{ border-bottom:1px solid #000; height:32px; }
+  .contractor-sheet .sig-label{ margin-top:4px; margin-bottom:0; }
+  .contractor-sheet .footer-line{
+    text-align:center; font-size:10px; color:#888;
+    letter-spacing:.2em; text-transform:uppercase;
+    margin-top:40px;
+  }
+  .contractor-sheet .empty-state{
+    text-align:center; padding:60px 20px; color:#999; font-style:italic;
+  }
+
   /* Print */
   @media print{
     body{background:#fff;color:#000;}
@@ -205,6 +364,25 @@
     .disc-toggle-row{background:#fff;border-color:#000;}
     .addon{background:#fff;border-color:#000;}
     .info-readout{background:#fff;border-color:#000;color:#000;}
+
+    /* Contractor mode overrides — only the bid sheet prints */
+    body.show-contractor{ background:#fff !important; }
+    body.show-contractor .contractor-view{
+      position:static !important;
+      background:#fff !important;
+      overflow:visible !important;
+    }
+    body.show-contractor .contractor-toolbar{ display:none !important; }
+    body.show-contractor .contractor-sheet{
+      margin:0 !important; padding:0 !important;
+      box-shadow:none !important;
+      max-width:none !important;
+      background:#fff !important;
+    }
+    body.show-contractor .scope-title,
+    body.show-contractor .summary-title{
+      -webkit-print-color-adjust:exact; print-color-adjust:exact;
+    }
   }
 </style>
 </head>
@@ -220,6 +398,7 @@
         <button onclick="openSavedModal()">Saved</button>
         <button onclick="saveEstimate()">Save</button>
         <button onclick="openSettings()">Pricing</button>
+        <button onclick="openContractorBid()">Contractor Bid</button>
         <button class="primary" onclick="window.print()">Print / PDF</button>
       </div>
     </div>
@@ -316,6 +495,18 @@
 
   <p class="footnote no-print" style="text-align:center;margin-top:18px;">Built-in averages reflect 2026 GTA market data. Tap <b style="color:var(--gold-bright)">Pricing</b> to align with your contractor quotes. Estimates save locally to this browser.</p>
   <p class="footnote no-print" style="text-align:center;margin-top:6px;letter-spacing:.18em;text-transform:uppercase;font-size:10px;color:var(--gold-deep);">Reno to Sold &middot; Renovate Smart &middot; Sell For More</p>
+</div>
+
+<!-- Contractor Bid Sheet (full-screen overlay) -->
+<div id="contractorView" class="contractor-view">
+  <div class="contractor-toolbar no-print">
+    <div class="ct-title">Contractor Bid Sheet</div>
+    <div class="ct-actions">
+      <button onclick="closeContractorBid()">&larr; Back to Estimator</button>
+      <button class="primary" onclick="window.print()">Print / PDF</button>
+    </div>
+  </div>
+  <div class="contractor-sheet" id="contractorSheet"></div>
 </div>
 
 <!-- Saved estimates modal -->
@@ -1490,6 +1681,206 @@ function renderPricingEditor(){
     </div>`;
 
   e.innerHTML = html;
+}
+
+/* ---------- Contractor Bid Sheet ---------- */
+function openContractorBid(){
+  renderContractorSheet();
+  document.body.classList.add("show-contractor");
+  window.scrollTo(0,0);
+}
+function closeContractorBid(){
+  document.body.classList.remove("show-contractor");
+}
+
+function pieceDescription(p){
+  return ({
+    "2":"toilet, sink",
+    "3":"toilet, sink, tub or shower",
+    "4":"toilet, sink, tub, shower",
+    "5":"toilet, sink, tub, shower, double vanity"
+  })[p] || "";
+}
+
+function scopeSection(title, items){
+  return `
+    <div class="scope-section">
+      <div class="scope-title">${escapeHtml(title)} &mdash; Scope of Work</div>
+      <div class="scope-body">
+        <ul class="scope-list">${items.map(i=>`<li${i.sub?' class="sub"':(i.hdr?' class="bath-hdr"':'')}>${i.html}</li>`).join("")}</ul>
+        <div class="bid-row">
+          <div class="bid-cell"><label>Your labour $</label><input type="text" class="bid-input"></div>
+          <div class="bid-cell"><label>Your material $</label><input type="text" class="bid-input"></div>
+          <div class="bid-cell"><label>Section total $</label><input type="text" class="bid-input"></div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderContractorSheet(){
+  const el = document.getElementById("contractorSheet");
+  const name = (state.propName || "").trim() || "Untitled property";
+  const addr = (state.propAddress || "").trim() || "—";
+  const sqft = state.propSqft || "—";
+  const today = new Date().toLocaleDateString("en-CA", {year:"numeric", month:"long", day:"numeric"});
+
+  let html = `
+    <h1>Contractor Bid Sheet</h1>
+    <div class="sheet-sub">Reno to Sold &middot; Renovation Scope of Work</div>
+    <div class="sheet-meta">
+      <div class="cell"><strong>Property</strong>${escapeHtml(name)}</div>
+      <div class="cell"><strong>Date prepared</strong>${escapeHtml(today)}</div>
+      <div class="cell"><strong>Address</strong>${escapeHtml(addr)}</div>
+      <div class="cell"><strong>Total property sqft</strong>${escapeHtml(String(sqft))}</div>
+      <div class="cell"><strong>Prepared by</strong>Reno to Sold</div>
+      <div class="cell"><strong>Contractor</strong><input type="text" class="bid-input" placeholder="Company / Contact"></div>
+    </div>
+    <p class="intro-note">Please review the scope below, fill in your labour, material &amp; section totals, then return this sheet. All quantities are estimated &mdash; verify on site before quoting.</p>
+  `;
+
+  let anyEnabled = false;
+
+  // -- Painting --
+  if(state.enabled.painting){
+    anyEnabled = true;
+    const s = state.painting;
+    const psqft = paintingSqft();
+    const items = [];
+    items.push({ html:`Walls: <b>${s.coats==="two"?"Two coats":"One coat"}</b> &mdash; premium paint, full prep (patch, sand, prime).` });
+    items.push({ html:`Painting area: <b>${s.scope==="custom" ? `Specific area &mdash; ${psqft||'?'} sqft` : `Entire property &mdash; ${psqft||'?'} sqft`}</b>` });
+    if(s.ceiling){
+      const cs = num(s.ceilingSqft) || psqft;
+      items.push({ html:`Ceiling: <b>${s.ceilingTier==="premium"?"Premium (textured / vaulted / 10ft+)":"Standard (flat 8&ndash;9ft)"}</b> &mdash; ${cs||'?'} sqft` });
+    }
+    if(s.trim){
+      items.push({ html:`Baseboards &amp; trim: <b>${s.trimLinFt||'?'} linear feet</b> &mdash; refresh / repaint.` });
+    }
+    if(s.doors){
+      items.push({ html:`Interior doors: <b>${s.doorCount||'?'} doors</b> &mdash; both sides, hardware removed &amp; reinstalled.` });
+    }
+    html += scopeSection("Painting", items);
+  }
+
+  // -- Flooring --
+  if(state.enabled.flooring){
+    anyEnabled = true;
+    const s = state.flooring;
+    const items = [];
+    items.push({ html:`Type: <b>${FLOORING_LABELS[s.type] || s.type || '?'}</b>` });
+    items.push({ html:`Area: <b>${s.sqft||'?'} sqft</b> of finished space` });
+    const q = flooringMaterialQty();
+    if(q){
+      items.push({ html:`Approx. material to order: <b>${Math.ceil(q.qty).toLocaleString("en-CA")} sqft</b> (includes ${q.pct}% waste factor)` });
+    }
+    if(s.removeOld){
+      const rsq = num(s.removalSqft) || num(s.sqft);
+      items.push({ html:`Removal &amp; disposal: <b>${rsq||'?'} sqft</b> &mdash; strip existing flooring + haul-away &amp; dump fees.` });
+    }
+    if(s.baseboards){
+      items.push({ html:`New baseboards: <b>${s.baseboardLinFt||'?'} linear feet</b> &mdash; supply &amp; install (4&ndash;5" MDF/poplar, unpainted).` });
+    }
+    html += scopeSection("Flooring", items);
+  }
+
+  // -- Tiling --
+  if(state.enabled.tiling){
+    anyEnabled = true;
+    const s = state.tiling;
+    const items = [
+      { html:`Material: <b>${s.tier==="premium"?"Large-format porcelain (premium)":"Ceramic (standard)"}</b>` },
+      { html:`Area: <b>${s.sqft||'?'} sqft</b> &mdash; non-bathroom (entryway, laundry, kitchen floor, etc.)` }
+    ];
+    html += scopeSection("Tiling", items);
+  }
+
+  // -- Kitchen --
+  if(state.enabled.kitchen){
+    anyEnabled = true;
+    const s = state.kitchen;
+    const sizeLabel = ({small:"Small (under 70 sqft)", medium:"Medium (70&ndash;150 sqft)", large:"Large (150+ sqft)"})[s.size] || s.size;
+    const items = [
+      { html:`Tier: <b>${s.tier==="custom"?"Custom &mdash; fully custom cabinets, premium fixtures &amp; finishes":"Standard &mdash; stock or semi-custom cabinets, builder-grade finishes"}</b>` },
+      { html:`Size: <b>${sizeLabel}</b>` },
+      { html:`Base scope includes: cabinets, sink, faucet, plumbing adjustments, cabinet install, all hardware.` }
+    ];
+    if(s.counter) items.push({ html:`Countertops: <b>included</b> (priced by kitchen size &amp; tier).` });
+    if(s.island)  items.push({ html:`Island add-on: <b>included</b> (${s.tier==="custom"?"custom":"standard"} build).` });
+    if(s.undercabLighting) items.push({ html:`Under-cabinet lighting: <b>included</b> (typical run &mdash; LED strip + driver).` });
+    html += scopeSection("Kitchen", items);
+  }
+
+  // -- Bathrooms --
+  if(state.enabled.bathroom){
+    anyEnabled = true;
+    const items = [];
+    state.bathroom.rooms.forEach((b,i) => {
+      items.push({ hdr:true, html:`Bathroom #${i+1}` });
+      items.push({ sub:true, html:`Pieces: <b>${b.pieces}-piece</b> &mdash; ${pieceDescription(b.pieces)}` });
+      items.push({ sub:true, html:`Tier: <b>${b.tier==="premium"?"Premium &mdash; upgraded vanity (quartz top), comfort-height toilet, soaker tub, premium fixtures":"Builder grade &mdash; stock vanity, basic toilet/tub/shower, contractor-grade fixtures"}</b>` });
+      if(num(b.floorTileSqft)) items.push({ sub:true, html:`Floor tile: <b>${b.floorTileSqft} sqft</b>` });
+      if(num(b.wallTileSqft))  items.push({ sub:true, html:`Wall tile: <b>${b.wallTileSqft} sqft</b>` });
+      if(b.standUpShower) items.push({ sub:true, html:`Stand-up shower: <b>included</b> (waterproofing, glass enclosure, fixtures)` });
+    });
+    html += scopeSection("Bathrooms", items);
+  }
+
+  // -- Pot Lights --
+  if(state.enabled.potlights){
+    anyEnabled = true;
+    const s = state.potlights;
+    const items = [
+      { html:`Fixtures: <b>${s.tier==="premium"?"Premium dimmable / smart LEDs, multiple zones":"Standard slim recessed LEDs, single switch"}</b>` },
+      { html:`Quantity: <b>${s.count||'?'} pot lights</b>` }
+    ];
+    html += scopeSection("Pot Lights", items);
+  }
+
+  if(!anyEnabled){
+    html += `<div class="empty-state">No categories are enabled. Turn on the categories you want bid on from the estimator, then come back here.</div>`;
+  } else {
+    // Bid summary
+    const labels = {painting:"Painting", flooring:"Flooring", tiling:"Tiling", kitchen:"Kitchen", bathroom:"Bathrooms", potlights:"Pot Lights"};
+    let rows = "";
+    Object.keys(labels).forEach(cat => {
+      if(state.enabled[cat]){
+        rows += `<div class="summary-row"><span>${labels[cat]}</span><input type="text" class="bid-input" placeholder="$"></div>`;
+      }
+    });
+    html += `
+      <div class="summary">
+        <div class="summary-title">Bid Summary</div>
+        <div class="summary-body">
+          ${rows}
+          <div class="summary-row total"><span>Total Bid (before HST)</span><input type="text" class="bid-input" placeholder="$"></div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Notes + signature
+  html += `
+    <div class="notes-block">
+      <div class="lbl">Notes / Timeline / Exclusions</div>
+      <div class="notes-line"></div>
+      <div class="notes-line"></div>
+      <div class="notes-line"></div>
+      <div class="notes-line"></div>
+    </div>
+    <div class="sig-area">
+      <div>
+        <div class="sig-line"></div>
+        <div class="sig-label">Contractor signature</div>
+      </div>
+      <div>
+        <div class="sig-line"></div>
+        <div class="sig-label">Date</div>
+      </div>
+    </div>
+    <div class="footer-line">Reno to Sold &middot; Renovate Smart &middot; Sell For More</div>
+  `;
+
+  el.innerHTML = html;
 }
 
 /* ---------- Toast ---------- */
