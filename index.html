@@ -16,6 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Dancing+Script:wght@600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root{
     /* Reno to Sold black & gold */
@@ -714,6 +715,7 @@
         <button onclick="saveEstimate()">Save</button>
         <button onclick="openSettings()">Pricing</button>
         <button onclick="openContractorBid()">Contractor Bid</button>
+        <button id="authBtn" onclick="onAuthClick()">Sign in</button>
         <button class="primary" onclick="window.print()">Print / PDF</button>
       </div>
     </div>
@@ -912,6 +914,30 @@
     <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
   </svg>
 </button>
+
+<!-- Auth modal (sign in with magic link) -->
+<div class="modal-bg" id="authModal" onclick="if(event.target===this)closeAuthModal()">
+  <div class="modal" style="max-width:440px;">
+    <h3>
+      <span id="authModalTitle">Sign in to sync</span>
+      <button class="ghost" onclick="closeAuthModal()">Close</button>
+    </h3>
+    <div class="modal-body">
+      <p class="footnote" id="authIntro" style="margin-top:0;font-size:12px;line-height:1.6;">
+        Enter your email and we'll send you a one-click sign-in link. After signing in, your saved estimates will sync automatically across your laptop, phone, and tablet.
+      </p>
+      <form onsubmit="event.preventDefault();submitAuth();">
+        <label>Email address</label>
+        <input type="email" id="authEmail" autocomplete="email" placeholder="you@example.com">
+      </form>
+      <div class="pin-msg" id="authMsg" style="display:none;text-align:left;"></div>
+      <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end;">
+        <button class="ghost" onclick="closeAuthModal()">Cancel</button>
+        <button class="primary" id="authSubmitBtn" onclick="submitAuth()">Send sign-in link</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- Saved estimates modal -->
 <div class="modal-bg" id="savedModal" onclick="if(event.target===this)closeSavedModal()">
@@ -1135,7 +1161,10 @@ function loadPrices(){
   }catch(e){}
   return fresh;
 }
-function savePrices(){ localStorage.setItem("reno_prices_v2", JSON.stringify(prices)); }
+function savePrices(){
+  localStorage.setItem("reno_prices_v2", JSON.stringify(prices));
+  if(currentUser && supa){ cloudPushPrices("client"); }
+}
 function resetPricing(){
   if(!confirm("Reset all unit prices to GTA defaults?")) return;
   prices = JSON.parse(JSON.stringify(DEFAULT_PRICES));
@@ -1156,6 +1185,8 @@ function saveEstimate(){
   if(idx>=0) list[idx] = entry; else list.unshift(entry);
   persistSavedList(list);
   flash("Saved estimate: " + name);
+  // Mirror to cloud if signed in (fire-and-forget — local save is the source of truth offline)
+  if(currentUser && supa){ upsertCloudEstimate(entry); }
 }
 function loadEstimate(id){
   const list = loadSavedList();
@@ -1227,6 +1258,7 @@ function deleteEstimate(id){
   const list = loadSavedList().filter(x=>x.id!==id);
   persistSavedList(list);
   renderSavedList();
+  if(currentUser && supa){ deleteCloudEstimate(id); }
 }
 function newEstimate(){
   if(!confirm("Start a new estimate? Unsaved changes will be lost.")) return;
@@ -2664,6 +2696,7 @@ function loadContractorPrices(){
 }
 function saveContractorPrices(){
   localStorage.setItem("reno_contractor_prices_v1", JSON.stringify(contractorPrices));
+  if(currentUser && supa){ cloudPushPrices("contractor"); }
 }
 function resetContractorPricing(){
   if(!confirm("Reset all contractor rates to 70% of client defaults?")) return;
@@ -3228,8 +3261,276 @@ function onAddressKey(ev){
   }
 }
 
+/* ---------- Supabase cross-device sync ---------- */
+const SUPABASE_URL = "https://icrnvnmvcdpmhnjorefs.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imljcm52bm12Y2RwbWhuam9yZWZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2ODQwMDgsImV4cCI6MjA5NDI2MDAwOH0.YoeBndWsky8vAW6mLeMziPeH2j2C6c_3VdAvOG_i0kA";
+let supa = null;
+let currentUser = null;
+
+function initSupabase(){
+  if(typeof window.supabase === "undefined"){
+    console.warn("Supabase JS not loaded — cloud sync disabled.");
+    return;
+  }
+  supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { autoRefreshToken:true, persistSession:true, detectSessionInUrl:true }
+  });
+  // Resume any existing session
+  supa.auth.getSession().then(({ data: { session } }) => {
+    if(session){
+      setCurrentUser(session.user);
+      // Background-sync after a tick so UI is responsive
+      setTimeout(() => bootstrapCloudSync(false), 250);
+    }
+  });
+  // Listen for sign-in / sign-out events
+  supa.auth.onAuthStateChange((event, session) => {
+    if(event === "SIGNED_IN" && session){
+      setCurrentUser(session.user);
+      flash("Signed in as " + session.user.email);
+      bootstrapCloudSync(true);
+    } else if(event === "SIGNED_OUT"){
+      setCurrentUser(null);
+      flash("Signed out");
+    }
+  });
+}
+
+function setCurrentUser(u){
+  currentUser = u;
+  updateAuthUI();
+}
+
+function updateAuthUI(){
+  const btn = document.getElementById("authBtn");
+  if(!btn) return;
+  if(currentUser){
+    btn.textContent = "Account";
+    btn.title = "Signed in as " + currentUser.email + " — tap to sign out";
+    btn.classList.add("primary");
+  } else {
+    btn.textContent = "Sign in";
+    btn.title = "Sync your estimates across devices";
+    btn.classList.remove("primary");
+  }
+}
+
+function onAuthClick(){
+  if(!supa){ flash("Sync unavailable — Supabase failed to load"); return; }
+  if(currentUser){
+    if(confirm("Sign out of " + currentUser.email + "?\n\nYour local estimates stay on this device. To resume syncing, sign in again.")){
+      supa.auth.signOut();
+    }
+    return;
+  }
+  openAuthModal();
+}
+
+function openAuthModal(){
+  document.getElementById("authEmail").value = "";
+  const m = document.getElementById("authMsg");
+  m.style.display = "none"; m.textContent = ""; m.className = "pin-msg"; m.style.color = "";
+  document.getElementById("authSubmitBtn").disabled = false;
+  document.getElementById("authSubmitBtn").textContent = "Send sign-in link";
+  document.getElementById("authModal").classList.add("show");
+  setTimeout(() => document.getElementById("authEmail").focus(), 80);
+}
+function closeAuthModal(){ document.getElementById("authModal").classList.remove("show"); }
+
+async function submitAuth(){
+  const email = (document.getElementById("authEmail").value || "").trim();
+  const msg = document.getElementById("authMsg");
+  if(!email || !email.includes("@")){
+    msg.style.display = ""; msg.className = "pin-msg"; msg.style.color = ""; msg.textContent = "Enter a valid email address.";
+    return;
+  }
+  const btn = document.getElementById("authSubmitBtn");
+  btn.disabled = true; btn.textContent = "Sending…";
+  msg.style.display = ""; msg.className = "pin-msg"; msg.style.color = ""; msg.textContent = "Sending sign-in link…";
+  try{
+    const { error } = await supa.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: window.location.href.split("#")[0].split("?")[0] }
+    });
+    if(error) throw error;
+    msg.className = "pin-msg ok"; msg.style.color = "var(--gold-bright)";
+    msg.innerHTML = `Check <b>${escapeHtml(email)}</b> for a sign-in link. Click it on the device you want to sync.`;
+    btn.textContent = "Link sent";
+  }catch(e){
+    msg.style.color = ""; msg.textContent = e.message || "Could not send sign-in link.";
+    btn.disabled = false; btn.textContent = "Send sign-in link";
+  }
+}
+
+/* Map a cloud row -> local-list shape, and vice versa */
+function cloudToLocal(row){
+  return { id: row.client_id, name: row.name, savedAt: row.updated_at, state: row.state };
+}
+function localToCloud(e){
+  return {
+    user_id: currentUser.id,
+    client_id: e.id,
+    name: e.name,
+    state: e.state,
+    updated_at: e.savedAt || new Date().toISOString()
+  };
+}
+
+async function upsertCloudEstimate(entry){
+  if(!currentUser || !supa) return;
+  try{
+    const { data: existing } = await supa.from("estimates")
+      .select("id")
+      .eq("user_id", currentUser.id)
+      .eq("client_id", entry.id)
+      .maybeSingle();
+    const payload = localToCloud(entry);
+    if(existing){
+      const { error } = await supa.from("estimates").update(payload).eq("id", existing.id);
+      if(error) throw error;
+    } else {
+      const { error } = await supa.from("estimates").insert(payload);
+      if(error) throw error;
+    }
+  }catch(e){
+    console.error("Cloud upsert failed:", e);
+  }
+}
+
+async function deleteCloudEstimate(clientId){
+  if(!currentUser || !supa) return;
+  try{
+    await supa.from("estimates").delete()
+      .eq("user_id", currentUser.id)
+      .eq("client_id", clientId);
+  }catch(e){
+    console.error("Cloud delete failed:", e);
+  }
+}
+
+/* User settings (pricing) sync */
+async function cloudFetchSettings(){
+  if(!currentUser || !supa) return null;
+  try{
+    const { data, error } = await supa.from("user_settings")
+      .select("client_prices,contractor_prices,updated_at")
+      .eq("user_id", currentUser.id)
+      .maybeSingle();
+    if(error){ console.error("Fetch settings failed:", error); return null; }
+    return data || null;
+  }catch(e){ console.error("Fetch settings failed:", e); return null; }
+}
+
+async function cloudPushPrices(which){
+  // which = "client" | "contractor" | "both"
+  if(!currentUser || !supa) return;
+  try{
+    const { data: existing } = await supa.from("user_settings")
+      .select("user_id")
+      .eq("user_id", currentUser.id)
+      .maybeSingle();
+    const payload = { updated_at: new Date().toISOString() };
+    if(which === "client" || which === "both") payload.client_prices = prices;
+    if((which === "contractor" || which === "both") && contractorPrices) payload.contractor_prices = contractorPrices;
+    if(existing){
+      const { error } = await supa.from("user_settings").update(payload).eq("user_id", currentUser.id);
+      if(error) throw error;
+    } else {
+      payload.user_id = currentUser.id;
+      const { error } = await supa.from("user_settings").insert(payload);
+      if(error) throw error;
+    }
+  }catch(e){
+    console.error("Push prices failed:", e);
+  }
+}
+
+/* On sign-in: merge local + cloud, last-write-wins per estimate. Sync pricing too. */
+async function bootstrapCloudSync(showMigratePrompt){
+  if(!currentUser || !supa) return;
+
+  // ---- Pricing sync ----
+  // If cloud has prices, those win (canonical). If cloud is empty, push local up.
+  const settings = await cloudFetchSettings();
+  if(settings && settings.client_prices){
+    const fresh = JSON.parse(JSON.stringify(DEFAULT_PRICES));
+    deepMerge(fresh, migrateFlatShowerPrice(settings.client_prices));
+    prices = fresh;
+    localStorage.setItem("reno_prices_v2", JSON.stringify(prices));
+  } else {
+    await cloudPushPrices("client");
+  }
+  if(settings && settings.contractor_prices){
+    const freshC = defaultContractorPrices();
+    deepMerge(freshC, migrateFlatShowerPrice(settings.contractor_prices));
+    contractorPrices = freshC;
+    localStorage.setItem("reno_contractor_prices_v1", JSON.stringify(contractorPrices));
+  } else if(contractorPrices){
+    await cloudPushPrices("contractor");
+  }
+  // If the pricing editor or contractor editor is open, refresh them
+  if(document.getElementById("settingsModal").classList.contains("show")) renderPricingEditor();
+  if(document.getElementById("contractorPricingModal").classList.contains("show")) renderContractorPricingEditor();
+  // Recalc totals so the live UI reflects the synced pricing
+  renderTotals();
+  // Listing-discount label can move if prices changed
+  const lbl = document.getElementById("listingPctLabel");
+  if(lbl) lbl.textContent = num(prices.listingDiscount && prices.listingDiscount.percent) || 0;
+
+  // First-time-on-this-device prompt to upload any local-only estimates
+  const migrateKey = "reno_cloud_migrated_" + currentUser.id;
+  const localList = loadSavedList();
+  if(showMigratePrompt && !localStorage.getItem(migrateKey) && localList.length > 0){
+    const ok = confirm("Welcome! You have " + localList.length + " local estimate(s) on this device. Upload them to your account so they sync across all your devices?");
+    if(ok){
+      for(const e of localList){ await upsertCloudEstimate(e); }
+      flash("Uploaded " + localList.length + " estimate" + (localList.length===1?"":"s"));
+    }
+    localStorage.setItem(migrateKey, "1");
+  }
+
+  // Pull cloud copy, merge with local (newer wins per client_id)
+  const { data: cloud, error } = await supa.from("estimates")
+    .select("client_id,name,state,updated_at")
+    .eq("user_id", currentUser.id);
+  if(error){ console.error(error); return; }
+
+  const cloudById = {};
+  (cloud || []).forEach(r => { if(r.client_id) cloudById[r.client_id] = r; });
+  const localById = {};
+  localList.forEach(e => { localById[e.id] = e; });
+
+  const merged = [];
+  const ids = new Set([...Object.keys(cloudById), ...Object.keys(localById)]);
+  for(const id of ids){
+    const c = cloudById[id], l = localById[id];
+    if(c && l){
+      const cT = new Date(c.updated_at).getTime();
+      const lT = new Date(l.savedAt).getTime();
+      if(lT > cT){
+        await upsertCloudEstimate(l);
+        merged.push(l);
+      } else {
+        merged.push(cloudToLocal(c));
+      }
+    } else if(c){
+      merged.push(cloudToLocal(c));
+    } else if(l){
+      await upsertCloudEstimate(l);
+      merged.push(l);
+    }
+  }
+  merged.sort((a,b) => new Date(b.savedAt) - new Date(a.savedAt));
+  persistSavedList(merged);
+  // Refresh UI if the saved list modal is open
+  if(document.getElementById("savedModal").classList.contains("show")){
+    renderSavedList();
+  }
+}
+
 /* ---------- Init ---------- */
 renderAll();
+initSupabase();
 </script>
 </body>
 </html>
