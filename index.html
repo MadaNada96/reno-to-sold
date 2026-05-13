@@ -384,8 +384,9 @@
   body.show-internal{ overflow:hidden; }
   body.show-internal .internal-view{ display:block; }
   body.show-internal > .app,
-  body.show-internal > .modal-bg,
+  body.show-internal > .modal-bg:not(#contractorPricingModal),
   body.show-internal > .contractor-view{ display:none !important; }
+  #contractorPricingModal{ z-index:1100; }
 
   .internal-toolbar{
     position:sticky; top:0;
@@ -550,6 +551,10 @@
     .app{padding:0;}
     .brandbar{background:#000 !important;color:#fff !important;border-radius:0;border:none;}
     .toolbar,.panel-body .add-btn,.no-print,.modal-bg,.cat-head .switch,header .toolbar{display:none !important;}
+    /* Hide unselected tier options, emphasize selected */
+    .tier-row label:has(input:not(:checked)){display:none !important;}
+    .tier-row{border:none !important;background:transparent !important;padding:0 !important;margin-bottom:10px !important;}
+    .tier-row input:checked + span{background:#000 !important;color:#fff !important;font-weight:800 !important;padding:5px 14px !important;border-radius:4px !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
     .total-card{background:#fff !important;color:#000 !important;border:2px solid #000 !important;box-shadow:none !important;}
     .total-card .grand{color:#000 !important;}
     .total-card .meta,.total-card .prop{color:#000 !important;}
@@ -687,7 +692,7 @@
         </div>
         <div>
           <label>Total property sqft</label>
-          <input type="number" id="propSqft" min="0" placeholder="e.g. 1600" oninput="renderTotals()">
+          <input type="number" id="propSqft" min="0" placeholder="e.g. 1600" oninput="onPropSqftInput()">
         </div>
       </div>
     </div>
@@ -884,15 +889,28 @@ const DEFAULT_PRICES = {
       custom:   { labour: 3500, material: 7500 }
     },
     // Under-cabinet lighting — typical run, flat
-    undercab: { labour: 350, material: 450 }
+    undercab: { labour: 350, material: 450 },
+    // Backsplash — subway is per sqft; quartz is a lump sum keyed by kitchen size (based on typical upper-cabinet count)
+    backsplash: {
+      subway: { labour: 10.00, material: 6.00 },
+      quartz: {
+        small:  { labour: 1400, material: 1100 },   // ~8 uppers → ~25 sqft
+        medium: { labour: 2200, material: 1800 },   // ~12 uppers → ~40 sqft
+        large:  { labour: 3000, material: 2500 }    // ~16 uppers → ~55 sqft
+      }
+    }
   },
   bathroom: {
-    // Base by piece count, tier = Builder grade or Premium
+    // Base (excludes stand-up shower add-on which is priced separately).
+    // *-shower variants auto-check the stand-up shower add-on in the UI.
     base: {
-      "2": { builder:{labour:2400, material:2500}, premium:{labour:3800, material:4000} },
-      "3": { builder:{labour:4000, material:5000}, premium:{labour:6500, material:8000} },
-      "4": { builder:{labour:5800, material:7200}, premium:{labour:9000, material:11000} },
-      "5": { builder:{labour:7600, material:9400}, premium:{labour:11250, material:13750} }
+      "2pc":               { builder:{labour:2400, material:2500}, premium:{labour:3800, material:4000} },   // toilet, vanity
+      "3pc-tub":           { builder:{labour:4000, material:5000}, premium:{labour:6500, material:8000} },   // toilet, vanity, tub
+      "3pc-shower":        { builder:{labour:2600, material:2700}, premium:{labour:4000, material:4200} },   // toilet, vanity, +shower add-on
+      "4pc-dv-tub":        { builder:{labour:5000, material:6800}, premium:{labour:8000, material:10500} },  // toilet, double vanity, tub
+      "4pc-dv-shower":     { builder:{labour:3500, material:4000}, premium:{labour:5500, material:6500} },   // toilet, double vanity, +shower add-on
+      "4pc-sv-tub-shower": { builder:{labour:3600, material:4400}, premium:{labour:5500, material:6500} },   // toilet, vanity, tub, +shower add-on
+      "5pc":               { builder:{labour:4600, material:5600}, premium:{labour:7000, material:8500} }    // toilet, double vanity, tub, +shower add-on
     },
     floorTile: {
       builder: { labour: 7.00, material: 5.00 },
@@ -967,7 +985,10 @@ function freshState(){
       size: "medium",
       counter: true,         // default on
       island: false,
-      undercabLighting: false
+      undercabLighting: false,
+      backsplash: false,
+      backsplashType: "subway",   // subway | quartz
+      backsplashSqft: ""
     },
     bathroom:  { rooms:[ defaultBath() ] },
     potlights: { tier:"standard", count:"" },
@@ -975,8 +996,20 @@ function freshState(){
   };
 }
 function defaultBath(){
-  return { tier:"builder", pieces:"4", floorTileSqft:"", wallTileSqft:"", standUpShower:false };
+  return { tier:"builder", pieces:"4pc-sv-tub-shower", floorTileSqft:"", wallTileSqft:"", standUpShower:true };
 }
+const BATH_VARIANTS = [
+  { value:"2pc",               label:"2-piece (toilet, vanity)",                            hasShower:false },
+  { value:"3pc-tub",           label:"3-piece (toilet, vanity, tub)",                       hasShower:false },
+  { value:"3pc-shower",        label:"3-piece (toilet, vanity, stand-up shower)",           hasShower:true  },
+  { value:"4pc-dv-tub",        label:"4-piece (toilet, double vanity, tub)",                hasShower:false },
+  { value:"4pc-dv-shower",     label:"4-piece (toilet, double vanity, stand-up shower)",    hasShower:true  },
+  { value:"4pc-sv-tub-shower", label:"4-piece (toilet, vanity, tub, stand-up shower)",      hasShower:true  },
+  { value:"5pc",               label:"5-piece (toilet, double vanity, tub, stand-up shower)", hasShower:true }
+];
+function bathVariant(v){ return BATH_VARIANTS.find(b => b.value === v); }
+function bathroomLabel(v){ const x = bathVariant(v); return x ? x.label : v; }
+function bathroomHasShower(v){ const x = bathVariant(v); return x ? x.hasShower : false; }
 
 /* ---------- Storage ---------- */
 function deepMerge(base, over){
@@ -1049,7 +1082,7 @@ function migrateOldEstimate(m){
   if(m.kitchen && m.kitchen.tier === "premium"){
     m.kitchen.tier = "custom";
   }
-  // Bathroom: standard -> builder, old tilingSqft -> floorTileSqft
+  // Bathroom: standard -> builder, old tilingSqft -> floorTileSqft, old piece-count keys -> new variant keys
   if(m.bathroom && Array.isArray(m.bathroom.rooms)){
     m.bathroom.rooms.forEach(b => {
       if(b.tier === "standard") b.tier = "builder";
@@ -1058,6 +1091,13 @@ function migrateOldEstimate(m){
         b.floorTileSqft = b.tilingSqft;
         b.wallTileSqft = b.wallTileSqft || "";
       }
+      // Migrate old "2"/"3"/"4"/"5" keys
+      if(b.pieces === "2") b.pieces = "2pc";
+      else if(b.pieces === "3") b.pieces = b.standUpShower ? "3pc-shower" : "3pc-tub";
+      else if(b.pieces === "4") b.pieces = "4pc-sv-tub-shower";
+      else if(b.pieces === "5") b.pieces = "5pc";
+      // Make sure shower-required variants have the flag set
+      if(bathroomHasShower(b.pieces)) b.standUpShower = true;
     });
   }
   // Discount schema migration
@@ -1087,6 +1127,20 @@ function paintingSqft(){
   const s = state.painting;
   return s.scope === "custom" ? num(s.sqft) : num(state.propSqft);
 }
+function suggestedTrimLinFt(){
+  // ~0.20 lin ft of baseboards/trim per sqft of property (typical layout)
+  const sqft = num(state.propSqft);
+  return sqft > 0 ? Math.round((sqft * 0.20) / 5) * 5 : 0;
+}
+function onPropSqftInput(){
+  state.propSqft = document.getElementById("propSqft").value;
+  // Re-render add-ons that auto-derive lin ft from property sqft
+  if(state.enabled.painting && state.painting.trim) renderCatBodyOnly("painting");
+  if(state.enabled.flooring && state.flooring.baseboards) renderCatBodyOnly("flooring");
+  // Painting "whole property" scope also depends on this for material readout
+  if(state.enabled.flooring) renderTotals();
+  renderTotals();
+}
 
 function flooringMaterialQty(){
   const sqft = num(state.flooring.sqft);
@@ -1115,7 +1169,7 @@ function computeCategory(cat, priceSet){
       material += cSqft * cr.material;
     }
     if(s.trim && p.trim){
-      const lf = num(s.trimLinFt);
+      const lf = num(s.trimLinFt) || suggestedTrimLinFt();
       labour += lf * p.trim.labour;
       material += lf * p.trim.material;
     }
@@ -1140,7 +1194,7 @@ function computeCategory(cat, priceSet){
       material += rSqft * p.removal.material;
     }
     if(s.baseboards && p.baseboards){
-      const lf = num(s.baseboardLinFt);
+      const lf = num(s.baseboardLinFt) || suggestedTrimLinFt();
       labour += lf * p.baseboards.labour;
       material += lf * p.baseboards.material;
     }
@@ -1167,6 +1221,17 @@ function computeCategory(cat, priceSet){
     if(s.undercabLighting && p.undercab){
       labour += p.undercab.labour;
       material += p.undercab.material;
+    }
+    if(s.backsplash && p.backsplash){
+      const t = s.backsplashType || "subway";
+      if(t === "quartz" && p.backsplash.quartz && p.backsplash.quartz[size]){
+        const q = p.backsplash.quartz[size];
+        labour += q.labour; material += q.material;
+      } else if(t === "subway" && p.backsplash.subway){
+        const sq = num(s.backsplashSqft);
+        labour += sq * p.backsplash.subway.labour;
+        material += sq * p.backsplash.subway.material;
+      }
     }
   }
   else if(cat === "bathroom"){
@@ -1464,11 +1529,11 @@ function renderCatBody(cat){
         ${s.trim ? `
           <div class="grid grid-2">
             <div>
-              <label>Linear feet of trim</label>
-              <input type="number" min="0" value="${s.trimLinFt||""}" placeholder="e.g. 280" oninput="state.painting.trimLinFt=this.value;renderTotals()">
+              <label>Linear feet of trim ${suggestedTrimLinFt() > 0 ? `<span style="text-transform:none;letter-spacing:0;color:var(--gold-bright);font-weight:600;">&middot; auto ≈ ${suggestedTrimLinFt()} from property sqft</span>` : ""}</label>
+              <input type="number" min="0" value="${s.trimLinFt||""}" placeholder="${suggestedTrimLinFt() > 0 ? `auto ${suggestedTrimLinFt()} (override if needed)` : 'enter property sqft first'}" oninput="state.painting.trimLinFt=this.value;renderTotals()">
             </div>
           </div>
-          <div class="footnote" style="margin-top:8px;">GTA 2026 going rate ~$2.00&ndash;$2.50/lin ft for refreshed baseboards, door &amp; window casings. A typical 1,500 sqft home has ~250&ndash;300 lin ft.</div>
+          <div class="footnote" style="margin-top:8px;">GTA 2026 going rate ~$2.00&ndash;$2.50/lin ft for refreshed baseboards, door &amp; window casings. Auto-suggest = property sqft &times; 0.20 (typical layout). Leave blank to use the suggestion.</div>
         ` : ""}
       </div>
 
@@ -1541,11 +1606,11 @@ function renderCatBody(cat){
         ${s.baseboards ? `
           <div class="grid grid-2">
             <div>
-              <label>Linear feet of baseboards</label>
-              <input type="number" min="0" value="${s.baseboardLinFt||""}" placeholder="e.g. 220" oninput="state.flooring.baseboardLinFt=this.value;renderTotals()">
+              <label>Linear feet of baseboards ${suggestedTrimLinFt() > 0 ? `<span style="text-transform:none;letter-spacing:0;color:var(--gold-bright);font-weight:600;">&middot; auto ≈ ${suggestedTrimLinFt()} from property sqft</span>` : ""}</label>
+              <input type="number" min="0" value="${s.baseboardLinFt||""}" placeholder="${suggestedTrimLinFt() > 0 ? `auto ${suggestedTrimLinFt()} (override if needed)` : 'enter property sqft first'}" oninput="state.flooring.baseboardLinFt=this.value;renderTotals()">
             </div>
           </div>
-          <div class="footnote" style="margin-top:8px;">Supply &amp; install of new MDF/poplar baseboards (4&ndash;5"). GTA 2026 going rate ~$4.00/lin ft installed (unpainted).</div>
+          <div class="footnote" style="margin-top:8px;">Supply &amp; install of new MDF/poplar baseboards (4&ndash;5"). GTA 2026 going rate ~$4.00/lin ft installed (unpainted). Auto-suggest = property sqft &times; 0.20.</div>
         ` : ""}
       </div>
 
@@ -1595,6 +1660,41 @@ function renderCatBody(cat){
           <input type="checkbox" ${s.counter?'checked':''} onchange="state.kitchen.counter=this.checked;renderTotals()">
           <span class="addon-title">Countertops <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(priced by kitchen size &amp; tier — ${kitchenCounterPriceLabel(s.size, s.tier)})</span></span>
         </label>
+      </div>
+
+      <!-- Backsplash add-on -->
+      <div class="addon">
+        <label class="check-row" style="margin-bottom:${s.backsplash?'10px':'0'};">
+          <input type="checkbox" ${s.backsplash?'checked':''} onchange="state.kitchen.backsplash=this.checked;renderCatBodyOnly('kitchen');renderTotals()">
+          <span class="addon-title">Backsplash</span>
+        </label>
+        ${s.backsplash ? `
+          <div class="grid grid-2">
+            <div>
+              <label>Material</label>
+              <select onchange="state.kitchen.backsplashType=this.value;renderCatBodyOnly('kitchen');renderTotals()">
+                <option value="subway" ${(s.backsplashType||'subway')==='subway'?'selected':''}>Subway tiles (per sqft)</option>
+                <option value="quartz" ${s.backsplashType==='quartz'?'selected':''}>Quartz — same as countertop</option>
+              </select>
+            </div>
+            ${(s.backsplashType||'subway') === 'subway' ? `
+              <div>
+                <label>Backsplash sqft</label>
+                <input type="number" min="0" value="${s.backsplashSqft||''}" placeholder="e.g. 35" oninput="state.kitchen.backsplashSqft=this.value;renderTotals()">
+              </div>
+            ` : `
+              <div>
+                <label>Quartz backsplash <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(priced by size)</span></label>
+                <div style="padding:10px 12px;background:#0d0d11;border:1px solid var(--line-strong);border-radius:8px;color:var(--gold-bright);font-size:13px;font-weight:600;">
+                  ${cap(s.size)} kitchen &middot; ${fmt(kitchenBacksplashQuartzPrice(s.size))}
+                </div>
+              </div>
+            `}
+          </div>
+          <div class="footnote" style="margin-top:8px;">
+            <b style="color:var(--gold-bright)">Subway</b>: ceramic/porcelain subway tile per sqft (~$16/sqft installed). <b style="color:var(--gold-bright)">Quartz</b>: same slab as countertop, priced as a lump sum based on typical upper-cabinet count for the kitchen size.
+          </div>
+        ` : ""}
       </div>
 
       <div class="addon">
@@ -1651,18 +1751,21 @@ function kitchenIslandPriceLabel(tier){
   if(!i) return "";
   return fmt(i.labour + i.material);
 }
+function kitchenBacksplashQuartzPrice(size){
+  const q = prices.kitchen && prices.kitchen.backsplash && prices.kitchen.backsplash.quartz && prices.kitchen.backsplash.quartz[size];
+  return q ? q.labour + q.material : 0;
+}
 
 function renderBathrooms(){
-  return state.bathroom.rooms.map((b,i)=>`
+  return state.bathroom.rooms.map((b,i)=>{
+    const requiresShower = bathroomHasShower(b.pieces);
+    return `
     <div class="bath-row">
-      <div class="grid grid-3">
+      <div class="grid grid-2">
         <div>
-          <label>Bathroom #${i+1} pieces</label>
-          <select onchange="state.bathroom.rooms[${i}].pieces=this.value;renderTotals()">
-            <option value="2" ${b.pieces==='2'?'selected':''}>2-piece (toilet, sink)</option>
-            <option value="3" ${b.pieces==='3'?'selected':''}>3-piece (toilet, sink, tub or shower)</option>
-            <option value="4" ${b.pieces==='4'?'selected':''}>4-piece (toilet, sink, tub, shower)</option>
-            <option value="5" ${b.pieces==='5'?'selected':''}>5-piece (toilet, sink, tub, shower, dbl vanity)</option>
+          <label>Bathroom #${i+1} &mdash; pieces</label>
+          <select onchange="onBathPiecesChange(${i}, this.value)">
+            ${BATH_VARIANTS.map(v => `<option value="${v.value}" ${b.pieces===v.value?'selected':''}>${v.label}</option>`).join("")}
           </select>
         </div>
         <div>
@@ -1672,7 +1775,6 @@ function renderBathrooms(){
             <option value="premium" ${b.tier==='premium'?'selected':''}>Premium</option>
           </select>
         </div>
-        <div></div>
       </div>
       <div class="grid grid-2" style="margin-top:10px;">
         <div>
@@ -1685,14 +1787,23 @@ function renderBathrooms(){
         </div>
       </div>
       <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-        <label class="check-row">
-          <input type="checkbox" ${b.standUpShower?'checked':''} onchange="state.bathroom.rooms[${i}].standUpShower=this.checked;renderTotals()">
-          Add stand-up shower (waterproofing, glass enclosure, fixtures)
+        <label class="check-row" title="${requiresShower?'Required by the selected piece option — auto-applied.':''}">
+          <input type="checkbox" ${b.standUpShower?'checked':''} ${requiresShower?'disabled':''} onchange="state.bathroom.rooms[${i}].standUpShower=this.checked;renderTotals()">
+          <span>Add stand-up shower (waterproofing, glass enclosure, fixtures)${requiresShower ? ' <span style="color:var(--gold-bright);font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;">&middot; auto for this option</span>' : ''}</span>
         </label>
         ${state.bathroom.rooms.length>1 ? `<button class="ghost danger no-print" onclick="removeBath(${i})">Remove</button>`:""}
       </div>
     </div>
-  `).join("");
+  `;}).join("");
+}
+
+function onBathPiecesChange(i, value){
+  state.bathroom.rooms[i].pieces = value;
+  // Auto-select stand-up shower for variants that include one
+  if(bathroomHasShower(value)){
+    state.bathroom.rooms[i].standUpShower = true;
+  }
+  renderBathBody();
 }
 
 function addBath(){ state.bathroom.rooms.push(defaultBath()); renderBathBody(); }
@@ -1917,15 +2028,35 @@ function renderPricingEditor(){
       <div>${priceInput("kitchen.undercab.material", prices.kitchen.undercab.material, 25)}</div>
     </div>`;
 
-  // Bathroom base
-  html += `<div class="section-title">Bathroom base (excludes tiling &amp; shower add)</div>
+  // Kitchen backsplash
+  html += `<div class="section-title">Backsplash &mdash; subway tiles (per sqft)</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>
+    <div class="price-edit-row">
+      <div class="lbl">Subway tile install</div>
+      <div>${priceInput("kitchen.backsplash.subway.labour", prices.kitchen.backsplash.subway.labour)}</div>
+      <div>${priceInput("kitchen.backsplash.subway.material", prices.kitchen.backsplash.subway.material)}</div>
+    </div>`;
+  html += `<div class="section-title">Backsplash &mdash; quartz (lump sum by kitchen size)</div>
     <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
-  ["2","3","4","5"].forEach(p=>{
+  ["small","medium","large"].forEach(sz=>{
+    html += `<div class="price-edit-row">
+      <div class="lbl">${cap(sz)}</div>
+      <div>${priceInput("kitchen.backsplash.quartz."+sz+".labour", prices.kitchen.backsplash.quartz[sz].labour, 25)}</div>
+      <div>${priceInput("kitchen.backsplash.quartz."+sz+".material", prices.kitchen.backsplash.quartz[sz].material, 25)}</div>
+    </div>`;
+  });
+
+  // Bathroom base
+  html += `<div class="section-title">Bathroom base (excludes stand-up shower add-on)</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
+  BATH_VARIANTS.forEach(v=>{
     ["builder","premium"].forEach(t=>{
+      const base = prices.bathroom.base[v.value] && prices.bathroom.base[v.value][t];
+      if(!base) return;
       html += `<div class="price-edit-row">
-        <div class="lbl">${p}-piece &middot; ${t==="builder"?"Builder grade":"Premium"}</div>
-        <div>${priceInput("bathroom.base."+p+"."+t+".labour", prices.bathroom.base[p][t].labour, 50)}</div>
-        <div>${priceInput("bathroom.base."+p+"."+t+".material", prices.bathroom.base[p][t].material, 50)}</div>
+        <div class="lbl">${v.label} &middot; ${t==="builder"?"Builder":"Premium"}</div>
+        <div>${priceInput("bathroom.base."+v.value+"."+t+".labour", base.labour, 50)}</div>
+        <div>${priceInput("bathroom.base."+v.value+"."+t+".material", base.material, 50)}</div>
       </div>`;
     });
   });
@@ -2107,6 +2238,13 @@ function renderContractorSheet(){
       { html:`Base scope includes: cabinets, sink, faucet, plumbing adjustments, cabinet install, all hardware.` }
     ];
     if(s.counter) items.push({ html:`Countertops: <b>included</b> (priced by kitchen size &amp; tier).` });
+    if(s.backsplash){
+      if((s.backsplashType||'subway') === 'subway'){
+        items.push({ html:`Backsplash: <b>Subway tile</b> &mdash; ${s.backsplashSqft||'?'} sqft` });
+      } else {
+        items.push({ html:`Backsplash: <b>Quartz</b> (matches countertop) &mdash; ${cap(s.size)} kitchen` });
+      }
+    }
     if(s.island)  items.push({ html:`Island add-on: <b>included</b> (${s.tier==="custom"?"custom":"standard"} build).` });
     if(s.undercabLighting) items.push({ html:`Under-cabinet lighting: <b>included</b> (typical run &mdash; LED strip + driver).` });
     html += scopeSection("Kitchen", items);
@@ -2118,7 +2256,7 @@ function renderContractorSheet(){
     const items = [];
     state.bathroom.rooms.forEach((b,i) => {
       items.push({ hdr:true, html:`Bathroom #${i+1}` });
-      items.push({ sub:true, html:`Pieces: <b>${b.pieces}-piece</b> &mdash; ${pieceDescription(b.pieces)}` });
+      items.push({ sub:true, html:`Pieces: <b>${bathroomLabel(b.pieces)}</b>` });
       items.push({ sub:true, html:`Tier: <b>${b.tier==="premium"?"Premium &mdash; upgraded vanity (quartz top), comfort-height toilet, soaker tub, premium fixtures":"Builder grade &mdash; stock vanity, basic toilet/tub/shower, contractor-grade fixtures"}</b>` });
       if(num(b.floorTileSqft)) items.push({ sub:true, html:`Floor tile: <b>${b.floorTileSqft} sqft</b>` });
       if(num(b.wallTileSqft))  items.push({ sub:true, html:`Wall tile: <b>${b.wallTileSqft} sqft</b>` });
@@ -2460,15 +2598,36 @@ function renderContractorPricingEditor(){
       <div>${ctrPriceInput("kitchen.undercab.labour", cp.kitchen.undercab.labour, 25)}</div>
       <div>${ctrPriceInput("kitchen.undercab.material", cp.kitchen.undercab.material, 25)}</div>
     </div>`;
-  // Bathroom base
-  html += `<div class="section-title">Bathroom base</div>
-    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
-  ["2","3","4","5"].forEach(p=>{
-    ["builder","premium"].forEach(t=>{
+  // Kitchen backsplash
+  if(cp.kitchen.backsplash){
+    html += `<div class="section-title">Backsplash &mdash; subway tiles (per sqft)</div>
+      <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>
+      <div class="price-edit-row">
+        <div class="lbl">Subway tile install</div>
+        <div>${ctrPriceInput("kitchen.backsplash.subway.labour", cp.kitchen.backsplash.subway.labour)}</div>
+        <div>${ctrPriceInput("kitchen.backsplash.subway.material", cp.kitchen.backsplash.subway.material)}</div>
+      </div>`;
+    html += `<div class="section-title">Backsplash &mdash; quartz (lump sum by kitchen size)</div>
+      <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
+    ["small","medium","large"].forEach(sz=>{
       html += `<div class="price-edit-row">
-        <div class="lbl">${p}-piece &middot; ${t==="builder"?"Builder grade":"Premium"}</div>
-        <div>${ctrPriceInput("bathroom.base."+p+"."+t+".labour", cp.bathroom.base[p][t].labour, 50)}</div>
-        <div>${ctrPriceInput("bathroom.base."+p+"."+t+".material", cp.bathroom.base[p][t].material, 50)}</div>
+        <div class="lbl">${cap(sz)}</div>
+        <div>${ctrPriceInput("kitchen.backsplash.quartz."+sz+".labour", cp.kitchen.backsplash.quartz[sz].labour, 25)}</div>
+        <div>${ctrPriceInput("kitchen.backsplash.quartz."+sz+".material", cp.kitchen.backsplash.quartz[sz].material, 25)}</div>
+      </div>`;
+    });
+  }
+  // Bathroom base
+  html += `<div class="section-title">Bathroom base (excludes shower add-on)</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
+  BATH_VARIANTS.forEach(v=>{
+    ["builder","premium"].forEach(t=>{
+      const base = cp.bathroom.base[v.value] && cp.bathroom.base[v.value][t];
+      if(!base) return;
+      html += `<div class="price-edit-row">
+        <div class="lbl">${v.label} &middot; ${t==="builder"?"Builder":"Premium"}</div>
+        <div>${ctrPriceInput("bathroom.base."+v.value+"."+t+".labour", base.labour, 50)}</div>
+        <div>${ctrPriceInput("bathroom.base."+v.value+"."+t+".material", base.material, 50)}</div>
       </div>`;
     });
   });
@@ -2681,13 +2840,20 @@ function scopeItemsFor(cat){
     items.push({ html:`Size: <b>${sizeLabel}</b>` });
     items.push({ html:`Base: cabinets + sink + faucet + plumbing + hardware` });
     if(s.counter) items.push({ html:`+ Countertops (priced by size &amp; tier)` });
+    if(s.backsplash){
+      if((s.backsplashType||'subway') === 'subway'){
+        items.push({ html:`+ Backsplash &mdash; subway tile, <b>${s.backsplashSqft||'?'} sqft</b>` });
+      } else {
+        items.push({ html:`+ Backsplash &mdash; quartz, ${cap(s.size)} kitchen` });
+      }
+    }
     if(s.island)  items.push({ html:`+ Island (${s.tier==="custom"?"custom":"standard"})` });
     if(s.undercabLighting) items.push({ html:`+ Under-cabinet lighting` });
   }
   else if(cat === "bathroom"){
     state.bathroom.rooms.forEach((b,i) => {
       items.push({ hdr:true, html:`Bathroom #${i+1}` });
-      items.push({ sub:true, html:`<b>${b.pieces}-piece</b> &middot; ${b.tier==="premium"?"Premium":"Builder grade"}` });
+      items.push({ sub:true, html:`<b>${bathroomLabel(b.pieces)}</b> &middot; ${b.tier==="premium"?"Premium":"Builder grade"}` });
       if(num(b.floorTileSqft)) items.push({ sub:true, html:`Floor tile: <b>${b.floorTileSqft} sqft</b>` });
       if(num(b.wallTileSqft))  items.push({ sub:true, html:`Wall tile: <b>${b.wallTileSqft} sqft</b>` });
       if(b.standUpShower)      items.push({ sub:true, html:`+ Stand-up shower` });
