@@ -991,16 +991,16 @@ const DEFAULT_PRICES = {
   },
   bathroom: {
     // Single premium-grade tier. Base covers toilet, vanity, mirror, light, fixtures, accessories.
-    // Floor tile + wall tile priced per sqft. Tub and stand-up shower are separate optional add-ons.
+    // Floor tile + wall tile priced per sqft. Tub, double vanity, stand-up shower are optional add-ons.
     base: {
       "2": { labour: 3500, material: 4000 },   // toilet, vanity
       "3": { labour: 4500, material: 5500 },   // toilet, vanity, tub or shower
-      "4": { labour: 5500, material: 7000 },   // toilet, vanity, tub, shower
-      "5": { labour: 7000, material: 9000 }    // toilet, double vanity, tub, shower
+      "4": { labour: 5500, material: 7000 }    // toilet, vanity, tub, shower
     },
     floorTile: { labour: 10.00, material: 8.00 },
     wallTile:  { labour: 12.00, material: 9.00 },
     newTub:        { labour: 1500, material: 1800 },
+    doubleVanity:  { labour: 900,  material: 1800 },   // upgrade from single to double vanity
     standUpShower: { labour: 4000, material: 5000 }
   },
   potlights: {
@@ -1077,14 +1077,13 @@ function freshState(){
   };
 }
 function defaultBath(){
-  return { pieces:"4", floorTileSqft:"", wallTileSqft:"", newTub:false, standUpShower:false };
+  return { pieces:"2", floorTileSqft:"", wallTileSqft:"", newTub:false, doubleVanity:false, standUpShower:false };
 }
 function bathroomLabel(p){
   return ({
     "2":"2-piece (toilet, vanity)",
     "3":"3-piece (toilet, vanity, tub or shower)",
-    "4":"4-piece (toilet, vanity, tub, shower)",
-    "5":"5-piece (toilet, double vanity, tub, shower)"
+    "4":"4-piece (toilet, vanity, tub, shower)"
   })[p] || p;
 }
 
@@ -1168,11 +1167,15 @@ function migrateOldEstimate(m){
         b.floorTileSqft = b.tilingSqft;
         b.wallTileSqft = b.wallTileSqft || "";
       }
+      // Migrate multi-variant keys back to simple values, capturing double-vanity intent
       if(b.pieces === "2pc") b.pieces = "2";
       else if(b.pieces === "3pc-tub" || b.pieces === "3pc-shower") b.pieces = "3";
-      else if(b.pieces === "4pc-dv-tub" || b.pieces === "4pc-dv-shower" || b.pieces === "4pc-sv-tub-shower") b.pieces = "4";
-      else if(b.pieces === "5pc") b.pieces = "5";
+      else if(b.pieces === "4pc-sv-tub-shower") b.pieces = "4";
+      else if(b.pieces === "4pc-dv-tub" || b.pieces === "4pc-dv-shower"){ b.pieces = "4"; b.doubleVanity = true; }
+      // 5-piece no longer exists — fold into 4-piece + double-vanity add-on
+      else if(b.pieces === "5pc" || b.pieces === "5"){ b.pieces = "4"; b.doubleVanity = true; }
       if(typeof b.newTub !== "boolean") b.newTub = false;
+      if(typeof b.doubleVanity !== "boolean") b.doubleVanity = false;
     });
   }
   // Discount schema migration
@@ -1324,6 +1327,10 @@ function computeCategory(cat, priceSet){
       if(b.newTub && p.newTub){
         labour += p.newTub.labour;
         material += p.newTub.material;
+      }
+      if(b.doubleVanity && p.doubleVanity){
+        labour += p.doubleVanity.labour;
+        material += p.doubleVanity.material;
       }
       if(b.standUpShower && p.standUpShower){
         labour += p.standUpShower.labour;
@@ -1802,7 +1809,7 @@ function renderCatBody(cat){
             <div class="included-head">New</div>
             <ul>
               <li>Floor tiles</li>
-              <li>Tub wall tiles</li>
+              <li>Shower wall tiles</li>
               <li>Shower fixtures</li>
               <li>Toilet</li>
               <li>Vanity</li>
@@ -1866,7 +1873,6 @@ function renderBathrooms(){
             <option value="2" ${b.pieces==='2'?'selected':''}>2-piece (toilet, vanity)</option>
             <option value="3" ${b.pieces==='3'?'selected':''}>3-piece (toilet, vanity, tub or shower)</option>
             <option value="4" ${b.pieces==='4'?'selected':''}>4-piece (toilet, vanity, tub, shower)</option>
-            <option value="5" ${b.pieces==='5'?'selected':''}>5-piece (toilet, double vanity, tub, shower)</option>
           </select>
         </div>
       </div>
@@ -1884,6 +1890,10 @@ function renderBathrooms(){
         <label class="check-row">
           <input type="checkbox" ${b.newTub?'checked':''} onchange="state.bathroom.rooms[${i}].newTub=this.checked;renderTotals()">
           <span>Add new tub <span style="color:var(--muted);font-weight:400;font-size:12px;">(replaces existing tub)</span></span>
+        </label>
+        <label class="check-row">
+          <input type="checkbox" ${b.doubleVanity?'checked':''} onchange="state.bathroom.rooms[${i}].doubleVanity=this.checked;renderTotals()">
+          <span>Add double vanity <span style="color:var(--muted);font-weight:400;font-size:12px;">(upgrade from single vanity, plumbed for two sinks)</span></span>
         </label>
         <label class="check-row">
           <input type="checkbox" ${b.standUpShower?'checked':''} onchange="state.bathroom.rooms[${i}].standUpShower=this.checked;renderTotals()">
@@ -2140,10 +2150,10 @@ function renderPricingEditor(){
     </div>`;
   });
 
-  // Bathroom base (single tier, excludes tile sqft + tub/shower add-ons)
-  html += `<div class="section-title">Bathroom base &mdash; per bathroom (excludes tile sqft &amp; tub/shower)</div>
+  // Bathroom base (single tier, excludes tile sqft + tub/double-vanity/shower add-ons)
+  html += `<div class="section-title">Bathroom base &mdash; per bathroom (excludes tile sqft &amp; add-ons)</div>
     <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
-  ["2","3","4","5"].forEach(p=>{
+  ["2","3","4"].forEach(p=>{
     const base = prices.bathroom.base[p];
     if(!base) return;
     html += `<div class="price-edit-row">
@@ -2178,6 +2188,15 @@ function renderPricingEditor(){
       <div class="lbl">Replace existing tub</div>
       <div>${priceInput("bathroom.newTub.labour", prices.bathroom.newTub.labour, 50)}</div>
       <div>${priceInput("bathroom.newTub.material", prices.bathroom.newTub.material, 50)}</div>
+    </div>`;
+
+  // Double vanity add-on
+  html += `<div class="section-title">Double vanity add-on (per bathroom)</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>
+    <div class="price-edit-row">
+      <div class="lbl">Upgrade single &rarr; double vanity</div>
+      <div>${priceInput("bathroom.doubleVanity.labour", prices.bathroom.doubleVanity.labour, 50)}</div>
+      <div>${priceInput("bathroom.doubleVanity.material", prices.bathroom.doubleVanity.material, 50)}</div>
     </div>`;
 
   // Stand-up shower add-on
@@ -2356,6 +2375,7 @@ function renderContractorSheet(){
       if(num(b.floorTileSqft)) items.push({ sub:true, html:`Floor tile: <b>${b.floorTileSqft} sqft</b>` });
       if(num(b.wallTileSqft))  items.push({ sub:true, html:`Wall tile: <b>${b.wallTileSqft} sqft</b>` });
       if(b.newTub) items.push({ sub:true, html:`New tub: <b>included</b> (replaces existing)` });
+      if(b.doubleVanity) items.push({ sub:true, html:`Double vanity: <b>included</b> (upgrade from single, plumbed for two sinks)` });
       if(b.standUpShower) items.push({ sub:true, html:`Stand-up shower: <b>included</b> (waterproofing, glass enclosure, fixtures)` });
     });
     html += scopeSection("Bathrooms", items);
@@ -2714,9 +2734,9 @@ function renderContractorPricingEditor(){
     });
   }
   // Bathroom base (single tier)
-  html += `<div class="section-title">Bathroom base &mdash; per bathroom (excludes tile sqft &amp; tub/shower add-ons)</div>
+  html += `<div class="section-title">Bathroom base &mdash; per bathroom (excludes tile sqft &amp; add-ons)</div>
     <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
-  ["2","3","4","5"].forEach(p=>{
+  ["2","3","4"].forEach(p=>{
     const base = cp.bathroom.base[p];
     if(!base) return;
     html += `<div class="price-edit-row">
@@ -2748,6 +2768,14 @@ function renderContractorPricingEditor(){
       <div class="lbl">Replace existing tub</div>
       <div>${ctrPriceInput("bathroom.newTub.labour", cp.bathroom.newTub.labour, 50)}</div>
       <div>${ctrPriceInput("bathroom.newTub.material", cp.bathroom.newTub.material, 50)}</div>
+    </div>`;
+  // Double vanity
+  html += `<div class="section-title">Double vanity add-on (per bathroom)</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>
+    <div class="price-edit-row">
+      <div class="lbl">Upgrade single &rarr; double vanity</div>
+      <div>${ctrPriceInput("bathroom.doubleVanity.labour", cp.bathroom.doubleVanity.labour, 50)}</div>
+      <div>${ctrPriceInput("bathroom.doubleVanity.material", cp.bathroom.doubleVanity.material, 50)}</div>
     </div>`;
   // Stand-up shower
   html += `<div class="section-title">Stand-up shower add-on (per bathroom)</div>
@@ -2962,6 +2990,7 @@ function scopeItemsFor(cat){
       if(num(b.floorTileSqft)) items.push({ sub:true, html:`Floor tile: <b>${b.floorTileSqft} sqft</b>` });
       if(num(b.wallTileSqft))  items.push({ sub:true, html:`Wall tile: <b>${b.wallTileSqft} sqft</b>` });
       if(b.newTub)             items.push({ sub:true, html:`+ New tub` });
+      if(b.doubleVanity)       items.push({ sub:true, html:`+ Double vanity` });
       if(b.standUpShower)      items.push({ sub:true, html:`+ Stand-up shower` });
     });
   }
