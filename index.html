@@ -790,10 +790,20 @@
   <!-- Categories -->
   <div id="categories"></div>
 
-  <!-- Discount -->
-  <div class="panel">
-    <h2>Discount <span style="font-weight:400;color:var(--muted);text-transform:none;letter-spacing:normal;font-size:12px;" id="discPreview">No discount applied</span></h2>
-    <div class="panel-body">
+  <!-- Discount (toggle card, mirrors category cards) -->
+  <div class="cat" id="cat-discount">
+    <div class="cat-head" onclick="toggleDiscount(event)">
+      <div class="cat-toggle">
+        <input type="checkbox" class="switch-input" id="sw-discount" onchange="setDiscountEnabled(this.checked)" onclick="event.stopPropagation()">
+        <label for="sw-discount" class="switch" onclick="event.stopPropagation()"></label>
+        <div>
+          <div class="cat-title">Discount</div>
+          <div class="cat-sub" id="cat-sub-discount">No discount applied</div>
+        </div>
+      </div>
+      <div class="cat-total" id="cat-total-discount">—</div>
+    </div>
+    <div class="cat-body hidden" id="cat-body-discount">
       <div class="disc-toggle-row">
         <input type="checkbox" class="switch-input" id="sw-listing" onchange="state.discount.listing=this.checked;renderTotals()">
         <label for="sw-listing" class="switch"></label>
@@ -1078,7 +1088,7 @@ function freshState(){
     },
     bathroom:  { rooms:[ defaultBath() ] },
     potlights: { tier:"standard", count:"" },
-    discount:  { listing:false, customType:"percent", customValue:"", customNote:"" }
+    discount:  { enabled:false, listing:false, customType:"percent", customValue:"", customNote:"" }
   };
 }
 function defaultBath(){
@@ -1204,6 +1214,12 @@ function migrateOldEstimate(m){
     if(m.discount.value && !m.discount.customValue) m.discount.customValue = m.discount.value;
     if(m.discount.note && !m.discount.customNote)  m.discount.customNote  = m.discount.note;
     if(typeof m.discount.listing !== "boolean") m.discount.listing = false;
+    // Older saves had no `enabled` flag — turn on if any actual discount data was present
+    if(typeof m.discount.enabled !== "boolean"){
+      const hadListing = !!m.discount.listing;
+      const hadCustom  = m.discount.customValue && parseFloat(m.discount.customValue) > 0;
+      m.discount.enabled = !!(hadListing || hadCustom);
+    }
   }
 }
 function deleteEstimate(id){
@@ -1382,15 +1398,17 @@ function computeTotals(){
   const sub = L + M;
   const d = state.discount || {};
   let listingDisc = 0, customDisc = 0;
-  if(d.listing){
-    const pct = num(prices.listingDiscount && prices.listingDiscount.percent);
-    listingDisc = sub * (Math.min(pct,100)/100);
-  }
-  if(d.customType === "percent"){
-    const pct = num(d.customValue);
-    customDisc = sub * (Math.min(pct,100)/100);
-  } else {
-    customDisc = num(d.customValue);
+  if(d.enabled){
+    if(d.listing){
+      const pct = num(prices.listingDiscount && prices.listingDiscount.percent);
+      listingDisc = sub * (Math.min(pct,100)/100);
+    }
+    if(d.customType === "percent"){
+      const pct = num(d.customValue);
+      customDisc = sub * (Math.min(pct,100)/100);
+    } else {
+      customDisc = num(d.customValue);
+    }
   }
   let discount = listingDisc + customDisc;
   discount = Math.min(discount, sub);
@@ -1418,7 +1436,10 @@ function renderAll(){
   document.getElementById("sellerName").value = state.sellerName || "";
   document.getElementById("sellerPhone").value = state.sellerPhone || "";
   document.getElementById("sellerEmail").value = state.sellerEmail || "";
-  if(!state.discount) state.discount = { listing:false, customType:"percent", customValue:"", customNote:"" };
+  if(!state.discount) state.discount = { enabled:false, listing:false, customType:"percent", customValue:"", customNote:"" };
+  document.getElementById("sw-discount").checked = !!state.discount.enabled;
+  document.getElementById("cat-discount").classList.toggle("on", !!state.discount.enabled);
+  document.getElementById("cat-body-discount").classList.toggle("hidden", !state.discount.enabled);
   document.getElementById("sw-listing").checked = !!state.discount.listing;
   document.getElementById("discCustomType").value = state.discount.customType || "percent";
   document.getElementById("discCustomValue").value = state.discount.customValue || "";
@@ -1426,6 +1447,26 @@ function renderAll(){
   document.getElementById("listingPctLabel").textContent = num(prices.listingDiscount && prices.listingDiscount.percent) || 0;
   renderDiscPlaceholder();
   renderCategories();
+  renderTotals();
+}
+
+function toggleDiscount(ev){
+  if(ev && (ev.target.tagName === "INPUT" || ev.target.tagName === "LABEL")) return;
+  const body = document.getElementById("cat-body-discount");
+  if(!body) return;
+  if(!state.discount.enabled){
+    setDiscountEnabled(true);
+    document.getElementById("sw-discount").checked = true;
+  } else {
+    body.classList.toggle("hidden");
+  }
+}
+function setDiscountEnabled(val){
+  state.discount.enabled = val;
+  const body = document.getElementById("cat-body-discount");
+  if(body) body.classList.toggle("hidden", !val);
+  const card = document.getElementById("cat-discount");
+  if(card) card.classList.toggle("on", !!val);
   renderTotals();
 }
 
@@ -1485,15 +1526,28 @@ function renderTotals(){
   document.getElementById("td-after").style.display = showAfter ? "" : "none";
   document.getElementById("td-after").textContent = fmt(t.afterDisc);
 
-  // Discount header preview
-  const dPrev = document.getElementById("discPreview");
-  if(dPrev){
+  // Discount card header
+  const dSub = document.getElementById("cat-sub-discount");
+  const dTotal = document.getElementById("cat-total-discount");
+  if(dSub){
     if(t.discount > 0){
-      dPrev.textContent = `· saving ${fmt(t.discount)}`;
-      dPrev.style.color = "var(--gold-bright)";
+      dSub.textContent = `Saving ${fmt(t.discount)}`;
+      dSub.style.color = "var(--gold-bright)";
+    } else if(state.discount && state.discount.enabled){
+      dSub.textContent = "Set discount below";
+      dSub.style.color = "";
     } else {
-      dPrev.textContent = "No discount applied";
-      dPrev.style.color = "var(--muted)";
+      dSub.textContent = "No discount applied";
+      dSub.style.color = "";
+    }
+  }
+  if(dTotal){
+    if(state.discount && state.discount.enabled && t.discount > 0){
+      dTotal.textContent = "−" + fmt(t.discount);
+      dTotal.style.color = "var(--gold-bright)";
+    } else {
+      dTotal.textContent = "—";
+      dTotal.style.color = "var(--muted)";
     }
   }
 
