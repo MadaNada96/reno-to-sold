@@ -695,6 +695,23 @@
           <input type="number" id="propSqft" min="0" placeholder="e.g. 1600" oninput="onPropSqftInput()">
         </div>
       </div>
+      <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line);">
+        <div style="font-size:11px;color:var(--gold-bright);text-transform:uppercase;letter-spacing:.15em;font-weight:600;margin-bottom:10px;">Seller Contact <span style="text-transform:none;letter-spacing:normal;color:var(--muted);font-weight:400;font-size:11px;">(stored with this estimate for follow-up &amp; marketing)</span></div>
+        <div class="grid grid-3">
+          <div>
+            <label>Seller's name</label>
+            <input type="text" id="sellerName" placeholder="e.g. John Smith" oninput="state.sellerName=this.value;renderTotals()">
+          </div>
+          <div>
+            <label>Phone number</label>
+            <input type="tel" id="sellerPhone" placeholder="e.g. 416-555-1234" oninput="state.sellerPhone=this.value">
+          </div>
+          <div>
+            <label>Email address</label>
+            <input type="email" id="sellerEmail" placeholder="e.g. john@example.com" autocomplete="off" oninput="state.sellerEmail=this.value">
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -964,6 +981,9 @@ function freshState(){
     propName: "",
     propAddress: "",
     propSqft: "",
+    sellerName: "",
+    sellerPhone: "",
+    sellerEmail: "",
     enabled: { painting:false, flooring:false, tiling:false, kitchen:false, bathroom:false, potlights:false },
     painting:  {
       coats: "one",          // "one" | "two"
@@ -1308,6 +1328,9 @@ function renderAll(){
   document.getElementById("propName").value = state.propName || "";
   document.getElementById("propAddress").value = state.propAddress || "";
   document.getElementById("propSqft").value = state.propSqft || "";
+  document.getElementById("sellerName").value = state.sellerName || "";
+  document.getElementById("sellerPhone").value = state.sellerPhone || "";
+  document.getElementById("sellerEmail").value = state.sellerEmail || "";
   if(!state.discount) state.discount = { listing:false, customType:"percent", customValue:"", customNote:"" };
   document.getElementById("sw-listing").checked = !!state.discount.listing;
   document.getElementById("discCustomType").value = state.discount.customType || "percent";
@@ -1859,9 +1882,14 @@ function renderSavedList(){
   empty.style.display="none";
   list.forEach(e => {
     const li = document.createElement("li");
+    const seller = (e.state && e.state.sellerName) ? e.state.sellerName.trim() : "";
+    const phone  = (e.state && e.state.sellerPhone) ? e.state.sellerPhone.trim() : "";
+    const email  = (e.state && e.state.sellerEmail) ? e.state.sellerEmail.trim() : "";
+    const sellerLine = [seller, phone, email].filter(Boolean).join(" · ");
     li.innerHTML = `
       <div class="info">
         <div class="name">${escapeHtml(e.name)}</div>
+        ${sellerLine ? `<div class="when" style="color:var(--gold-bright);">${escapeHtml(sellerLine)}</div>` : ""}
         <div class="when">${new Date(e.savedAt).toLocaleString()}</div>
       </div>
       <button onclick="loadEstimate('${e.id}')">Open</button>
@@ -2690,12 +2718,21 @@ function renderInternalSheet(){
   const sqft = state.propSqft || "—";
   const today = new Date().toLocaleDateString("en-CA", {year:"numeric", month:"long", day:"numeric"});
 
+  const sellerName  = (state.sellerName || "").trim();
+  const sellerPhone = (state.sellerPhone || "").trim();
+  const sellerEmail = (state.sellerEmail || "").trim();
+  const hasSeller = sellerName || sellerPhone || sellerEmail;
+
   let html = `
     <div class="iv-meta">
       <div><strong>Property</strong>${escapeHtml(name)}</div>
       <div><strong>Date</strong>${escapeHtml(today)}</div>
       <div><strong>Address</strong>${escapeHtml(addr)}</div>
       <div><strong>Total property sqft</strong>${escapeHtml(String(sqft))}</div>
+      ${hasSeller ? `
+        <div><strong>Seller</strong>${escapeHtml(sellerName || "—")}</div>
+        <div><strong>Contact</strong>${escapeHtml([sellerPhone, sellerEmail].filter(Boolean).join(" · ") || "—")}</div>
+      ` : ""}
     </div>
   `;
 
