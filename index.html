@@ -67,10 +67,20 @@
   .grid-3{grid-template-columns:repeat(3,minmax(0,1fr));}
   @media (max-width:680px){.grid-2,.grid-3{grid-template-columns:1fr;}.logo-img{max-height:90px;}}
   label{display:block;font-size:11px;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.1em;font-weight:600;}
-  input[type="text"],input[type="number"],select{width:100%;padding:10px 12px;border:1px solid var(--line-strong);border-radius:8px;font:inherit;background:#0d0d11;color:var(--ink);font-size:14px;}
+  input[type="text"],input[type="number"],input[type="tel"],input[type="email"],input[type="password"],select{width:100%;padding:10px 12px;border:1px solid var(--line-strong);border-radius:8px;font:inherit;background:#0d0d11;color:var(--ink);font-size:14px;}
   input::placeholder{color:#5a5750;}
   input:focus,select:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 2px rgba(212,175,106,.18);}
   select option{background:#0d0d11;color:var(--ink);}
+  /* Kill Chrome/Safari autofill yellow/white background */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  input:-webkit-autofill:active{
+    -webkit-box-shadow:0 0 0 100px #0d0d11 inset !important;
+    -webkit-text-fill-color:var(--ink) !important;
+    caret-color:var(--ink);
+    transition:background-color 5000s ease-in-out 0s;
+  }
 
   .cat{border:1px solid var(--line);border-radius:10px;margin-bottom:10px;overflow:hidden;background:var(--panel);transition:border-color .15s, box-shadow .15s;}
   .cat.on{border-color:var(--gold-deep);box-shadow:var(--gold-glow);}
@@ -696,7 +706,7 @@
         </div>
       </div>
       <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line);">
-        <div style="font-size:11px;color:var(--gold-bright);text-transform:uppercase;letter-spacing:.15em;font-weight:600;margin-bottom:10px;">Seller Contact <span style="text-transform:none;letter-spacing:normal;color:var(--muted);font-weight:400;font-size:11px;">(stored with this estimate for follow-up &amp; marketing)</span></div>
+        <div style="font-size:11px;color:var(--gold-bright);text-transform:uppercase;letter-spacing:.15em;font-weight:600;margin-bottom:10px;">Seller Contact</div>
         <div class="grid grid-3">
           <div>
             <label>Seller's name</label>
