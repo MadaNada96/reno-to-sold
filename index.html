@@ -1082,7 +1082,7 @@ function defaultBath(){
 function bathroomLabel(p){
   return ({
     "2":"2-piece (toilet, vanity)",
-    "3":"3-piece (toilet, vanity, tub or shower)",
+    "3":"3-piece (toilet, vanity, tub)",
     "4":"4-piece (toilet, vanity, tub, shower)"
   })[p] || p;
 }
@@ -1871,7 +1871,7 @@ function renderBathrooms(){
           <label>Bathroom #${i+1} &mdash; pieces</label>
           <select onchange="state.bathroom.rooms[${i}].pieces=this.value;renderTotals()">
             <option value="2" ${b.pieces==='2'?'selected':''}>2-piece (toilet, vanity)</option>
-            <option value="3" ${b.pieces==='3'?'selected':''}>3-piece (toilet, vanity, tub or shower)</option>
+            <option value="3" ${b.pieces==='3'?'selected':''}>3-piece (toilet, vanity, tub)</option>
             <option value="4" ${b.pieces==='4'?'selected':''}>4-piece (toilet, vanity, tub, shower)</option>
           </select>
         </div>
