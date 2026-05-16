@@ -17,6 +17,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Dancing+Script:wght@600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>if(window.pdfjsLib){pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';}</script>
 <style>
   :root{
     /* Reno to Sold black & gold */
@@ -51,6 +53,61 @@
   .logo-img{display:block;width:100%;max-width:560px;height:auto;max-height:140px;object-fit:contain;object-position:left center;}
 
   .toolbar{display:flex;gap:8px;flex-wrap:wrap;}
+  .toolbar-row-2{display:flex;justify-content:flex-end;margin-top:10px;padding-top:10px;border-top:1px dashed rgba(212,175,106,.18);position:relative;}
+  .import-pdf-link{
+    display:inline-flex;align-items:center;gap:6px;
+    font:inherit;font-size:12px;font-weight:600;letter-spacing:.08em;
+    color:var(--gold-bright);background:transparent;border:1px solid var(--gold-deep);
+    padding:7px 14px;border-radius:8px;cursor:pointer;
+    text-transform:uppercase;transition:all .15s;
+  }
+  .import-pdf-link:hover{background:rgba(212,175,106,.08);border-color:var(--gold);color:var(--gold-bright);}
+  .import-pdf-link svg{width:14px;height:14px;display:block;}
+  @media (max-width:680px){.toolbar-row-2{justify-content:center;}}
+
+  /* PDF import — confirmation modal */
+  .pdf-detect-grid{
+    display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;
+  }
+  @media (max-width:680px){.pdf-detect-grid{grid-template-columns:1fr;}}
+  .pdf-detect-grid .field{display:flex;flex-direction:column;}
+  .pdf-detect-grid .field.span-2{grid-column:1 / -1;}
+  .pdf-status{
+    background:rgba(212,175,106,.06);
+    border:1px solid var(--gold-deep);
+    border-radius:8px;padding:12px 14px;margin-bottom:14px;
+    font-size:12px;color:var(--ink);line-height:1.5;
+  }
+  .pdf-status .ps-title{
+    color:var(--gold-bright);font-weight:700;text-transform:uppercase;
+    letter-spacing:.15em;font-size:10px;margin-bottom:4px;
+  }
+  .pdf-status.warn{border-color:#7a4d3a;background:rgba(226,109,109,.05);}
+  .pdf-status.warn .ps-title{color:#e2b06d;}
+  .pdf-bath-list{
+    background:var(--panel-2);border:1px solid var(--line-strong);
+    border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;
+  }
+  .pdf-bath-list .pbl-title{
+    color:var(--gold-bright);font-size:10px;text-transform:uppercase;
+    letter-spacing:.15em;font-weight:700;margin-bottom:8px;
+  }
+  .pdf-bath-list .pbl-item{
+    display:flex;justify-content:space-between;padding:4px 0;
+    border-bottom:1px solid var(--line);color:var(--ink);
+  }
+  .pdf-bath-list .pbl-item:last-child{border-bottom:none;}
+  .pdf-bath-list .pbl-item .pbl-floor{color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-size:10px;}
+  .pdf-loading{
+    text-align:center;padding:30px 20px;color:var(--muted);font-size:13px;
+  }
+  .pdf-loading::after{
+    content:"";display:inline-block;width:14px;height:14px;
+    border:2px solid var(--gold-deep);border-top-color:var(--gold-bright);
+    border-radius:50%;margin-left:10px;vertical-align:middle;
+    animation:spin .8s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
   button{font:inherit;cursor:pointer;border:1px solid var(--line-strong);background:transparent;color:var(--ink);padding:9px 16px;border-radius:8px;transition:all .15s;font-weight:500;font-size:13px;letter-spacing:.03em;}
   button:hover{background:var(--panel-2);border-color:var(--gold-deep);color:var(--gold-bright);}
   button.primary{background:var(--gold-grad);color:#0a0a0a;border:none;font-weight:700;}
@@ -793,6 +850,13 @@
         <button class="primary" onclick="window.print()">Print / PDF</button>
       </div>
     </div>
+    <div class="toolbar-row-2 no-print">
+      <button class="import-pdf-link" onclick="triggerPdfImport()" title="Auto-fill a new estimate from an iGUIDE floor plan PDF">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 12 15 15"/></svg>
+        <span>Import from PDF</span>
+      </button>
+      <input type="file" id="pdfImportInput" accept="application/pdf,.pdf" style="display:none;" onchange="onPdfFileChosen(event)">
+    </div>
   </div>
 
   <!-- Live Total -->
@@ -1045,6 +1109,22 @@
     <div class="modal-body">
       <ul class="saved-list" id="savedList"></ul>
       <p id="savedEmpty" class="footnote" style="display:none">No saved estimates yet.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Floor plan PDF import modal -->
+<div class="modal-bg" id="pdfImportModal" onclick="if(event.target===this)closePdfImport()">
+  <div class="modal">
+    <h3>
+      <span>Import from Floor Plan PDF</span>
+      <span class="small-stack">
+        <button class="ghost" onclick="closePdfImport()">Cancel</button>
+        <button class="primary" id="pdfApplyBtn" onclick="applyPdfImport()" disabled>Apply to Estimate</button>
+      </span>
+    </h3>
+    <div class="modal-body" id="pdfImportBody">
+      <div class="pdf-loading">Reading PDF…</div>
     </div>
   </div>
 </div>
@@ -3682,6 +3762,408 @@ async function bootstrapCloudSync(showMigratePrompt){
   }
 }
 
+/* ---------- PDF Floor Plan Import ----------
+   Reads iGUIDE-style floor plan PDFs (the standard format used by most GTA
+   real estate measurement services) entirely in the browser using PDF.js.
+   The PDF never leaves the browser. Extracts: total interior sqft, address,
+   bedroom count, bathroom list (with piece count + floor), main kitchen size.
+*/
+let pdfDetected = null; // last parsed result, used by Apply
+let pdfIncludeBasement = false; // user toggle: include basement rooms/sqft in import
+
+function triggerPdfImport(){
+  if(typeof pdfjsLib === "undefined"){
+    alert("PDF reader is still loading. Try again in a second.");
+    return;
+  }
+  pdfIncludeBasement = false; // reset each time the import opens
+  document.getElementById("pdfImportInput").value = "";
+  document.getElementById("pdfImportInput").click();
+}
+
+function setPdfIncludeBasement(val){
+  pdfIncludeBasement = !!val;
+  // Re-render but preserve any text the user typed into the name/address fields
+  const nameEl = document.getElementById("pdfPropName");
+  const addrEl = document.getElementById("pdfAddress");
+  const editedName = nameEl ? nameEl.value : null;
+  const editedAddr = addrEl ? addrEl.value : null;
+  renderPdfDetectModal();
+  if(editedName !== null){
+    const n = document.getElementById("pdfPropName"); if(n) n.value = editedName;
+  }
+  if(editedAddr !== null){
+    const a = document.getElementById("pdfAddress"); if(a) a.value = editedAddr;
+  }
+}
+
+async function onPdfFileChosen(ev){
+  const file = ev.target.files && ev.target.files[0];
+  if(!file) return;
+  openPdfImport();
+  setPdfBodyHtml('<div class="pdf-loading">Reading "' + escapeHtml(file.name) + '"…</div>');
+  try{
+    const buf = await file.arrayBuffer();
+    const text = await extractPdfText(buf);
+    pdfDetected = parseFloorPlanText(text);
+    renderPdfDetectModal();
+  }catch(err){
+    console.error("PDF import failed:", err);
+    setPdfBodyHtml(`
+      <div class="pdf-status warn">
+        <div class="ps-title">Couldn't read this PDF</div>
+        ${escapeHtml(err && err.message || String(err))}
+      </div>
+      <p class="footnote">Try a different PDF, or close this window and enter the property details manually.</p>
+    `);
+  }
+}
+
+function openPdfImport(){
+  document.getElementById("pdfImportModal").classList.add("show");
+  document.getElementById("pdfApplyBtn").disabled = true;
+}
+function closePdfImport(){
+  document.getElementById("pdfImportModal").classList.remove("show");
+  pdfDetected = null;
+}
+function setPdfBodyHtml(html){
+  document.getElementById("pdfImportBody").innerHTML = html;
+}
+
+async function extractPdfText(arrayBuffer){
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  let allText = "";
+  for(let i=1; i<=pdf.numPages; i++){
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    // Each item has .str; PDF.js often returns words individually.
+    // Join with spaces but preserve newline-ish gaps between items that are far apart.
+    let lastY = null, line = "";
+    const lines = [];
+    for(const it of content.items){
+      const y = it.transform ? it.transform[5] : null;
+      if(lastY !== null && y !== null && Math.abs(y - lastY) > 2){
+        lines.push(line.trim()); line = "";
+      }
+      line += (line && !line.endsWith(" ") ? " " : "") + (it.str || "");
+      lastY = y;
+    }
+    if(line.trim()) lines.push(line.trim());
+    allText += "\n--- PAGE " + i + " ---\n" + lines.join("\n");
+  }
+  return allText;
+}
+
+function parseFloorPlanText(text){
+  // Normalize: collapse extra whitespace but keep newlines
+  const norm = text.replace(/[ \t]+/g, " ");
+
+  const out = {
+    address: "",
+    propName: "",
+    totalInteriorSqft: 0,
+    totalExteriorSqft: 0,
+    mainFloorSqft: 0,
+    secondFloorSqft: 0,
+    basementSqft: 0,
+    bedroomCount: 0,
+    bedrooms: [],          // [{name, sqft, floor}]
+    bathrooms: [],         // [{pieces, type, sqft, floor}]
+    kitchenSqft: 0,
+    kitchenSize: "",
+    rawTextLength: text.length
+  };
+
+  // --- Address: first plausible "<num> <street>, <city>, ON" line near the top ---
+  const addressMatch = norm.match(/\b(\d{1,6}\s+[A-Z][A-Za-z0-9' ]+?(?:\s+(?:St|Street|Ave|Avenue|Rd|Road|Blvd|Boulevard|Dr|Drive|Crt|Court|Ct|Cres|Crescent|Way|Lane|Ln|Pl|Place|Ter|Terrace|Trail|Trl|Hwy|Park|Pkwy|Gate|Gdns|Gardens|Mews|Cir|Circle|Sq|Square))?)\s*,\s*([A-Z][A-Za-z' \-]+?)\s*,\s*(ON|Ontario)\b/);
+  if(addressMatch){
+    out.address = `${addressMatch[1]}, ${addressMatch[2]}, ON`;
+    // Use just the street address part as the property nickname
+    out.propName = addressMatch[1].trim();
+  }
+
+  // --- Total interior above-grade sqft (preferred) ---
+  // Pattern variations seen in iGUIDE: "Total Above Grade Floor Area ... Interior Area: 2856.10 sqft"
+  let m = norm.match(/Total\s*Above\s*Grade\s*Floor\s*Area[\s\S]{0,120}?Interior\s*Area\s*:?\s*([\d,]+(?:\.\d+)?)\s*sq\s*ft/i);
+  if(m) out.totalInteriorSqft = parseFloat(m[1].replace(/,/g,""));
+
+  // Total above-grade exterior (some PDFs only have this, used as fallback)
+  m = norm.match(/Total\s*Exterior\s*Area\s*Above\s*Grade\s*([\d,]+(?:\.\d+)?)\s*sq\s*ft/i)
+   || norm.match(/Total\s*Above\s*Grade[\s\S]{0,40}?Exterior\s*Area\s*:?\s*([\d,]+(?:\.\d+)?)\s*sq\s*ft/i);
+  if(m) out.totalExteriorSqft = parseFloat(m[1].replace(/,/g,""));
+
+  // Per-floor interior — handy if Total wasn't matched
+  const floorAreaPattern = /(Main\s*Floor|2nd\s*Floor|Second\s*Floor|Basement(?:\s*\([^)]*\))?)\s*[\s\S]{0,80}?Interior\s*Area\s*:?\s*([\d,]+(?:\.\d+)?)\s*sq\s*ft/gi;
+  let fm;
+  while((fm = floorAreaPattern.exec(norm)) !== null){
+    const label = fm[1].toLowerCase();
+    const sqft = parseFloat(fm[2].replace(/,/g,""));
+    if(label.startsWith("main")) out.mainFloorSqft = sqft;
+    else if(label.includes("2") || label.includes("second")) out.secondFloorSqft = sqft;
+    else if(label.startsWith("basement")) out.basementSqft = sqft;
+  }
+  if(!out.totalInteriorSqft){
+    out.totalInteriorSqft = out.mainFloorSqft + out.secondFloorSqft;
+  }
+
+  // --- Walk rooms section-by-section, tracking current floor ---
+  // iGUIDE Property Details page has headers MAINFLOOR / 2NDFLOOR / BASEMENT
+  // We split text on those markers and parse rooms in each chunk.
+  const sectionRegex = /\b(MAIN\s*FLOOR|2\s*ND\s*FLOOR|SECOND\s*FLOOR|BASEMENT(?:\s*\([^)]*\))?)\b/gi;
+  // Find all section header positions
+  const headers = [];
+  let hm;
+  while((hm = sectionRegex.exec(norm)) !== null){
+    let label = hm[1].toLowerCase().replace(/\s+/g,"");
+    let floor;
+    if(label.startsWith("main")) floor = "main";
+    else if(label.startsWith("2nd") || label.startsWith("second")) floor = "2nd";
+    else if(label.startsWith("basement")) floor = "basement";
+    if(floor) headers.push({ floor, idx: hm.index });
+  }
+  // Build segments
+  const segments = [];
+  for(let i=0; i<headers.length; i++){
+    const start = headers[i].idx;
+    const end   = (i+1 < headers.length) ? headers[i+1].idx : norm.length;
+    segments.push({ floor: headers[i].floor, text: norm.slice(start, end) });
+  }
+
+  // Bedroom & bathroom matchers
+  const bedroomRe  = /\b(Bedroom|Primary|Master\s*Bedroom|MasterBedroom)\s*:\s*\d+'\d*"?\s*x\s*\d+'\d*"?\s*\|\s*(\d+)\s*sq\s*ft/gi;
+  const bathroomRe = /\b(\d)\s*pc\s*(Bath|Ensuite|Powder\s*Room|Powder)\s*:\s*\d+'\d*"?\s*x\s*\d+'\d*"?\s*\|\s*(\d+)\s*sq\s*ft/gi;
+  const kitchenRe  = /\bKitchen\s*:\s*\d+'\d*"?\s*x\s*\d+'\d*"?\s*\|\s*(\d+)\s*sq\s*ft/gi;
+
+  // Track room IDs to avoid double-counting (same room appears on multiple pages)
+  const seenBedroom = new Set();
+  const seenBath = new Set();
+
+  segments.forEach(seg => {
+    let bm;
+    bedroomRe.lastIndex = 0;
+    while((bm = bedroomRe.exec(seg.text)) !== null){
+      const sqft = parseFloat(bm[2]);
+      const key = seg.floor + "|" + bm[1].toLowerCase().replace(/\s+/g,"") + "|" + sqft;
+      if(seenBedroom.has(key)) continue;
+      seenBedroom.add(key);
+      out.bedrooms.push({ name: bm[1], sqft, floor: seg.floor });
+    }
+    let xm;
+    bathroomRe.lastIndex = 0;
+    while((xm = bathroomRe.exec(seg.text)) !== null){
+      const pieces = parseInt(xm[1], 10);
+      const type   = xm[2].replace(/\s+/g,"");
+      const sqft   = parseFloat(xm[3]);
+      const key    = seg.floor + "|" + pieces + "|" + type.toLowerCase() + "|" + sqft;
+      if(seenBath.has(key)) continue;
+      seenBath.add(key);
+      out.bathrooms.push({ pieces, type, sqft, floor: seg.floor });
+    }
+  });
+
+  // Fallback (no section headers found): scan the whole text once
+  if(out.bedrooms.length === 0){
+    let bm; bedroomRe.lastIndex = 0;
+    while((bm = bedroomRe.exec(norm)) !== null){
+      const sqft = parseFloat(bm[2]);
+      const key = bm[1].toLowerCase() + "|" + sqft;
+      if(seenBedroom.has(key)) continue;
+      seenBedroom.add(key);
+      out.bedrooms.push({ name: bm[1], sqft, floor: "" });
+    }
+  }
+  if(out.bathrooms.length === 0){
+    let xm; bathroomRe.lastIndex = 0;
+    while((xm = bathroomRe.exec(norm)) !== null){
+      const pieces = parseInt(xm[1], 10);
+      const type   = xm[2].replace(/\s+/g,"");
+      const sqft   = parseFloat(xm[3]);
+      const key    = pieces + "|" + type.toLowerCase() + "|" + sqft;
+      if(seenBath.has(key)) continue;
+      seenBath.add(key);
+      out.bathrooms.push({ pieces, type, sqft, floor: "" });
+    }
+  }
+
+  out.bedroomCount = out.bedrooms.length;
+
+  // Largest kitchen by sqft (main kitchen)
+  let km, biggestK = 0;
+  kitchenRe.lastIndex = 0;
+  while((km = kitchenRe.exec(norm)) !== null){
+    const s = parseFloat(km[1]);
+    if(s > biggestK) biggestK = s;
+  }
+  out.kitchenSqft = biggestK;
+  if(biggestK > 0){
+    out.kitchenSize = biggestK >= 150 ? "large" : (biggestK >= 70 ? "medium" : "small");
+  }
+
+  return out;
+}
+
+function renderPdfDetectModal(){
+  const d = pdfDetected;
+  if(!d){ setPdfBodyHtml('<div class="pdf-status warn"><div class="ps-title">No data</div>Couldn\'t parse this PDF.</div>'); return; }
+
+  const anyData = d.totalInteriorSqft || d.bedrooms.length || d.bathrooms.length || d.kitchenSqft || d.address;
+
+  if(!anyData){
+    setPdfBodyHtml(`
+      <div class="pdf-status warn">
+        <div class="ps-title">Couldn't auto-detect any data</div>
+        This PDF doesn't look like an iGUIDE-format floor plan, or the text is image-only (scanned). Close this window and fill in the property details manually.
+      </div>
+      <details><summary class="footnote" style="cursor:pointer;">Show raw extracted text (debug)</summary>
+        <pre style="font-size:10px;color:var(--muted);max-height:200px;overflow:auto;background:#0a0a0e;padding:8px;border-radius:6px;margin-top:8px;">${escapeHtml((d.rawTextLength + " chars extracted")).slice(0,500)}</pre>
+      </details>
+    `);
+    document.getElementById("pdfApplyBtn").disabled = true;
+    return;
+  }
+
+  // --- Apply the include-basement toggle: filter rooms + adjust sqft ---
+  const hasBasement = !!d.basementSqft
+                    || d.bedrooms.some(b => b.floor === "basement")
+                    || d.bathrooms.some(b => b.floor === "basement");
+
+  const filterFn = r => pdfIncludeBasement ? true : r.floor !== "basement";
+  const bedroomsShown  = d.bedrooms.filter(filterFn);
+  const bathroomsShown = d.bathrooms.filter(filterFn);
+
+  // Effective total sqft = above-grade interior; add basement if user opted in
+  const aboveGradeSqft = d.totalInteriorSqft || 0;
+  const effectiveSqft  = pdfIncludeBasement ? (aboveGradeSqft + (d.basementSqft || 0)) : aboveGradeSqft;
+  const sqftLabel      = pdfIncludeBasement
+    ? `Total property sqft (above grade ${Math.round(aboveGradeSqft)} + basement ${Math.round(d.basementSqft||0)})`
+    : `Total property sqft (interior, above grade)`;
+
+  // Build bathroom list HTML
+  const bathFloors = { main:"Main Floor", "2nd":"2nd Floor", basement:"Basement", "":"—" };
+  const bathHtml = bathroomsShown.length
+    ? bathroomsShown.map(b => `
+        <div class="pbl-item">
+          <span><b>${b.pieces}-piece ${escapeHtml(b.type)}</b> · ${Math.round(b.sqft)} sqft</span>
+          <span class="pbl-floor">${escapeHtml(bathFloors[b.floor] || b.floor || "—")}</span>
+        </div>`).join("")
+    : `<div class="pbl-item" style="color:var(--muted);font-style:italic;">No bathrooms detected — you can add them manually after import.</div>`;
+
+  // Bedroom list (compact)
+  const bedFloors = bathFloors;
+  const bedHtml = bedroomsShown.length
+    ? bedroomsShown.map(b => `<div class="pbl-item"><span>${escapeHtml(b.name)} · ${Math.round(b.sqft)} sqft</span><span class="pbl-floor">${escapeHtml(bedFloors[b.floor] || b.floor || "—")}</span></div>`).join("")
+    : `<div class="pbl-item" style="color:var(--muted);font-style:italic;">No bedrooms detected.</div>`;
+
+  const kitchenLine = d.kitchenSqft
+    ? `Main kitchen detected at <b>${Math.round(d.kitchenSqft)} sqft</b> — auto-set to <b>${({small:"Small",medium:"Medium",large:"Large"})[d.kitchenSize]}</b> tier.`
+    : `No kitchen detected. Toggle the Kitchen category manually if needed.`;
+
+  // Basement toggle row — only shown if a basement was actually detected
+  const basementToggle = hasBasement ? `
+    <div class="disc-toggle-row" style="margin-bottom:14px;">
+      <input type="checkbox" class="switch-input" id="sw-pdf-basement" ${pdfIncludeBasement?'checked':''} onchange="setPdfIncludeBasement(this.checked)">
+      <label for="sw-pdf-basement" class="switch"></label>
+      <div class="toggle-info">
+        <div class="cat-title">Include Basement in this Estimate</div>
+        <div class="cat-sub">${pdfIncludeBasement
+          ? `Basement rooms &amp; ${Math.round(d.basementSqft||0)} sqft added to the renovation`
+          : `Basement excluded — only above-grade rooms &amp; ${Math.round(aboveGradeSqft)} sqft will be imported`}</div>
+      </div>
+    </div>` : "";
+
+  setPdfBodyHtml(`
+    <div class="pdf-status">
+      <div class="ps-title">Detected from PDF</div>
+      Review and adjust below, then click <b>Apply to Estimate</b>. Applying replaces your current estimate with a fresh one filled in from this PDF.
+    </div>
+
+    ${basementToggle}
+
+    <div class="pdf-detect-grid">
+      <div class="field">
+        <label>Property nickname</label>
+        <input type="text" id="pdfPropName" value="${escapeHtml(d.propName || "")}" placeholder="e.g. 12 Maple Ave">
+      </div>
+      <div class="field">
+        <label>${sqftLabel}</label>
+        <input type="number" id="pdfSqft" value="${effectiveSqft ? Math.round(effectiveSqft) : ""}" placeholder="e.g. 2856">
+      </div>
+      <div class="field span-2">
+        <label>Address</label>
+        <input type="text" id="pdfAddress" value="${escapeHtml(d.address || "")}" placeholder="e.g. 12 Maple Ave, Toronto, ON">
+      </div>
+    </div>
+
+    <div class="pdf-bath-list">
+      <div class="pbl-title">${bedroomsShown.length} bedroom${bedroomsShown.length===1?"":"s"} detected${hasBasement && !pdfIncludeBasement ? ` <span style="color:var(--muted);font-weight:400;">(basement bedrooms excluded)</span>` : ""}</div>
+      ${bedHtml}
+    </div>
+
+    <div class="pdf-bath-list">
+      <div class="pbl-title">${bathroomsShown.length} bathroom${bathroomsShown.length===1?"":"s"} detected${hasBasement && !pdfIncludeBasement ? ` <span style="color:var(--muted);font-weight:400;">(basement bathrooms excluded)</span>` : ""} — will be pre-loaded in the Bathroom category</div>
+      ${bathHtml}
+    </div>
+
+    <div class="pdf-status">
+      <div class="ps-title">Kitchen</div>
+      ${kitchenLine}
+    </div>
+
+    <p class="footnote">Categories (paint type, flooring material, kitchen tier, add-ons) are <b>not</b> set automatically — you choose those after import.</p>
+  `);
+
+  document.getElementById("pdfApplyBtn").disabled = false;
+}
+
+function applyPdfImport(){
+  if(!pdfDetected) return;
+  const d = pdfDetected;
+  // Read user-adjusted values from the form
+  const propName = (document.getElementById("pdfPropName").value || "").trim();
+  const address  = (document.getElementById("pdfAddress").value || "").trim();
+  const sqft     = (document.getElementById("pdfSqft").value || "").trim();
+
+  if(!confirm("Apply detected data? Your current estimate will be replaced with a new one filled in from this PDF.")) return;
+
+  // Start fresh
+  state = freshState();
+
+  state.propName = propName || (address ? address.split(",")[0] : "");
+  state.propAddress = address;
+  state.propSqft = sqft;
+
+  // Pre-load bathrooms — respect the include-basement toggle
+  const bathroomsToImport = pdfIncludeBasement
+    ? d.bathrooms
+    : d.bathrooms.filter(b => b.floor !== "basement");
+
+  if(bathroomsToImport.length){
+    state.enabled.bathroom = true;
+    state.bathroom.rooms = bathroomsToImport.map(b => {
+      const room = defaultBath();
+      if(b.pieces === 2) room.pieces = "2";
+      else if(b.pieces === 3) room.pieces = "3";
+      else if(b.pieces === 4) room.pieces = "4";
+      else if(b.pieces === 5){ room.pieces = "4"; room.doubleVanity = true; }
+      else room.pieces = "2";
+      return room;
+    });
+  }
+
+  // Pre-set kitchen size if detected (but don't auto-toggle the category — user picks tier first)
+  if(d.kitchenSize){
+    state.kitchen.size = d.kitchenSize;
+  }
+
+  closePdfImport();
+  renderAll();
+  const basementNote = pdfIncludeBasement ? " (incl. basement)" : (d.basementSqft ? " (basement excluded)" : "");
+  flash && flash("Loaded from floor plan PDF — " + bathroomsToImport.length + " bathroom" + (bathroomsToImport.length===1?"":"s") + " pre-filled" + basementNote);
+}
+</script>
+
+<script>
 /* ---------- Init ---------- */
 renderAll();
 initSupabase();
