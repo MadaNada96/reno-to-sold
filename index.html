@@ -825,7 +825,7 @@
   <!-- Top "By Listing With Us You Save" banner (visible only when a discount is applied) -->
   <div class="savings-banner top-banner" id="topSavingsBanner" style="display:none;">
     <div class="sb-eyebrow">By Listing With Us You Save</div>
-    <div class="sb-amount" id="topSbAmount">−$0</div>
+    <div class="sb-amount" id="topSbAmount">$0</div>
     <div class="sb-sub" id="topSbSub">On this renovation with Reno to Sold</div>
   </div>
 
@@ -890,7 +890,7 @@
       <!-- Hero savings callout (visible when any discount is producing a value) -->
       <div class="savings-banner" id="savingsBanner" style="display:none;">
         <div class="sb-eyebrow">Total Client Savings</div>
-        <div class="sb-amount" id="sbAmount">−$0</div>
+        <div class="sb-amount" id="sbAmount">$0</div>
         <div class="sb-sub" id="sbSub">By listing with Reno to Sold</div>
       </div>
 
@@ -1678,7 +1678,7 @@ function renderTotals(){
   // Savings banners — top of page (between Live Total and Property Info) + inside Client Savings card.
   // Both display the same total savings; sub-message adapts to which discount(s) are active.
   const showBanner = !!(state.discount && state.discount.enabled && t.discount > 0);
-  const amountText = "−" + fmt(t.discount);
+  const amountText = fmt(t.discount);
   const onListing  = t.listingDisc > 0;
   const onCustom   = t.customDisc > 0;
   let subText = "On this renovation with Reno to Sold";
