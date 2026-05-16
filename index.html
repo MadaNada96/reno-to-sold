@@ -15,7 +15,7 @@
 <meta name="apple-mobile-web-app-title" content="Reno to Sold">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Playfair+Display:ital,wght@1,500;1,600;1,700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Cormorant+Garamond:ital,wght@1,400;1,500;1,600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>if(window.pdfjsLib){pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';}</script>
@@ -56,16 +56,16 @@
     line-height:1.4;
   }
   .brand-tagline .bt-line{
-    font-family:'Playfair Display', Georgia, serif;
+    font-family:'Cormorant Garamond', Georgia, 'Times New Roman', serif;
     font-style:italic;
     font-weight:400;       /* non-bold per request */
-    font-size:26px;
+    font-size:28px;
     color:#ffffff;
-    letter-spacing:.005em;
+    letter-spacing:.01em;
     display:block;
     margin:0;
   }
-  .brand-tagline .bt-sub{font-size:22px;margin-top:2px;}
+  .brand-tagline .bt-sub{font-size:24px;margin-top:2px;}
   .brand-tagline .bt-accent{
     color:var(--gold-bright);
     text-shadow:
@@ -74,11 +74,8 @@
   }
   @media (max-width:680px){
     .brand-tagline{margin-bottom:18px;}
-    .brand-tagline .bt-line{font-size:20px;}
-    .brand-tagline .bt-sub{font-size:17px;}
-  }
-  @media print{
-    .brand-tagline{display:none !important;}
+    .brand-tagline .bt-line{font-size:22px;}
+    .brand-tagline .bt-sub{font-size:18px;}
   }
   .brandbar::before{content:"";position:absolute;inset:0;background:linear-gradient(120deg,transparent 40%,rgba(212,175,106,.04) 60%,transparent 80%);pointer-events:none;}
   .brandbar-row{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;position:relative;}
@@ -780,8 +777,52 @@
   @media print{
     body{background:#fff;color:#000;}
     .app{padding:0;}
-    .brandbar{background:#000 !important;color:#fff !important;border-radius:0;border:none;}
-    .toolbar,.panel-body .add-btn,.no-print,.modal-bg,.cat-head .switch,header .toolbar{display:none !important;}
+    /* Brand bar in print: white background, logo centered, slogan beneath */
+    .brandbar{
+      background:#fff !important;
+      color:#000 !important;
+      border-radius:0;
+      border:none;
+      padding:8px 0 4px !important;
+      margin-bottom:10px !important;
+      box-shadow:none !important;
+    }
+    .brandbar::before{display:none !important;}
+    .brandbar-row{justify-content:center !important;}
+    .logo{
+      flex:0 0 auto !important;
+      max-width:none !important;
+      justify-content:center !important;
+    }
+    .logo-img{
+      max-width:380px !important;
+      max-height:90px !important;
+      object-position:center center !important;
+      /* Strip the black background: invert tone, then rotate hue to keep gold gold.
+         This works because the logo is black bg + white text + gold accents — invert
+         turns black bg → white (transparent on the white page), and the hue-rotate
+         restores the gold tones that invert would otherwise shift toward blue. */
+      filter:invert(1) hue-rotate(180deg) saturate(1.15);
+      -webkit-print-color-adjust:exact;
+      print-color-adjust:exact;
+    }
+    /* Slogan visible under the logo on print */
+    .brand-tagline{
+      display:block !important;
+      text-align:center;
+      margin:6px 0 14px !important;
+      page-break-after:avoid;
+      break-after:avoid;
+    }
+    .brand-tagline .bt-line{color:#000 !important;font-size:18px !important;text-shadow:none !important;}
+    .brand-tagline .bt-sub{font-size:15px !important;}
+    .brand-tagline .bt-accent{
+      color:#a8853f !important;
+      text-shadow:none !important;
+      -webkit-print-color-adjust:exact;
+      print-color-adjust:exact;
+    }
+    .toolbar,.panel-body .add-btn,.no-print,.modal-bg,.cat-head .switch,header .toolbar,.toolbar-row-2{display:none !important;}
     /* Hide unselected tier options, emphasize selected */
     .tier-row label:has(input:not(:checked)){display:none !important;}
     .tier-row{border:none !important;background:transparent !important;padding:0 !important;margin-bottom:10px !important;}
@@ -892,7 +933,7 @@
   </div>
 
   <!-- Brand tagline -->
-  <div class="brand-tagline no-print">
+  <div class="brand-tagline">
     <span class="bt-line">Renovate for <span class="bt-accent">less.</span> Sell for <span class="bt-accent">more.</span></span>
     <span class="bt-line bt-sub">Fully managed <span class="bt-accent">from start to sold.</span></span>
   </div>
