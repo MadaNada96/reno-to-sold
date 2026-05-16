@@ -53,40 +53,37 @@
     text-align:center;
     margin:0 0 22px;
     padding:6px 12px;
-    line-height:1.35;
+    line-height:1.4;
   }
-  .brand-tagline .bt-1{
+  .brand-tagline .bt-line{
     font-family:'Playfair Display', Georgia, serif;
     font-style:italic;
-    font-size:24px;
-    font-weight:600;
-    color:var(--gold-bright);
+    font-weight:400;       /* non-bold per request */
+    font-size:26px;
+    color:#ffffff;
     letter-spacing:.005em;
     display:block;
-    text-shadow:0 1px 12px rgba(212,175,106,.15);
+    margin:0;
   }
-  .brand-tagline .bt-2{
-    display:block;
-    font-family:'Montserrat',sans-serif;
-    font-size:10px;
-    color:var(--gold-deep);
-    letter-spacing:.32em;
-    text-transform:uppercase;
-    font-weight:600;
-    margin-top:6px;
+  .brand-tagline .bt-sub{font-size:22px;margin-top:2px;}
+  .brand-tagline .bt-accent{
+    color:var(--gold-bright);
+    text-shadow:
+      0 0 14px rgba(232,201,137,.55),
+      0 0 4px rgba(212,175,106,.6);
   }
   @media (max-width:680px){
     .brand-tagline{margin-bottom:18px;}
-    .brand-tagline .bt-1{font-size:20px;}
-    .brand-tagline .bt-2{font-size:9px;letter-spacing:.25em;}
+    .brand-tagline .bt-line{font-size:20px;}
+    .brand-tagline .bt-sub{font-size:17px;}
   }
   @media print{
     .brand-tagline{display:none !important;}
   }
   .brandbar::before{content:"";position:absolute;inset:0;background:linear-gradient(120deg,transparent 40%,rgba(212,175,106,.04) 60%,transparent 80%);pointer-events:none;}
   .brandbar-row{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;position:relative;}
-  .logo{display:flex;align-items:flex-start;gap:0;flex-wrap:nowrap;flex:1;min-width:0;overflow:hidden;max-height:108px;}
-  .logo-img{display:block;width:100%;max-width:560px;height:auto;max-height:none;}
+  .logo{display:flex;align-items:center;gap:0;flex-wrap:nowrap;flex:1;min-width:0;}
+  .logo-img{display:block;width:100%;max-width:560px;height:auto;max-height:140px;object-fit:contain;object-position:left center;}
 
   .toolbar{display:flex;gap:8px;flex-wrap:wrap;}
   .toolbar-row-2{display:flex;justify-content:center;margin-top:10px;padding-top:10px;border-top:1px dashed rgba(212,175,106,.18);position:relative;}
@@ -158,7 +155,7 @@
   .grid{display:grid;gap:12px;}
   .grid-2{grid-template-columns:repeat(2,minmax(0,1fr));}
   .grid-3{grid-template-columns:repeat(3,minmax(0,1fr));}
-  @media (max-width:680px){.grid-2,.grid-3{grid-template-columns:1fr;}.logo{max-height:70px;}}
+  @media (max-width:680px){.grid-2,.grid-3{grid-template-columns:1fr;}.logo-img{max-height:90px;}}
   label{display:block;font-size:11px;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.1em;font-weight:600;}
   input[type="text"],input[type="number"],input[type="tel"],input[type="email"],input[type="password"],select{width:100%;padding:10px 12px;border:1px solid var(--line-strong);border-radius:8px;font:inherit;background:#0d0d11;color:var(--ink);font-size:14px;}
   input::placeholder{color:#5a5750;}
@@ -873,7 +870,7 @@
   <div class="brandbar">
     <div class="brandbar-row">
       <a href="./" class="logo" aria-label="Reno to Sold home">
-        <img src="logo.png" alt="Reno to Sold" class="logo-img">
+        <img src="RENO_to_SOLD_logo_only.png" alt="Reno to Sold" class="logo-img">
       </a>
       <div class="toolbar no-print">
         <button onclick="newEstimate()">+ New</button>
@@ -896,8 +893,8 @@
 
   <!-- Brand tagline -->
   <div class="brand-tagline no-print">
-    <span class="bt-1">Renovate for less. Sell for more.</span>
-    <span class="bt-2">Fully managed from start to sold.</span>
+    <span class="bt-line">Renovate for <span class="bt-accent">less.</span> Sell for <span class="bt-accent">more.</span></span>
+    <span class="bt-line bt-sub">Fully managed <span class="bt-accent">from start to sold.</span></span>
   </div>
 
   <!-- Live Total -->
