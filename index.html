@@ -15,7 +15,7 @@
 <meta name="apple-mobile-web-app-title" content="Reno to Sold">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Cormorant+Garamond:ital,wght@1,400;1,500;1,600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Cormorant+Garamond:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>if(window.pdfjsLib){pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';}</script>
@@ -57,7 +57,7 @@
   }
   .brand-tagline .bt-line{
     font-family:'Cormorant Garamond', Georgia, 'Times New Roman', serif;
-    font-style:italic;
+    font-style:normal;
     font-weight:400;       /* non-bold per request */
     font-size:28px;
     color:#ffffff;
@@ -81,6 +81,7 @@
   .brandbar-row{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;position:relative;}
   .logo{display:flex;align-items:center;gap:0;flex-wrap:nowrap;flex:1;min-width:0;}
   .logo-img{display:block;width:100%;max-width:560px;height:auto;max-height:140px;object-fit:contain;object-position:left center;}
+  .logo-img-print{display:none;}  /* shown only on print/PDF — see @media print */
 
   .toolbar{display:flex;gap:8px;flex-wrap:wrap;}
   .toolbar-row-2{display:flex;justify-content:center;margin-top:10px;padding-top:10px;border-top:1px dashed rgba(212,175,106,.18);position:relative;}
@@ -777,14 +778,14 @@
   @media print{
     body{background:#fff;color:#000;}
     .app{padding:0;}
-    /* Brand bar in print: white background, logo centered, slogan beneath */
+    /* Brand bar in print: white background, transparent logo centered (slogan baked in) */
     .brandbar{
       background:#fff !important;
       color:#000 !important;
       border-radius:0;
       border:none;
       padding:8px 0 4px !important;
-      margin-bottom:10px !important;
+      margin-bottom:14px !important;
       box-shadow:none !important;
     }
     .brandbar::before{display:none !important;}
@@ -794,34 +795,19 @@
       max-width:none !important;
       justify-content:center !important;
     }
-    .logo-img{
-      max-width:380px !important;
-      max-height:90px !important;
-      object-position:center center !important;
-      /* Strip the black background: invert tone, then rotate hue to keep gold gold.
-         This works because the logo is black bg + white text + gold accents — invert
-         turns black bg → white (transparent on the white page), and the hue-rotate
-         restores the gold tones that invert would otherwise shift toward blue. */
-      filter:invert(1) hue-rotate(180deg) saturate(1.15);
-      -webkit-print-color-adjust:exact;
-      print-color-adjust:exact;
-    }
-    /* Slogan visible under the logo on print */
-    .brand-tagline{
+    /* Hide the screen logo, show the transparent print logo */
+    .logo-img{display:none !important;}
+    .logo-img-print{
       display:block !important;
-      text-align:center;
-      margin:6px 0 14px !important;
-      page-break-after:avoid;
-      break-after:avoid;
-    }
-    .brand-tagline .bt-line{color:#000 !important;font-size:18px !important;text-shadow:none !important;}
-    .brand-tagline .bt-sub{font-size:15px !important;}
-    .brand-tagline .bt-accent{
-      color:#a8853f !important;
-      text-shadow:none !important;
+      width:auto !important;
+      max-width:480px !important;
+      max-height:170px !important;
+      margin:0 auto !important;
       -webkit-print-color-adjust:exact;
       print-color-adjust:exact;
     }
+    /* Hide the HTML slogan in print — slogan is baked into the transparent logo image */
+    .brand-tagline{display:none !important;}
     .toolbar,.panel-body .add-btn,.no-print,.modal-bg,.cat-head .switch,header .toolbar,.toolbar-row-2{display:none !important;}
     /* Hide unselected tier options, emphasize selected */
     .tier-row label:has(input:not(:checked)){display:none !important;}
@@ -912,6 +898,7 @@
     <div class="brandbar-row">
       <a href="./" class="logo" aria-label="Reno to Sold home">
         <img src="RENO_to_SOLD_logo_only.png" alt="Reno to Sold" class="logo-img">
+        <img src="updated-logo-trans.png" alt="Reno to Sold &mdash; Renovate for less. Sell for more. Fully managed from start to sold." class="logo-img-print">
       </a>
       <div class="toolbar no-print">
         <button onclick="newEstimate()">+ New</button>
