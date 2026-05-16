@@ -237,10 +237,99 @@
   .check-row input{accent-color:var(--gold);width:16px;height:16px;}
 
   /* Listing discount toggle row */
-  .disc-toggle-row{display:flex;align-items:center;gap:14px;padding:14px 16px;background:var(--panel-2);border:1px solid var(--line-strong);border-radius:10px;}
+  .disc-toggle-row{display:flex;align-items:center;gap:14px;padding:14px 16px;background:var(--panel-2);border:1px solid var(--line-strong);border-radius:10px;margin-bottom:10px;}
+  .disc-toggle-row:last-child{margin-bottom:0;}
   .disc-toggle-row .toggle-info{flex:1;}
   .disc-toggle-row .cat-title{font-size:13px;}
   .disc-toggle-row .cat-sub{color:var(--muted);font-size:11px;letter-spacing:.05em;text-transform:uppercase;margin-top:3px;}
+
+  /* Savings hero banner (inside discount card body) */
+  .savings-banner{
+    background:linear-gradient(135deg, rgba(232,201,137,.10) 0%, rgba(168,133,63,.06) 100%);
+    border:1px solid var(--gold-deep);
+    border-radius:12px;
+    padding:20px 24px;
+    margin-bottom:16px;
+    position:relative;
+    overflow:hidden;
+    text-align:center;
+    box-shadow:0 0 28px rgba(212,175,106,.08) inset, var(--gold-glow);
+  }
+  .savings-banner::before{
+    content:"";
+    position:absolute;
+    inset:0;
+    background:radial-gradient(circle at 15% 20%, rgba(232,201,137,.14) 0%, transparent 55%),
+               radial-gradient(circle at 85% 80%, rgba(168,133,63,.10) 0%, transparent 55%);
+    pointer-events:none;
+  }
+  .savings-banner > *{position:relative;}
+  .savings-banner .sb-eyebrow{
+    font-size:10px;
+    color:var(--gold-bright);
+    letter-spacing:.22em;
+    text-transform:uppercase;
+    font-weight:700;
+    margin-bottom:6px;
+    opacity:.92;
+  }
+  .savings-banner .sb-amount{
+    font-size:34px;
+    font-weight:800;
+    color:var(--gold-bright);
+    letter-spacing:-.01em;
+    font-variant-numeric:tabular-nums;
+    line-height:1.1;
+    text-shadow:0 0 24px rgba(232,201,137,.25);
+  }
+  .savings-banner .sb-sub{
+    font-size:11px;
+    color:var(--ink);
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    margin-top:8px;
+    opacity:.85;
+    font-weight:500;
+  }
+  @media (max-width:680px){
+    .savings-banner{padding:18px 16px;}
+    .savings-banner .sb-amount{font-size:28px;}
+  }
+
+  /* Custom discount fields (toggled) */
+  #customDiscFields{transition:opacity .15s;}
+  #customDiscFields.hidden{display:none;}
+
+  /* Discount card accent — make it stand out from regular categories when enabled */
+  #cat-discount.on{
+    border-color:var(--gold);
+    box-shadow:0 0 0 1px rgba(212,175,106,.35), 0 6px 24px rgba(212,175,106,.12);
+  }
+  #cat-discount .cat-title{color:var(--gold-bright);}
+
+  /* "You're saving" highlight inside the Live Total card */
+  .savings-line{
+    grid-column:1 / -1;
+    margin-top:6px;
+    padding:10px 14px;
+    background:linear-gradient(135deg, rgba(232,201,137,.10) 0%, rgba(168,133,63,.04) 100%);
+    border:1px solid var(--gold-deep);
+    border-radius:8px;
+    display:flex;align-items:center;justify-content:space-between;gap:12px;
+    font-variant-numeric:tabular-nums;
+  }
+  .savings-line .sl-label{
+    color:var(--gold-bright);
+    font-size:10px;
+    text-transform:uppercase;
+    letter-spacing:.18em;
+    font-weight:700;
+  }
+  .savings-line .sl-val{
+    color:var(--gold-bright);
+    font-weight:800;
+    font-size:16px;
+  }
 
   /* Add-on card (used inside categories) */
   .addon{border:1px dashed var(--line-strong);border-radius:8px;padding:12px;background:var(--panel-2);margin-bottom:12px;}
@@ -652,6 +741,13 @@
     .disc-toggle-row{background:#fff;border-color:#000;}
     .addon{background:#fff;border-color:#000;}
     .info-readout{background:#fff;border-color:#000;color:#000;}
+    .savings-banner{background:#fff !important;border:2px solid #000 !important;box-shadow:none !important;page-break-inside:avoid !important;break-inside:avoid !important;}
+    .savings-banner::before{display:none !important;}
+    .savings-banner .sb-eyebrow{color:#000 !important;}
+    .savings-banner .sb-amount{color:#000 !important;text-shadow:none !important;}
+    .savings-banner .sb-sub{color:#000 !important;}
+    .savings-line{background:#fff !important;border:2px solid #000 !important;}
+    .savings-line .sl-label,.savings-line .sl-val{color:#000 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
 
     /* Contractor mode overrides — only the bid sheet prints */
     body.show-contractor{ background:#fff !important; }
@@ -743,6 +839,10 @@
       <div class="lbl" id="td-disc-listing-row" style="display:none">Listing Discount <span id="td-disc-listing-pct" style="text-transform:none;letter-spacing:normal;font-weight:400;color:var(--muted);"></span></div><div class="val discount" id="td-disc-listing" style="display:none">−$0</div>
       <div class="lbl" id="td-disc-custom-row" style="display:none">Custom Discount <span id="td-disc-custom-note" style="text-transform:none;letter-spacing:normal;font-weight:400;color:var(--muted);"></span></div><div class="val discount" id="td-disc-custom" style="display:none">−$0</div>
       <div class="lbl" id="td-after-row" style="display:none">After Discount</div><div class="val" id="td-after" style="display:none">$0</div>
+      <div class="savings-line" id="td-savings-line" style="display:none">
+        <span class="sl-label">You're Saving</span>
+        <span class="sl-val" id="td-savings-val">−$0</span>
+      </div>
       <div class="lbl">HST (13%)</div><div class="val" id="td-hst">$0</div>
       <div class="lbl final">Total</div><div class="val final" id="td-total">$0</div>
     </div>
@@ -792,20 +892,27 @@
   <!-- Categories -->
   <div id="categories"></div>
 
-  <!-- Discount (toggle card, mirrors category cards) -->
+  <!-- Client Savings (toggle card, mirrors category cards but with extra emphasis) -->
   <div class="cat" id="cat-discount">
     <div class="cat-head" onclick="toggleDiscount(event)">
       <div class="cat-toggle">
         <input type="checkbox" class="switch-input" id="sw-discount" onchange="setDiscountEnabled(this.checked)" onclick="event.stopPropagation()">
         <label for="sw-discount" class="switch" onclick="event.stopPropagation()"></label>
         <div>
-          <div class="cat-title">Discount</div>
-          <div class="cat-sub" id="cat-sub-discount">No discount applied</div>
+          <div class="cat-title">Client Savings</div>
+          <div class="cat-sub" id="cat-sub-discount">Show clients what they save by listing with us</div>
         </div>
       </div>
       <div class="cat-total" id="cat-total-discount">—</div>
     </div>
     <div class="cat-body hidden" id="cat-body-discount">
+      <!-- Hero savings callout (visible when any discount is producing a value) -->
+      <div class="savings-banner" id="savingsBanner" style="display:none;">
+        <div class="sb-eyebrow">Total Client Savings</div>
+        <div class="sb-amount" id="sbAmount">−$0</div>
+        <div class="sb-sub" id="sbSub">By listing with Reno to Sold</div>
+      </div>
+
       <div class="disc-toggle-row">
         <input type="checkbox" class="switch-input" id="sw-listing" onchange="state.discount.listing=this.checked;renderTotals()">
         <label for="sw-listing" class="switch"></label>
@@ -815,25 +922,36 @@
         </div>
       </div>
 
-      <div class="section-title">Custom Discount (optional)</div>
-      <div class="grid grid-3">
-        <div>
-          <label>Type</label>
-          <select id="discCustomType" onchange="state.discount.customType=this.value;renderDiscPlaceholder();renderTotals()">
-            <option value="percent">Percentage (%)</option>
-            <option value="amount">Flat amount ($)</option>
-          </select>
-        </div>
-        <div>
-          <label>Amount</label>
-          <input type="number" id="discCustomValue" min="0" step="0.5" placeholder="0" oninput="state.discount.customValue=this.value;renderTotals()">
-        </div>
-        <div>
-          <label>Note (required for custom)</label>
-          <input type="text" id="discCustomNote" placeholder="e.g. Repeat client, package deal" oninput="state.discount.customNote=this.value;renderTotals()">
+      <div class="disc-toggle-row">
+        <input type="checkbox" class="switch-input" id="sw-custom" onchange="setCustomDiscountEnabled(this.checked)">
+        <label for="sw-custom" class="switch"></label>
+        <div class="toggle-info">
+          <div class="cat-title">Custom Discount</div>
+          <div class="cat-sub">Add an additional flat or % discount (e.g. repeat client, package deal)</div>
         </div>
       </div>
-      <p class="footnote">Discounts are applied to the subtotal <i>before</i> HST. Listing &amp; custom discounts stack if both are used.</p>
+
+      <div id="customDiscFields" class="hidden" style="margin-top:14px;">
+        <div class="grid grid-3">
+          <div>
+            <label>Type</label>
+            <select id="discCustomType" onchange="state.discount.customType=this.value;renderDiscPlaceholder();renderTotals()">
+              <option value="percent">Percentage (%)</option>
+              <option value="amount">Flat amount ($)</option>
+            </select>
+          </div>
+          <div>
+            <label>Amount</label>
+            <input type="number" id="discCustomValue" min="0" step="0.5" placeholder="0" oninput="state.discount.customValue=this.value;renderTotals()">
+          </div>
+          <div>
+            <label>Note (shown on quote)</label>
+            <input type="text" id="discCustomNote" placeholder="e.g. Repeat client, package deal" oninput="state.discount.customNote=this.value;renderTotals()">
+          </div>
+        </div>
+      </div>
+
+      <p class="footnote" style="margin-top:14px;">Discounts apply to the subtotal <i>before</i> HST. Listing &amp; custom discounts stack if both are turned on.</p>
     </div>
   </div>
 
@@ -1114,7 +1232,7 @@ function freshState(){
     },
     bathroom:  { rooms:[ defaultBath() ] },
     potlights: { tier:"standard", count:"" },
-    discount:  { enabled:false, listing:false, customType:"percent", customValue:"", customNote:"" }
+    discount:  { enabled:false, listing:false, customEnabled:false, customType:"percent", customValue:"", customNote:"" }
   };
 }
 function defaultBath(){
@@ -1250,6 +1368,12 @@ function migrateOldEstimate(m){
       const hadListing = !!m.discount.listing;
       const hadCustom  = m.discount.customValue && parseFloat(m.discount.customValue) > 0;
       m.discount.enabled = !!(hadListing || hadCustom);
+    }
+    // Migrate to customEnabled flag — true if the custom value/note had real data
+    if(typeof m.discount.customEnabled !== "boolean"){
+      const hadCustom = (m.discount.customValue && parseFloat(m.discount.customValue) > 0)
+                     || (m.discount.customNote && String(m.discount.customNote).trim() !== "");
+      m.discount.customEnabled = !!hadCustom;
     }
   }
 }
@@ -1435,11 +1559,13 @@ function computeTotals(){
       const pct = num(prices.listingDiscount && prices.listingDiscount.percent);
       listingDisc = sub * (Math.min(pct,100)/100);
     }
-    if(d.customType === "percent"){
-      const pct = num(d.customValue);
-      customDisc = sub * (Math.min(pct,100)/100);
-    } else {
-      customDisc = num(d.customValue);
+    if(d.customEnabled){
+      if(d.customType === "percent"){
+        const pct = num(d.customValue);
+        customDisc = sub * (Math.min(pct,100)/100);
+      } else {
+        customDisc = num(d.customValue);
+      }
     }
   }
   let discount = listingDisc + customDisc;
@@ -1468,11 +1594,14 @@ function renderAll(){
   document.getElementById("sellerName").value = state.sellerName || "";
   document.getElementById("sellerPhone").value = state.sellerPhone || "";
   document.getElementById("sellerEmail").value = state.sellerEmail || "";
-  if(!state.discount) state.discount = { enabled:false, listing:false, customType:"percent", customValue:"", customNote:"" };
+  if(!state.discount) state.discount = { enabled:false, listing:false, customEnabled:false, customType:"percent", customValue:"", customNote:"" };
+  if(typeof state.discount.customEnabled !== "boolean") state.discount.customEnabled = !!(state.discount.customValue && parseFloat(state.discount.customValue) > 0);
   document.getElementById("sw-discount").checked = !!state.discount.enabled;
   document.getElementById("cat-discount").classList.toggle("on", !!state.discount.enabled);
   document.getElementById("cat-body-discount").classList.toggle("hidden", !state.discount.enabled);
   document.getElementById("sw-listing").checked = !!state.discount.listing;
+  document.getElementById("sw-custom").checked = !!state.discount.customEnabled;
+  document.getElementById("customDiscFields").classList.toggle("hidden", !state.discount.customEnabled);
   document.getElementById("discCustomType").value = state.discount.customType || "percent";
   document.getElementById("discCustomValue").value = state.discount.customValue || "";
   document.getElementById("discCustomNote").value = state.discount.customNote || "";
@@ -1499,6 +1628,13 @@ function setDiscountEnabled(val){
   if(body) body.classList.toggle("hidden", !val);
   const card = document.getElementById("cat-discount");
   if(card) card.classList.toggle("on", !!val);
+  renderTotals();
+}
+
+function setCustomDiscountEnabled(val){
+  state.discount.customEnabled = !!val;
+  const fields = document.getElementById("customDiscFields");
+  if(fields) fields.classList.toggle("hidden", !val);
   renderTotals();
 }
 
@@ -1558,18 +1694,53 @@ function renderTotals(){
   document.getElementById("td-after").style.display = showAfter ? "" : "none";
   document.getElementById("td-after").textContent = fmt(t.afterDisc);
 
+  // Gold "You're Saving" line in the Live Total card
+  const savingsLine = document.getElementById("td-savings-line");
+  const savingsVal  = document.getElementById("td-savings-val");
+  if(savingsLine && savingsVal){
+    if(t.discount > 0){
+      savingsLine.style.display = "";
+      savingsVal.textContent = "−" + fmt(t.discount);
+    } else {
+      savingsLine.style.display = "none";
+    }
+  }
+
+  // Hero savings banner inside the Client Savings card
+  const sBanner = document.getElementById("savingsBanner");
+  const sAmount = document.getElementById("sbAmount");
+  const sSub    = document.getElementById("sbSub");
+  if(sBanner && sAmount && sSub){
+    if(state.discount && state.discount.enabled && t.discount > 0){
+      sBanner.style.display = "";
+      sAmount.textContent = "−" + fmt(t.discount);
+      // Tailor the sub-message to which discount(s) are active
+      const onListing = t.listingDisc > 0;
+      const onCustom  = t.customDisc > 0;
+      if(onListing && onCustom){
+        sSub.textContent = "By listing with Reno to Sold + custom savings";
+      } else if(onListing){
+        sSub.textContent = "By listing with Reno to Sold";
+      } else if(onCustom){
+        sSub.textContent = "Custom savings applied to this estimate";
+      }
+    } else {
+      sBanner.style.display = "none";
+    }
+  }
+
   // Discount card header
   const dSub = document.getElementById("cat-sub-discount");
   const dTotal = document.getElementById("cat-total-discount");
   if(dSub){
     if(t.discount > 0){
-      dSub.textContent = `Saving ${fmt(t.discount)}`;
+      dSub.textContent = `Saving ${fmt(t.discount)} on this renovation`;
       dSub.style.color = "var(--gold-bright)";
     } else if(state.discount && state.discount.enabled){
-      dSub.textContent = "Set discount below";
+      dSub.textContent = "Turn on Listing or Custom below";
       dSub.style.color = "";
     } else {
-      dSub.textContent = "No discount applied";
+      dSub.textContent = "Show clients what they save by listing with us";
       dSub.style.color = "";
     }
   }
@@ -2425,7 +2596,9 @@ function renderContractorSheet(){
       items.push({ html:`Ceiling: <b>${s.ceilingTier==="premium"?"Premium (textured / vaulted / 10ft+)":"Standard (flat 8&ndash;9ft)"}</b> &mdash; ${cs||'?'} sqft` });
     }
     if(s.trim){
-      items.push({ html:`Baseboards &amp; trim: <b>${s.trimLinFt||'?'} linear feet</b> &mdash; refresh / repaint.` });
+      const trimLf = num(s.trimLinFt) || suggestedTrimLinFt();
+      const trimAuto = !num(s.trimLinFt) && suggestedTrimLinFt() > 0;
+      items.push({ html:`Baseboards &amp; trim: <b>${trimLf || '?'} linear feet</b>${trimAuto?' <i style="color:#666;font-weight:400">(auto-estimated from property sqft)</i>':''} &mdash; refresh / repaint.` });
     }
     if(s.doors){
       items.push({ html:`Interior doors: <b>${s.doorCount||'?'} doors</b> &mdash; both sides, hardware removed &amp; reinstalled.` });
@@ -2449,7 +2622,9 @@ function renderContractorSheet(){
       items.push({ html:`Removal &amp; disposal: <b>${rsq||'?'} sqft</b> &mdash; strip existing flooring + haul-away &amp; dump fees.` });
     }
     if(s.baseboards){
-      items.push({ html:`New baseboards: <b>${s.baseboardLinFt||'?'} linear feet</b> &mdash; supply &amp; install (4&ndash;5" MDF/poplar, unpainted).` });
+      const bbLf = num(s.baseboardLinFt) || suggestedTrimLinFt();
+      const bbAuto = !num(s.baseboardLinFt) && suggestedTrimLinFt() > 0;
+      items.push({ html:`New baseboards: <b>${bbLf || '?'} linear feet</b>${bbAuto?' <i style="color:#666;font-weight:400">(auto-estimated from property sqft)</i>':''} &mdash; supply &amp; install (4&ndash;5" MDF/poplar, unpainted).` });
     }
     html += scopeSection("Flooring", items);
   }
@@ -3087,7 +3262,7 @@ function scopeItemsFor(cat){
       const cs = num(s.ceilingSqft) || psqft;
       items.push({ html:`Ceiling: <b>${s.ceilingTier==="premium"?"Premium":"Standard"}</b> &mdash; ${cs||'?'} sqft` });
     }
-    if(s.trim){ items.push({ html:`Baseboards &amp; trim: <b>${s.trimLinFt||'?'} lin ft</b>` }); }
+    if(s.trim){ items.push({ html:`Baseboards &amp; trim: <b>${(num(s.trimLinFt) || suggestedTrimLinFt()) || '?'} lin ft</b>` }); }
     if(s.doors){ items.push({ html:`Doors: <b>${s.doorCount||'?'}</b>` }); }
   }
   else if(cat === "flooring"){
@@ -3099,7 +3274,7 @@ function scopeItemsFor(cat){
       const rsq = num(s.removalSqft) || num(s.sqft);
       items.push({ html:`Removal &amp; disposal: <b>${rsq||'?'} sqft</b>` });
     }
-    if(s.baseboards){ items.push({ html:`New baseboards: <b>${s.baseboardLinFt||'?'} lin ft</b>` }); }
+    if(s.baseboards){ items.push({ html:`New baseboards: <b>${(num(s.baseboardLinFt) || suggestedTrimLinFt()) || '?'} lin ft</b>` }); }
   }
   else if(cat === "tiling"){
     items.push({ html:`Material: <b>${s.tier==="premium"?"Porcelain (premium)":"Ceramic (standard)"}</b>` });
