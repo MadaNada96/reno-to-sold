@@ -47,13 +47,48 @@
 
   /* Brand bar */
   .brandbar{background:#000;border:1px solid var(--line-strong);border-radius:14px;padding:22px 28px;margin-bottom:18px;box-shadow:var(--shadow);position:relative;overflow:hidden;}
+
+  /* Brand tagline — sits between brand bar and the rest of the page */
+  .brand-tagline{
+    text-align:center;
+    margin:0 0 22px;
+    padding:6px 12px;
+    line-height:1.35;
+  }
+  .brand-tagline .bt-1{
+    font-family:'Dancing Script', cursive;
+    font-size:30px;
+    font-weight:700;
+    color:var(--gold-bright);
+    letter-spacing:.02em;
+    display:block;
+    text-shadow:0 1px 12px rgba(212,175,106,.18);
+  }
+  .brand-tagline .bt-2{
+    display:block;
+    font-family:'Montserrat',sans-serif;
+    font-size:10px;
+    color:var(--gold-deep);
+    letter-spacing:.32em;
+    text-transform:uppercase;
+    font-weight:600;
+    margin-top:6px;
+  }
+  @media (max-width:680px){
+    .brand-tagline{margin-bottom:18px;}
+    .brand-tagline .bt-1{font-size:24px;}
+    .brand-tagline .bt-2{font-size:9px;letter-spacing:.25em;}
+  }
+  @media print{
+    .brand-tagline{display:none !important;}
+  }
   .brandbar::before{content:"";position:absolute;inset:0;background:linear-gradient(120deg,transparent 40%,rgba(212,175,106,.04) 60%,transparent 80%);pointer-events:none;}
   .brandbar-row{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;position:relative;}
-  .logo{display:flex;align-items:center;gap:0;flex-wrap:nowrap;flex:1;min-width:0;}
-  .logo-img{display:block;width:100%;max-width:560px;height:auto;max-height:140px;object-fit:contain;object-position:left center;}
+  .logo{display:flex;align-items:flex-start;gap:0;flex-wrap:nowrap;flex:1;min-width:0;overflow:hidden;max-height:78px;}
+  .logo-img{display:block;width:100%;max-width:560px;height:auto;max-height:none;object-fit:contain;object-position:left top;}
 
   .toolbar{display:flex;gap:8px;flex-wrap:wrap;}
-  .toolbar-row-2{display:flex;justify-content:flex-end;margin-top:10px;padding-top:10px;border-top:1px dashed rgba(212,175,106,.18);position:relative;}
+  .toolbar-row-2{display:flex;justify-content:center;margin-top:10px;padding-top:10px;border-top:1px dashed rgba(212,175,106,.18);position:relative;}
   .import-pdf-link{
     display:inline-flex;align-items:center;gap:6px;
     font:inherit;font-size:12px;font-weight:600;letter-spacing:.08em;
@@ -63,7 +98,6 @@
   }
   .import-pdf-link:hover{background:rgba(212,175,106,.08);border-color:var(--gold);color:var(--gold-bright);}
   .import-pdf-link svg{width:14px;height:14px;display:block;}
-  @media (max-width:680px){.toolbar-row-2{justify-content:center;}}
 
   /* PDF import — confirmation modal */
   .pdf-detect-grid{
@@ -123,7 +157,7 @@
   .grid{display:grid;gap:12px;}
   .grid-2{grid-template-columns:repeat(2,minmax(0,1fr));}
   .grid-3{grid-template-columns:repeat(3,minmax(0,1fr));}
-  @media (max-width:680px){.grid-2,.grid-3{grid-template-columns:1fr;}.logo-img{max-height:90px;}}
+  @media (max-width:680px){.grid-2,.grid-3{grid-template-columns:1fr;}.logo{max-height:50px;}}
   label{display:block;font-size:11px;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.1em;font-weight:600;}
   input[type="text"],input[type="number"],input[type="tel"],input[type="email"],input[type="password"],select{width:100%;padding:10px 12px;border:1px solid var(--line-strong);border-radius:8px;font:inherit;background:#0d0d11;color:var(--ink);font-size:14px;}
   input::placeholder{color:#5a5750;}
@@ -838,7 +872,7 @@
   <div class="brandbar">
     <div class="brandbar-row">
       <a href="./" class="logo" aria-label="Reno to Sold home">
-        <img src="logo.png" alt="Reno to Sold &mdash; Renovate Smart. Sell For More. Fully Managed From Start To Sold." class="logo-img">
+        <img src="logo.png" alt="Reno to Sold" class="logo-img">
       </a>
       <div class="toolbar no-print">
         <button onclick="newEstimate()">+ New</button>
@@ -857,6 +891,12 @@
       </button>
       <input type="file" id="pdfImportInput" accept="application/pdf,.pdf" style="display:none;" onchange="onPdfFileChosen(event)">
     </div>
+  </div>
+
+  <!-- Brand tagline -->
+  <div class="brand-tagline no-print">
+    <span class="bt-1">Renovate for less. Sell for more.</span>
+    <span class="bt-2">Fully managed from start to sold.</span>
   </div>
 
   <!-- Live Total -->
