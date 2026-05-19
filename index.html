@@ -2197,11 +2197,11 @@ function renderCatBody(cat){
         ${s.trim ? `
           <div class="grid grid-2">
             <div>
-              <label>Linear feet of trim ${suggestedTrimLinFt() > 0 ? `<span style="text-transform:none;letter-spacing:0;color:var(--gold-bright);font-weight:600;">&middot; auto ≈ ${suggestedTrimLinFt()} from property sqft</span>` : ""}</label>
-              <input type="number" min="0" value="${s.trimLinFt||""}" placeholder="${suggestedTrimLinFt() > 0 ? `auto ${suggestedTrimLinFt()} (override if needed)` : 'enter property sqft first'}" oninput="state.painting.trimLinFt=this.value;renderTotals()">
+              <label>Linear feet of trim ${suggestedTrimLinFt() > 0 ? `<span style="text-transform:none;letter-spacing:0;color:var(--gold-bright);font-weight:600;">&middot; auto from property sqft</span>` : ""}</label>
+              <input type="number" min="0" value="${s.trimLinFt || (suggestedTrimLinFt() > 0 ? suggestedTrimLinFt() : '')}" placeholder="${suggestedTrimLinFt() > 0 ? 'override if needed' : 'enter property sqft first'}" oninput="state.painting.trimLinFt=this.value;renderTotals()">
             </div>
           </div>
-          <div class="footnote" style="margin-top:8px;">Auto-suggest = property sqft &times; 0.20 (typical layout). Leave blank to use the suggestion.</div>
+          <div class="footnote" style="margin-top:8px;">Auto-suggest = property sqft &times; 0.20 (typical layout). Type over the value to override.</div>
         ` : ""}
       </div>
 
@@ -2295,11 +2295,11 @@ function renderCatBody(cat){
         ${s.baseboards ? `
           <div class="grid grid-2">
             <div>
-              <label>Linear feet of baseboards ${suggestedTrimLinFt() > 0 ? `<span style="text-transform:none;letter-spacing:0;color:var(--gold-bright);font-weight:600;">&middot; auto ≈ ${suggestedTrimLinFt()} from property sqft</span>` : ""}</label>
-              <input type="number" min="0" value="${s.baseboardLinFt||""}" placeholder="${suggestedTrimLinFt() > 0 ? `auto ${suggestedTrimLinFt()} (override if needed)` : 'enter property sqft first'}" oninput="state.flooring.baseboardLinFt=this.value;renderTotals()">
+              <label>Linear feet of baseboards ${suggestedTrimLinFt() > 0 ? `<span style="text-transform:none;letter-spacing:0;color:var(--gold-bright);font-weight:600;">&middot; auto from property sqft</span>` : ""}</label>
+              <input type="number" min="0" value="${s.baseboardLinFt || (suggestedTrimLinFt() > 0 ? suggestedTrimLinFt() : '')}" placeholder="${suggestedTrimLinFt() > 0 ? 'override if needed' : 'enter property sqft first'}" oninput="state.flooring.baseboardLinFt=this.value;renderTotals()">
             </div>
           </div>
-          <div class="footnote" style="margin-top:8px;">Supply &amp; install of new MDF/poplar baseboards (4&ndash;5"), unpainted. Auto-suggest = property sqft &times; 0.20.</div>
+          <div class="footnote" style="margin-top:8px;">Supply &amp; install of new MDF/poplar baseboards (4&ndash;5"), unpainted. Auto-suggest = property sqft &times; 0.20. Type over the value to override.</div>
         ` : ""}
       </div>
 
