@@ -1258,9 +1258,13 @@ const DEFAULT_PRICES = {
     // Doors — paint per interior door
     door: { labour: 65, material: 25 },             // $/door
     // Popcorn ceiling removal — scrape, skim-coat smooth, prime, repaint
-    // GTA 2026 going rate ~$3–$5/sqft for non-asbestos popcorn removal.
-    // Set as $2.75 labour + $1.00 material = $3.75/sqft (mid-range, includes skim coat).
-    popcorn: { labour: 2.75, material: 1.00 }       // $/sqft of popcorn ceiling
+    // GTA 2026 going rate ~$3–$6/sqft for non-asbestos popcorn removal.
+    // Standard (8-9ft flat) = $3.75/sqft; Premium (textured / vaulted / 10ft+)
+    // = $5.00/sqft due to scaffolding, harder substrate, and longer reach.
+    popcorn: {
+      standard: { labour: 2.75, material: 1.00 },   // $/sqft — flat 8-9ft ceiling
+      premium:  { labour: 3.75, material: 1.25 }    // $/sqft — textured / vaulted / 10ft+
+    }
   },
   flooring: {
     // Per sqft installed — labour is per sqft of space, material is per sqft × waste factor
@@ -1391,7 +1395,7 @@ function freshState(){
       ceiling: false, ceilingTier: "standard", ceilingSqft: "",
       trim: false, trimLinFt: "",
       doors: false, doorCount: "", doorsAutoFromPdf: false,  // doorsAutoFromPdf adds the "confirm closet doors" note
-      popcorn: false, popcornSqft: ""                         // popcorn-ceiling removal (scrape, skim-coat, repaint)
+      popcorn: false, popcornTier: "standard", popcornSqft: "" // popcorn-ceiling removal (scrape, skim-coat, repaint)
     },
     flooring:  {
       type: "vinyl",         // vinyl | laminate | engineered | hardwood
@@ -1483,6 +1487,14 @@ function migrateFlatShowerPrice(p){
   // Backfill the "refresh" tier on older saves that only have convert + new
   if(p && p.bathroom && p.bathroom.standUpShower && !p.bathroom.standUpShower.refresh){
     p.bathroom.standUpShower.refresh = { labour: 1800, material: 2700 };
+  }
+  // Popcorn ceiling: legacy flat shape { labour, material } → { standard, premium }
+  if(p && p.painting && p.painting.popcorn && typeof p.painting.popcorn.labour === "number"){
+    const old = p.painting.popcorn;
+    p.painting.popcorn = {
+      standard: { labour: old.labour,         material: old.material },
+      premium:  { labour: +(old.labour*1.35).toFixed(2), material: +(old.material*1.25).toFixed(2) }
+    };
   }
   // Potlights: legacy { standard, premium } → { replace, new }. Drop the old keys.
   if(p && p.potlights){
@@ -1729,11 +1741,13 @@ function computeCategory(cat, priceSet){
     }
     // Popcorn ceiling removal — scrape, skim-coat smooth, prime, repaint
     if(s.popcorn && p.popcorn){
-      // Default sqft for popcorn removal = whatever was entered for the ceiling
-      // sqft (if ceiling painting was also enabled) or the wall painting sqft.
       const popSqft = num(s.popcornSqft) || num(s.ceilingSqft) || paintingSqft();
-      labour   += popSqft * p.popcorn.labour;
-      material += popSqft * p.popcorn.material;
+      const popTier = s.popcornTier || "standard";
+      const pr = p.popcorn[popTier] || p.popcorn.standard;
+      if(pr){
+        labour   += popSqft * pr.labour;
+        material += popSqft * pr.material;
+      }
     }
   }
   else if(cat === "flooring"){
@@ -2182,7 +2196,36 @@ function renderCatBody(cat){
         Ceilings, trim &amp; doors are extras below.
       </div>
 
-      <!-- Ceiling add-on -->
+      <!-- Popcorn ceiling removal add-on (placed BEFORE ceiling paint so the
+           workflow reads top-to-bottom: scrape texture → paint the new smooth surface) -->
+      <div class="addon">
+        <label class="check-row" style="margin-bottom:${s.popcorn?'10px':'0'};">
+          <input type="checkbox" ${s.popcorn?'checked':''} onchange="state.painting.popcorn=this.checked;renderCatBodyOnly('painting');renderTotals()">
+          <span class="addon-title">Add popcorn ceiling removal</span>
+        </label>
+        ${s.popcorn ? `
+          <div class="grid grid-2">
+            <div>
+              <label>Popcorn ceiling tier</label>
+              <select onchange="state.painting.popcornTier=this.value;renderTotals()">
+                <option value="standard" ${(s.popcornTier||'standard')==='standard'?'selected':''}>Standard (8&ndash;9ft, flat)</option>
+                <option value="premium"  ${s.popcornTier==='premium' ?'selected':''}>Premium (textured / vaulted / 10ft+)</option>
+              </select>
+            </div>
+            <div>
+              <label>Popcorn ceiling sqft <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(blank = use painting sqft)</span></label>
+              <input type="number" min="0" value="${s.popcornSqft||""}" placeholder="defaults to painting sqft" oninput="state.painting.popcornSqft=this.value;renderTotals()">
+            </div>
+          </div>
+          <div class="footnote" style="margin-top:8px;">
+            <b style="color:var(--gold-bright)">What's included:</b> score, soak &amp; scrape off the existing popcorn texture, full skim-coat to smooth the ceiling, prime, and finish with two coats of paint. Drop sheets, plastic-wrap furniture, and clean-up are all part of the price.
+            <br><br>
+            <b style="color:var(--danger)">Asbestos note:</b> Homes built before 1980 often have asbestos-containing popcorn ceilings. We strongly recommend an asbestos test before scope is finalized — abatement is a separate scope handled by a certified contractor and not included in this estimate.
+          </div>
+        ` : ""}
+      </div>
+
+      <!-- Ceiling paint add-on -->
       <div class="addon">
         <label class="check-row" style="margin-bottom:${s.ceiling?'10px':'0'};">
           <input type="checkbox" ${s.ceiling?'checked':''} onchange="state.painting.ceiling=this.checked;renderCatBodyOnly('painting');renderTotals()">
@@ -2222,8 +2265,8 @@ function renderCatBody(cat){
         ` : ""}
       </div>
 
-      <!-- Doors add-on -->
-      <div class="addon">
+      <!-- Doors add-on (last) -->
+      <div class="addon last">
         <label class="check-row" style="margin-bottom:${s.doors?'10px':'0'};">
           <input type="checkbox" ${s.doors?'checked':''} onchange="state.painting.doors=this.checked;renderCatBodyOnly('painting');renderTotals()">
           <span class="addon-title">Add door painting</span>
@@ -2237,27 +2280,6 @@ function renderCatBody(cat){
             </div>
           </div>
           <div class="footnote" style="margin-top:8px;">Both sides painted, hardware removed &amp; reinstalled.</div>
-        ` : ""}
-      </div>
-
-      <!-- Popcorn ceiling removal add-on -->
-      <div class="addon last">
-        <label class="check-row" style="margin-bottom:${s.popcorn?'10px':'0'};">
-          <input type="checkbox" ${s.popcorn?'checked':''} onchange="state.painting.popcorn=this.checked;renderCatBodyOnly('painting');renderTotals()">
-          <span class="addon-title">Add popcorn ceiling removal</span>
-        </label>
-        ${s.popcorn ? `
-          <div class="grid grid-2">
-            <div>
-              <label>Sqft of popcorn ceiling <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(blank = same as painting/ceiling sqft)</span></label>
-              <input type="number" min="0" value="${s.popcornSqft||""}" placeholder="defaults to painting sqft" oninput="state.painting.popcornSqft=this.value;renderTotals()">
-            </div>
-          </div>
-          <div class="footnote" style="margin-top:8px;">
-            <b style="color:var(--gold-bright)">What's included:</b> score, soak &amp; scrape off the existing popcorn texture, full skim-coat to smooth the ceiling, prime, and finish with two coats of paint. Drop sheets, plastic-wrap furniture, and clean-up are all part of the price.
-            <br><br>
-            <b style="color:var(--danger)">Asbestos note:</b> Homes built before 1980 often have asbestos-containing popcorn ceilings. We strongly recommend an asbestos test before scope is finalized — abatement is a separate scope handled by a certified contractor and not included in this estimate.
-          </div>
         ` : ""}
       </div>
 
@@ -2857,15 +2879,17 @@ function renderPricingEditor(){
       <div>${priceInput("painting.door.material", prices.painting.door.material, 5)}</div>
     </div>`;
 
-  // Painting — popcorn ceiling removal
-  const popDef = prices.painting.popcorn || { labour:2.75, material:1.00 };
+  // Painting — popcorn ceiling removal (standard / premium tiers)
   html += `<div class="section-title">Painting &mdash; popcorn ceiling removal (per sqft)</div>
-    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>
-    <div class="price-edit-row">
-      <div class="lbl">Scrape + skim-coat + prime + paint</div>
-      <div>${priceInput("painting.popcorn.labour", popDef.labour)}</div>
-      <div>${priceInput("painting.popcorn.material", popDef.material)}</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
+  ["standard","premium"].forEach(t=>{
+    const row = (prices.painting.popcorn && prices.painting.popcorn[t]) || { labour:0, material:0 };
+    html += `<div class="price-edit-row">
+      <div class="lbl">${cap(t)}${t==='premium'?' (textured / vaulted / 10ft+)':' (flat 8&ndash;9ft)'}</div>
+      <div>${priceInput("painting.popcorn."+t+".labour", row.labour)}</div>
+      <div>${priceInput("painting.popcorn."+t+".material", row.material)}</div>
     </div>`;
+  });
 
   // Flooring — types
   html += `<div class="section-title">Flooring &mdash; install (per sqft)</div>
@@ -3145,7 +3169,7 @@ function renderContractorSheet(){
     }
     if(s.popcorn){
       const popSqft = num(s.popcornSqft) || num(s.ceilingSqft) || psqft;
-      items.push({ html:`Popcorn ceiling removal: <b>${popSqft||'?'} sqft</b> &mdash; scrape, full skim-coat smooth, prime, two finish coats. <i style="color:#666;font-weight:400">Asbestos abatement (pre-1980 homes) is a separate scope, not included.</i>` });
+      items.push({ html:`Popcorn ceiling removal: <b>${(s.popcornTier||'standard')==='premium' ? 'Premium (textured / vaulted / 10ft+)' : 'Standard (flat 8&ndash;9ft)'}</b> &mdash; ${popSqft||'?'} sqft. Scrape, full skim-coat smooth, prime, two finish coats. <i style="color:#666;font-weight:400">Asbestos abatement (pre-1980 homes) is a separate scope, not included.</i>` });
     }
     html += scopeSection("Painting", items);
   }
@@ -3517,15 +3541,17 @@ function renderContractorPricingEditor(){
       <div>${ctrPriceInput("painting.door.labour", cp.painting.door.labour, 5)}</div>
       <div>${ctrPriceInput("painting.door.material", cp.painting.door.material, 5)}</div>
     </div>`;
-  // Popcorn ceiling removal
-  const ctrPopDef = cp.painting.popcorn || { labour:1.93, material:0.70 };  // 70% scale of 2.75 / 1.00
+  // Popcorn ceiling removal (standard / premium tiers)
   html += `<div class="section-title">Painting &mdash; popcorn ceiling removal (per sqft)</div>
-    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>
-    <div class="price-edit-row">
-      <div class="lbl">Scrape + skim-coat + prime + paint</div>
-      <div>${ctrPriceInput("painting.popcorn.labour", ctrPopDef.labour)}</div>
-      <div>${ctrPriceInput("painting.popcorn.material", ctrPopDef.material)}</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
+  ["standard","premium"].forEach(t=>{
+    const row = (cp.painting.popcorn && cp.painting.popcorn[t]) || { labour:0, material:0 };
+    html += `<div class="price-edit-row">
+      <div class="lbl">${cap(t)}${t==='premium'?' (textured / vaulted / 10ft+)':' (flat 8&ndash;9ft)'}</div>
+      <div>${ctrPriceInput("painting.popcorn."+t+".labour", row.labour)}</div>
+      <div>${ctrPriceInput("painting.popcorn."+t+".material", row.material)}</div>
     </div>`;
+  });
   // Flooring types
   html += `<div class="section-title">Flooring &mdash; install (per sqft)</div>
     <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
@@ -3857,7 +3883,7 @@ function scopeItemsFor(cat){
     }
     if(s.popcorn){
       const popSqft = num(s.popcornSqft) || num(s.ceilingSqft) || psqft;
-      items.push({ html:`Popcorn removal: <b>${popSqft||'?'} sqft</b>` });
+      items.push({ html:`Popcorn removal: <b>${(s.popcornTier||'standard')==='premium' ? 'Premium' : 'Standard'}</b> &mdash; ${popSqft||'?'} sqft` });
     }
   }
   else if(cat === "flooring"){
