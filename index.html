@@ -406,6 +406,18 @@
   .addon-title{font-weight:600;color:var(--ink-strong);text-transform:uppercase;letter-spacing:.08em;font-size:12px;}
   .info-readout{display:inline-block;background:rgba(212,175,106,.12);border:1px solid rgba(212,175,106,.3);color:var(--gold-bright);font-size:11px;padding:6px 10px;border-radius:6px;margin-top:6px;letter-spacing:.04em;font-weight:600;}
 
+  /* Inline "included as standard" callout — used in flooring, etc. */
+  .included-note{display:flex;align-items:flex-start;gap:10px;padding:11px 14px;background:rgba(212,175,106,.06);border:1px solid rgba(212,175,106,.25);border-radius:8px;margin-bottom:12px;font-size:13px;color:var(--ink);}
+  .included-note .incl-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--gold-bright);box-shadow:0 0 8px rgba(232,201,137,.5);flex:0 0 8px;margin-top:6px;}
+
+  /* Auto-from-PDF micro-note shown next to inputs that were filled by import */
+  .pdf-auto-note{display:block;margin-top:6px;font-size:11px;letter-spacing:.04em;color:var(--gold-bright);font-style:italic;font-weight:500;line-height:1.4;}
+
+  /* Stand-up shower custom dimension inputs */
+  .shower-size-row{margin-top:10px;padding:10px 12px;background:#0d0d11;border:1px solid var(--line-strong);border-radius:8px;}
+  .ssr-title{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--gold-bright);font-weight:600;margin-bottom:8px;}
+  .ssr-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+
   /* Contractor bid sheet view (overlay) */
   .contractor-view{
     display:none;
@@ -838,6 +850,9 @@
     .disc-toggle-row{background:#fff;border-color:#000;}
     .addon{background:#fff;border-color:#000;}
     .info-readout{background:#fff;border-color:#000;color:#000;}
+    .included-note{background:#fff !important;border-color:#000 !important;color:#000 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .included-note .incl-dot{background:#000 !important;box-shadow:none !important;}
+    .pdf-auto-note{color:#444 !important;}
     .savings-banner{background:#fff !important;border:2px solid #000 !important;box-shadow:none !important;page-break-inside:avoid !important;break-inside:avoid !important;}
     .savings-banner::before{display:none !important;}
     .savings-banner .sb-eyebrow{color:#000 !important;}
@@ -1339,12 +1354,12 @@ function freshState(){
       sqft: "",              // when scope==="custom"
       ceiling: false, ceilingTier: "standard", ceilingSqft: "",
       trim: false, trimLinFt: "",
-      doors: false, doorCount: ""
+      doors: false, doorCount: "", doorsAutoFromPdf: false   // doorsAutoFromPdf adds the "confirm closet doors" note
     },
     flooring:  {
       type: "vinyl",         // vinyl | laminate | engineered | hardwood
       sqft: "",
-      removeOld: false, removalSqft: "",
+      removeOld: true, removalSqft: "",   // removal & disposal is always included; toggle removed from UI
       baseboards: false, baseboardLinFt: ""
     },
     tiling:    { tier:"standard", sqft:"" },
@@ -1364,7 +1379,17 @@ function freshState(){
   };
 }
 function defaultBath(){
-  return { pieces:"2", floorTileSqft:"", wallTileSqft:"", newTub:false, doubleVanity:false, standUpShower:false, showerType:"convert" };
+  return {
+    pieces:"2",
+    floorTileSqft:"",
+    wallTileSqft:"",
+    newTub:false,
+    doubleVanity:false,
+    standUpShower:false,
+    showerType:"convert",
+    // Custom stand-up shower footprint (used to compute floor + wall tile sqft)
+    showerWidth:5, showerDepth:5, showerHeight:8
+  };
 }
 function bathroomLabel(p){
   return ({
@@ -1483,7 +1508,14 @@ function migrateOldEstimate(m){
       if(typeof b.newTub !== "boolean") b.newTub = false;
       if(typeof b.doubleVanity !== "boolean") b.doubleVanity = false;
       if(!b.showerType) b.showerType = "convert";
+      if(typeof b.showerWidth  !== "number" || !isFinite(b.showerWidth))  b.showerWidth  = 5;
+      if(typeof b.showerDepth  !== "number" || !isFinite(b.showerDepth))  b.showerDepth  = 5;
+      if(typeof b.showerHeight !== "number" || !isFinite(b.showerHeight)) b.showerHeight = 8;
     });
+  }
+  // Flooring: removal & disposal is now ALWAYS included — force flag on older saves
+  if(m.flooring){
+    m.flooring.removeOld = true;
   }
   // Discount schema migration
   if(m.discount){
@@ -1586,7 +1618,8 @@ function computeCategory(cat, priceSet){
       labour += sqft * r.labour;
       material += sqft * waste * r.material;
     }
-    if(s.removeOld && p.removal){
+    // Removal & disposal of existing flooring is ALWAYS included now — toggle has been retired.
+    if(p.removal){
       const rSqft = num(s.removalSqft) || sqft;
       labour += rSqft * p.removal.labour;
       material += rSqft * p.removal.material;
@@ -2039,8 +2072,9 @@ function renderCatBody(cat){
         ${s.doors ? `
           <div class="grid grid-2">
             <div>
-              <label>Number of doors</label>
+              <label>Number of doors${s.doorsAutoFromPdf ? ` <span style="text-transform:none;letter-spacing:0;color:var(--gold-bright);font-weight:600;">&middot; auto from floor plan</span>` : ""}</label>
               <input type="number" min="0" value="${s.doorCount||""}" placeholder="e.g. 8" oninput="state.painting.doorCount=this.value;renderTotals()">
+              ${s.doorsAutoFromPdf ? `<span class="pdf-auto-note">Includes all closet doors. Please confirm count — some closets may have sliding mirror doors that aren't painted.</span>` : ""}
             </div>
           </div>
           <div class="footnote" style="margin-top:8px;">GTA 2026 going rate ~$85&ndash;$110 per interior door, both sides painted, hardware removed &amp; reinstalled.</div>
@@ -2075,20 +2109,12 @@ function renderCatBody(cat){
         Material accounts for cutting waste (vinyl 7%, laminate 8%, engineered 10%, solid hardwood 12%). Labour is per sqft of finished space.
       </div>
 
-      <div class="addon">
-        <label class="check-row" style="margin-bottom:${s.removeOld?'10px':'0'};">
-          <input type="checkbox" ${s.removeOld?'checked':''} onchange="state.flooring.removeOld=this.checked;renderCatBodyOnly('flooring');renderTotals()">
-          <span class="addon-title">Remove &amp; dispose of existing flooring</span>
-        </label>
-        ${s.removeOld ? `
-          <div class="grid grid-2">
-            <div>
-              <label>Removal sqft <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(blank = same as new floor sqft)</span></label>
-              <input type="number" min="0" value="${s.removalSqft||""}" placeholder="defaults to flooring sqft" oninput="state.flooring.removalSqft=this.value;renderTotals()">
-            </div>
-          </div>
-          <div class="footnote" style="margin-top:8px;">Includes labour to strip old flooring + haul-away &amp; dump fees. GTA 2026 going rate ~$1.50&ndash;$2.00/sqft.</div>
-        ` : ""}
+      <div class="included-note">
+        <span class="incl-dot"></span>
+        <div>
+          <b style="color:var(--gold-bright);font-weight:600;">Removal &amp; disposal of existing flooring is included.</b>
+          <div class="footnote" style="margin-top:4px;">Strip-out, haul-away &amp; dump fees are baked into every flooring estimate.</div>
+        </div>
       </div>
 
       <div class="addon last">
@@ -2313,6 +2339,24 @@ function renderBathrooms(){
               <option value="convert" ${(b.showerType||'convert')==='convert'?'selected':''}>Convert existing tub into stand-up shower (uses existing plumbing)</option>
               <option value="new"     ${b.showerType==='new'?'selected':''}>Add new stand-up shower (new framing &amp; plumbing rough-in)</option>
             </select>
+            <div class="shower-size-row">
+              <div class="ssr-title">Stand-up shower size <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;font-size:11px;">(used to auto-compute floor + wall tile sqft)</span></div>
+              <div class="ssr-grid">
+                <div>
+                  <label>Width (ft)</label>
+                  <input type="number" step="0.5" min="2" max="20" value="${b.showerWidth||5}" onchange="state.bathroom.rooms[${i}].showerWidth=parseFloat(this.value)||5;applyShowerTileAuto(${i});renderBathBody()">
+                </div>
+                <div>
+                  <label>Depth (ft)</label>
+                  <input type="number" step="0.5" min="2" max="20" value="${b.showerDepth||5}" onchange="state.bathroom.rooms[${i}].showerDepth=parseFloat(this.value)||5;applyShowerTileAuto(${i});renderBathBody()">
+                </div>
+                <div>
+                  <label>Wall height (ft)</label>
+                  <input type="number" step="0.5" min="6" max="12" value="${b.showerHeight||8}" onchange="state.bathroom.rooms[${i}].showerHeight=parseFloat(this.value)||8;applyShowerTileAuto(${i});renderBathBody()">
+                </div>
+              </div>
+              <div class="footnote" style="margin-top:6px;">Defaults to a 5'×5'×8' stand-up shower (industry standard). Adjust if this bathroom has a different size.</div>
+            </div>
           </div>
         ` : ""}
         ${state.bathroom.rooms.length>1 ? `<button class="ghost danger no-print" onclick="removeBath(${i})" style="align-self:flex-end;margin-top:4px;">Remove this bathroom</button>`:""}
@@ -2326,6 +2370,53 @@ function removeBath(i){ state.bathroom.rooms.splice(i,1); renderBathBody(); }
 function renderBathBody(){
   document.getElementById("bath-rooms").innerHTML = renderBathrooms();
   renderTotals();
+}
+
+/* ---------- Bathroom tile auto-computation ----------
+   For wall tile, we model a standard tub surround as 3 walls:
+     back wall (5ft tub long-side) + two end walls (~3ft each) × wall height (8ft default)
+     → (5 + 3 + 3) × 8 = 88 sqft
+   For a stand-up shower we model 3 walls (front is glass):
+     (width + depth + depth) × wall height
+     plus shower floor sqft = width × depth.
+*/
+const TUB_LEN_FT     = 5;     // standard tub long side
+const TUB_END_WALL_FT= 3;     // approx wall depth around tub
+const TUB_WALL_HEIGHT= 8;     // default tub-surround tile height
+function tubSurroundSqft(){
+  return (TUB_LEN_FT + TUB_END_WALL_FT + TUB_END_WALL_FT) * TUB_WALL_HEIGHT; // 88
+}
+function showerWallSqft(b){
+  const w = num(b.showerWidth)  || 5;
+  const d = num(b.showerDepth)  || 5;
+  const h = num(b.showerHeight) || 8;
+  return (w + d + d) * h;   // 3 walls; front is glass enclosure
+}
+function showerFloorSqft(b){
+  const w = num(b.showerWidth) || 5;
+  const d = num(b.showerDepth) || 5;
+  return w * d;
+}
+/* Recompute wall-tile sqft for a single bathroom based on what's in it.
+   Adds tub surround (88) if there's a tub (pieces 3 or 4 or newTub),
+   plus shower 3-wall surround if standUpShower is on. */
+function autoBathWallTileSqft(b){
+  let sqft = 0;
+  const hasTub = (b.pieces === "3" || b.pieces === "4" || b.newTub);
+  if(hasTub) sqft += tubSurroundSqft();
+  if(b.standUpShower) sqft += showerWallSqft(b);
+  return Math.round(sqft);
+}
+/* When the user changes shower dimensions, re-apply the auto wall-tile total
+   only if the existing wallTileSqft looks like it was auto-set (or empty). */
+function applyShowerTileAuto(i){
+  const b = state.bathroom.rooms[i];
+  if(!b) return;
+  // Always refresh floor tile (add shower footprint to existing bathroom floor tile baseline)
+  // We don't override a user-entered floor tile here — shower floor tile is intentionally
+  // bundled into the bathroom's floor tile sqft and already accounted for at import time.
+  // Recompute wall tile total.
+  b.wallTileSqft = String(autoBathWallTileSqft(b));
 }
 function renderCatBodyOnly(cat){
   const body = document.getElementById("cat-body-"+cat);
@@ -2727,7 +2818,10 @@ function renderContractorSheet(){
       items.push({ html:`Baseboards &amp; trim: <b>${trimLf || '?'} linear feet</b>${trimAuto?' <i style="color:#666;font-weight:400">(auto-estimated from property sqft)</i>':''} &mdash; refresh / repaint.` });
     }
     if(s.doors){
-      items.push({ html:`Interior doors: <b>${s.doorCount||'?'} doors</b> &mdash; both sides, hardware removed &amp; reinstalled.` });
+      const note = s.doorsAutoFromPdf
+        ? ` <i style="color:#666;font-weight:400">(auto-counted from floor plan &mdash; includes closet doors; confirm count, some closets may be sliding mirror)</i>`
+        : "";
+      items.push({ html:`Interior doors: <b>${s.doorCount||'?'} doors</b>${note} &mdash; both sides, hardware removed &amp; reinstalled.` });
     }
     html += scopeSection("Painting", items);
   }
@@ -2743,9 +2837,9 @@ function renderContractorSheet(){
     if(q){
       items.push({ html:`Approx. material to order: <b>${Math.ceil(q.qty).toLocaleString("en-CA")} sqft</b> (includes ${q.pct}% waste factor)` });
     }
-    if(s.removeOld){
+    {
       const rsq = num(s.removalSqft) || num(s.sqft);
-      items.push({ html:`Removal &amp; disposal: <b>${rsq||'?'} sqft</b> &mdash; strip existing flooring + haul-away &amp; dump fees.` });
+      items.push({ html:`Removal &amp; disposal: <b>${rsq||'?'} sqft</b> <i style="color:#666;font-weight:400">(included as standard)</i> &mdash; strip existing flooring + haul-away &amp; dump fees.` });
     }
     if(s.baseboards){
       const bbLf = num(s.baseboardLinFt) || suggestedTrimLinFt();
@@ -2805,7 +2899,8 @@ function renderContractorSheet(){
         const showerNote = (b.showerType||"convert") === "new"
           ? "new framing &amp; plumbing rough-in"
           : "convert existing tub, reuse plumbing";
-        items.push({ sub:true, html:`Stand-up shower: <b>included</b> &mdash; ${showerNote} (waterproofing, glass enclosure, fixtures)` });
+        const sw = (num(b.showerWidth)||5), sd = (num(b.showerDepth)||5), sh = (num(b.showerHeight)||8);
+        items.push({ sub:true, html:`Stand-up shower: <b>included</b> &mdash; ${showerNote} (waterproofing, glass enclosure, fixtures). Size: <b>${sw}&prime; &times; ${sd}&prime; &times; ${sh}&prime; high</b>.` });
       }
     });
     html += scopeSection("Bathrooms", items);
@@ -3389,16 +3484,19 @@ function scopeItemsFor(cat){
       items.push({ html:`Ceiling: <b>${s.ceilingTier==="premium"?"Premium":"Standard"}</b> &mdash; ${cs||'?'} sqft` });
     }
     if(s.trim){ items.push({ html:`Baseboards &amp; trim: <b>${(num(s.trimLinFt) || suggestedTrimLinFt()) || '?'} lin ft</b>` }); }
-    if(s.doors){ items.push({ html:`Doors: <b>${s.doorCount||'?'}</b>` }); }
+    if(s.doors){
+      const note = s.doorsAutoFromPdf ? ` <i style="color:var(--muted);font-weight:400;">(incl. closets — confirm)</i>` : "";
+      items.push({ html:`Doors: <b>${s.doorCount||'?'}</b>${note}` });
+    }
   }
   else if(cat === "flooring"){
     items.push({ html:`Type: <b>${FLOORING_LABELS[s.type] || s.type || '?'}</b>` });
     items.push({ html:`Area: <b>${s.sqft||'?'} sqft</b>` });
     const q = flooringMaterialQty();
     if(q) items.push({ html:`Material to order: <b>${Math.ceil(q.qty).toLocaleString("en-CA")} sqft</b> (incl. ${q.pct}% waste)` });
-    if(s.removeOld){
+    {
       const rsq = num(s.removalSqft) || num(s.sqft);
-      items.push({ html:`Removal &amp; disposal: <b>${rsq||'?'} sqft</b>` });
+      items.push({ html:`Removal &amp; disposal: <b>${rsq||'?'} sqft</b> <i style="color:var(--muted);font-weight:400;">(included)</i>` });
     }
     if(s.baseboards){ items.push({ html:`New baseboards: <b>${(num(s.baseboardLinFt) || suggestedTrimLinFt()) || '?'} lin ft</b>` }); }
   }
@@ -3432,7 +3530,8 @@ function scopeItemsFor(cat){
       if(b.doubleVanity)       items.push({ sub:true, html:`+ Double vanity` });
       if(b.standUpShower){
         const t = (b.showerType||"convert") === "new" ? "new framing &amp; plumbing" : "convert from tub";
-        items.push({ sub:true, html:`+ Stand-up shower (${t})` });
+        const sw = (num(b.showerWidth)||5), sd = (num(b.showerDepth)||5);
+        items.push({ sub:true, html:`+ Stand-up shower (${t}) — ${sw}&prime;&times;${sd}&prime;` });
       }
     });
   }
@@ -3928,6 +4027,7 @@ function parseFloorPlanText(text){
 
   const out = {
     address: "",
+    streetName: "",        // street only, no house number — for property nickname
     propName: "",
     totalInteriorSqft: 0,
     totalExteriorSqft: 0,
@@ -3936,9 +4036,15 @@ function parseFloorPlanText(text){
     basementSqft: 0,
     bedroomCount: 0,
     bedrooms: [],          // [{name, sqft, floor}]
-    bathrooms: [],         // [{pieces, type, sqft, floor}]
+    bathrooms: [],         // [{pieces, type, sqft, floor, hasTub, hasShower}]
     kitchenSqft: 0,
     kitchenSize: "",
+    foyerSqft: 0,          // total foyer/entry sqft (typically tiled)  — ABOVE-GRADE only
+    foyerSqftBasement: 0,  // basement foyer sqft (added only if user opts to include basement)
+    breakfastSqft: 0,      // total breakfast area sqft (typically tiled)
+    breakfastSqftBasement: 0,
+    closetCount: 0,        // each closet ≈ one door — ABOVE-GRADE only
+    closetCountBasement: 0,
     rawTextLength: text.length
   };
 
@@ -3946,8 +4052,10 @@ function parseFloorPlanText(text){
   const addressMatch = norm.match(/\b(\d{1,6}\s+[A-Z][A-Za-z0-9' ]+?(?:\s+(?:St|Street|Ave|Avenue|Rd|Road|Blvd|Boulevard|Dr|Drive|Crt|Court|Ct|Cres|Crescent|Way|Lane|Ln|Pl|Place|Ter|Terrace|Trail|Trl|Hwy|Park|Pkwy|Gate|Gdns|Gardens|Mews|Cir|Circle|Sq|Square))?)\s*,\s*([A-Z][A-Za-z' \-]+?)\s*,\s*(ON|Ontario)\b/);
   if(addressMatch){
     out.address = `${addressMatch[1]}, ${addressMatch[2]}, ON`;
-    // Use just the street address part as the property nickname
-    out.propName = addressMatch[1].trim();
+    const street1 = addressMatch[1].trim();
+    // Strip leading house number → street name only, e.g. "12 Maple Ave" → "Maple Ave"
+    out.streetName = street1.replace(/^\d{1,6}\s+/, "").trim();
+    out.propName = out.streetName || street1;
   }
 
   // --- Total interior above-grade sqft (preferred) ---
@@ -4001,6 +4109,10 @@ function parseFloorPlanText(text){
   const bedroomRe  = /\b(Bedroom|Primary|Master\s*Bedroom|MasterBedroom)\s*:\s*\d+'\d*"?\s*x\s*\d+'\d*"?\s*\|\s*(\d+)\s*sq\s*ft/gi;
   const bathroomRe = /\b(\d)\s*pc\s*(Bath|Ensuite|Powder\s*Room|Powder)\s*:\s*\d+'\d*"?\s*x\s*\d+'\d*"?\s*\|\s*(\d+)\s*sq\s*ft/gi;
   const kitchenRe  = /\bKitchen\s*:\s*\d+'\d*"?\s*x\s*\d+'\d*"?\s*\|\s*(\d+)\s*sq\s*ft/gi;
+  // Foyer / entry / breakfast / closet matchers (sqft extraction)
+  const foyerRe     = /\b(Foyer|Entry|Entrance|Mudroom|Mud\s*Room|Vestibule)\s*:\s*\d+'\d*"?\s*x\s*\d+'\d*"?\s*\|\s*(\d+)\s*sq\s*ft/gi;
+  const breakfastRe = /\b(Breakfast|Dinette|Eating\s*Area|Breakfast\s*Area|Breakfast\s*Nook)\s*:\s*\d+'\d*"?\s*x\s*\d+'\d*"?\s*\|\s*(\d+)\s*sq\s*ft/gi;
+  const closetRe    = /\b(Closet|W\.?I\.?C\.?|Walk[\s-]?in\s*Closet|Linen\s*Closet|Linen|Pantry)\s*:\s*\d+'\d*"?\s*x\s*\d+'\d*"?\s*\|\s*(\d+)\s*sq\s*ft/gi;
 
   // Track room IDs to avoid double-counting (same room appears on multiple pages)
   const seenBedroom = new Set();
@@ -4025,7 +4137,38 @@ function parseFloorPlanText(text){
       const key    = seg.floor + "|" + pieces + "|" + type.toLowerCase() + "|" + sqft;
       if(seenBath.has(key)) continue;
       seenBath.add(key);
-      out.bathrooms.push({ pieces, type, sqft, floor: seg.floor });
+      // iGUIDE piece count → fixture inference:
+      //   2pc = toilet + vanity (no tub/shower)
+      //   3pc = toilet + vanity + ONE of (tub or shower). Default to tub.
+      //   4pc = toilet + vanity + tub + shower
+      //   5pc = 4pc + bidet — treat as 4 + double-vanity (handled later)
+      let hasTub = false, hasShower = false;
+      if(pieces === 3){ hasTub = true; }                      // assume tub for a 3pc
+      else if(pieces === 4 || pieces === 5){ hasTub = true; hasShower = true; }
+      out.bathrooms.push({ pieces, type, sqft, floor: seg.floor, hasTub, hasShower });
+    }
+    // Foyer / Entry sqft  (track per-floor so include-basement toggle can filter)
+    foyerRe.lastIndex = 0;
+    let fm2;
+    while((fm2 = foyerRe.exec(seg.text)) !== null){
+      const sqft = parseFloat(fm2[2]);
+      if(seg.floor === "basement") out.foyerSqftBasement += sqft;
+      else                          out.foyerSqft        += sqft;
+    }
+    // Breakfast / dinette sqft
+    breakfastRe.lastIndex = 0;
+    let bx;
+    while((bx = breakfastRe.exec(seg.text)) !== null){
+      const sqft = parseFloat(bx[2]);
+      if(seg.floor === "basement") out.breakfastSqftBasement += sqft;
+      else                          out.breakfastSqft        += sqft;
+    }
+    // Closets (one door per closet, plus pantry/linen)
+    closetRe.lastIndex = 0;
+    let cm;
+    while((cm = closetRe.exec(seg.text)) !== null){
+      if(seg.floor === "basement") out.closetCountBasement += 1;
+      else                          out.closetCount        += 1;
     }
   });
 
@@ -4049,7 +4192,10 @@ function parseFloorPlanText(text){
       const key    = pieces + "|" + type.toLowerCase() + "|" + sqft;
       if(seenBath.has(key)) continue;
       seenBath.add(key);
-      out.bathrooms.push({ pieces, type, sqft, floor: "" });
+      let hasTub = false, hasShower = false;
+      if(pieces === 3){ hasTub = true; }
+      else if(pieces === 4 || pieces === 5){ hasTub = true; hasShower = true; }
+      out.bathrooms.push({ pieces, type, sqft, floor: "", hasTub, hasShower });
     }
   }
 
@@ -4126,6 +4272,15 @@ function renderPdfDetectModal(){
     ? `Main kitchen detected at <b>${Math.round(d.kitchenSqft)} sqft</b> — auto-set to <b>${({small:"Small",medium:"Medium",large:"Large"})[d.kitchenSize]}</b> tier.`
     : `No kitchen detected. Toggle the Kitchen category manually if needed.`;
 
+  // Additional rooms used for tiling + door counts
+  const includeFoyer     = (d.foyerSqft     || 0) + (pdfIncludeBasement ? (d.foyerSqftBasement     || 0) : 0);
+  const includeBreakfast = (d.breakfastSqft || 0) + (pdfIncludeBasement ? (d.breakfastSqftBasement || 0) : 0);
+  const includeClosets   = (d.closetCount   || 0) + (pdfIncludeBasement ? (d.closetCountBasement   || 0) : 0);
+  const otherRoomsLine =
+    (includeFoyer     ? `Foyer/entry: <b>${Math.round(includeFoyer)} sqft</b> &middot; ` : "") +
+    (includeBreakfast ? `Breakfast: <b>${Math.round(includeBreakfast)} sqft</b> &middot; ` : "") +
+    (includeClosets   ? `Closets: <b>${includeClosets}</b>` : "");
+
   // Basement toggle row — only shown if a basement was actually detected
   const basementToggle = hasBasement ? `
     <div class="disc-toggle-row" style="margin-bottom:14px;">
@@ -4177,7 +4332,19 @@ function renderPdfDetectModal(){
       ${kitchenLine}
     </div>
 
-    <p class="footnote">Categories (paint type, flooring material, kitchen tier, add-ons) are <b>not</b> set automatically — you choose those after import.</p>
+    ${otherRoomsLine ? `
+    <div class="pdf-status">
+      <div class="ps-title">Other rooms detected</div>
+      ${otherRoomsLine}
+    </div>` : ""}
+
+    <p class="footnote">
+      <b style="color:var(--gold-bright)">All 6 categories will be enabled by default</b> with smart defaults:
+      whole-property painting (incl. trim &amp; doors), flooring (excluding kitchen &amp; baths),
+      tiling for foyer + kitchen + breakfast, quartz countertops + backsplash + under-cab lighting,
+      bathroom floor &amp; wall tile, plus pot lights everywhere except bedrooms.
+      You can adjust or disable any category after import.
+    </p>
   `);
 
   document.getElementById("pdfApplyBtn").disabled = false;
@@ -4187,46 +4354,136 @@ function applyPdfImport(){
   if(!pdfDetected) return;
   const d = pdfDetected;
   // Read user-adjusted values from the form
-  const propName = (document.getElementById("pdfPropName").value || "").trim();
-  const address  = (document.getElementById("pdfAddress").value || "").trim();
-  const sqft     = (document.getElementById("pdfSqft").value || "").trim();
+  const propNameForm = (document.getElementById("pdfPropName").value || "").trim();
+  const addressForm  = (document.getElementById("pdfAddress").value || "").trim();
+  const sqftForm     = (document.getElementById("pdfSqft").value || "").trim();
 
-  if(!confirm("Apply detected data? Your current estimate will be replaced with a new one filled in from this PDF.")) return;
+  if(!confirm("Apply detected data? Your current estimate will be replaced with a new one filled in from this PDF, with all categories enabled.")) return;
 
-  // Start fresh
+  // ---- Start fresh ----
   state = freshState();
 
-  state.propName = propName || (address ? address.split(",")[0] : "");
-  state.propAddress = address;
-  state.propSqft = sqft;
+  // Property nickname: street only (no house number)
+  state.propName = propNameForm || d.streetName || (addressForm ? addressForm.split(",")[0] : "");
+  // sqft as shown in form (basement-toggle aware)
+  state.propSqft = sqftForm;
 
-  // Pre-load bathrooms — respect the include-basement toggle
-  const bathroomsToImport = pdfIncludeBasement
-    ? d.bathrooms
-    : d.bathrooms.filter(b => b.floor !== "basement");
+  // Route the address through the autocomplete lookup field (not just a raw copy):
+  // - set the input value
+  // - fire onAddressInput so the GTA autocomplete suggestions populate
+  // - the user can then click a suggestion to lock in the verified address
+  state.propAddress = addressForm;
 
+  // ---- Filter rooms by basement toggle ----
+  const bathroomsToImport = pdfIncludeBasement ? d.bathrooms : d.bathrooms.filter(b => b.floor !== "basement");
+  const bedroomsToImport  = pdfIncludeBasement ? d.bedrooms  : d.bedrooms.filter(b => b.floor !== "basement");
+  const includeFoyer      = (d.foyerSqft     || 0) + (pdfIncludeBasement ? (d.foyerSqftBasement     || 0) : 0);
+  const includeBreakfast  = (d.breakfastSqft || 0) + (pdfIncludeBasement ? (d.breakfastSqftBasement || 0) : 0);
+  const includeClosets    = (d.closetCount   || 0) + (pdfIncludeBasement ? (d.closetCountBasement   || 0) : 0);
+  const propertySqft      = num(sqftForm) || 0;
+
+  // Sum bathroom floor sqft (used to exclude from flooring sqft)
+  const bathroomTotalSqft = bathroomsToImport.reduce((sum,b) => sum + (num(b.sqft) || 0), 0);
+  const bedroomTotalSqft  = bedroomsToImport.reduce((sum,b)  => sum + (num(b.sqft) || 0), 0);
+  const kitchenSqft       = num(d.kitchenSqft) || 0;
+
+  // ---- Enable EVERY category by default ----
+  state.enabled.painting  = true;
+  state.enabled.flooring  = true;
+  state.enabled.tiling    = true;
+  state.enabled.kitchen   = true;
+  state.enabled.bathroom  = true;
+  state.enabled.potlights = true;
+
+  // ---- Painting auto-population ----
+  // Walls: default 1 coat, whole property — keep as-is.
+  // Auto-select baseboards & trim painting (linear feet will auto-compute from property sqft).
+  state.painting.trim = true;
+  // Doors: count = bedrooms + bathrooms + closets + 1 entry door
+  const doorCount = bedroomsToImport.length + bathroomsToImport.length + includeClosets + 1;
+  state.painting.doors = true;
+  state.painting.doorCount = String(doorCount);
+  state.painting.doorsAutoFromPdf = true;
+
+  // ---- Flooring auto-population ----
+  // Sqft of finished flooring = total property sqft − kitchen − bathrooms
+  // (the user explicitly said do NOT subtract foyer/breakfast)
+  const flooringSqft = Math.max(0, Math.round(propertySqft - kitchenSqft - bathroomTotalSqft));
+  state.flooring.sqft = flooringSqft ? String(flooringSqft) : "";
+  state.flooring.baseboards = true;
+  // removeOld is already true by default in freshState() — disposal is included as standard.
+
+  // ---- Tiling auto-population ----
+  // Tile sqft = foyer + kitchen + breakfast (non-bathroom tile)
+  const tilingSqft = Math.round(includeFoyer + kitchenSqft + includeBreakfast);
+  state.tiling.sqft = tilingSqft ? String(tilingSqft) : "";
+
+  // ---- Kitchen auto-population ----
+  state.kitchen.size              = d.kitchenSize || "medium";
+  state.kitchen.counter           = true;
+  state.kitchen.undercabLighting  = true;
+  state.kitchen.backsplash        = true;
+  state.kitchen.backsplashType    = "quartz";  // same material as countertop
+
+  // ---- Bathroom auto-population ----
   if(bathroomsToImport.length){
-    state.enabled.bathroom = true;
     state.bathroom.rooms = bathroomsToImport.map(b => {
       const room = defaultBath();
-      if(b.pieces === 2) room.pieces = "2";
-      else if(b.pieces === 3) room.pieces = "3";
-      else if(b.pieces === 4) room.pieces = "4";
+      // Map pieces from iGUIDE → our schema
+      if(b.pieces === 2){ room.pieces = "2"; }
+      else if(b.pieces === 3){
+        // Default 3pc = with tub. (iGUIDE doesn't distinguish 3pc-tub vs 3pc-shower in the room label.)
+        room.pieces = b.hasShower && !b.hasTub ? "3s" : "3";
+      }
+      else if(b.pieces === 4){ room.pieces = "4"; }
       else if(b.pieces === 5){ room.pieces = "4"; room.doubleVanity = true; }
-      else room.pieces = "2";
+      else { room.pieces = "2"; }
+
+      // Floor tile sqft = the bathroom's footprint from the PDF
+      room.floorTileSqft = b.sqft ? String(Math.round(b.sqft)) : "";
+
+      // Stand-up shower follows the piece count:
+      //   - "3s" means it's a stand-up shower (no tub)
+      //   - "4"  means it has both a tub AND a stand-up shower
+      //   - "2"/"3" no separate shower
+      if(room.pieces === "3s" || room.pieces === "4"){
+        room.standUpShower = true;
+        room.showerType    = "new";   // assume new (room had a shower in original layout)
+        // showerWidth/Depth/Height = defaults (5×5×8) from defaultBath()
+      }
+
+      // Wall tile sqft from tub surround (88) + shower surround (120 by default)
+      room.wallTileSqft = String(autoBathWallTileSqft(room));
       return room;
     });
   }
 
-  // Pre-set kitchen size if detected (but don't auto-toggle the category — user picks tier first)
-  if(d.kitchenSize){
-    state.kitchen.size = d.kitchenSize;
-  }
+  // ---- Potlights auto-calc (exclude bedrooms) ----
+  // Potlight count = ceiling area outside bedrooms ÷ 25 sqft per light (industry standard).
+  // For bathrooms we still want pots, so this includes them.
+  const potlightArea = Math.max(0, propertySqft - bedroomTotalSqft);
+  const potlightCount = Math.round(potlightArea / 25);
+  state.potlights.tier  = "standard";
+  state.potlights.count = potlightCount ? String(potlightCount) : "";
 
+  // ---- Close modal and render ----
   closePdfImport();
   renderAll();
+
+  // After renderAll(), set the address in the lookup field and trigger autocomplete suggestions
+  // so the user can click a verified GTA address rather than just trusting the raw PDF text.
+  setTimeout(() => {
+    const addrEl = document.getElementById("propAddress");
+    if(addrEl && addressForm){
+      addrEl.value = addressForm;
+      onAddressInput(addressForm);   // triggers the Nominatim lookup
+      addrEl.focus();
+      addrEl.setSelectionRange(addressForm.length, addressForm.length);
+    }
+  }, 50);
+
   const basementNote = pdfIncludeBasement ? " (incl. basement)" : (d.basementSqft ? " (basement excluded)" : "");
-  flash && flash("Loaded from floor plan PDF — " + bathroomsToImport.length + " bathroom" + (bathroomsToImport.length===1?"":"s") + " pre-filled" + basementNote);
+  flash && flash("Imported: " + bathroomsToImport.length + " bathroom" + (bathroomsToImport.length===1?"":"s") + ", " + doorCount + " doors, " + (potlightCount||0) + " pot lights" + basementNote);
 }
 </script>
 
