@@ -4464,8 +4464,9 @@ async function extractPdfText(arrayBuffer){
 }
 
 function parseFloorPlanText(text){
-  // Normalize: collapse extra whitespace but keep newlines
-  const norm = text.replace(/[ \t]+/g, " ");
+  // Normalize: collapse extra whitespace but keep newlines.
+  // Also normalize Unicode "Number-no-break-space" and similar to regular spaces.
+  const norm = text.replace(/[   ]/g, " ").replace(/[ \t]+/g, " ");
 
   const out = {
     address: "",
@@ -4475,6 +4476,7 @@ function parseFloorPlanText(text){
     totalExteriorSqft: 0,
     mainFloorSqft: 0,
     secondFloorSqft: 0,
+    thirdFloorSqft: 0,     // some iGUIDE PDFs report a 3rd floor / upper level
     basementSqft: 0,
     bedroomCount: 0,
     bedrooms: [],          // [{name, sqft, floor}]
@@ -4493,79 +4495,189 @@ function parseFloorPlanText(text){
     closetCountBasement: 0,
     // Additional "doored" room counts for door-count heuristic
     utilityRoomCount: 0, utilityRoomCountBasement: 0,
-    rawTextLength: text.length
+    rawTextLength: text.length,
+    // Diagnostics — what the parser actually matched, useful for debugging new
+    // iGUIDE templates. Surfaced in the import modal under a "details" disclosure.
+    diagnostics: { totalSource: "", floorSource: "", roomSource: "", warnings: [] }
   };
 
-  // --- Address: first plausible "<num> <street>, <city>, ON" line near the top ---
+  // ---------------------------------------------------------------------------
+  // Cross-version pattern primitives
+  // ---------------------------------------------------------------------------
+  // Unit suffix — accepts: "sq ft", "sqft", "sq. ft.", "ft²", "ft2", "square feet", "SF"
+  const SQFT = `(?:sq\\.?\\s*ft\\.?|sqft|ft\\.?\\s*[²2]|square\\s+feet|SF)`;
+  // A numeric area value with optional comma thousands & decimals: 1,234.56 / 850
+  const NUM  = `([\\d,]+(?:\\.\\d+)?)`;
+  // Dimension token: `12'0"` or `12'` or `12'4` — feet/inches imperial
+  const DIM  = `\\d+'\\s*\\d*\\s*"?`;
+  // Separator between dimensions & sqft: `|` is iGUIDE default, but allow `,` `-` or just whitespace
+  const SEP  = `(?:\\s*[\\|,\\u2013\\u2014\\-]\\s*|\\s+)`;
+  // Floor label patterns — flexible across iGUIDE versions & wording
+  const FLOOR_LABEL_PAT = `(Main\\s*Floor|First\\s*Floor|1st\\s*Floor|Ground\\s*Floor|Ground\\s*Level|2nd\\s*Floor|Second\\s*Floor|Upper\\s*Floor|Upper\\s*Level|3rd\\s*Floor|Third\\s*Floor|4th\\s*Floor|Fourth\\s*Floor|Basement(?:\\s*\\([^)]*\\))?|Lower\\s*Level|Lower\\s*Floor|Cellar|Sub[\\s-]?Basement)`;
+
+  /* normalize a detected floor label to a canonical key:
+     "main" | "2nd" | "3rd" | "basement"
+     Returns null for unrecognized labels (e.g. "Garage"). */
+  function normalizeFloor(label){
+    const lo = (label || "").toLowerCase().replace(/[\s ]+/g, "");
+    if(lo.startsWith("main") || lo.startsWith("ground") || lo.startsWith("first") || lo.startsWith("1st")) return "main";
+    if(lo.startsWith("2nd") || lo.startsWith("second") || lo.startsWith("upper")) return "2nd";
+    if(lo.startsWith("3rd") || lo.startsWith("third") || lo.startsWith("4th") || lo.startsWith("fourth")) return "3rd";
+    if(lo.startsWith("basement") || lo.startsWith("lower") || lo.startsWith("cellar") || lo.startsWith("sub")) return "basement";
+    return null;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Address (Ontario-anchored; flexible street suffix list)
+  // ---------------------------------------------------------------------------
   const addressMatch = norm.match(/\b(\d{1,6}\s+[A-Z][A-Za-z0-9' ]+?(?:\s+(?:St|Street|Ave|Avenue|Rd|Road|Blvd|Boulevard|Dr|Drive|Crt|Court|Ct|Cres|Crescent|Way|Lane|Ln|Pl|Place|Ter|Terrace|Trail|Trl|Hwy|Park|Pkwy|Gate|Gdns|Gardens|Mews|Cir|Circle|Sq|Square))?)\s*,\s*([A-Z][A-Za-z' \-]+?)\s*,\s*(ON|Ontario)\b/);
   if(addressMatch){
     out.address = `${addressMatch[1]}, ${addressMatch[2]}, ON`;
     const street1 = addressMatch[1].trim();
-    // Strip leading house number → street name only, e.g. "12 Maple Ave" → "Maple Ave"
     out.streetName = street1.replace(/^\d{1,6}\s+/, "").trim();
     out.propName = out.streetName || street1;
   }
 
-  // --- Total interior above-grade sqft (preferred) ---
-  // Pattern variations seen in iGUIDE: "Total Above Grade Floor Area ... Interior Area: 2856.10 sqft"
-  let m = norm.match(/Total\s*Above\s*Grade\s*Floor\s*Area[\s\S]{0,120}?Interior\s*Area\s*:?\s*([\d,]+(?:\.\d+)?)\s*sq\s*ft/i);
-  if(m) out.totalInteriorSqft = parseFloat(m[1].replace(/,/g,""));
+  // ---------------------------------------------------------------------------
+  // Total above-grade sqft — try a series of patterns in priority order
+  // ---------------------------------------------------------------------------
+  // Each pattern is labelled so diagnostics can report which version matched.
+  const totalPatterns = [
+    // ANSI Z765-2021 (newer iGUIDE)
+    { src: "ANSI: Above Grade Finished Area",
+      re:  new RegExp(`Above\\s*Grade\\s*Finished\\s*Area\\s*:?\\s*${NUM}\\s*${SQFT}`, "i") },
+    // RECA RMS (older iGUIDE)
+    { src: "RECA: Total Above Grade Floor Area, Interior Area",
+      re:  new RegExp(`Total\\s*Above\\s*Grade\\s*Floor\\s*Area[\\s\\S]{0,150}?Interior\\s*Area\\s*:?\\s*${NUM}\\s*${SQFT}`, "i") },
+    // Generic "Total Interior Area" anywhere
+    { src: "Total Interior Area",
+      re:  new RegExp(`Total\\s*Interior\\s*Area\\s*:?\\s*${NUM}\\s*${SQFT}`, "i") },
+    // Generic "Total Finished Area"
+    { src: "Total Finished Area",
+      re:  new RegExp(`Total\\s*Finished\\s*Area\\s*:?\\s*${NUM}\\s*${SQFT}`, "i") },
+    // "Main Building: Above Grade Finished Area: X sq ft" (header banner on page 1)
+    { src: "Main Building banner",
+      re:  new RegExp(`Main\\s*Building[\\s\\S]{0,80}?Above\\s*Grade\\s*Finished\\s*Area\\s*:?\\s*${NUM}\\s*${SQFT}`, "i") },
+    // ANSI Z765-2021 alternative wording
+    { src: "ANSI: Above Grade Living Area",
+      re:  new RegExp(`Above\\s*Grade\\s*Living\\s*Area\\s*:?\\s*${NUM}\\s*${SQFT}`, "i") }
+  ];
+  for(const tp of totalPatterns){
+    const mm = norm.match(tp.re);
+    if(mm){
+      out.totalInteriorSqft = parseFloat(mm[1].replace(/,/g,""));
+      out.diagnostics.totalSource = tp.src;
+      break;
+    }
+  }
 
   // Total above-grade exterior (some PDFs only have this, used as fallback)
-  m = norm.match(/Total\s*Exterior\s*Area\s*Above\s*Grade\s*([\d,]+(?:\.\d+)?)\s*sq\s*ft/i)
-   || norm.match(/Total\s*Above\s*Grade[\s\S]{0,40}?Exterior\s*Area\s*:?\s*([\d,]+(?:\.\d+)?)\s*sq\s*ft/i);
+  let m = norm.match(new RegExp(`Total\\s*Exterior\\s*Area\\s*Above\\s*Grade\\s*${NUM}\\s*${SQFT}`, "i"))
+       || norm.match(new RegExp(`Total\\s*Above\\s*Grade[\\s\\S]{0,40}?Exterior\\s*Area\\s*:?\\s*${NUM}\\s*${SQFT}`, "i"));
   if(m) out.totalExteriorSqft = parseFloat(m[1].replace(/,/g,""));
 
-  // Per-floor interior — handy if Total wasn't matched
-  const floorAreaPattern = /(Main\s*Floor|2nd\s*Floor|Second\s*Floor|Basement(?:\s*\([^)]*\))?)\s*[\s\S]{0,80}?Interior\s*Area\s*:?\s*([\d,]+(?:\.\d+)?)\s*sq\s*ft/gi;
+  // ---------------------------------------------------------------------------
+  // Per-floor sqft — flexible. Matches:
+  //   "Main Floor … (Interior|Finished|Floor)? Area: X sq ft"
+  //   "First Floor", "Ground Level", "Upper Level", "3rd Floor", "Lower Level", etc.
+  // FIRST-WIN per floor — labels appear multiple times in iGUIDE PDFs.
+  // ---------------------------------------------------------------------------
+  const floorAreaPattern = new RegExp(
+    FLOOR_LABEL_PAT + `\\s*[\\s\\S]{0,120}?(?:Interior|Finished|Floor)?\\s*Area\\s*:?\\s*` + NUM + `\\s*` + SQFT,
+    "gi"
+  );
   let fm;
+  let floorMatchCount = 0;
   while((fm = floorAreaPattern.exec(norm)) !== null){
-    const label = fm[1].toLowerCase();
+    const floor = normalizeFloor(fm[1]);
+    if(!floor) continue;
     const sqft = parseFloat(fm[2].replace(/,/g,""));
-    if(label.startsWith("main")) out.mainFloorSqft = sqft;
-    else if(label.includes("2") || label.includes("second")) out.secondFloorSqft = sqft;
-    else if(label.startsWith("basement")) out.basementSqft = sqft;
+    if(!isFinite(sqft) || sqft <= 0) continue;
+    floorMatchCount++;
+    if(floor === "main"     && !out.mainFloorSqft)   out.mainFloorSqft   = sqft;
+    if(floor === "2nd"      && !out.secondFloorSqft) out.secondFloorSqft = sqft;
+    if(floor === "3rd"      && !out.thirdFloorSqft)  out.thirdFloorSqft  = sqft;
+    if(floor === "basement" && !out.basementSqft)    out.basementSqft    = sqft;
   }
+  if(floorMatchCount > 0) out.diagnostics.floorSource = floorMatchCount + " per-floor matches";
+
+  // Fallback: if total still 0, derive from sum of above-grade floors.
   if(!out.totalInteriorSqft){
-    out.totalInteriorSqft = out.mainFloorSqft + out.secondFloorSqft;
+    out.totalInteriorSqft = (out.mainFloorSqft || 0) + (out.secondFloorSqft || 0) + (out.thirdFloorSqft || 0);
+    if(out.totalInteriorSqft > 0) out.diagnostics.totalSource = "summed from per-floor matches";
   }
 
-  // --- Walk rooms section-by-section, tracking current floor ---
-  // iGUIDE Property Details page has headers MAINFLOOR / 2NDFLOOR / BASEMENT
-  // We split text on those markers and parse rooms in each chunk.
-  const sectionRegex = /\b(MAIN\s*FLOOR|2\s*ND\s*FLOOR|SECOND\s*FLOOR|BASEMENT(?:\s*\([^)]*\))?)\b/gi;
-  // Find all section header positions
-  const headers = [];
-  let hm;
-  while((hm = sectionRegex.exec(norm)) !== null){
-    let label = hm[1].toLowerCase().replace(/\s+/g,"");
-    let floor;
-    if(label.startsWith("main")) floor = "main";
-    else if(label.startsWith("2nd") || label.startsWith("second")) floor = "2nd";
-    else if(label.startsWith("basement")) floor = "basement";
-    if(floor) headers.push({ floor, idx: hm.index });
+  // Sanity check: if total is set AND sum of detected floors disagrees by >20%, warn.
+  // (Could indicate a parsing miss on one floor.)
+  const sumAbove = (out.mainFloorSqft || 0) + (out.secondFloorSqft || 0) + (out.thirdFloorSqft || 0);
+  if(out.totalInteriorSqft > 0 && sumAbove > 0 && Math.abs(sumAbove - out.totalInteriorSqft) / out.totalInteriorSqft > 0.20){
+    out.diagnostics.warnings.push(`Total above-grade (${out.totalInteriorSqft} sqft) doesn't match sum of detected floors (${sumAbove} sqft) within 20%.`);
   }
-  // Build segments
+
+  // ---------------------------------------------------------------------------
+  // Scope room-walking to the cleaner "Property Details" / "Room Measurements"
+  // section if present. Multiple aliases supported.
+  // ---------------------------------------------------------------------------
+  const propDetailsMatch = norm.match(/(Property\s*Details|Room\s*Measurements|Room\s*Information|Floor\s*Plan\s*Details|Room\s*Schedule)/i);
+  const roomScopeText = propDetailsMatch ? norm.slice(propDetailsMatch.index) : norm;
+  const roomScopeOffset = propDetailsMatch ? propDetailsMatch.index : 0;
+  if(propDetailsMatch) out.diagnostics.roomSource = "Property Details section";
+  else                 out.diagnostics.roomSource = "whole-document fallback";
+
+  // ---------------------------------------------------------------------------
+  // Section header detection within the room-scope text. Uses the broad
+  // FLOOR_LABEL_PAT (matches Main/First/Ground/2nd/Second/Upper/3rd/Third/
+  // Basement/Lower/Cellar). Filters out column-2 (Floor Area Information)
+  // headers that appear inline with room rows.
+  // ---------------------------------------------------------------------------
+  const sectionRegex = new RegExp(FLOOR_LABEL_PAT, "gi");
+  const rawHeaders = [];
+  let hm;
+  while((hm = sectionRegex.exec(roomScopeText)) !== null){
+    const floor = normalizeFloor(hm[1]);
+    if(floor) rawHeaders.push({ floor, idx: hm.index, label: hm[1] });
+  }
+  // Filter out column-2 noise: headers preceded on the same line by a previous
+  // room's "X sq ft", or by another duplicate label.
+  const headers = rawHeaders.filter(h => {
+    const before = roomScopeText.slice(Math.max(0, h.idx - 30), h.idx);
+    const lastNl = before.lastIndexOf("\n");
+    const lineFragment = lastNl >= 0 ? before.slice(lastNl) : before;
+    if(new RegExp(`\\d+\\s*${SQFT}\\s*$`, "i").test(lineFragment)) return false;
+    if(new RegExp(FLOOR_LABEL_PAT + "\\s*$", "i").test(lineFragment)) return false;
+    return true;
+  });
+  // Build segments — sliced from the room-scope text so we don't accidentally
+  // pull rooms from one floor into another via duplicate headers.
   const segments = [];
   for(let i=0; i<headers.length; i++){
     const start = headers[i].idx;
-    const end   = (i+1 < headers.length) ? headers[i+1].idx : norm.length;
-    segments.push({ floor: headers[i].floor, text: norm.slice(start, end) });
+    const end   = (i+1 < headers.length) ? headers[i+1].idx : roomScopeText.length;
+    segments.push({ floor: headers[i].floor, text: roomScopeText.slice(start, end) });
   }
 
-  // Bedroom & bathroom matchers
-  const bedroomRe  = /\b(Bedroom|Primary|Master\s*Bedroom|MasterBedroom)\s*:\s*\d+'\d*"?\s*x\s*\d+'\d*"?\s*\|\s*(\d+)\s*sq\s*ft/gi;
-  const bathroomRe = /\b(\d)\s*pc\s*(Bath|Ensuite|Powder\s*Room|Powder)\s*:\s*\d+'\d*"?\s*x\s*\d+'\d*"?\s*\|\s*(\d+)\s*sq\s*ft/gi;
-  const kitchenRe  = /\bKitchen\s*:\s*\d+'\d*"?\s*x\s*\d+'\d*"?\s*\|\s*(\d+)\s*sq\s*ft/gi;
-  // Foyer / entry / breakfast / closet matchers (sqft extraction)
-  const foyerRe     = /\b(Foyer|Entry|Entrance|Mudroom|Mud\s*Room|Vestibule)\s*:\s*\d+'\d*"?\s*x\s*\d+'\d*"?\s*\|\s*(\d+)\s*sq\s*ft/gi;
-  const breakfastRe = /\b(Breakfast|Dinette|Eating\s*Area|Breakfast\s*Area|Breakfast\s*Nook)\s*:\s*\d+'\d*"?\s*x\s*\d+'\d*"?\s*\|\s*(\d+)\s*sq\s*ft/gi;
-  const laundryRe   = /\b(Laundry|Laundry\s*Room)\s*:\s*\d+'\d*"?\s*x\s*\d+'\d*"?\s*\|\s*(\d+)\s*sq\s*ft/gi;
-  const closetRe    = /\b(Closet|W\.?I\.?C\.?|Walk[\s-]?in\s*Closet|Linen\s*Closet|Linen|Pantry)\s*:\s*\d+'\d*"?\s*x\s*\d+'\d*"?\s*\|\s*(\d+)\s*sq\s*ft/gi;
+  // Room matchers — built from the cross-version primitives:
+  //   • DIM   = imperial dimension (allows feet/inches with or without quotes)
+  //   • SEP   = flexible separator (|, comma, dash, or just whitespace)
+  //   • SQFT  = sq ft / sqft / sq.ft. / ft² / ft2 / square feet / SF
+  // Each room regex captures: 1=name (or piece count for baths), 2=sqft (or for
+  //   bathrooms 1=pieces, 2=type, 3=sqft).
+  // Room name token allowed to include a colon OR an em-dash before dimensions
+  // — some iGUIDE templates skip the colon. We match either with `[:\\s]`.
+  const ROOM_SEP_BEFORE_DIM = `[:\\s\\-–—]+`;
+  const roomTail            = `${ROOM_SEP_BEFORE_DIM}${DIM}\\s*[xX×]\\s*${DIM}${SEP}(\\d+(?:\\.\\d+)?)\\s*${SQFT}`;
+
+  const bedroomRe  = new RegExp(`\\b(Bedroom|Primary|Master\\s*Bedroom|MasterBedroom|Bdrm)${roomTail}`, "gi");
+  const bathroomRe = new RegExp(`\\b(\\d)\\s*pc\\.?\\s*(Bath(?:room)?|Ensuite|Powder\\s*Room|Powder|WR)${roomTail}`, "gi");
+  const kitchenRe  = new RegExp(`\\bKitchen${roomTail}`, "gi");
+  const foyerRe    = new RegExp(`\\b(Foyer|Entry|Entrance|Mudroom|Mud\\s*Room|Vestibule)${roomTail}`, "gi");
+  const breakfastRe= new RegExp(`\\b(Breakfast|Dinette|Eating\\s*Area|Breakfast\\s*Area|Breakfast\\s*Nook)${roomTail}`, "gi");
+  const laundryRe  = new RegExp(`\\b(Laundry|Laundry\\s*Room)${roomTail}`, "gi");
+  const closetRe   = new RegExp(`\\b(Closet|W\\.?I\\.?C\\.?|Walk[\\s-]?in\\s*Closet|Linen\\s*Closet|Linen|Pantry)${roomTail}`, "gi");
   // "Doored" utility rooms that aren't bedrooms/baths but get a swing door.
   // NOTE: Pantry is intentionally NOT here — already counted by closetRe.
   //       Mudroom is here AND in foyerRe (mudrooms get tiled like foyers).
-  const utilityRe   = /\b(Laundry|Laundry\s*Room|Mudroom|Mud\s*Room|Utility|Utility\s*Room|Mechanical|Mechanical\s*Room|Storage|Storage\s*Room|Office|Den|Study|Library|Workshop|Cold\s*Cellar|Cold\s*Room|Sauna|Workout\s*Room|Gym|Furnace\s*Room|Boot\s*Room|Garage)\s*:\s*\d+'\d*"?\s*x\s*\d+'\d*"?\s*\|\s*(\d+)\s*sq\s*ft/gi;
+  const utilityRe  = new RegExp(`\\b(Laundry|Laundry\\s*Room|Mudroom|Mud\\s*Room|Utility|Utility\\s*Room|Mechanical|Mechanical\\s*Room|Storage|Storage\\s*Room|Office|Den|Study|Library|Workshop|Cold\\s*Cellar|Cold\\s*Room|Sauna|Workout\\s*Room|Gym|Furnace\\s*Room|Boot\\s*Room|Garage)${roomTail}`, "gi");
 
   // Track room IDs to avoid double-counting (same room appears on multiple pages)
   const seenBedroom = new Set();
@@ -4864,6 +4976,18 @@ function renderPdfDetectModal(){
       bathroom floor &amp; wall tile, plus pot lights everywhere except bedrooms.
       You can adjust or disable any category after import.
     </p>
+
+    ${(d.diagnostics && (d.diagnostics.totalSource || d.diagnostics.warnings.length)) ? `
+      <details class="pdf-diagnostics">
+        <summary class="footnote" style="cursor:pointer;color:var(--gold-bright);">Parser diagnostics (click to expand)</summary>
+        <div class="footnote" style="margin-top:6px;line-height:1.6;">
+          ${d.diagnostics.totalSource ? `<div>Total sqft source: <b>${escapeHtml(d.diagnostics.totalSource)}</b></div>` : ""}
+          ${d.diagnostics.floorSource ? `<div>Per-floor sqft: <b>${escapeHtml(d.diagnostics.floorSource)}</b></div>` : ""}
+          ${d.diagnostics.roomSource ? `<div>Rooms parsed from: <b>${escapeHtml(d.diagnostics.roomSource)}</b></div>` : ""}
+          ${d.diagnostics.warnings.length ? `<div style="color:var(--danger);margin-top:6px;"><b>Warnings:</b><ul style="margin:4px 0 0 18px;">${d.diagnostics.warnings.map(w => `<li>${escapeHtml(w)}</li>`).join("")}</ul></div>` : ""}
+        </div>
+      </details>
+    ` : ""}
   `);
 
   document.getElementById("pdfApplyBtn").disabled = false;
