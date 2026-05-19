@@ -1311,6 +1311,18 @@ const DEFAULT_PRICES = {
     newTub:        { labour: 1500, material: 1800 },
     doubleVanity:  { labour: 900,  material: 1800 },   // upgrade single -> double vanity
     standUpShower: {
+      // GTA 2026 rates per stand-up shower scenario (single bathroom):
+      //   refresh — existing shower stays in place. Reuse plumbing rough-in + framing/curb.
+      //             Demo old tile + waterproofing, install new waterproof membrane,
+      //             new tile, new fixtures (valve trim, head, drain cover), new glass
+      //             enclosure. ~$4–5k all-in.
+      //   convert — bathroom currently has a TUB. Remove tub, frame curb & sloped pan,
+      //             reuse existing tub plumbing, then waterproof + tile + fixtures + glass.
+      //             ~$5.5–7k all-in.
+      //   new     — bathroom has no shower today. Build the whole stall from scratch:
+      //             new framing, new plumbing rough-in, drain, waterproof, tile, fixtures,
+      //             glass enclosure. ~$9–11k all-in.
+      refresh: { labour: 1800, material: 2700 },       // ~$4.5k all-in: re-tile + new fixtures + new glass
       convert: { labour: 2500, material: 3500 },       // ~$6k all-in: existing tub plumbing reused
       new:     { labour: 4500, material: 5500 }        // ~$10k all-in: new framing + plumbing rough-in
     }
@@ -1437,6 +1449,10 @@ function migrateFlatShowerPrice(p){
   if(p && p.bathroom && p.bathroom.standUpShower && typeof p.bathroom.standUpShower.labour === "number"){
     const old = p.bathroom.standUpShower;
     p.bathroom.standUpShower = { convert: { labour: old.labour, material: old.material } };
+  }
+  // Backfill the "refresh" tier on older saves that only have convert + new
+  if(p && p.bathroom && p.bathroom.standUpShower && !p.bathroom.standUpShower.refresh){
+    p.bathroom.standUpShower.refresh = { labour: 1800, material: 2700 };
   }
   // Potlights: legacy { standard, premium } → { replace, new }. Drop the old keys.
   if(p && p.potlights){
@@ -2419,7 +2435,8 @@ function renderBathrooms(){
         ${b.standUpShower ? `
           <div style="margin-left:25px;margin-top:-2px;">
             <select onchange="state.bathroom.rooms[${i}].showerType=this.value;renderTotals()">
-              <option value="convert" ${(b.showerType||'convert')==='convert'?'selected':''}>Convert existing tub into stand-up shower (uses existing plumbing)</option>
+              <option value="refresh" ${(b.showerType||'convert')==='refresh'?'selected':''}>Refresh existing stand-up shower (reuse plumbing &amp; structure &mdash; re-tile, new fixtures &amp; glass)</option>
+              <option value="convert" ${(b.showerType||'convert')==='convert'?'selected':''}>Convert existing tub into stand-up shower (reuses tub plumbing)</option>
               <option value="new"     ${b.showerType==='new'?'selected':''}>Add new stand-up shower (new framing &amp; plumbing rough-in)</option>
             </select>
             <div class="shower-size-row">
@@ -2791,9 +2808,14 @@ function renderPricingEditor(){
       <div>${priceInput("bathroom.doubleVanity.material", prices.bathroom.doubleVanity.material, 50)}</div>
     </div>`;
 
-  // Stand-up shower add-on (two pricing paths)
+  // Stand-up shower add-on (three pricing paths)
   html += `<div class="section-title">Stand-up shower add-on (per bathroom)</div>
     <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>
+    <div class="price-edit-row">
+      <div class="lbl">Refresh existing shower (re-tile + new fixtures + glass)</div>
+      <div>${priceInput("bathroom.standUpShower.refresh.labour", (prices.bathroom.standUpShower.refresh||{labour:1800}).labour, 50)}</div>
+      <div>${priceInput("bathroom.standUpShower.refresh.material", (prices.bathroom.standUpShower.refresh||{material:2700}).material, 50)}</div>
+    </div>
     <div class="price-edit-row">
       <div class="lbl">Convert existing tub &rarr; shower</div>
       <div>${priceInput("bathroom.standUpShower.convert.labour", prices.bathroom.standUpShower.convert.labour, 50)}</div>
@@ -2987,11 +3009,13 @@ function renderContractorSheet(){
       if(b.newTub) items.push({ sub:true, html:`New tub: <b>included</b> (replaces existing)` });
       if(b.doubleVanity) items.push({ sub:true, html:`Double vanity: <b>included</b> (upgrade from single, plumbed for two sinks)` });
       if(b.standUpShower){
-        const showerNote = (b.showerType||"convert") === "new"
-          ? "new framing &amp; plumbing rough-in"
-          : "convert existing tub, reuse plumbing";
+        const st = b.showerType || "convert";
+        const showerNote =
+          st === "new"     ? "new framing &amp; new plumbing rough-in" :
+          st === "refresh" ? "reuse existing plumbing &amp; structure, refresh only" :
+                             "convert existing tub, reuse tub plumbing";
         const sw = (num(b.showerWidth)||4), sd = (num(b.showerDepth)||3), sh = (num(b.showerHeight)||8);
-        items.push({ sub:true, html:`Stand-up shower: <b>included</b> &mdash; ${showerNote} (waterproofing, glass enclosure, fixtures). Size: <b>${sw}&prime; &times; ${sd}&prime; &times; ${sh}&prime; high</b>.` });
+        items.push({ sub:true, html:`Stand-up shower: <b>included</b> &mdash; ${showerNote} (waterproofing, new tile, new fixtures, new glass enclosure). Size: <b>${sw}&prime; &times; ${sd}&prime; &times; ${sh}&prime; high</b>.` });
       }
     });
     html += scopeSection("Bathrooms", items);
@@ -3397,9 +3421,14 @@ function renderContractorPricingEditor(){
       <div>${ctrPriceInput("bathroom.doubleVanity.labour", cp.bathroom.doubleVanity.labour, 50)}</div>
       <div>${ctrPriceInput("bathroom.doubleVanity.material", cp.bathroom.doubleVanity.material, 50)}</div>
     </div>`;
-  // Stand-up shower (two pricing paths)
+  // Stand-up shower (three pricing paths)
   html += `<div class="section-title">Stand-up shower add-on (per bathroom)</div>
     <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>
+    <div class="price-edit-row">
+      <div class="lbl">Refresh existing shower (re-tile + new fixtures + glass)</div>
+      <div>${ctrPriceInput("bathroom.standUpShower.refresh.labour", (cp.bathroom.standUpShower.refresh||{labour:1500}).labour, 50)}</div>
+      <div>${ctrPriceInput("bathroom.standUpShower.refresh.material", (cp.bathroom.standUpShower.refresh||{material:2200}).material, 50)}</div>
+    </div>
     <div class="price-edit-row">
       <div class="lbl">Convert existing tub &rarr; shower</div>
       <div>${ctrPriceInput("bathroom.standUpShower.convert.labour", cp.bathroom.standUpShower.convert.labour, 50)}</div>
@@ -3621,7 +3650,10 @@ function scopeItemsFor(cat){
       if(b.newTub)             items.push({ sub:true, html:`+ New tub` });
       if(b.doubleVanity)       items.push({ sub:true, html:`+ Double vanity` });
       if(b.standUpShower){
-        const t = (b.showerType||"convert") === "new" ? "new framing &amp; plumbing" : "convert from tub";
+        const st = b.showerType || "convert";
+        const t = st === "new"     ? "new framing &amp; plumbing" :
+                  st === "refresh" ? "refresh existing"           :
+                                     "convert from tub";
         const sw = (num(b.showerWidth)||4), sd = (num(b.showerDepth)||3);
         items.push({ sub:true, html:`+ Stand-up shower (${t}) — ${sw}&prime;&times;${sd}&prime;` });
       }
@@ -4585,8 +4617,11 @@ function applyPdfImport(){
       //   - "2"/"3" no separate shower
       if(room.pieces === "3s" || room.pieces === "4"){
         room.standUpShower = true;
-        room.showerType    = "new";   // assume new (room had a shower in original layout)
-        // showerWidth/Depth/Height = defaults (5×5×8) from defaultBath()
+        // The bathroom ALREADY has a shower per the PDF, so the cheapest realistic
+        // default is "refresh" — keep the existing stall + plumbing, redo tile,
+        // fixtures, and glass. User can switch to convert/new if they want a bigger job.
+        room.showerType    = "refresh";
+        // showerWidth/Depth/Height = defaults (4×3×8) from defaultBath()
       }
 
       // Wall tile sqft from tub surround (88) + shower surround (120 by default)
