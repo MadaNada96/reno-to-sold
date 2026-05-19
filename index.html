@@ -1256,7 +1256,11 @@ const DEFAULT_PRICES = {
     // Baseboards & trim — paint refresh per linear foot
     trim: { labour: 1.75, material: 0.50 },         // $/lin ft
     // Doors — paint per interior door
-    door: { labour: 65, material: 25 }              // $/door
+    door: { labour: 65, material: 25 },             // $/door
+    // Popcorn ceiling removal — scrape, skim-coat smooth, prime, repaint
+    // GTA 2026 going rate ~$3–$5/sqft for non-asbestos popcorn removal.
+    // Set as $2.75 labour + $1.00 material = $3.75/sqft (mid-range, includes skim coat).
+    popcorn: { labour: 2.75, material: 1.00 }       // $/sqft of popcorn ceiling
   },
   flooring: {
     // Per sqft installed — labour is per sqft of space, material is per sqft × waste factor
@@ -1386,7 +1390,8 @@ function freshState(){
       sqft: "",              // when scope==="custom"
       ceiling: false, ceilingTier: "standard", ceilingSqft: "",
       trim: false, trimLinFt: "",
-      doors: false, doorCount: "", doorsAutoFromPdf: false   // doorsAutoFromPdf adds the "confirm closet doors" note
+      doors: false, doorCount: "", doorsAutoFromPdf: false,  // doorsAutoFromPdf adds the "confirm closet doors" note
+      popcorn: false, popcornSqft: ""                         // popcorn-ceiling removal (scrape, skim-coat, repaint)
     },
     flooring:  {
       type: "vinyl",         // vinyl | laminate | engineered | hardwood
@@ -1686,7 +1691,8 @@ function setSecondaryFlooringEnabled(on){
 }
 
 function flooringMaterialQty(){
-  const sqft = num(state.flooring.sqft);
+  // Use the user-entered flooring sqft, or fall back to the property total as a default.
+  const sqft = num(state.flooring.sqft) || num(state.propSqft);
   if(!sqft) return null;
   const type = state.flooring.type || "vinyl";
   const waste = WASTE_FACTORS[type] || 1.10;
@@ -1721,9 +1727,20 @@ function computeCategory(cat, priceSet){
       labour += dc * p.door.labour;
       material += dc * p.door.material;
     }
+    // Popcorn ceiling removal — scrape, skim-coat smooth, prime, repaint
+    if(s.popcorn && p.popcorn){
+      // Default sqft for popcorn removal = whatever was entered for the ceiling
+      // sqft (if ceiling painting was also enabled) or the wall painting sqft.
+      const popSqft = num(s.popcornSqft) || num(s.ceilingSqft) || paintingSqft();
+      labour   += popSqft * p.popcorn.labour;
+      material += popSqft * p.popcorn.material;
+    }
   }
   else if(cat === "flooring"){
-    const sqft = num(s.sqft);
+    // Fall back to the property total sqft when the flooring sqft is empty so
+    // toggling the category on gives an immediate rough cost. User overrides
+    // by typing a different value.
+    const sqft = num(s.sqft) || num(state.propSqft);
     const type = s.type || "vinyl";
     const sec  = s.secondary || {};
     const secEnabled = !!sec.enabled && num(sec.sqft) > 0 && sec.type;
@@ -2206,7 +2223,7 @@ function renderCatBody(cat){
       </div>
 
       <!-- Doors add-on -->
-      <div class="addon last">
+      <div class="addon">
         <label class="check-row" style="margin-bottom:${s.doors?'10px':'0'};">
           <input type="checkbox" ${s.doors?'checked':''} onchange="state.painting.doors=this.checked;renderCatBodyOnly('painting');renderTotals()">
           <span class="addon-title">Add door painting</span>
@@ -2220,6 +2237,27 @@ function renderCatBody(cat){
             </div>
           </div>
           <div class="footnote" style="margin-top:8px;">Both sides painted, hardware removed &amp; reinstalled.</div>
+        ` : ""}
+      </div>
+
+      <!-- Popcorn ceiling removal add-on -->
+      <div class="addon last">
+        <label class="check-row" style="margin-bottom:${s.popcorn?'10px':'0'};">
+          <input type="checkbox" ${s.popcorn?'checked':''} onchange="state.painting.popcorn=this.checked;renderCatBodyOnly('painting');renderTotals()">
+          <span class="addon-title">Add popcorn ceiling removal</span>
+        </label>
+        ${s.popcorn ? `
+          <div class="grid grid-2">
+            <div>
+              <label>Sqft of popcorn ceiling <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(blank = same as painting/ceiling sqft)</span></label>
+              <input type="number" min="0" value="${s.popcornSqft||""}" placeholder="defaults to painting sqft" oninput="state.painting.popcornSqft=this.value;renderTotals()">
+            </div>
+          </div>
+          <div class="footnote" style="margin-top:8px;">
+            <b style="color:var(--gold-bright)">What's included:</b> score, soak &amp; scrape off the existing popcorn texture, full skim-coat to smooth the ceiling, prime, and finish with two coats of paint. Drop sheets, plastic-wrap furniture, and clean-up are all part of the price.
+            <br><br>
+            <b style="color:var(--danger)">Asbestos note:</b> Homes built before 1980 often have asbestos-containing popcorn ceilings. We strongly recommend an asbestos test before scope is finalized — abatement is a separate scope handled by a certified contractor and not included in this estimate.
+          </div>
         ` : ""}
       </div>
 
@@ -2248,15 +2286,15 @@ function renderCatBody(cat){
       </div>
       <div class="grid grid-2">
         <div>
-          <label>Sqft of space to floor</label>
-          <input type="number" min="0" value="${s.sqft||""}" oninput="state.flooring.sqft=this.value;renderTotals()">
+          <label>Sqft of space to floor ${num(state.propSqft) > 0 ? `<span style="text-transform:none;letter-spacing:0;color:var(--gold-bright);font-weight:600;">&middot; auto from property sqft</span>` : ""}</label>
+          <input type="number" min="0" value="${s.sqft || (num(state.propSqft) > 0 ? state.propSqft : '')}" placeholder="${num(state.propSqft) > 0 ? 'override if needed' : 'enter property sqft first'}" oninput="state.flooring.sqft=this.value;renderTotals()">
           <div class="info-readout" id="floor-mat-readout" style="display:${q?'':'none'};">
             ${q ? `≈ ${Math.ceil(q.qty).toLocaleString("en-CA")} sqft of material to order (${q.sqft.toLocaleString("en-CA")} + ${q.pct}% waste)` : ""}
           </div>
         </div>
       </div>
       <div class="footnote" style="margin-top:10px;margin-bottom:14px;">
-        Material accounts for cutting waste (vinyl 7%, laminate 8%, engineered 10%, solid hardwood 12%). Labour is per sqft of finished space.
+        Material accounts for cutting waste (vinyl 7%, laminate 8%, engineered 10%, solid hardwood 12%). Labour is per sqft of finished space. Auto-defaults to your property total — adjust down for tiled areas (kitchen, baths, laundry, foyer).
       </div>
 
       <!-- Secondary flooring material carve-out (e.g., vinyl in basement) -->
@@ -2819,6 +2857,16 @@ function renderPricingEditor(){
       <div>${priceInput("painting.door.material", prices.painting.door.material, 5)}</div>
     </div>`;
 
+  // Painting — popcorn ceiling removal
+  const popDef = prices.painting.popcorn || { labour:2.75, material:1.00 };
+  html += `<div class="section-title">Painting &mdash; popcorn ceiling removal (per sqft)</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>
+    <div class="price-edit-row">
+      <div class="lbl">Scrape + skim-coat + prime + paint</div>
+      <div>${priceInput("painting.popcorn.labour", popDef.labour)}</div>
+      <div>${priceInput("painting.popcorn.material", popDef.material)}</div>
+    </div>`;
+
   // Flooring — types
   html += `<div class="section-title">Flooring &mdash; install (per sqft)</div>
     <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
@@ -3095,6 +3143,10 @@ function renderContractorSheet(){
         : "";
       items.push({ html:`Interior doors: <b>${s.doorCount||'?'} doors</b>${note} &mdash; both sides, hardware removed &amp; reinstalled.` });
     }
+    if(s.popcorn){
+      const popSqft = num(s.popcornSqft) || num(s.ceilingSqft) || psqft;
+      items.push({ html:`Popcorn ceiling removal: <b>${popSqft||'?'} sqft</b> &mdash; scrape, full skim-coat smooth, prime, two finish coats. <i style="color:#666;font-weight:400">Asbestos abatement (pre-1980 homes) is a separate scope, not included.</i>` });
+    }
     html += scopeSection("Painting", items);
   }
 
@@ -3103,22 +3155,24 @@ function renderContractorSheet(){
     anyEnabled = true;
     const s = state.flooring;
     const items = [];
+    // Effective total = entered value, or fall back to property sqft (auto-default).
+    const effectiveTotal = num(s.sqft) || num(state.propSqft);
     const secEnabled = !!(s.secondary && s.secondary.enabled && num(s.secondary.sqft) > 0);
-    const secSqft = secEnabled ? Math.min(num(s.secondary.sqft), num(s.sqft)) : 0;
-    const primarySqft = Math.max(0, num(s.sqft) - secSqft);
+    const secSqft = secEnabled ? Math.min(num(s.secondary.sqft), effectiveTotal) : 0;
+    const primarySqft = Math.max(0, effectiveTotal - secSqft);
     if(secEnabled){
       items.push({ html:`Primary type: <b>${FLOORING_LABELS[s.type] || s.type || '?'}</b> &mdash; <b>${primarySqft || '?'} sqft</b>` });
       items.push({ html:`Secondary type: <b>${FLOORING_LABELS[s.secondary.type] || s.secondary.type || '?'}</b> &mdash; <b>${secSqft || '?'} sqft</b> <i style="color:#666;font-weight:400">(carved out of the total below — typically basement or secondary suite)</i>` });
     } else {
       items.push({ html:`Type: <b>${FLOORING_LABELS[s.type] || s.type || '?'}</b>` });
     }
-    items.push({ html:`Total area: <b>${s.sqft||'?'} sqft</b> of finished space` });
+    items.push({ html:`Total area: <b>${effectiveTotal || '?'} sqft</b> of finished space` });
     const q = flooringMaterialQty();
     if(q){
       items.push({ html:`Approx. material to order: <b>${Math.ceil(q.qty).toLocaleString("en-CA")} sqft</b> (includes ${q.pct}% waste factor)` });
     }
     {
-      const rsq = num(s.removalSqft) || num(s.sqft);
+      const rsq = num(s.removalSqft) || effectiveTotal;
       items.push({ html:`Removal &amp; disposal: <b>${rsq||'?'} sqft</b> <i style="color:#666;font-weight:400">(included as standard)</i> &mdash; strip existing flooring + haul-away &amp; dump fees.` });
     }
     if(s.baseboards){
@@ -3463,6 +3517,15 @@ function renderContractorPricingEditor(){
       <div>${ctrPriceInput("painting.door.labour", cp.painting.door.labour, 5)}</div>
       <div>${ctrPriceInput("painting.door.material", cp.painting.door.material, 5)}</div>
     </div>`;
+  // Popcorn ceiling removal
+  const ctrPopDef = cp.painting.popcorn || { labour:1.93, material:0.70 };  // 70% scale of 2.75 / 1.00
+  html += `<div class="section-title">Painting &mdash; popcorn ceiling removal (per sqft)</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>
+    <div class="price-edit-row">
+      <div class="lbl">Scrape + skim-coat + prime + paint</div>
+      <div>${ctrPriceInput("painting.popcorn.labour", ctrPopDef.labour)}</div>
+      <div>${ctrPriceInput("painting.popcorn.material", ctrPopDef.material)}</div>
+    </div>`;
   // Flooring types
   html += `<div class="section-title">Flooring &mdash; install (per sqft)</div>
     <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
@@ -3792,22 +3855,27 @@ function scopeItemsFor(cat){
       const note = s.doorsAutoFromPdf ? ` <i style="color:var(--muted);font-weight:400;">(incl. closets — confirm)</i>` : "";
       items.push({ html:`Doors: <b>${s.doorCount||'?'}</b>${note}` });
     }
+    if(s.popcorn){
+      const popSqft = num(s.popcornSqft) || num(s.ceilingSqft) || psqft;
+      items.push({ html:`Popcorn removal: <b>${popSqft||'?'} sqft</b>` });
+    }
   }
   else if(cat === "flooring"){
+    const effectiveTotal = num(s.sqft) || num(state.propSqft);
     const secEnabled = !!(s.secondary && s.secondary.enabled && num(s.secondary.sqft) > 0);
-    const secSqft = secEnabled ? Math.min(num(s.secondary.sqft), num(s.sqft)) : 0;
-    const primarySqft = Math.max(0, num(s.sqft) - secSqft);
+    const secSqft = secEnabled ? Math.min(num(s.secondary.sqft), effectiveTotal) : 0;
+    const primarySqft = Math.max(0, effectiveTotal - secSqft);
     if(secEnabled){
       items.push({ html:`Primary: <b>${FLOORING_LABELS[s.type] || s.type || '?'}</b> &mdash; ${primarySqft||'?'} sqft` });
       items.push({ html:`Secondary: <b>${FLOORING_LABELS[s.secondary.type] || s.secondary.type || '?'}</b> &mdash; ${secSqft||'?'} sqft` });
     } else {
       items.push({ html:`Type: <b>${FLOORING_LABELS[s.type] || s.type || '?'}</b>` });
     }
-    items.push({ html:`Total: <b>${s.sqft||'?'} sqft</b>` });
+    items.push({ html:`Total: <b>${effectiveTotal||'?'} sqft</b>` });
     const q = flooringMaterialQty();
     if(q) items.push({ html:`Material to order: <b>${Math.ceil(q.qty).toLocaleString("en-CA")} sqft</b> (incl. ${q.pct}% waste)` });
     {
-      const rsq = num(s.removalSqft) || num(s.sqft);
+      const rsq = num(s.removalSqft) || effectiveTotal;
       items.push({ html:`Removal &amp; disposal: <b>${rsq||'?'} sqft</b> <i style="color:var(--muted);font-weight:400;">(included)</i>` });
     }
     if(s.baseboards){ items.push({ html:`New baseboards: <b>${(num(s.baseboardLinFt) || suggestedTrimLinFt()) || '?'} lin ft</b>` }); }
@@ -4879,8 +4947,8 @@ function applyPdfImport(){
   // ---- Flooring auto-population ----
   // Total flooring sqft = property − everything that's tiled (above-grade + basement)
   // − bathrooms (they get their own floor tile via the bathroom category).
-  // If user opted to tile basement kitchen, that sqft is already counted in tilingSqft;
-  // otherwise it stays in flooring (priced at the SECONDARY material rate).
+  // If user opted to tile basement kitchen, that sqft is already in tilingSqft;
+  // otherwise it stays in the flooring total (priced at the SECONDARY material rate).
   const aboveGradeTiled = (num(d.foyerSqft)||0) + (num(d.mainKitchenSqft)||kitchenSqft||0) + (num(d.breakfastSqft)||0) + (num(d.laundrySqft)||0);
   const basementTiled   = pdfIncludeBasement
     ? (basementLaundrySqft + basementFoyerSqft + basementBreakfastSqft + (pdfTileBasementKitchen ? basementKitchenSqft : 0))
