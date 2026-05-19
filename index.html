@@ -423,6 +423,11 @@
   .app textarea{color:#ffffff !important;}
   .app input::placeholder{color:#8a8579;opacity:1;}
 
+  /* Multi-kitchen titles + container */
+  .kitchen-instance-title{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--gold-bright);font-weight:700;margin:6px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line);}
+  .kitchen-instance{border-left:2px solid var(--gold-deep);padding-left:14px;margin-bottom:10px;}
+  .kitchen-instance-toggle{padding:10px 12px;background:#0d0d11;border:1px dashed var(--line-strong);border-radius:8px;}
+
   /* Stand-up shower custom dimension inputs */
   .shower-size-row{margin-top:10px;padding:10px 12px;background:#0d0d11;border:1px solid var(--line-strong);border-radius:8px;}
   .ssr-title{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--gold-bright);font-weight:600;margin-bottom:8px;}
@@ -1385,9 +1390,15 @@ function freshState(){
     },
     flooring:  {
       type: "vinyl",         // vinyl | laminate | engineered | hardwood
-      sqft: "",
+      sqft: "",              // total flooring sqft — also drives baseboard linear feet
       removeOld: true, removalSqft: "",   // removal & disposal is always included; toggle removed from UI
-      baseboards: false, baseboardLinFt: ""
+      baseboards: false, baseboardLinFt: "",
+      // Secondary material carve-out: a portion of the total sqft uses a different
+      // material (e.g., basement vinyl while main floors use hardwood). The "sqft"
+      // here is NOT added to the total — it just identifies how many sqft of the
+      // total are priced at the secondary rate. Baseboard / linear-feet calcs
+      // continue to use the master total above unchanged.
+      secondary: { enabled:false, type:"vinyl", sqft:"" }
     },
     tiling:    { tier:"standard", sqft:"" },
     kitchen:   {
@@ -1398,7 +1409,21 @@ function freshState(){
       undercabLighting: false,
       backsplash: false,
       backsplashType: "subway",   // subway | quartz
-      backsplashSqft: ""
+      backsplashSqft: "",
+      // Optional second kitchen (typically a basement / secondary suite kitchen).
+      // Same fields as the main kitchen above. enabled=false means it's not part
+      // of the estimate.
+      basement: {
+        enabled: false,
+        tier: "standard",
+        size: "medium",
+        counter: true,
+        island: false,
+        undercabLighting: false,
+        backsplash: false,
+        backsplashType: "subway",
+        backsplashSqft: ""
+      }
     },
     bathroom:  { rooms:[ defaultBath() ] },
     potlights: { tier:"new", count:"" },     // tier is "replace" | "new" — default to "Install new"
@@ -1561,6 +1586,35 @@ function migrateOldEstimate(m){
   // Flooring: removal & disposal is now ALWAYS included — force flag on older saves
   if(m.flooring){
     m.flooring.removeOld = true;
+    // Backfill secondary-material carve-out if missing on older saves
+    if(!m.flooring.secondary || typeof m.flooring.secondary !== "object"){
+      m.flooring.secondary = { enabled:false, type:"vinyl", sqft:"" };
+    } else {
+      if(typeof m.flooring.secondary.enabled !== "boolean") m.flooring.secondary.enabled = false;
+      if(!m.flooring.secondary.type)                          m.flooring.secondary.type    = "vinyl";
+      if(typeof m.flooring.secondary.sqft !== "string")       m.flooring.secondary.sqft    = String(m.flooring.secondary.sqft || "");
+    }
+  }
+  // Kitchen: backfill optional basement-kitchen sub-object on older saves
+  if(m.kitchen){
+    if(!m.kitchen.basement || typeof m.kitchen.basement !== "object"){
+      m.kitchen.basement = {
+        enabled:false, tier:"standard", size:"medium", counter:true,
+        island:false, undercabLighting:false,
+        backsplash:false, backsplashType:"subway", backsplashSqft:""
+      };
+    } else {
+      const bk = m.kitchen.basement;
+      if(typeof bk.enabled  !== "boolean") bk.enabled  = false;
+      if(!bk.tier)                          bk.tier    = "standard";
+      if(!bk.size)                          bk.size    = "medium";
+      if(typeof bk.counter !== "boolean")  bk.counter = true;
+      if(typeof bk.island  !== "boolean")  bk.island  = false;
+      if(typeof bk.undercabLighting !== "boolean") bk.undercabLighting = false;
+      if(typeof bk.backsplash !== "boolean") bk.backsplash = false;
+      if(!bk.backsplashType)                 bk.backsplashType = "subway";
+      if(typeof bk.backsplashSqft !== "string") bk.backsplashSqft = String(bk.backsplashSqft || "");
+    }
   }
   // Potlights: tier renamed from standard|premium → replace|new
   if(m.potlights && (m.potlights.tier === "standard" || m.potlights.tier === "premium")){
@@ -1622,6 +1676,15 @@ function onPropSqftInput(){
   renderTotals();
 }
 
+function setSecondaryFlooringEnabled(on){
+  if(!state.flooring.secondary){
+    state.flooring.secondary = { enabled:false, type:"vinyl", sqft:"" };
+  }
+  state.flooring.secondary.enabled = !!on;
+  renderCatBodyOnly("flooring");
+  renderTotals();
+}
+
 function flooringMaterialQty(){
   const sqft = num(state.flooring.sqft);
   if(!sqft) return null;
@@ -1662,13 +1725,28 @@ function computeCategory(cat, priceSet){
   else if(cat === "flooring"){
     const sqft = num(s.sqft);
     const type = s.type || "vinyl";
+    const sec  = s.secondary || {};
+    const secEnabled = !!sec.enabled && num(sec.sqft) > 0 && sec.type;
+    const secSqft = secEnabled ? Math.min(num(sec.sqft), sqft) : 0;
+    const primarySqft = Math.max(0, sqft - secSqft);
+
+    // Primary material
     const r = p[type];
     const waste = WASTE_FACTORS[type] || 1.10;
     if(r){
-      labour += sqft * r.labour;
-      material += sqft * waste * r.material;
+      labour   += primarySqft * r.labour;
+      material += primarySqft * waste * r.material;
     }
-    // Removal & disposal of existing flooring is ALWAYS included now — toggle has been retired.
+    // Secondary material carve-out (priced at secondary rate)
+    if(secEnabled){
+      const r2 = p[sec.type];
+      const waste2 = WASTE_FACTORS[sec.type] || 1.10;
+      if(r2){
+        labour   += secSqft * r2.labour;
+        material += secSqft * waste2 * r2.material;
+      }
+    }
+    // Removal & disposal of existing flooring is ALWAYS included — covers the FULL sqft.
     if(p.removal){
       const rSqft = num(s.removalSqft) || sqft;
       labour += rSqft * p.removal.labour;
@@ -1687,32 +1765,46 @@ function computeCategory(cat, priceSet){
     material = sqft * r.material;
   }
   else if(cat === "kitchen"){
-    const tier = s.tier || "standard";
-    const size = s.size || "medium";
-    const baseR = p.base[size][tier];
-    labour += baseR.labour; material += baseR.material;
-    if(s.counter && p.counter && p.counter[size] && p.counter[size][tier]){
-      const cr = p.counter[size][tier];
-      labour += cr.labour; material += cr.material;
-    }
-    if(s.island && p.island && p.island[tier]){
-      const ir = p.island[tier];
-      labour += ir.labour; material += ir.material;
-    }
-    if(s.undercabLighting && p.undercab){
-      labour += p.undercab.labour;
-      material += p.undercab.material;
-    }
-    if(s.backsplash && p.backsplash){
-      const t = s.backsplashType || "subway";
-      if(t === "quartz" && p.backsplash.quartz && p.backsplash.quartz[size]){
-        const q = p.backsplash.quartz[size];
-        labour += q.labour; material += q.material;
-      } else if(t === "subway" && p.backsplash.subway){
-        const sq = num(s.backsplashSqft);
-        labour += sq * p.backsplash.subway.labour;
-        material += sq * p.backsplash.subway.material;
+    // Helper: cost a single kitchen instance (main or basement) using its own
+    // tier/size/add-on flags. p is the shared kitchen pricing object.
+    function costKitchen(k){
+      let L = 0, M = 0;
+      const tier = k.tier || "standard";
+      const size = k.size || "medium";
+      const baseR = p.base[size] && p.base[size][tier];
+      if(baseR){ L += baseR.labour; M += baseR.material; }
+      if(k.counter && p.counter && p.counter[size] && p.counter[size][tier]){
+        const cr = p.counter[size][tier];
+        L += cr.labour; M += cr.material;
       }
+      if(k.island && p.island && p.island[tier]){
+        const ir = p.island[tier];
+        L += ir.labour; M += ir.material;
+      }
+      if(k.undercabLighting && p.undercab){
+        L += p.undercab.labour;
+        M += p.undercab.material;
+      }
+      if(k.backsplash && p.backsplash){
+        const t = k.backsplashType || "subway";
+        if(t === "quartz" && p.backsplash.quartz && p.backsplash.quartz[size]){
+          const q = p.backsplash.quartz[size];
+          L += q.labour; M += q.material;
+        } else if(t === "subway" && p.backsplash.subway){
+          const sq = num(k.backsplashSqft);
+          L += sq * p.backsplash.subway.labour;
+          M += sq * p.backsplash.subway.material;
+        }
+      }
+      return { L, M };
+    }
+    // Main kitchen
+    const main = costKitchen(s);
+    labour += main.L; material += main.M;
+    // Optional basement kitchen — only counted when enabled
+    if(s.basement && s.basement.enabled){
+      const bk = costKitchen(s.basement);
+      labour += bk.L; material += bk.M;
     }
   }
   else if(cat === "bathroom"){
@@ -2167,6 +2259,34 @@ function renderCatBody(cat){
         Material accounts for cutting waste (vinyl 7%, laminate 8%, engineered 10%, solid hardwood 12%). Labour is per sqft of finished space.
       </div>
 
+      <!-- Secondary flooring material carve-out (e.g., vinyl in basement) -->
+      <div class="addon">
+        <label class="check-row" style="margin-bottom:${(s.secondary&&s.secondary.enabled)?'10px':'0'};">
+          <input type="checkbox" ${(s.secondary&&s.secondary.enabled)?'checked':''} onchange="setSecondaryFlooringEnabled(this.checked)">
+          <span class="addon-title">Add secondary flooring material <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(e.g. vinyl in basement while main floors use hardwood)</span></span>
+        </label>
+        ${(s.secondary&&s.secondary.enabled) ? `
+          <div class="grid grid-2">
+            <div>
+              <label>Secondary material</label>
+              <select onchange="state.flooring.secondary.type=this.value;renderTotals()">
+                <option value="vinyl"      ${(s.secondary.type||'vinyl')==='vinyl'      ?'selected':''}>Vinyl</option>
+                <option value="laminate"   ${s.secondary.type==='laminate'   ?'selected':''}>Waterproof Laminate</option>
+                <option value="engineered" ${s.secondary.type==='engineered' ?'selected':''}>Engineered Hardwood</option>
+                <option value="hardwood"   ${s.secondary.type==='hardwood'   ?'selected':''}>Solid Hardwood</option>
+              </select>
+            </div>
+            <div>
+              <label>Sqft using this material <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(portion of total)</span></label>
+              <input type="number" min="0" value="${s.secondary.sqft||""}" oninput="state.flooring.secondary.sqft=this.value;renderTotals()">
+            </div>
+          </div>
+          <div class="footnote" style="margin-top:8px;">
+            This <b style="color:var(--gold-bright)">does NOT add</b> to the total flooring sqft above &mdash; it specifies how many of those sqft are priced at the secondary material rate. Baseboard / linear-feet calcs continue to use the full total. The remaining sqft uses the primary material.
+          </div>
+        ` : ""}
+      </div>
+
       <div class="addon last">
         <label class="check-row" style="margin-bottom:${s.baseboards?'10px':'0'};">
           <input type="checkbox" ${s.baseboards?'checked':''} onchange="state.flooring.baseboards=this.checked;renderCatBodyOnly('flooring');renderTotals()">
@@ -2207,6 +2327,7 @@ function renderCatBody(cat){
     `;
   }
   if(cat === "kitchen"){
+    const bk = s.basement || { enabled:false };
     return `
       <div class="included-note">
         <span class="incl-dot"></span>
@@ -2215,84 +2336,21 @@ function renderCatBody(cat){
           <div class="footnote" style="margin-top:4px;">Cabinet removal, countertop tear-out, haul-away &amp; dump fees are all baked into the kitchen price.</div>
         </div>
       </div>
-      <div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start;margin-bottom:14px;">
-        <div>
-          <label style="margin-bottom:6px;">Tier</label>
-          ${tierToggle("kitchen", s.tier, [{value:"standard",label:"Standard"},{value:"custom",label:"Custom"}])}
-        </div>
-      </div>
-      <div class="grid grid-3" style="margin-bottom:10px;">
-        <div>
-          <label>Kitchen size</label>
-          <select onchange="state.kitchen.size=this.value;renderCatBodyOnly('kitchen');renderTotals()">
-            <option value="small"  ${s.size==='small'?'selected':''}>Small (under 70 sqft)</option>
-            <option value="medium" ${s.size==='medium'?'selected':''}>Medium (70 – 150 sqft)</option>
-            <option value="large"  ${s.size==='large'?'selected':''}>Large (150+ sqft)</option>
-          </select>
-        </div>
-      </div>
-      <div class="footnote" style="margin-bottom:14px;">
-        Base price <b style="color:var(--gold-bright)">includes the sink, faucet, plumbing adjustments, cabinet install &amp; all hardware</b>.
-        <b style="color:var(--gold-bright)">Standard</b> = stock or semi-custom cabinets, builder-grade finishes.
-        <b style="color:var(--gold-bright)">Custom</b> = fully custom cabinets, premium fixtures &amp; finishes.
-        Countertops, island and under-cabinet lighting are separate add-ons below.
-      </div>
 
-      <div class="addon">
-        <label class="check-row" style="margin-bottom:0;">
-          <input type="checkbox" ${s.counter?'checked':''} onchange="state.kitchen.counter=this.checked;renderTotals()">
-          <span class="addon-title">Countertops <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(priced by kitchen size &amp; tier — ${kitchenCounterPriceLabel(s.size, s.tier)})</span></span>
+      <div class="kitchen-instance-title">Main Kitchen</div>
+      ${renderKitchenInstance(s, "state.kitchen", "main")}
+
+      <!-- Optional second kitchen (basement / secondary suite) -->
+      <div class="kitchen-instance-toggle" style="margin-top:18px;">
+        <label class="check-row">
+          <input type="checkbox" ${bk.enabled?'checked':''} onchange="setBasementKitchenEnabled(this.checked)">
+          <span class="addon-title">Include basement kitchen <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(secondary suite, in-law kitchen, etc.)</span></span>
         </label>
       </div>
-
-      <!-- Backsplash add-on -->
-      <div class="addon">
-        <label class="check-row" style="margin-bottom:${s.backsplash?'10px':'0'};">
-          <input type="checkbox" ${s.backsplash?'checked':''} onchange="state.kitchen.backsplash=this.checked;renderCatBodyOnly('kitchen');renderTotals()">
-          <span class="addon-title">Backsplash</span>
-        </label>
-        ${s.backsplash ? `
-          <div class="grid grid-2">
-            <div>
-              <label>Material</label>
-              <select onchange="state.kitchen.backsplashType=this.value;renderCatBodyOnly('kitchen');renderTotals()">
-                <option value="subway" ${(s.backsplashType||'subway')==='subway'?'selected':''}>Subway tiles (per sqft)</option>
-                <option value="quartz" ${s.backsplashType==='quartz'?'selected':''}>Quartz — same as countertop</option>
-              </select>
-            </div>
-            ${(s.backsplashType||'subway') === 'subway' ? `
-              <div>
-                <label>Backsplash sqft</label>
-                <input type="number" min="0" value="${s.backsplashSqft||''}" placeholder="e.g. 35" oninput="state.kitchen.backsplashSqft=this.value;renderTotals()">
-              </div>
-            ` : `
-              <div>
-                <label>Quartz backsplash <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(priced by size)</span></label>
-                <div style="padding:10px 12px;background:#0d0d11;border:1px solid var(--line-strong);border-radius:8px;color:var(--gold-bright);font-size:13px;font-weight:600;">
-                  ${cap(s.size)} kitchen &middot; ${fmt(kitchenBacksplashQuartzPrice(s.size))}
-                </div>
-              </div>
-            `}
-          </div>
-          <div class="footnote" style="margin-top:8px;">
-            <b style="color:var(--gold-bright)">Subway</b>: ceramic/porcelain subway tile per sqft (~$16/sqft installed). <b style="color:var(--gold-bright)">Quartz</b>: same slab as countertop, priced as a lump sum based on typical upper-cabinet count for the kitchen size.
-          </div>
-        ` : ""}
-      </div>
-
-      <div class="addon">
-        <label class="check-row" style="margin-bottom:0;">
-          <input type="checkbox" ${s.island?'checked':''} onchange="state.kitchen.island=this.checked;renderTotals()">
-          <span class="addon-title">Add an island <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(${kitchenIslandPriceLabel(s.tier)})</span></span>
-        </label>
-      </div>
-
-      <div class="addon last">
-        <label class="check-row" style="margin-bottom:0;">
-          <input type="checkbox" ${s.undercabLighting?'checked':''} onchange="state.kitchen.undercabLighting=this.checked;renderTotals()">
-          <span class="addon-title">Under-cabinet lighting <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(${fmt((prices.kitchen.undercab.labour||0)+(prices.kitchen.undercab.material||0))} flat — typical run)</span></span>
-        </label>
-      </div>
+      ${bk.enabled ? `
+        <div class="kitchen-instance-title" style="margin-top:14px;">Basement Kitchen</div>
+        ${renderKitchenInstance(bk, "state.kitchen.basement", "basement")}
+      ` : ""}
 
       <div style="margin-top:14px">${breakdownRows(cat)}</div>
     `;
@@ -2356,6 +2414,112 @@ function renderCatBody(cat){
     `;
   }
   return "";
+}
+
+/* ---------- Kitchen instance helpers ---------- */
+function setBasementKitchenEnabled(on){
+  if(!state.kitchen.basement){
+    state.kitchen.basement = {
+      enabled:false, tier:"standard", size:"medium", counter:true,
+      island:false, undercabLighting:false,
+      backsplash:false, backsplashType:"subway", backsplashSqft:""
+    };
+  }
+  state.kitchen.basement.enabled = !!on;
+  renderCatBodyOnly("kitchen");
+  renderTotals();
+}
+
+/* Render one kitchen instance (main or basement) using the given path prefix
+   for inline event handlers. `slug` is "main" or "basement" — used to give the
+   tier-radio group a unique `name` attribute so the two pickers don't collide. */
+function renderKitchenInstance(k, prefix, slug){
+  const tierName = "tier-kitchen-" + slug;
+  return `
+    <div class="kitchen-instance">
+      <div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start;margin-bottom:14px;">
+        <div>
+          <label style="margin-bottom:6px;">Tier</label>
+          <div class="tier-row">
+            ${[{value:"standard",label:"Standard"},{value:"custom",label:"Custom"}].map(o =>
+              `<label><input type="radio" name="${tierName}" value="${o.value}" ${(k.tier||'standard')===o.value?"checked":""} onchange="${prefix}.tier=this.value;renderCatBodyOnly('kitchen');renderTotals()"><span>${o.label}</span></label>`
+            ).join("")}
+          </div>
+        </div>
+      </div>
+      <div class="grid grid-3" style="margin-bottom:10px;">
+        <div>
+          <label>Kitchen size</label>
+          <select onchange="${prefix}.size=this.value;renderCatBodyOnly('kitchen');renderTotals()">
+            <option value="small"  ${k.size==='small'?'selected':''}>Small (under 70 sqft)</option>
+            <option value="medium" ${(k.size||'medium')==='medium'?'selected':''}>Medium (70 – 150 sqft)</option>
+            <option value="large"  ${k.size==='large'?'selected':''}>Large (150+ sqft)</option>
+          </select>
+        </div>
+      </div>
+      <div class="footnote" style="margin-bottom:14px;">
+        Base price <b style="color:var(--gold-bright)">includes the sink, faucet, plumbing adjustments, cabinet install &amp; all hardware</b>.
+        <b style="color:var(--gold-bright)">Standard</b> = stock or semi-custom cabinets, builder-grade finishes.
+        <b style="color:var(--gold-bright)">Custom</b> = fully custom cabinets, premium fixtures &amp; finishes.
+        Countertops, island and under-cabinet lighting are separate add-ons below.
+      </div>
+
+      <div class="addon">
+        <label class="check-row" style="margin-bottom:0;">
+          <input type="checkbox" ${k.counter?'checked':''} onchange="${prefix}.counter=this.checked;renderTotals()">
+          <span class="addon-title">Countertops <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(priced by kitchen size &amp; tier — ${kitchenCounterPriceLabel(k.size, k.tier)})</span></span>
+        </label>
+      </div>
+
+      <div class="addon">
+        <label class="check-row" style="margin-bottom:${k.backsplash?'10px':'0'};">
+          <input type="checkbox" ${k.backsplash?'checked':''} onchange="${prefix}.backsplash=this.checked;renderCatBodyOnly('kitchen');renderTotals()">
+          <span class="addon-title">Backsplash</span>
+        </label>
+        ${k.backsplash ? `
+          <div class="grid grid-2">
+            <div>
+              <label>Material</label>
+              <select onchange="${prefix}.backsplashType=this.value;renderCatBodyOnly('kitchen');renderTotals()">
+                <option value="subway" ${(k.backsplashType||'subway')==='subway'?'selected':''}>Subway tiles (per sqft)</option>
+                <option value="quartz" ${k.backsplashType==='quartz'?'selected':''}>Quartz — same as countertop</option>
+              </select>
+            </div>
+            ${(k.backsplashType||'subway') === 'subway' ? `
+              <div>
+                <label>Backsplash sqft</label>
+                <input type="number" min="0" value="${k.backsplashSqft||''}" placeholder="e.g. 35" oninput="${prefix}.backsplashSqft=this.value;renderTotals()">
+              </div>
+            ` : `
+              <div>
+                <label>Quartz backsplash <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(priced by size)</span></label>
+                <div style="padding:10px 12px;background:#0d0d11;border:1px solid var(--line-strong);border-radius:8px;color:var(--gold-bright);font-size:13px;font-weight:600;">
+                  ${cap(k.size)} kitchen &middot; ${fmt(kitchenBacksplashQuartzPrice(k.size))}
+                </div>
+              </div>
+            `}
+          </div>
+          <div class="footnote" style="margin-top:8px;">
+            <b style="color:var(--gold-bright)">Subway</b>: ceramic/porcelain subway tile per sqft (~$16/sqft installed). <b style="color:var(--gold-bright)">Quartz</b>: same slab as countertop, priced as a lump sum based on typical upper-cabinet count for the kitchen size.
+          </div>
+        ` : ""}
+      </div>
+
+      <div class="addon">
+        <label class="check-row" style="margin-bottom:0;">
+          <input type="checkbox" ${k.island?'checked':''} onchange="${prefix}.island=this.checked;renderTotals()">
+          <span class="addon-title">Add an island <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(${kitchenIslandPriceLabel(k.tier)})</span></span>
+        </label>
+      </div>
+
+      <div class="addon last">
+        <label class="check-row" style="margin-bottom:0;">
+          <input type="checkbox" ${k.undercabLighting?'checked':''} onchange="${prefix}.undercabLighting=this.checked;renderTotals()">
+          <span class="addon-title">Under-cabinet lighting <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(${fmt((prices.kitchen.undercab.labour||0)+(prices.kitchen.undercab.material||0))} flat — typical run)</span></span>
+        </label>
+      </div>
+    </div>
+  `;
 }
 
 function kitchenCounterPriceLabel(size, tier){
@@ -2939,8 +3103,16 @@ function renderContractorSheet(){
     anyEnabled = true;
     const s = state.flooring;
     const items = [];
-    items.push({ html:`Type: <b>${FLOORING_LABELS[s.type] || s.type || '?'}</b>` });
-    items.push({ html:`Area: <b>${s.sqft||'?'} sqft</b> of finished space` });
+    const secEnabled = !!(s.secondary && s.secondary.enabled && num(s.secondary.sqft) > 0);
+    const secSqft = secEnabled ? Math.min(num(s.secondary.sqft), num(s.sqft)) : 0;
+    const primarySqft = Math.max(0, num(s.sqft) - secSqft);
+    if(secEnabled){
+      items.push({ html:`Primary type: <b>${FLOORING_LABELS[s.type] || s.type || '?'}</b> &mdash; <b>${primarySqft || '?'} sqft</b>` });
+      items.push({ html:`Secondary type: <b>${FLOORING_LABELS[s.secondary.type] || s.secondary.type || '?'}</b> &mdash; <b>${secSqft || '?'} sqft</b> <i style="color:#666;font-weight:400">(carved out of the total below — typically basement or secondary suite)</i>` });
+    } else {
+      items.push({ html:`Type: <b>${FLOORING_LABELS[s.type] || s.type || '?'}</b>` });
+    }
+    items.push({ html:`Total area: <b>${s.sqft||'?'} sqft</b> of finished space` });
     const q = flooringMaterialQty();
     if(q){
       items.push({ html:`Approx. material to order: <b>${Math.ceil(q.qty).toLocaleString("en-CA")} sqft</b> (includes ${q.pct}% waste factor)` });
@@ -2972,23 +3144,34 @@ function renderContractorSheet(){
   if(state.enabled.kitchen){
     anyEnabled = true;
     const s = state.kitchen;
-    const sizeLabel = ({small:"Small (under 70 sqft)", medium:"Medium (70&ndash;150 sqft)", large:"Large (150+ sqft)"})[s.size] || s.size;
-    const items = [
-      { html:`Tier: <b>${s.tier==="custom"?"Custom &mdash; fully custom cabinets, premium fixtures &amp; finishes":"Standard &mdash; stock or semi-custom cabinets, builder-grade finishes"}</b>` },
-      { html:`Size: <b>${sizeLabel}</b>` },
-      { html:`Base scope includes: cabinets, sink, faucet, plumbing adjustments, cabinet install, all hardware.` }
-    ];
-    if(s.counter) items.push({ html:`Countertops: <b>included</b> (priced by kitchen size &amp; tier).` });
-    if(s.backsplash){
-      if((s.backsplashType||'subway') === 'subway'){
-        items.push({ html:`Backsplash: <b>Subway tile</b> &mdash; ${s.backsplashSqft||'?'} sqft` });
-      } else {
-        items.push({ html:`Backsplash: <b>Quartz</b> (matches countertop) &mdash; ${cap(s.size)} kitchen` });
+    const sizeLabel = sz => ({small:"Small (under 70 sqft)", medium:"Medium (70&ndash;150 sqft)", large:"Large (150+ sqft)"})[sz] || sz;
+    function kitchenScopeItems(k, hdrLabel){
+      const out = [];
+      if(hdrLabel) out.push({ hdr:true, html: hdrLabel });
+      out.push({ sub: !!hdrLabel, html:`Tier: <b>${k.tier==="custom"?"Custom &mdash; fully custom cabinets, premium fixtures &amp; finishes":"Standard &mdash; stock or semi-custom cabinets, builder-grade finishes"}</b>` });
+      out.push({ sub: !!hdrLabel, html:`Size: <b>${sizeLabel(k.size)}</b>` });
+      out.push({ sub: !!hdrLabel, html:`Base scope includes: cabinets, sink, faucet, plumbing adjustments, cabinet install, all hardware.` });
+      if(k.counter) out.push({ sub: !!hdrLabel, html:`Countertops: <b>included</b> (priced by kitchen size &amp; tier).` });
+      if(k.backsplash){
+        if((k.backsplashType||'subway') === 'subway'){
+          out.push({ sub: !!hdrLabel, html:`Backsplash: <b>Subway tile</b> &mdash; ${k.backsplashSqft||'?'} sqft` });
+        } else {
+          out.push({ sub: !!hdrLabel, html:`Backsplash: <b>Quartz</b> (matches countertop) &mdash; ${cap(k.size)} kitchen` });
+        }
       }
+      if(k.island)            out.push({ sub: !!hdrLabel, html:`Island add-on: <b>included</b> (${k.tier==="custom"?"custom":"standard"} build).` });
+      if(k.undercabLighting)  out.push({ sub: !!hdrLabel, html:`Under-cabinet lighting: <b>included</b> (typical run &mdash; LED strip + driver).` });
+      return out;
     }
-    if(s.island)  items.push({ html:`Island add-on: <b>included</b> (${s.tier==="custom"?"custom":"standard"} build).` });
-    if(s.undercabLighting) items.push({ html:`Under-cabinet lighting: <b>included</b> (typical run &mdash; LED strip + driver).` });
-    html += scopeSection("Kitchen", items);
+    let kitchenItems = [];
+    const hasBasementKitchen = !!(s.basement && s.basement.enabled);
+    if(hasBasementKitchen){
+      kitchenItems = kitchenItems.concat(kitchenScopeItems(s, "Main Kitchen"));
+      kitchenItems = kitchenItems.concat(kitchenScopeItems(s.basement, "Basement Kitchen"));
+    } else {
+      kitchenItems = kitchenScopeItems(s, null);
+    }
+    html += scopeSection("Kitchen", kitchenItems);
   }
 
   // -- Bathrooms --
@@ -3611,8 +3794,16 @@ function scopeItemsFor(cat){
     }
   }
   else if(cat === "flooring"){
-    items.push({ html:`Type: <b>${FLOORING_LABELS[s.type] || s.type || '?'}</b>` });
-    items.push({ html:`Area: <b>${s.sqft||'?'} sqft</b>` });
+    const secEnabled = !!(s.secondary && s.secondary.enabled && num(s.secondary.sqft) > 0);
+    const secSqft = secEnabled ? Math.min(num(s.secondary.sqft), num(s.sqft)) : 0;
+    const primarySqft = Math.max(0, num(s.sqft) - secSqft);
+    if(secEnabled){
+      items.push({ html:`Primary: <b>${FLOORING_LABELS[s.type] || s.type || '?'}</b> &mdash; ${primarySqft||'?'} sqft` });
+      items.push({ html:`Secondary: <b>${FLOORING_LABELS[s.secondary.type] || s.secondary.type || '?'}</b> &mdash; ${secSqft||'?'} sqft` });
+    } else {
+      items.push({ html:`Type: <b>${FLOORING_LABELS[s.type] || s.type || '?'}</b>` });
+    }
+    items.push({ html:`Total: <b>${s.sqft||'?'} sqft</b>` });
     const q = flooringMaterialQty();
     if(q) items.push({ html:`Material to order: <b>${Math.ceil(q.qty).toLocaleString("en-CA")} sqft</b> (incl. ${q.pct}% waste)` });
     {
@@ -3626,20 +3817,32 @@ function scopeItemsFor(cat){
     items.push({ html:`Area: <b>${s.sqft||'?'} sqft</b>` });
   }
   else if(cat === "kitchen"){
-    const sizeLabel = ({small:"Small (<70 sqft)", medium:"Medium (70-150 sqft)", large:"Large (150+ sqft)"})[s.size] || s.size;
-    items.push({ html:`Tier: <b>${s.tier==="custom"?"Custom":"Standard"}</b>` });
-    items.push({ html:`Size: <b>${sizeLabel}</b>` });
-    items.push({ html:`Base: cabinets + sink + faucet + plumbing + hardware` });
-    if(s.counter) items.push({ html:`+ Countertops (priced by size &amp; tier)` });
-    if(s.backsplash){
-      if((s.backsplashType||'subway') === 'subway'){
-        items.push({ html:`+ Backsplash &mdash; subway tile, <b>${s.backsplashSqft||'?'} sqft</b>` });
-      } else {
-        items.push({ html:`+ Backsplash &mdash; quartz, ${cap(s.size)} kitchen` });
+    const sizeShort = sz => ({small:"Small (<70 sqft)", medium:"Medium (70-150 sqft)", large:"Large (150+ sqft)"})[sz] || sz;
+    function kitchenInternalItems(k, hdr){
+      const out = [];
+      if(hdr) out.push({ hdr:true, html: hdr });
+      out.push({ sub: !!hdr, html:`Tier: <b>${k.tier==="custom"?"Custom":"Standard"}</b>` });
+      out.push({ sub: !!hdr, html:`Size: <b>${sizeShort(k.size)}</b>` });
+      out.push({ sub: !!hdr, html:`Base: cabinets + sink + faucet + plumbing + hardware` });
+      if(k.counter) out.push({ sub: !!hdr, html:`+ Countertops (priced by size &amp; tier)` });
+      if(k.backsplash){
+        if((k.backsplashType||'subway') === 'subway'){
+          out.push({ sub: !!hdr, html:`+ Backsplash &mdash; subway tile, <b>${k.backsplashSqft||'?'} sqft</b>` });
+        } else {
+          out.push({ sub: !!hdr, html:`+ Backsplash &mdash; quartz, ${cap(k.size)} kitchen` });
+        }
       }
+      if(k.island)            out.push({ sub: !!hdr, html:`+ Island (${k.tier==="custom"?"custom":"standard"})` });
+      if(k.undercabLighting)  out.push({ sub: !!hdr, html:`+ Under-cabinet lighting` });
+      return out;
     }
-    if(s.island)  items.push({ html:`+ Island (${s.tier==="custom"?"custom":"standard"})` });
-    if(s.undercabLighting) items.push({ html:`+ Under-cabinet lighting` });
+    const hasBasementKitchen = !!(s.basement && s.basement.enabled);
+    if(hasBasementKitchen){
+      items.push(...kitchenInternalItems(s, "Main Kitchen"));
+      items.push(...kitchenInternalItems(s.basement, "Basement Kitchen"));
+    } else {
+      items.push(...kitchenInternalItems(s, null));
+    }
   }
   else if(cat === "bathroom"){
     state.bathroom.rooms.forEach((b,i) => {
@@ -4060,6 +4263,9 @@ async function bootstrapCloudSync(showMigratePrompt){
 */
 let pdfDetected = null; // last parsed result, used by Apply
 let pdfIncludeBasement = false; // user toggle: include basement rooms/sqft in import
+let pdfTileBasementKitchen = false; // when basement included AND a basement kitchen exists,
+                                    // user can opt to TILE that kitchen instead of flooring it
+                                    // with the secondary (basement) material.
 
 function triggerPdfImport(){
   if(typeof pdfjsLib === "undefined"){
@@ -4067,13 +4273,31 @@ function triggerPdfImport(){
     return;
   }
   pdfIncludeBasement = false; // reset each time the import opens
+  pdfTileBasementKitchen = false;
   document.getElementById("pdfImportInput").value = "";
   document.getElementById("pdfImportInput").click();
 }
 
 function setPdfIncludeBasement(val){
   pdfIncludeBasement = !!val;
+  // When basement is turned off, the basement-kitchen-tiling toggle is meaningless
+  if(!pdfIncludeBasement) pdfTileBasementKitchen = false;
   // Re-render but preserve any text the user typed into the name/address fields
+  const nameEl = document.getElementById("pdfPropName");
+  const addrEl = document.getElementById("pdfAddress");
+  const editedName = nameEl ? nameEl.value : null;
+  const editedAddr = addrEl ? addrEl.value : null;
+  renderPdfDetectModal();
+  if(editedName !== null){
+    const n = document.getElementById("pdfPropName"); if(n) n.value = editedName;
+  }
+  if(editedAddr !== null){
+    const a = document.getElementById("pdfAddress"); if(a) a.value = editedAddr;
+  }
+}
+function setPdfTileBasementKitchen(val){
+  pdfTileBasementKitchen = !!val;
+  // Just re-render the modal — preserve typed name/address
   const nameEl = document.getElementById("pdfPropName");
   const addrEl = document.getElementById("pdfAddress");
   const editedName = nameEl ? nameEl.value : null;
@@ -4161,8 +4385,10 @@ function parseFloorPlanText(text){
     bedroomCount: 0,
     bedrooms: [],          // [{name, sqft, floor}]
     bathrooms: [],         // [{pieces, type, sqft, floor, hasTub, hasShower}]
-    kitchenSqft: 0,
-    kitchenSize: "",
+    kitchenSqft: 0,        // legacy single kitchen sqft (largest detected) — kept for compat
+    kitchenSize: "",       // legacy single kitchen size tier
+    mainKitchenSqft: 0,    // largest kitchen on the main / 2nd floor (above grade)
+    basementKitchenSqft: 0,// kitchen detected in the basement section
     foyerSqft: 0,          // total foyer/entry sqft (typically tiled)  — ABOVE-GRADE only
     foyerSqftBasement: 0,  // basement foyer sqft (added only if user opts to include basement)
     breakfastSqft: 0,      // total breakfast area sqft (typically tiled)
@@ -4318,6 +4544,20 @@ function parseFloorPlanText(text){
       if(seg.floor === "basement") out.utilityRoomCountBasement += 1;
       else                          out.utilityRoomCount        += 1;
     }
+    // Per-floor kitchen detection: pick the largest kitchen in this section
+    kitchenRe.lastIndex = 0;
+    let kkm, biggest = 0;
+    while((kkm = kitchenRe.exec(seg.text)) !== null){
+      const s = parseFloat(kkm[1]);
+      if(s > biggest) biggest = s;
+    }
+    if(biggest > 0){
+      if(seg.floor === "basement"){
+        if(biggest > out.basementKitchenSqft) out.basementKitchenSqft = biggest;
+      } else {
+        if(biggest > out.mainKitchenSqft) out.mainKitchenSqft = biggest;
+      }
+    }
   });
 
   // Fallback (no section headers found): scan the whole text once
@@ -4349,16 +4589,21 @@ function parseFloorPlanText(text){
 
   out.bedroomCount = out.bedrooms.length;
 
-  // Largest kitchen by sqft (main kitchen)
-  let km, biggestK = 0;
-  kitchenRe.lastIndex = 0;
-  while((km = kitchenRe.exec(norm)) !== null){
-    const s = parseFloat(km[1]);
-    if(s > biggestK) biggestK = s;
+  // Legacy single-kitchen fields — populated from the MAIN (above-grade) kitchen,
+  // falling back to the largest kitchen detected anywhere if no main was found.
+  if(out.mainKitchenSqft > 0){
+    out.kitchenSqft = out.mainKitchenSqft;
+  } else {
+    let km, biggestK = 0;
+    kitchenRe.lastIndex = 0;
+    while((km = kitchenRe.exec(norm)) !== null){
+      const s = parseFloat(km[1]);
+      if(s > biggestK) biggestK = s;
+    }
+    out.kitchenSqft = biggestK;
   }
-  out.kitchenSqft = biggestK;
-  if(biggestK > 0){
-    out.kitchenSize = biggestK >= 150 ? "large" : (biggestK >= 70 ? "medium" : "small");
+  if(out.kitchenSqft > 0){
+    out.kitchenSize = out.kitchenSqft >= 150 ? "large" : (out.kitchenSqft >= 70 ? "medium" : "small");
   }
 
   return out;
@@ -4416,9 +4661,21 @@ function renderPdfDetectModal(){
     ? bedroomsShown.map(b => `<div class="pbl-item"><span>${escapeHtml(b.name)} · ${Math.round(b.sqft)} sqft</span><span class="pbl-floor">${escapeHtml(bedFloors[b.floor] || b.floor || "—")}</span></div>`).join("")
     : `<div class="pbl-item" style="color:var(--muted);font-style:italic;">No bedrooms detected.</div>`;
 
-  const kitchenLine = d.kitchenSqft
-    ? `Main kitchen detected at <b>${Math.round(d.kitchenSqft)} sqft</b> — auto-set to <b>${({small:"Small",medium:"Medium",large:"Large"})[d.kitchenSize]}</b> tier.`
-    : `No kitchen detected. Toggle the Kitchen category manually if needed.`;
+  let kitchenLine;
+  if(d.kitchenSqft || d.mainKitchenSqft){
+    const mks = d.mainKitchenSqft || d.kitchenSqft;
+    const mkSize = mks >= 150 ? "Large" : (mks >= 70 ? "Medium" : "Small");
+    kitchenLine = `Main kitchen detected at <b>${Math.round(mks)} sqft</b> — auto-set to <b>${mkSize}</b> tier.`;
+    if(pdfIncludeBasement && d.basementKitchenSqft > 0){
+      const bks = d.basementKitchenSqft;
+      const bkSize = bks >= 150 ? "Large" : (bks >= 70 ? "Medium" : "Small");
+      kitchenLine += `<br>Basement kitchen detected at <b>${Math.round(bks)} sqft</b> — auto-set to <b>${bkSize}</b> tier (as a second kitchen).`;
+    } else if(d.basementKitchenSqft > 0 && !pdfIncludeBasement){
+      kitchenLine += `<br><span style="color:var(--muted);font-size:12px;">A basement kitchen of ${Math.round(d.basementKitchenSqft)} sqft was also detected — toggle "Include Basement" above to add it as a second kitchen.</span>`;
+    }
+  } else {
+    kitchenLine = `No kitchen detected. Toggle the Kitchen category manually if needed.`;
+  }
 
   // Additional rooms used for tiling + door counts
   const includeFoyer     = (d.foyerSqft       || 0) + (pdfIncludeBasement ? (d.foyerSqftBasement       || 0) : 0);
@@ -4447,6 +4704,20 @@ function renderPdfDetectModal(){
       </div>
     </div>` : "";
 
+  // Secondary toggle — visible only when basement is on AND a basement kitchen was detected.
+  // Defaults OFF (basement kitchen will use the secondary flooring material).
+  const basementKitchenToggle = (pdfIncludeBasement && d.basementKitchenSqft > 0) ? `
+    <div class="disc-toggle-row" style="margin-bottom:14px;">
+      <input type="checkbox" class="switch-input" id="sw-pdf-tilebk" ${pdfTileBasementKitchen?'checked':''} onchange="setPdfTileBasementKitchen(this.checked)">
+      <label for="sw-pdf-tilebk" class="switch"></label>
+      <div class="toggle-info">
+        <div class="cat-title">Tile the basement kitchen floor</div>
+        <div class="cat-sub">${pdfTileBasementKitchen
+          ? `Basement kitchen's ${Math.round(d.basementKitchenSqft)} sqft will be added to Tiling.`
+          : `By default the basement kitchen floor will use the secondary flooring material (e.g. vinyl). Toggle on if you'll be tiling it instead.`}</div>
+      </div>
+    </div>` : "";
+
   setPdfBodyHtml(`
     <div class="pdf-status">
       <div class="ps-title">Detected from PDF</div>
@@ -4454,6 +4725,7 @@ function renderPdfDetectModal(){
     </div>
 
     ${basementToggle}
+    ${basementKitchenToggle}
 
     <div class="pdf-detect-grid">
       <div class="field">
@@ -4552,8 +4824,15 @@ function applyPdfImport(){
 
   // ---- Painting auto-population ----
   // Walls: default 1 coat, whole property — keep as-is.
-  // Auto-select baseboards & trim painting (linear feet will auto-compute from property sqft).
+  // Auto-select baseboards & trim painting.
   state.painting.trim = true;
+  // Write the suggested linear-feet value into state so the number shows up
+  // in the input field (white text) instead of as a faint grey placeholder.
+  // state.propSqft was set above, so suggestedTrimLinFt() returns a real number.
+  const autoLinFt = suggestedTrimLinFt();
+  if(autoLinFt > 0){
+    state.painting.trimLinFt = String(autoLinFt);
+  }
   // Door-count heuristic — every standalone "doored" room contributes 1 door:
   //   • Bedrooms (entry door)
   //   • Bathrooms (entry door)
@@ -4574,25 +4853,81 @@ function applyPdfImport(){
   state.painting.doorCount = String(doorCount);
   state.painting.doorsAutoFromPdf = true;
 
-  // ---- Flooring auto-population ----
-  // Sqft of finished flooring = total property sqft − kitchen − bathrooms − laundry
-  // (kitchen, bathrooms, laundry all get tiled rather than floored)
-  const flooringSqft = Math.max(0, Math.round(propertySqft - kitchenSqft - bathroomTotalSqft - includeLaundry));
-  state.flooring.sqft = flooringSqft ? String(flooringSqft) : "";
-  state.flooring.baseboards = true;
-  // removeOld is already true by default in freshState() — disposal is included as standard.
+  // Convenience locals for the basement portion (zero when basement is excluded)
+  const basementSqft         = pdfIncludeBasement ? num(d.basementSqft) : 0;
+  const basementKitchenSqft  = pdfIncludeBasement ? num(d.basementKitchenSqft) : 0;
+  const basementLaundrySqft  = pdfIncludeBasement ? num(d.laundrySqftBasement)   : 0;
+  const basementFoyerSqft    = pdfIncludeBasement ? num(d.foyerSqftBasement)     : 0;
+  const basementBreakfastSqft= pdfIncludeBasement ? num(d.breakfastSqftBasement) : 0;
+  // Basement bathrooms = those bathrooms whose floor sqft contributes (already in bathroomTotalSqft)
+  const basementBathSqft     = pdfIncludeBasement
+    ? d.bathrooms.filter(b => b.floor === "basement").reduce((s,b) => s + (num(b.sqft)||0), 0)
+    : 0;
 
   // ---- Tiling auto-population ----
-  // Tile sqft = foyer + kitchen + breakfast + laundry (non-bathroom tile)
-  const tilingSqft = Math.round(includeFoyer + kitchenSqft + includeBreakfast + includeLaundry);
+  // Above-grade tiling = foyer + main kitchen + breakfast + laundry (each above grade)
+  // Basement tiling additions: laundry + foyer (always); breakfast if any; basement kitchen
+  // ONLY if the user explicitly toggled "Tile basement kitchen".
+  // Basement bathrooms are tiled per-bathroom (handled inside the Bathroom category).
+  let tilingSqft = Math.round((num(d.foyerSqft)||0) + (num(d.mainKitchenSqft)||kitchenSqft||0) + (num(d.breakfastSqft)||0) + (num(d.laundrySqft)||0));
+  if(pdfIncludeBasement){
+    tilingSqft += Math.round(basementLaundrySqft + basementFoyerSqft + basementBreakfastSqft);
+    if(pdfTileBasementKitchen) tilingSqft += Math.round(basementKitchenSqft);
+  }
   state.tiling.sqft = tilingSqft ? String(tilingSqft) : "";
 
+  // ---- Flooring auto-population ----
+  // Total flooring sqft = property − everything that's tiled (above-grade + basement)
+  // − bathrooms (they get their own floor tile via the bathroom category).
+  // If user opted to tile basement kitchen, that sqft is already counted in tilingSqft;
+  // otherwise it stays in flooring (priced at the SECONDARY material rate).
+  const aboveGradeTiled = (num(d.foyerSqft)||0) + (num(d.mainKitchenSqft)||kitchenSqft||0) + (num(d.breakfastSqft)||0) + (num(d.laundrySqft)||0);
+  const basementTiled   = pdfIncludeBasement
+    ? (basementLaundrySqft + basementFoyerSqft + basementBreakfastSqft + (pdfTileBasementKitchen ? basementKitchenSqft : 0))
+    : 0;
+  const flooringSqft = Math.max(0, Math.round(propertySqft - aboveGradeTiled - basementTiled - bathroomTotalSqft));
+  state.flooring.sqft = flooringSqft ? String(flooringSqft) : "";
+  state.flooring.baseboards = true;
+  // Same as trim — write the auto baseboard linear feet into state so the white-text
+  // input value shows up clearly (instead of a faint placeholder hint).
+  if(autoLinFt > 0){
+    state.flooring.baseboardLinFt = String(autoLinFt);
+  }
+  // removeOld is already true by default in freshState() — disposal is included as standard.
+
+  // Secondary flooring carve-out: ONLY when basement is included. The basement portion
+  // of the total flooring sqft is priced at the secondary (basement) material rate.
+  // basement flooring sqft = basement_total − (basement tiled portions) − basement bathrooms
+  if(pdfIncludeBasement){
+    const basementFlooringSqft = Math.max(0, Math.round(basementSqft - basementTiled - basementBathSqft));
+    state.flooring.secondary.enabled = basementFlooringSqft > 0;
+    state.flooring.secondary.type    = "vinyl";  // sensible basement default
+    state.flooring.secondary.sqft    = basementFlooringSqft ? String(basementFlooringSqft) : "";
+  } else {
+    state.flooring.secondary.enabled = false;
+    state.flooring.secondary.sqft    = "";
+  }
+
   // ---- Kitchen auto-population ----
+  // Main kitchen
   state.kitchen.size              = d.kitchenSize || "medium";
   state.kitchen.counter           = true;
   state.kitchen.undercabLighting  = true;
   state.kitchen.backsplash        = true;
   state.kitchen.backsplashType    = "quartz";  // same material as countertop
+  // Basement kitchen (only when basement is included AND a kitchen was detected there)
+  if(pdfIncludeBasement && basementKitchenSqft > 0){
+    const bkSize = basementKitchenSqft >= 150 ? "large" : (basementKitchenSqft >= 70 ? "medium" : "small");
+    state.kitchen.basement.enabled           = true;
+    state.kitchen.basement.tier              = "standard";
+    state.kitchen.basement.size              = bkSize;
+    state.kitchen.basement.counter           = true;
+    state.kitchen.basement.undercabLighting  = true;
+    state.kitchen.basement.backsplash        = true;
+    state.kitchen.basement.backsplashType    = "quartz";
+  } else {
+    state.kitchen.basement.enabled = false;
+  }
 
   // ---- Bathroom auto-population ----
   if(bathroomsToImport.length){
