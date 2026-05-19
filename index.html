@@ -2287,7 +2287,7 @@ function renderCatBody(cat){
       <div class="grid grid-2">
         <div>
           <label>Sqft of space to floor ${num(state.propSqft) > 0 ? `<span style="text-transform:none;letter-spacing:0;color:var(--gold-bright);font-weight:600;">&middot; auto from property sqft</span>` : ""}</label>
-          <input type="number" min="0" value="${s.sqft || (num(state.propSqft) > 0 ? state.propSqft : '')}" placeholder="${num(state.propSqft) > 0 ? 'override if needed' : 'enter property sqft first'}" oninput="state.flooring.sqft=this.value;renderTotals()">
+          <input type="number" min="0" value="${s.sqft || (num(state.propSqft) > 0 ? state.propSqft : '')}" placeholder="Type to override property total" oninput="state.flooring.sqft=this.value;renderTotals()">
           <div class="info-readout" id="floor-mat-readout" style="display:${q?'':'none'};">
             ${q ? `≈ ${Math.ceil(q.qty).toLocaleString("en-CA")} sqft of material to order (${q.sqft.toLocaleString("en-CA")} + ${q.pct}% waste)` : ""}
           </div>
