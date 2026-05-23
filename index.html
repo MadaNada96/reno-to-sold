@@ -967,6 +967,38 @@
   }
   .es-totals-box .row.grand .v{ color:#a8853f; }
 
+  /* Savings card — eye-catching black/gold box that shouts the discount.
+     Only rendered when there's an active discount. Sits directly under
+     the Quote Summary; marked page-break-inside:avoid so it never splits. */
+  .es-savings-card{
+    margin:18px 0 30px;
+    background:#0a0a0a;
+    border:3px solid #d4af6a;
+    padding:22px 26px;
+    text-align:center;
+    color:#fff;
+    box-shadow:0 0 0 1px #d4af6a inset;
+    page-break-inside:avoid;
+    break-inside:avoid;
+    position:relative;
+  }
+  .es-savings-card .es-sav-eyebrow{
+    font-size:11px; letter-spacing:.24em; text-transform:uppercase;
+    font-weight:700; color:#e8c989;
+    margin:0 0 4px;
+  }
+  .es-savings-card .es-sav-amount{
+    font-family:'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+    font-size:46px; line-height:1; font-weight:700;
+    color:#e8c989; letter-spacing:.02em;
+    margin:6px 0 10px;
+    text-shadow:0 0 18px rgba(232,201,137,.35), 0 0 4px rgba(212,175,106,.5);
+  }
+  .es-savings-card .es-sav-tag{
+    font-size:12px; color:#f5f1e6; letter-spacing:.08em; font-weight:500;
+  }
+  .es-savings-card .es-sav-tag b{ color:#e8c989; font-weight:700; }
+
   /* Page-2 wrapper — disclaimer + signatures travel together on their own sheet.
      `page-break-inside:avoid` here guarantees the signatures cannot detach
      from the disclaimer block. If the content overflows a single page, the
@@ -1170,10 +1202,17 @@
     body.show-estimate .es-totals-title,
     body.show-estimate .es-totals,
     body.show-estimate .es-totals-box .row.grand,
+    body.show-estimate .es-savings-card,
+    body.show-estimate .es-savings-card .es-sav-eyebrow,
+    body.show-estimate .es-savings-card .es-sav-amount,
+    body.show-estimate .es-savings-card .es-sav-tag,
     body.show-estimate .es-disclaimer,
     body.show-estimate .es-disclaimer .es-disc-title,
     body.show-estimate .es-disclaimer .es-disc-title::before{
       -webkit-print-color-adjust:exact; print-color-adjust:exact;
+    }
+    body.show-estimate .es-savings-card{
+      page-break-inside:avoid !important; break-inside:avoid !important;
     }
     body.show-estimate .es-disclaimer{
       page-break-inside:avoid !important; break-inside:avoid !important;
@@ -3853,8 +3892,13 @@ function printEstimateViaIframe(){
     .estimate-toolbar { display:none !important; }
     .es-table thead th, .es-cat-row td, .es-subtotal-row td,
     .es-totals-title, .es-totals, .es-totals-box .row.grand,
+    .es-savings-card, .es-savings-card .es-sav-eyebrow,
+    .es-savings-card .es-sav-amount, .es-savings-card .es-sav-tag,
     .es-disclaimer, .es-disclaimer .es-disc-title, .es-disclaimer .es-disc-title::before {
       -webkit-print-color-adjust:exact; print-color-adjust:exact;
+    }
+    .es-savings-card {
+      page-break-inside:avoid !important; break-inside:avoid !important;
     }
     .es-table thead { display:table-header-group; }
     .es-table tr, .es-header, .es-meta-grid, .es-totals, .es-signatures, .es-disclaimer, .es-footer {
@@ -4418,6 +4462,19 @@ function renderClientEstimate(){
         </div>
       </div>
     `;
+
+    // Eye-catching savings card — only when there's an active discount worth showing.
+    // Rounded to the nearest dollar, formatted with thousands separators.
+    if(state.discount && state.discount.enabled && t.discount > 0){
+      const savingsAmt = "$" + Math.round(t.discount).toLocaleString("en-CA");
+      html += `
+        <div class="es-savings-card">
+          <div class="es-sav-eyebrow">By Listing With Us You Save</div>
+          <div class="es-sav-amount">${savingsAmt}</div>
+          <div class="es-sav-tag">On this renovation with <b>Reno to Sold</b></div>
+        </div>
+      `;
+    }
   }
 
   // ============================================================
