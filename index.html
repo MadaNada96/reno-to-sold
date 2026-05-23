@@ -961,39 +961,56 @@
   }
   .es-totals-box .row.grand .v{ color:#a8853f; }
 
+  /* Page-2 wrapper — disclaimer + signatures travel together on their own sheet */
+  .es-page-break{
+    /* On screen we just leave breathing room. In print we force a new page. */
+    height:0; margin:0; padding:0;
+  }
+  .es-disclaimer-page{
+    margin-top:48px;
+  }
+
   /* Exclusive-listing disclaimer */
   .es-disclaimer{
-    margin-top:34px;
-    border:2px solid #d4af6a;
+    border:3px double #a8853f;
     background:#fffaf0;
-    padding:18px 20px 16px;
-    page-break-inside:avoid;
+    padding:0 24px 18px;
+    margin-bottom:30px;
+    box-shadow:0 1px 0 #d4af6a inset, 0 -1px 0 #d4af6a inset;
   }
+  /* Title bar — prominent, outlined */
   .es-disclaimer .es-disc-title{
-    font-size:11px; letter-spacing:.22em; text-transform:uppercase;
-    font-weight:800; color:#a8853f;
-    margin-bottom:10px;
-    display:flex; align-items:center; gap:8px;
+    background:#0a0a0a;
+    color:#e8c989;
+    margin:0 -24px 16px;
+    padding:13px 20px 13px;
+    border-bottom:3px solid #d4af6a;
+    display:flex; align-items:center; gap:10px;
+    font-size:13px; letter-spacing:.16em; text-transform:uppercase;
+    font-weight:800;
   }
   .es-disclaimer .es-disc-title::before{
     content:"!"; display:inline-flex; align-items:center; justify-content:center;
-    width:18px; height:18px; border-radius:50%;
-    background:#a8853f; color:#fff;
-    font-size:12px; font-weight:800;
+    width:22px; height:22px; border-radius:50%;
+    background:#d4af6a; color:#0a0a0a;
+    font-size:14px; font-weight:900; flex:0 0 auto;
   }
+  .es-disclaimer .es-disc-title-text{ flex:1; }
   .es-disclaimer p{
-    margin:0 0 8px; font-size:12px; line-height:1.55; color:#1a1a1a;
+    margin:0 0 10px; font-size:12px; line-height:1.6; color:#1a1a1a;
   }
   .es-disclaimer p:last-child{ margin-bottom:0; }
   .es-disclaimer .es-disc-ack{
-    font-size:11px; color:#444; font-style:italic; margin-top:8px;
+    font-size:11.5px; color:#1a1a1a; font-style:italic; margin-top:14px;
+    padding-top:12px; border-top:1px dashed #d4af6a;
   }
 
   /* Signatures */
   .es-signatures{
-    display:grid; grid-template-columns:1fr 1fr; gap:40px;
-    margin-top:30px; page-break-inside:avoid;
+    display:grid; grid-template-columns:1fr 1fr; gap:40px 50px;
+    margin-top:8px; page-break-inside:avoid;
   }
+  .es-signatures-multi{ row-gap:34px; }
   @media (max-width:720px){ .es-signatures{ grid-template-columns:1fr; gap:30px; } }
   .es-sig .sig-line{
     border-bottom:1px solid #0a0a0a; height:42px;
@@ -1137,11 +1154,22 @@
     body.show-estimate .es-totals,
     body.show-estimate .es-totals-box .row.grand,
     body.show-estimate .es-disclaimer,
+    body.show-estimate .es-disclaimer .es-disc-title,
     body.show-estimate .es-disclaimer .es-disc-title::before{
       -webkit-print-color-adjust:exact; print-color-adjust:exact;
     }
     body.show-estimate .es-disclaimer{
       page-break-inside:avoid !important; break-inside:avoid !important;
+    }
+    /* Force the disclaimer + signatures onto their own printed sheet */
+    body.show-estimate .es-page-break{
+      page-break-before:always !important;
+      break-before:page !important;
+      display:block;
+    }
+    body.show-estimate .es-disclaimer-page{
+      page-break-inside:avoid !important; break-inside:avoid !important;
+      margin-top:0 !important;
     }
     body.show-estimate .es-table thead{ display:table-header-group; }
     body.show-estimate .es-table tr{
@@ -1268,21 +1296,11 @@
         </div>
       </div>
       <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line);">
-        <div style="font-size:11px;color:var(--gold-bright);text-transform:uppercase;letter-spacing:.15em;font-weight:600;margin-bottom:10px;">Seller Contact</div>
-        <div class="grid grid-3">
-          <div>
-            <label>Seller's name</label>
-            <input type="text" id="sellerName" placeholder="e.g. John Smith" oninput="state.sellerName=this.value;renderTotals()">
-          </div>
-          <div>
-            <label>Phone number</label>
-            <input type="tel" id="sellerPhone" placeholder="e.g. 416-555-1234" oninput="state.sellerPhone=this.value">
-          </div>
-          <div>
-            <label>Email address</label>
-            <input type="email" id="sellerEmail" placeholder="e.g. john@example.com" autocomplete="off" oninput="state.sellerEmail=this.value">
-          </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+          <div style="font-size:11px;color:var(--gold-bright);text-transform:uppercase;letter-spacing:.15em;font-weight:600;">Seller Contact</div>
+          <button type="button" class="add-btn no-print" onclick="addSeller()" style="margin:0;">+ Add another seller</button>
         </div>
+        <div id="sellersContainer"></div>
       </div>
     </div>
   </div>
@@ -1655,9 +1673,10 @@ function freshState(){
     propName: "",
     propAddress: "",
     propSqft: "",
-    sellerName: "",
-    sellerPhone: "",
-    sellerEmail: "",
+    // Sellers — supports any number; sellers[0] is always present.
+    // Legacy sellerName/sellerPhone/sellerEmail are migrated into sellers[0]
+    // on load (see migrateOldEstimate).
+    sellers: [ { name:"", phone:"", email:"" } ],
     enabled: { painting:false, flooring:false, tiling:false, kitchen:false, bathroom:false, potlights:false },
     painting:  {
       coats: "one",          // "one" | "two"
@@ -1928,6 +1947,27 @@ function migrateOldEstimate(m){
       m.discount.customEnabled = !!hadCustom;
     }
   }
+  // Sellers: migrate legacy singletons (sellerName / sellerPhone / sellerEmail)
+  // into the new sellers[] array. Older shapes might also have sellers as an
+  // object/empty/missing — normalise to a non-empty array.
+  if(!Array.isArray(m.sellers)){
+    const legacy = {
+      name:  (m.sellerName  || "").toString(),
+      phone: (m.sellerPhone || "").toString(),
+      email: (m.sellerEmail || "").toString()
+    };
+    m.sellers = [legacy];
+  }
+  if(m.sellers.length === 0){
+    m.sellers.push({ name:"", phone:"", email:"" });
+  }
+  m.sellers = m.sellers.map(s => ({
+    name:  (s && s.name)  ? String(s.name)  : "",
+    phone: (s && s.phone) ? String(s.phone) : "",
+    email: (s && s.email) ? String(s.email) : ""
+  }));
+  // Drop the legacy fields once migrated so saves stay clean
+  delete m.sellerName; delete m.sellerPhone; delete m.sellerEmail;
 }
 function deleteEstimate(id){
   if(!confirm("Delete this estimate?")) return;
@@ -2196,9 +2236,7 @@ function renderAll(){
   document.getElementById("propName").value = state.propName || "";
   document.getElementById("propAddress").value = state.propAddress || "";
   document.getElementById("propSqft").value = state.propSqft || "";
-  document.getElementById("sellerName").value = state.sellerName || "";
-  document.getElementById("sellerPhone").value = state.sellerPhone || "";
-  document.getElementById("sellerEmail").value = state.sellerEmail || "";
+  renderSellers();
   if(!state.discount) state.discount = { enabled:false, listing:false, customEnabled:false, customType:"percent", customValue:"", customNote:"" };
   if(typeof state.discount.customEnabled !== "boolean") state.discount.customEnabled = !!(state.discount.customValue && parseFloat(state.discount.customValue) > 0);
   document.getElementById("sw-discount").checked = !!state.discount.enabled;
@@ -2214,6 +2252,60 @@ function renderAll(){
   renderDiscPlaceholder();
   renderCategories();
   renderTotals();
+}
+
+/* ---------- Sellers (multiple) ---------- */
+function ensureSellers(){
+  if(!Array.isArray(state.sellers) || state.sellers.length === 0){
+    state.sellers = [ { name:"", phone:"", email:"" } ];
+  }
+}
+function renderSellers(){
+  ensureSellers();
+  const wrap = document.getElementById("sellersContainer");
+  if(!wrap) return;
+  wrap.innerHTML = state.sellers.map((s, i) => {
+    const isFirst = i === 0;
+    return `
+      <div class="seller-block" data-idx="${i}" style="margin-top:${isFirst?'0':'14px'};padding-top:${isFirst?'0':'14px'};${isFirst?'':'border-top:1px dashed var(--line);'}">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;flex-wrap:wrap;">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.16em;font-weight:700;">Seller ${i+1}</div>
+          ${isFirst ? "" : `<button type="button" class="ghost danger no-print" onclick="removeSeller(${i})" style="font-size:11px;padding:4px 10px;">Remove</button>`}
+        </div>
+        <div class="grid grid-3">
+          <div>
+            <label>${isFirst ? "Seller's name" : "Name"}</label>
+            <input type="text" placeholder="e.g. ${isFirst?'John Smith':'Jane Smith'}" value="${escapeHtml(s.name||'')}" oninput="setSellerField(${i},'name',this.value)">
+          </div>
+          <div>
+            <label>Phone number</label>
+            <input type="tel" placeholder="e.g. 416-555-1234" value="${escapeHtml(s.phone||'')}" oninput="setSellerField(${i},'phone',this.value)">
+          </div>
+          <div>
+            <label>Email address</label>
+            <input type="email" placeholder="e.g. ${isFirst?'john':'jane'}@example.com" autocomplete="off" value="${escapeHtml(s.email||'')}" oninput="setSellerField(${i},'email',this.value)">
+          </div>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+function setSellerField(i, field, val){
+  ensureSellers();
+  if(!state.sellers[i]) return;
+  state.sellers[i][field] = val;
+  if(field === "name") renderTotals(); // header pulls name from sellers[0] in some places
+}
+function addSeller(){
+  ensureSellers();
+  state.sellers.push({ name:"", phone:"", email:"" });
+  renderSellers();
+}
+function removeSeller(i){
+  ensureSellers();
+  if(i <= 0 || i >= state.sellers.length) return;
+  state.sellers.splice(i, 1);
+  renderSellers();
 }
 
 function toggleDiscount(ev){
@@ -3062,10 +3154,15 @@ function renderSavedList(){
   empty.style.display="none";
   list.forEach(e => {
     const li = document.createElement("li");
-    const seller = (e.state && e.state.sellerName) ? e.state.sellerName.trim() : "";
-    const phone  = (e.state && e.state.sellerPhone) ? e.state.sellerPhone.trim() : "";
-    const email  = (e.state && e.state.sellerEmail) ? e.state.sellerEmail.trim() : "";
-    const sellerLine = [seller, phone, email].filter(Boolean).join(" · ");
+    // Pull seller data from new sellers[] array, falling back to legacy
+    // sellerName/sellerPhone/sellerEmail singletons for un-migrated saves.
+    const s0 = (e.state && Array.isArray(e.state.sellers) && e.state.sellers[0]) ? e.state.sellers[0] : {};
+    const seller = ((s0.name  || (e.state && e.state.sellerName))  || "").trim();
+    const phone  = ((s0.phone || (e.state && e.state.sellerPhone)) || "").trim();
+    const email  = ((s0.email || (e.state && e.state.sellerEmail)) || "").trim();
+    const allCount = Array.isArray(e.state && e.state.sellers) ? e.state.sellers.length : (seller ? 1 : 0);
+    const extra = allCount > 1 ? ` +${allCount-1} more` : "";
+    const sellerLine = [seller + extra, phone, email].filter(Boolean).join(" · ");
     li.innerHTML = `
       <div class="info">
         <div class="name">${escapeHtml(e.name)}</div>
@@ -3731,12 +3828,22 @@ function printEstimateViaIframe(){
     .estimate-toolbar { display:none !important; }
     .es-table thead th, .es-cat-row td, .es-subtotal-row td,
     .es-totals-title, .es-totals, .es-totals-box .row.grand,
-    .es-disclaimer, .es-disclaimer .es-disc-title::before {
+    .es-disclaimer, .es-disclaimer .es-disc-title, .es-disclaimer .es-disc-title::before {
       -webkit-print-color-adjust:exact; print-color-adjust:exact;
     }
     .es-table thead { display:table-header-group; }
     .es-table tr, .es-header, .es-meta-grid, .es-totals, .es-signatures, .es-disclaimer, .es-footer {
       page-break-inside:avoid !important; break-inside:avoid !important;
+    }
+    /* Disclaimer + signatures always print on a fresh sheet, kept together */
+    .es-page-break {
+      page-break-before:always !important;
+      break-before:page !important;
+      display:block; height:0; margin:0; padding:0;
+    }
+    .es-disclaimer-page {
+      page-break-inside:avoid !important; break-inside:avoid !important;
+      margin-top:0 !important;
     }
     .es-logo img { max-height:70px !important; }
   `);
@@ -4144,9 +4251,16 @@ function renderClientEstimate(){
   const propName = (state.propName || "").trim();
   const propAddr = (state.propAddress || "").trim();
   const propSqft = state.propSqft || "";
-  const seller = (state.sellerName || "").trim();
-  const sellerPhone = (state.sellerPhone || "").trim();
-  const sellerEmail = (state.sellerEmail || "").trim();
+
+  // Sellers — array of {name, phone, email}; sellers[0] always exists.
+  // Filter to those with any data so blank rows don't print noise.
+  const allSellers = (Array.isArray(state.sellers) ? state.sellers : [])
+    .map(s => ({
+      name:  ((s && s.name)  || "").trim(),
+      phone: ((s && s.phone) || "").trim(),
+      email: ((s && s.email) || "").trim()
+    }));
+  const sellers = allSellers.filter(s => s.name || s.phone || s.email);
 
   const groups = buildEstimateLineItems();
   const totals = computeTotals();
@@ -4174,12 +4288,16 @@ function renderClientEstimate(){
     </div>
   `;
 
-  // Prepared For / Project
-  const billto = [
-    seller && `<div class="name">${escapeHtml(seller)}</div>`,
-    sellerPhone && `<div>${escapeHtml(sellerPhone)}</div>`,
-    sellerEmail && `<div>${escapeHtml(sellerEmail)}</div>`
-  ].filter(Boolean).join("") || `<div style="color:#aaa;">—</div>`;
+  // Prepared For / Project — render each seller as a stacked block
+  const billto = sellers.length ? sellers.map((s, i) => {
+    const parts = [
+      s.name  && `<div class="name">${escapeHtml(s.name)}</div>`,
+      s.phone && `<div>${escapeHtml(s.phone)}</div>`,
+      s.email && `<div>${escapeHtml(s.email)}</div>`
+    ].filter(Boolean).join("");
+    const sep = i > 0 ? `<div style="height:10px;"></div>` : "";
+    return sep + parts;
+  }).join("") : `<div style="color:#aaa;">—</div>`;
 
   const project = [
     propName && `<div class="name">${escapeHtml(propName)}</div>`,
@@ -4267,37 +4385,63 @@ function renderClientEstimate(){
     `;
   }
 
-  // Exclusive-listing disclaimer (client must acknowledge by signing below)
-  html += `
-    <div class="es-disclaimer">
-      <div class="es-disc-title">Important — Exclusive Listing Disclaimer</div>
-      <p>This estimate, and any discount shown above, are provided exclusively on the condition that the renovated property will be listed for sale with <b>Mohamed Nada (Broker)</b> under an exclusive listing agreement.</p>
-      <p>If, at any point after the renovation work is complete, the client decides <b>not to sell</b> the property — or <b>cancels the exclusive listing agreement</b> — the client agrees to pay the <b>full price of the renovation</b>, excluding any and all discount(s) shown on this estimate.</p>
-      <p class="es-disc-ack">By signing below, the client confirms they have read, understood, and accept both this estimate and the disclaimer above in full.</p>
+  // ============================================================
+  // PAGE 2 — Disclaimer + Signatures
+  // The .es-page-break wrapper forces this section onto its own
+  // printed sheet so the disclaimer + signatures always travel
+  // together regardless of how long the line-item table is.
+  // ============================================================
+
+  // Use sellers we already filtered above. Fall back to a single generic
+  // "Seller" signature line so a printed estimate is never sign-less.
+  const signingSellers = sellers.length ? sellers : [{ name:"" }];
+
+  // Disclaimer signature rows — every seller signs both the estimate and
+  // the disclaimer. Stack them top-to-bottom, two per row when there's
+  // room (handled by the grid columns rule).
+  const sellerSigBlocks = signingSellers.map((s, i) => {
+    const nameLine = s.name ? `Seller signature &mdash; ${escapeHtml(s.name)}` : `Seller signature${signingSellers.length>1 ? ` &mdash; Seller ${i+1}` : ""}`;
+    return `
+      <div class="es-sig">
+        <div class="sig-line"></div>
+        <div class="sig-label">${nameLine}</div>
+        <div class="sig-date">
+          <div class="sig-line"></div>
+          <div class="sig-label">Date</div>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  const brokerSigBlock = `
+    <div class="es-sig">
+      <div class="sig-line"></div>
+      <div class="sig-label">${escapeHtml(ci.signatureName)}</div>
+      <div class="sig-date">
+        <div class="sig-line"></div>
+        <div class="sig-label">Date</div>
+      </div>
     </div>
   `;
 
-  // Signatures
   html += `
-    <div class="es-signatures">
-      <div class="es-sig">
-        <div class="sig-line"></div>
-        <div class="sig-label">Client signature &mdash; accepts estimate &amp; disclaimer</div>
-        <div class="sig-date">
-          <div class="sig-line"></div>
-          <div class="sig-label">Date</div>
-        </div>
+    <div class="es-page-break"></div>
+    <div class="es-disclaimer-page">
+      <div class="es-disclaimer">
+        <div class="es-disc-title"><span class="es-disc-title-text">Important &mdash; Renovation, Exclusive Listing &amp; MLS Listing Disclaimer</span></div>
+        <p>This estimate, and any discount(s) shown above, are provided to the seller(s) by <b>Mohamed Nada (Broker), Reno to Sold Inc.</b> exclusively on the conditions set out below. All listing arrangements are governed by the <b>Trust in Real Estate Services Act, 2002 (TRESA)</b> and the rules of the <b>Real Estate Council of Ontario (RECO)</b>.</p>
+        <p><b>1. During the renovation period.</b> Effective on acceptance of this estimate, the seller(s) agree to list the property with the brokerage under an <b>Exclusive Listing Agreement</b> (OREA Form 201 — Listing Agreement, Seller Representation Agreement &mdash; Exclusive, or its current equivalent). The brokerage will hold the exclusive right to market the property throughout the duration of the renovation work.</p>
+        <p><b>2. Transition to MLS&reg; on completion.</b> No later than <b>seven (7) calendar days prior to the projected renovation completion date</b>, the brokerage will deliver an <b>MLS&reg; Listing Agreement</b> (OREA Form 200 — Seller Representation Agreement, Authority to Offer for Sale, or its current equivalent) to the seller(s) for execution. Upon completion of the renovation, the property will be listed on the MLS&reg; system of the local real estate board under that agreement.</p>
+        <p><b>3. Cancellation or change of mind.</b> If, at any point on or after the renovation work commences, the seller(s) decide <b>not to sell the property</b>, <b>cancel the Exclusive Listing Agreement</b>, decline to execute the MLS&reg; Listing Agreement, or <b>cancel the MLS&reg; Listing Agreement</b> before the property is sold, the seller(s) agree to pay the <b>full price of the renovation</b>, excluding any and all discount(s) shown on this estimate. Termination of either listing agreement remains subject to the terms of the executed OREA form and applicable RECO regulations.</p>
+        <p class="es-disc-ack">By signing below, each seller confirms they have read, understood, and accept this estimate, the listing arrangements described above, and all terms of this disclaimer in full.</p>
       </div>
-      <div class="es-sig">
-        <div class="sig-line"></div>
-        <div class="sig-label">${escapeHtml(ci.signatureName)}</div>
-        <div class="sig-date">
-          <div class="sig-line"></div>
-          <div class="sig-label">Date</div>
-        </div>
+
+      <div class="es-signatures es-signatures-multi">
+        ${sellerSigBlocks}
+        ${brokerSigBlock}
       </div>
+      <div class="es-footer">Prepared by Reno to Sold Inc.</div>
     </div>
-    <div class="es-footer">Prepared by Reno to Sold Inc.</div>
   `;
 
   el.innerHTML = html;
@@ -4710,10 +4854,15 @@ function renderInternalSheet(){
   const sqft = state.propSqft || "—";
   const today = new Date().toLocaleDateString("en-CA", {year:"numeric", month:"long", day:"numeric"});
 
-  const sellerName  = (state.sellerName || "").trim();
-  const sellerPhone = (state.sellerPhone || "").trim();
-  const sellerEmail = (state.sellerEmail || "").trim();
-  const hasSeller = sellerName || sellerPhone || sellerEmail;
+  const sellers = (Array.isArray(state.sellers) ? state.sellers : []).filter(s => (s.name||s.phone||s.email));
+  const hasSeller = sellers.length > 0;
+  const sellerCells = hasSeller ? sellers.map((s, idx) => {
+    const contact = [s.phone, s.email].filter(Boolean).join(" · ") || "—";
+    return `
+      <div><strong>Seller${sellers.length>1 ? " "+(idx+1) : ""}</strong>${escapeHtml((s.name||"").trim() || "—")}</div>
+      <div><strong>Contact</strong>${escapeHtml(contact)}</div>
+    `;
+  }).join("") : "";
 
   let html = `
     <div class="iv-meta">
@@ -4721,10 +4870,7 @@ function renderInternalSheet(){
       <div><strong>Date</strong>${escapeHtml(today)}</div>
       <div><strong>Address</strong>${escapeHtml(addr)}</div>
       <div><strong>Total property sqft</strong>${escapeHtml(String(sqft))}</div>
-      ${hasSeller ? `
-        <div><strong>Seller</strong>${escapeHtml(sellerName || "—")}</div>
-        <div><strong>Contact</strong>${escapeHtml([sellerPhone, sellerEmail].filter(Boolean).join(" · ") || "—")}</div>
-      ` : ""}
+      ${sellerCells}
     </div>
   `;
 
