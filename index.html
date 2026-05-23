@@ -1381,6 +1381,11 @@
     body.show-estimate .es-subblock{
       page-break-inside:avoid !important; break-inside:avoid !important;
     }
+    /* Drop the text-shadow glow on the savings amount — it renders as a
+       muddy halo in PDFs across most browsers. Stays on-screen, off in print. */
+    body.show-estimate .es-savings-card .es-sav-amount{
+      text-shadow:none !important;
+    }
     body.show-estimate .es-disclaimer{
       page-break-inside:avoid !important; break-inside:avoid !important;
     }
@@ -4071,6 +4076,8 @@ function printEstimateViaIframe(){
     .es-category-block, .es-subblock {
       page-break-inside:avoid !important; break-inside:avoid !important;
     }
+    /* PDF renderers turn text-shadow glows into muddy halos. Off in print. */
+    .es-savings-card .es-sav-amount { text-shadow:none !important; }
     .es-table thead { display:table-header-group; }
     .es-table tr, .es-header, .es-meta-grid, .es-totals, .es-signatures, .es-disclaimer, .es-footer {
       page-break-inside:avoid !important; break-inside:avoid !important;
