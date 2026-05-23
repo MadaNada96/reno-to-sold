@@ -904,11 +904,16 @@
     border-bottom:2px solid #d4af6a;
   }
   .es-table thead th.num{ text-align:right; }
+  /* `.es-table tbody td` (which comes later in this stylesheet) has higher
+     specificity than `.es-cat-row td`, so without !important the cat row's
+     text colour gets overridden to dark grey and disappears on the black
+     background. Force background + colour to lock in the high-contrast look. */
   .es-cat-row td{
-    background:#0a0a0a; color:#ffffff;
+    background:#0a0a0a !important; color:#ffffff !important;
     font-size:12.5px; font-weight:800; letter-spacing:.18em; text-transform:uppercase;
-    padding:11px 12px;
-    border-top:2px solid #d4af6a; border-bottom:2px solid #d4af6a;
+    padding:11px 12px !important;
+    border-top:2px solid #d4af6a !important;
+    border-bottom:2px solid #d4af6a !important;
   }
   .es-table tbody td{
     font-size:12px; padding:9px 10px;
