@@ -935,14 +935,14 @@
     border-bottom:2px solid #d4af6a;
   }
   .es-totals{
-    display:flex; justify-content:flex-end;
+    display:flex; justify-content:flex-start;
     background:#faf6ec;
     padding:18px 18px 8px;
     border:1px solid #e6dec7;
     border-top:none;
   }
   .es-totals-box{
-    min-width:340px; max-width:100%;
+    min-width:340px; max-width:480px; width:100%;
   }
   .es-totals-box .row{
     display:flex; justify-content:space-between; align-items:baseline;
@@ -961,10 +961,38 @@
   }
   .es-totals-box .row.grand .v{ color:#a8853f; }
 
+  /* Exclusive-listing disclaimer */
+  .es-disclaimer{
+    margin-top:34px;
+    border:2px solid #d4af6a;
+    background:#fffaf0;
+    padding:18px 20px 16px;
+    page-break-inside:avoid;
+  }
+  .es-disclaimer .es-disc-title{
+    font-size:11px; letter-spacing:.22em; text-transform:uppercase;
+    font-weight:800; color:#a8853f;
+    margin-bottom:10px;
+    display:flex; align-items:center; gap:8px;
+  }
+  .es-disclaimer .es-disc-title::before{
+    content:"!"; display:inline-flex; align-items:center; justify-content:center;
+    width:18px; height:18px; border-radius:50%;
+    background:#a8853f; color:#fff;
+    font-size:12px; font-weight:800;
+  }
+  .es-disclaimer p{
+    margin:0 0 8px; font-size:12px; line-height:1.55; color:#1a1a1a;
+  }
+  .es-disclaimer p:last-child{ margin-bottom:0; }
+  .es-disclaimer .es-disc-ack{
+    font-size:11px; color:#444; font-style:italic; margin-top:8px;
+  }
+
   /* Signatures */
   .es-signatures{
     display:grid; grid-template-columns:1fr 1fr; gap:40px;
-    margin-top:48px; page-break-inside:avoid;
+    margin-top:30px; page-break-inside:avoid;
   }
   @media (max-width:720px){ .es-signatures{ grid-template-columns:1fr; gap:30px; } }
   .es-sig .sig-line{
@@ -1107,8 +1135,13 @@
     body.show-estimate .es-table thead th,
     body.show-estimate .es-totals-title,
     body.show-estimate .es-totals,
-    body.show-estimate .es-totals-box .row.grand{
+    body.show-estimate .es-totals-box .row.grand,
+    body.show-estimate .es-disclaimer,
+    body.show-estimate .es-disclaimer .es-disc-title::before{
       -webkit-print-color-adjust:exact; print-color-adjust:exact;
+    }
+    body.show-estimate .es-disclaimer{
+      page-break-inside:avoid !important; break-inside:avoid !important;
     }
     body.show-estimate .es-table thead{ display:table-header-group; }
     body.show-estimate .es-table tr{
@@ -1330,7 +1363,7 @@
     <div class="ct-title">Contractor Bid Sheet</div>
     <div class="ct-actions">
       <button onclick="closeContractorBid()">&larr; Back to Estimator</button>
-      <button class="primary" onclick="window.print()">Print / PDF</button>
+      <button class="primary" onclick="printContractorBidViaIframe()">Print / PDF</button>
     </div>
   </div>
   <div class="contractor-sheet" id="contractorSheet"></div>
@@ -3594,22 +3627,135 @@ const COMPANY_INFO = {
 };
 
 function openClientEstimate(){
-  // Nothing is editable on the estimate — render it and go straight to the
-  // print / Save-as-PDF dialog. The overlay is briefly visible while the
-  // browser opens its dialog; afterprint cleans it up.
+  // Nothing is editable on the estimate — render the sheet into a hidden
+  // iframe with its own about:blank document, then trigger that iframe's
+  // print dialog. This is the only reliable way to suppress the browser's
+  // auto-inserted URL/page-title header — the iframe's URL is about:blank
+  // and its document title is empty, so most browsers render a clean
+  // header/footer (or omit them entirely).
   renderClientEstimate();
-  document.body.classList.add("show-estimate");
-  window.scrollTo(0,0);
-  const cleanup = () => {
-    document.body.classList.remove("show-estimate");
-    window.removeEventListener("afterprint", cleanup);
-  };
-  window.addEventListener("afterprint", cleanup);
-  // Defer print to next tick so the sheet is fully painted first
-  setTimeout(() => { try{ window.print(); }catch(e){ /* ignore */ } }, 60);
+  printEstimateViaIframe();
 }
 function closeClientEstimate(){
   document.body.classList.remove("show-estimate");
+}
+
+/* Generic helper: print a DOM node into a hidden iframe so the browser
+   doesn't auto-inject URL/page-title text into the print header/footer.
+   - sourceEl      DOM node to print (will be cloned + serialized)
+   - bodyClasses   classes to set on the iframe document's <body>
+   - extraCss      iframe-specific CSS overrides (margins, page-break rules, etc.)
+   Typed-in input values are copied into value attributes before serialization
+   so they survive (critical for the Contractor Bid sheet's fillable fields). */
+function printNodeViaIframe(sourceEl, bodyClasses, extraCss){
+  if(!sourceEl){ return; }
+
+  // Clone so we can serialize without mutating the live DOM
+  const clone = sourceEl.cloneNode(true);
+  const liveInputs   = sourceEl.querySelectorAll("input, textarea, select");
+  const clonedInputs = clone.querySelectorAll("input, textarea, select");
+  liveInputs.forEach((live, i) => {
+    const c = clonedInputs[i];
+    if(!c) return;
+    const tag = (live.tagName || "").toUpperCase();
+    if(tag === "TEXTAREA"){
+      c.textContent = live.value || "";
+    } else if(tag === "SELECT"){
+      Array.from(c.options).forEach(opt => {
+        if(opt.value === live.value) opt.setAttribute("selected", "selected");
+        else opt.removeAttribute("selected");
+      });
+    } else {
+      if(live.type === "checkbox" || live.type === "radio"){
+        if(live.checked) c.setAttribute("checked", "checked");
+        else c.removeAttribute("checked");
+      } else {
+        c.setAttribute("value", live.value || "");
+      }
+    }
+  });
+  const sourceHtml = clone.outerHTML;
+
+  // Copy all parent stylesheets into the iframe so the print rendering matches
+  const styleNodes = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+    .map(n => n.outerHTML).join("\n");
+
+  const doc = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title></title>
+${styleNodes}
+<style>
+  @page { size: letter; margin: 0.45in; }
+  html, body { background:#fff !important; margin:0 !important; padding:0 !important; }
+  body { font-family:'Montserrat',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; color:#0a0a0a; }
+  ${extraCss || ""}
+</style>
+</head>
+<body class="${bodyClasses || ""}">
+${sourceHtml}
+</body>
+</html>`;
+
+  // Reuse-or-create a single hidden print iframe
+  let iframe = document.getElementById("__printFrame");
+  if(iframe) iframe.remove();
+  iframe = document.createElement("iframe");
+  iframe.id = "__printFrame";
+  iframe.setAttribute("aria-hidden", "true");
+  iframe.style.cssText = "position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none;";
+  document.body.appendChild(iframe);
+
+  const win = iframe.contentWindow;
+  const idoc = win.document;
+  idoc.open(); idoc.write(doc); idoc.close();
+
+  const tryPrint = () => {
+    try { win.focus(); win.print(); } catch(e){ /* ignore */ }
+    setTimeout(() => { try{ iframe.remove(); }catch(e){} }, 1500);
+  };
+  if(idoc.fonts && idoc.fonts.ready && typeof idoc.fonts.ready.then === "function"){
+    idoc.fonts.ready.then(() => setTimeout(tryPrint, 80));
+  } else {
+    setTimeout(tryPrint, 350);
+  }
+}
+
+/* Print the Client Estimate via the iframe helper. */
+function printEstimateViaIframe(){
+  const sourceEl = document.getElementById("estimateView");
+  printNodeViaIframe(sourceEl, "show-estimate", `
+    .estimate-view { display:block !important; position:static !important; background:#fff !important; overflow:visible !important; }
+    .estimate-sheet { margin:0 !important; padding:0 !important; max-width:none !important; box-shadow:none !important; background:#fff !important; }
+    .estimate-toolbar { display:none !important; }
+    .es-table thead th, .es-cat-row td, .es-subtotal-row td,
+    .es-totals-title, .es-totals, .es-totals-box .row.grand,
+    .es-disclaimer, .es-disclaimer .es-disc-title::before {
+      -webkit-print-color-adjust:exact; print-color-adjust:exact;
+    }
+    .es-table thead { display:table-header-group; }
+    .es-table tr, .es-header, .es-meta-grid, .es-totals, .es-signatures, .es-disclaimer, .es-footer {
+      page-break-inside:avoid !important; break-inside:avoid !important;
+    }
+    .es-logo img { max-height:70px !important; }
+  `);
+}
+
+/* Print the Contractor Bid Sheet via the iframe helper. Reuses the existing
+   .contractor-sheet styles (which already have @media print rules), and adds
+   iframe-specific overrides to unwrap the full-screen overlay. */
+function printContractorBidViaIframe(){
+  const sourceEl = document.getElementById("contractorView");
+  printNodeViaIframe(sourceEl, "show-contractor", `
+    .contractor-view { display:block !important; position:static !important; background:#fff !important; overflow:visible !important; }
+    .contractor-toolbar { display:none !important; }
+    .contractor-sheet { margin:0 !important; padding:0 !important; max-width:none !important; box-shadow:none !important; background:#fff !important; }
+    .scope-title, .summary-title { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .scope-section, .summary, .notes-block, .sig-area {
+      page-break-inside:avoid !important; break-inside:avoid !important;
+    }
+  `);
 }
 
 /* Deterministic quote number: Q-YYMMDD-#### derived from address + date */
@@ -4121,12 +4267,22 @@ function renderClientEstimate(){
     `;
   }
 
+  // Exclusive-listing disclaimer (client must acknowledge by signing below)
+  html += `
+    <div class="es-disclaimer">
+      <div class="es-disc-title">Important — Exclusive Listing Disclaimer</div>
+      <p>This estimate, and any discount shown above, are provided exclusively on the condition that the renovated property will be listed for sale with <b>Mohamed Nada (Broker)</b> under an exclusive listing agreement.</p>
+      <p>If, at any point after the renovation work is complete, the client decides <b>not to sell</b> the property — or <b>cancels the exclusive listing agreement</b> — the client agrees to pay the <b>full price of the renovation</b>, excluding any and all discount(s) shown on this estimate.</p>
+      <p class="es-disc-ack">By signing below, the client confirms they have read, understood, and accept both this estimate and the disclaimer above in full.</p>
+    </div>
+  `;
+
   // Signatures
   html += `
     <div class="es-signatures">
       <div class="es-sig">
         <div class="sig-line"></div>
-        <div class="sig-label">Client signature</div>
+        <div class="sig-label">Client signature &mdash; accepts estimate &amp; disclaimer</div>
         <div class="sig-date">
           <div class="sig-line"></div>
           <div class="sig-label">Date</div>
@@ -4148,9 +4304,9 @@ function renderClientEstimate(){
 }
 
 function printEstimate(){
-  // Re-render in case the estimator was just edited
+  // Re-render in case the estimator was just edited, then print via iframe
   renderClientEstimate();
-  window.print();
+  printEstimateViaIframe();
 }
 
 /* ---------- Toast ---------- */
