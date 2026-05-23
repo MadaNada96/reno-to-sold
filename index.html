@@ -1026,7 +1026,7 @@
     border-top:none;
   }
   .es-totals-box{
-    min-width:340px; max-width:480px; width:100%;
+    width:100%; max-width:none;
   }
   .es-totals-box .row{
     display:flex; justify-content:space-between; align-items:baseline;
@@ -4811,7 +4811,11 @@ function renderClientEstimate(){
             <div class="row"><span>Labour subtotal</span><span class="v">${fmtCurrency(t.labour)}</span></div>
             <div class="row"><span>Material subtotal</span><span class="v">${fmtCurrency(t.material)}</span></div>
             <div class="row"><span>Subtotal</span><span class="v">${fmtCurrency(t.subtotal)}</span></div>
-            ${t.listingDisc ? `<div class="row discount"><span>Listing discount</span><span class="v">−${fmtCurrency(t.listingDisc)}</span></div>` : ""}
+            ${t.listingDisc ? (() => {
+              const listingPct = num(prices.listingDiscount && prices.listingDiscount.percent);
+              const pctLbl = listingPct > 0 ? ` (${listingPct}%)` : "";
+              return `<div class="row discount"><span>Listing discount${pctLbl}</span><span class="v">−${fmtCurrency(t.listingDisc)}</span></div>`;
+            })() : ""}
             ${t.customDisc ? `<div class="row discount"><span>Discount${state.discount && state.discount.customNote ? ` (${escapeHtml(state.discount.customNote)})` : ""}</span><span class="v">−${fmtCurrency(t.customDisc)}</span></div>` : ""}
             <div class="row"><span>HST (13%)</span><span class="v">${fmtCurrency(t.hst)}</span></div>
             <div class="row grand"><span>Total</span><span class="v">${fmtCurrency(t.total)}</span></div>
