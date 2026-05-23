@@ -802,6 +802,190 @@
   .iv-summary-row.disc-row .val{ color:#ff9b6a; }
   .iv-summary-row.divider{ border-top:1px dashed #2a2a30; margin-top:10px; padding-top:14px; }
 
+  /* ============================================================
+     Client Estimate (professional Print/PDF) — full-screen overlay
+     ============================================================ */
+  .estimate-view{
+    display:none; position:fixed; inset:0; z-index:980;
+    background:#f1ece1; overflow:auto;
+    color:#0a0a0a;
+    font-family:'Montserrat',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    letter-spacing:.005em;
+  }
+  body.show-estimate{ overflow:hidden; }
+  body.show-estimate .estimate-view{ display:block; }
+  body.show-estimate > .app,
+  body.show-estimate > .modal-bg,
+  body.show-estimate > .contractor-view,
+  body.show-estimate > .internal-view{ display:none !important; }
+
+  .estimate-toolbar{
+    position:sticky; top:0; z-index:5;
+    background:#0a0a0a; color:#e8c989;
+    padding:10px 18px;
+    display:flex; align-items:center; justify-content:space-between;
+    gap:12px; flex-wrap:wrap;
+    border-bottom:1px solid #d4af6a;
+  }
+  .estimate-toolbar .et-title{
+    font-size:13px; letter-spacing:.18em; text-transform:uppercase; font-weight:700; color:#e8c989;
+  }
+  .estimate-toolbar .et-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+
+  /* The printed sheet itself */
+  .estimate-sheet{
+    background:#ffffff;
+    max-width:840px;
+    margin:24px auto;
+    padding:50px 56px;
+    box-shadow:0 6px 28px rgba(0,0,0,.18);
+    color:#0a0a0a;
+  }
+  @media (max-width:720px){
+    .estimate-sheet{ padding:28px 22px; margin:14px; }
+  }
+
+  /* Header — company block + estimate badge */
+  .es-header{
+    display:flex; justify-content:space-between; align-items:flex-start;
+    gap:24px; padding-bottom:22px;
+    border-bottom:3px solid #d4af6a;
+    margin-bottom:28px;
+  }
+  .es-h-left{ flex:1; min-width:0; }
+  .es-company-input{
+    font-family:inherit;
+    font-size:24px; font-weight:800; letter-spacing:.04em;
+    color:#0a0a0a; background:transparent; border:none; padding:0;
+    width:100%; max-width:480px;
+    border-bottom:1px dashed transparent;
+  }
+  .es-company-input:focus{ outline:none; border-bottom-color:#d4af6a; }
+  .es-company-input::placeholder{ color:#bdbdbd; font-weight:600; }
+  .es-contact-line{
+    display:flex; flex-wrap:wrap; gap:18px;
+    margin-top:10px; font-size:11px; color:#555;
+  }
+  .es-contact-line input{
+    border:none; border-bottom:1px dashed transparent;
+    background:transparent; font:inherit; color:#444; padding:2px 0;
+    min-width:140px;
+  }
+  .es-contact-line input:focus{ outline:none; border-bottom-color:#d4af6a; }
+  .es-contact-line input::placeholder{ color:#bdbdbd; }
+
+  .es-h-right{ text-align:right; min-width:200px; }
+  .es-badge{
+    display:inline-block;
+    font-size:26px; font-weight:800; letter-spacing:.20em;
+    text-transform:uppercase; color:#a8853f;
+    border-bottom:2px solid #d4af6a; padding-bottom:4px;
+  }
+  .es-h-right .es-quote-meta{
+    margin-top:14px; font-size:11px; color:#444; line-height:1.7;
+  }
+  .es-h-right .es-quote-meta b{ color:#0a0a0a; display:inline-block; min-width:78px; text-transform:uppercase; letter-spacing:.10em; font-size:10px; }
+
+  /* Meta grid — BILL TO | PROJECT */
+  .es-meta-grid{
+    display:grid; grid-template-columns:1fr 1fr; gap:30px;
+    margin-bottom:28px;
+  }
+  @media (max-width:720px){ .es-meta-grid{ grid-template-columns:1fr; gap:18px; } }
+  .es-meta-block .lbl{
+    font-size:10px; letter-spacing:.22em; text-transform:uppercase;
+    color:#a8853f; font-weight:700; margin-bottom:6px;
+  }
+  .es-meta-block .body{
+    font-size:13px; line-height:1.55; color:#1a1a1a;
+  }
+  .es-meta-block .body .name{ font-weight:700; font-size:14px; }
+
+  /* Line item table */
+  .es-table{ width:100%; border-collapse:collapse; margin-bottom:14px; }
+  .es-table thead th{
+    text-align:left;
+    font-size:10px; letter-spacing:.16em; text-transform:uppercase;
+    font-weight:700; color:#fff; background:#0a0a0a;
+    padding:11px 10px;
+    border-bottom:2px solid #d4af6a;
+  }
+  .es-table thead th.num{ text-align:right; }
+  .es-cat-row td{
+    background:#fbf5e6; color:#0a0a0a;
+    font-size:12px; font-weight:800; letter-spacing:.10em; text-transform:uppercase;
+    padding:9px 10px;
+    border-top:1px solid #e6dec7; border-bottom:1px solid #e6dec7;
+  }
+  .es-table tbody td{
+    font-size:12px; padding:9px 10px;
+    border-bottom:1px solid #eee;
+    vertical-align:top; color:#1a1a1a;
+  }
+  .es-table td.num{ text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .es-table td.desc{ width:42%; }
+  .es-table td.desc .sub{ display:block; color:#666; font-size:11px; margin-top:2px; line-height:1.45; }
+  .es-subtotal-row td{
+    background:#fff; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.12em;
+    color:#a8853f;
+    padding:9px 10px;
+    border-bottom:2px solid #d4af6a;
+  }
+  .es-subtotal-row td.num{ color:#0a0a0a; font-size:13px; letter-spacing:.02em; }
+
+  /* Totals block */
+  .es-totals{
+    display:flex; justify-content:flex-end;
+    margin:24px 0 30px;
+  }
+  .es-totals-box{
+    min-width:340px; max-width:100%;
+  }
+  .es-totals-box .row{
+    display:flex; justify-content:space-between; align-items:baseline;
+    padding:7px 0; font-size:13px;
+    border-bottom:1px dotted #ddd;
+  }
+  .es-totals-box .row .v{ font-variant-numeric:tabular-nums; }
+  .es-totals-box .row.discount .v{ color:#a32a2a; }
+  .es-totals-box .row.grand{
+    border-top:2px solid #0a0a0a;
+    margin:8px -14px 0;
+    padding:14px 14px 14px;
+    font-size:18px; font-weight:800; letter-spacing:.04em;
+    background:#fbf5e6;
+    border-bottom:3px solid #d4af6a;
+  }
+  .es-totals-box .row.grand .v{ color:#a8853f; }
+
+  /* Signatures */
+  .es-signatures{
+    display:grid; grid-template-columns:1fr 1fr; gap:40px;
+    margin-top:48px; page-break-inside:avoid;
+  }
+  @media (max-width:720px){ .es-signatures{ grid-template-columns:1fr; gap:30px; } }
+  .es-sig .sig-line{
+    border-bottom:1px solid #0a0a0a; height:42px;
+  }
+  .es-sig .sig-label{
+    font-size:10px; letter-spacing:.18em; text-transform:uppercase;
+    color:#555; margin-top:6px; font-weight:700;
+  }
+  .es-sig .sig-date{ margin-top:18px; }
+  .es-sig .sig-date .sig-line{ height:30px; }
+
+  /* Footer note */
+  .es-footer{
+    margin-top:34px; padding-top:18px;
+    border-top:1px solid #ddd;
+    text-align:center;
+    font-size:10px; letter-spacing:.18em; text-transform:uppercase; color:#888;
+  }
+  .es-empty{
+    padding:30px; text-align:center; font-size:13px; color:#666;
+    background:#faf8f1; border:1px dashed #d4af6a;
+  }
+
   /* Print */
   @media print{
     body{background:#fff;color:#000;}
@@ -893,6 +1077,47 @@
       -webkit-print-color-adjust:exact; print-color-adjust:exact;
     }
 
+    /* Client Estimate mode — only the estimate sheet prints */
+    body.show-estimate{ background:#fff !important; }
+    body.show-estimate .estimate-view{
+      position:static !important; background:#fff !important;
+      overflow:visible !important;
+    }
+    body.show-estimate .estimate-toolbar{ display:none !important; }
+    body.show-estimate .estimate-sheet{
+      margin:0 !important; padding:0 !important;
+      max-width:none !important; box-shadow:none !important;
+      background:#fff !important;
+    }
+    body.show-estimate .es-header,
+    body.show-estimate .es-meta-grid,
+    body.show-estimate .es-totals,
+    body.show-estimate .es-signatures,
+    body.show-estimate .es-footer{
+      page-break-inside:avoid !important; break-inside:avoid !important;
+    }
+    body.show-estimate .es-cat-row{
+      page-break-after:avoid !important; break-after:avoid !important;
+      -webkit-print-color-adjust:exact; print-color-adjust:exact;
+    }
+    body.show-estimate .es-subtotal-row,
+    body.show-estimate .es-table thead th,
+    body.show-estimate .es-totals-box .row.grand{
+      -webkit-print-color-adjust:exact; print-color-adjust:exact;
+    }
+    body.show-estimate .es-table thead{ display:table-header-group; }
+    body.show-estimate .es-table tr{
+      page-break-inside:avoid !important; break-inside:avoid !important;
+    }
+    /* In print, make typed-in inputs read as plain text */
+    body.show-estimate .es-company-input,
+    body.show-estimate .es-contact-line input{
+      border:none !important; padding:0 !important; color:#0a0a0a !important;
+      background:transparent !important;
+    }
+    body.show-estimate .es-contact-line input::placeholder{ color:transparent !important; }
+    body.show-estimate .es-company-input::placeholder{ color:transparent !important; }
+
     /* Internal Mode print — light-on-white, sections kept together */
     body.show-internal{ background:#fff !important; color:#000 !important; }
     body.show-internal .internal-view{ position:static !important; background:#fff !important; overflow:visible !important; }
@@ -938,7 +1163,7 @@
         <button onclick="openSettings()">Pricing</button>
         <button onclick="openContractorBid()">Contractor Bid</button>
         <button id="authBtn" onclick="onAuthClick()">Sign in</button>
-        <button class="primary" onclick="window.print()">Print / PDF</button>
+        <button class="primary" onclick="openClientEstimate()">Print / PDF</button>
       </div>
     </div>
     <div class="toolbar-row-2 no-print">
@@ -1111,6 +1336,18 @@
     </div>
   </div>
   <div class="contractor-sheet" id="contractorSheet"></div>
+</div>
+
+<!-- Client Estimate (professional Print/PDF overlay) -->
+<div id="estimateView" class="estimate-view">
+  <div class="estimate-toolbar no-print">
+    <div class="et-title">Client Estimate</div>
+    <div class="et-actions">
+      <button onclick="closeClientEstimate()">&larr; Back to Estimator</button>
+      <button class="primary" onclick="printEstimate()">Print / Save as PDF</button>
+    </div>
+  </div>
+  <div class="estimate-sheet" id="estimateSheet"></div>
 </div>
 
 <!-- Internal Mode view (full-screen overlay, PIN-gated) -->
@@ -3338,6 +3575,578 @@ function renderContractorSheet(){
   `;
 
   el.innerHTML = html;
+}
+
+/* ============================================================
+   Client Estimate (professional Print/PDF) — data layer + render
+   ============================================================ */
+
+function openClientEstimate(){
+  renderClientEstimate();
+  document.body.classList.add("show-estimate");
+  window.scrollTo(0,0);
+}
+function closeClientEstimate(){
+  document.body.classList.remove("show-estimate");
+}
+
+/* Persist company-header info across estimates */
+function loadCompanyInfo(){
+  try{
+    const raw = localStorage.getItem("reno_company_info_v1");
+    if(raw) return JSON.parse(raw);
+  }catch(e){}
+  return { name:"", phone:"", email:"", address:"" };
+}
+function saveCompanyInfo(){
+  const get = id => { const el = document.getElementById(id); return el ? el.value : ""; };
+  const info = {
+    name:    get("esCompanyName"),
+    phone:   get("esCompanyPhone"),
+    email:   get("esCompanyEmail"),
+    address: get("esCompanyAddress")
+  };
+  try{ localStorage.setItem("reno_company_info_v1", JSON.stringify(info)); }catch(e){}
+}
+
+/* Deterministic quote number: Q-YYMMDD-#### derived from address + date */
+function quoteNumber(){
+  const d = new Date();
+  const yy = String(d.getFullYear()).slice(-2);
+  const mm = String(d.getMonth()+1).padStart(2,"0");
+  const dd = String(d.getDate()).padStart(2,"0");
+  const base = ((state.propAddress || state.propName || "estimate") + "|" + yy + mm + dd);
+  let h = 0;
+  for(let i=0;i<base.length;i++){ h = (h*31 + base.charCodeAt(i)) | 0; }
+  const seq = String(Math.abs(h) % 10000).padStart(4,"0");
+  return `Q-${yy}${mm}${dd}-${seq}`;
+}
+
+function fmtCurrency(n){
+  if(!isFinite(n)) n = 0;
+  return "$" + n.toLocaleString("en-CA", {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+function formatQty(q){
+  if(q == null || q === "") return "—";
+  const n = +q;
+  if(!isFinite(n)) return String(q);
+  if(Math.abs(n - Math.round(n)) < 0.01) return Math.round(n).toLocaleString("en-CA");
+  return n.toLocaleString("en-CA", {maximumFractionDigits:2});
+}
+
+/* Build one structured row per task, grouped by category.
+   Mirrors computeCategory() so totals tie out exactly. */
+function buildEstimateLineItems(){
+  const groups = [];
+  const addRow = (rows, opts) => {
+    const labour = +(opts.labour||0);
+    const material = +(opts.material||0);
+    rows.push({
+      desc: opts.desc || "",
+      subdesc: opts.subdesc || "",
+      qty: opts.qty,
+      unit: opts.unit || "",
+      labour, material,
+      total: labour + material
+    });
+  };
+
+  // ---- Painting
+  if(state.enabled.painting){
+    const s = state.painting;
+    const p = prices.painting;
+    const rows = [];
+    const psqft = paintingSqft();
+    const wr = (p.walls && p.walls[s.coats||"one"]) || (p.walls && p.walls.one);
+    if(wr && psqft > 0){
+      const coatsLbl = (s.coats === "two") ? "Two coats" : "One coat";
+      const scopeLbl = s.scope === "custom" ? "specific area" : "entire property";
+      addRow(rows, {
+        desc: `Wall painting — ${coatsLbl}`,
+        subdesc: `Premium paint, full prep (patch, sand, prime) — ${scopeLbl}`,
+        qty: psqft, unit: "sqft",
+        labour: psqft * wr.labour,
+        material: psqft * wr.material
+      });
+    }
+    // Popcorn ceiling removal — same placement as the estimator (above ceiling paint)
+    if(s.popcorn && p.popcorn){
+      const popSqft = num(s.popcornSqft) || num(s.ceilingSqft) || psqft;
+      const pr = p.popcorn[s.popcornTier || "standard"] || p.popcorn.standard;
+      if(pr && popSqft > 0){
+        const tierLbl = (s.popcornTier === "premium") ? "Premium (textured / vaulted / 10ft+)" : "Standard (flat 8–9ft)";
+        addRow(rows, {
+          desc: `Popcorn ceiling removal — ${tierLbl}`,
+          subdesc: "Scrape, full skim-coat smooth, prime, two finish coats. (Asbestos abatement for pre-1980 homes is a separate scope.)",
+          qty: popSqft, unit: "sqft",
+          labour: popSqft * pr.labour,
+          material: popSqft * pr.material
+        });
+      }
+    }
+    if(s.ceiling && p.ceiling){
+      const cSqft = num(s.ceilingSqft) || psqft;
+      const cr = p.ceiling[s.ceilingTier || "standard"] || p.ceiling.standard;
+      if(cr && cSqft > 0){
+        const tierLbl = (s.ceilingTier === "premium") ? "Premium (textured / vaulted / 10ft+)" : "Standard (flat 8–9ft)";
+        addRow(rows, {
+          desc: `Ceiling painting — ${tierLbl}`,
+          subdesc: "Patch, prime, two finish coats",
+          qty: cSqft, unit: "sqft",
+          labour: cSqft * cr.labour,
+          material: cSqft * cr.material
+        });
+      }
+    }
+    if(s.trim && p.trim){
+      const lf = num(s.trimLinFt) || suggestedTrimLinFt();
+      if(lf > 0){
+        addRow(rows, {
+          desc: "Baseboards & trim — refresh / repaint",
+          subdesc: "Caulk, fill, prime, two finish coats",
+          qty: lf, unit: "lin ft",
+          labour: lf * p.trim.labour,
+          material: lf * p.trim.material
+        });
+      }
+    }
+    if(s.doors && p.door){
+      const dc = num(s.doorCount);
+      if(dc > 0){
+        addRow(rows, {
+          desc: "Interior doors — paint both sides",
+          subdesc: "Hardware removed & reinstalled",
+          qty: dc, unit: "doors",
+          labour: dc * p.door.labour,
+          material: dc * p.door.material
+        });
+      }
+    }
+    if(rows.length) groups.push({ cat:"painting", title:"Painting", rows });
+  }
+
+  // ---- Flooring
+  if(state.enabled.flooring){
+    const s = state.flooring;
+    const p = prices.flooring;
+    const rows = [];
+    const totalSqft = num(s.sqft) || num(state.propSqft);
+    const sec = s.secondary || {};
+    const secEnabled = !!sec.enabled && num(sec.sqft) > 0 && sec.type;
+    const secSqft = secEnabled ? Math.min(num(sec.sqft), totalSqft) : 0;
+    const primarySqft = Math.max(0, totalSqft - secSqft);
+    const type = s.type || "vinyl";
+    const r = p[type];
+    if(r && primarySqft > 0){
+      const waste = WASTE_FACTORS[type] || 1.10;
+      addRow(rows, {
+        desc: `Flooring — ${FLOORING_LABELS[type] || type}`,
+        subdesc: `Supply & install — material includes ${Math.round((waste-1)*100)}% waste factor`,
+        qty: primarySqft, unit: "sqft",
+        labour: primarySqft * r.labour,
+        material: primarySqft * waste * r.material
+      });
+    }
+    if(secEnabled){
+      const r2 = p[sec.type];
+      if(r2 && secSqft > 0){
+        const waste2 = WASTE_FACTORS[sec.type] || 1.10;
+        addRow(rows, {
+          desc: `Flooring (secondary) — ${FLOORING_LABELS[sec.type] || sec.type}`,
+          subdesc: `Supply & install — carved out of the primary area (typically basement or secondary suite)`,
+          qty: secSqft, unit: "sqft",
+          labour: secSqft * r2.labour,
+          material: secSqft * waste2 * r2.material
+        });
+      }
+    }
+    if(p.removal){
+      const rSqft = num(s.removalSqft) || totalSqft;
+      if(rSqft > 0){
+        addRow(rows, {
+          desc: "Removal & disposal of existing flooring",
+          subdesc: "Strip existing flooring + haul-away & dump fees",
+          qty: rSqft, unit: "sqft",
+          labour: rSqft * p.removal.labour,
+          material: rSqft * p.removal.material
+        });
+      }
+    }
+    if(s.baseboards && p.baseboards){
+      const lf = num(s.baseboardLinFt) || suggestedTrimLinFt();
+      if(lf > 0){
+        addRow(rows, {
+          desc: "New baseboards — supply & install",
+          subdesc: "4–5\" MDF/poplar, unpainted",
+          qty: lf, unit: "lin ft",
+          labour: lf * p.baseboards.labour,
+          material: lf * p.baseboards.material
+        });
+      }
+    }
+    if(rows.length) groups.push({ cat:"flooring", title:"Flooring", rows });
+  }
+
+  // ---- Tiling
+  if(state.enabled.tiling){
+    const s = state.tiling;
+    const p = prices.tiling;
+    const rows = [];
+    const sqft = num(s.sqft);
+    const r = p[s.tier] || p.standard;
+    if(r && sqft > 0){
+      const matLbl = (s.tier === "premium") ? "Large-format porcelain (premium)" : "Ceramic (standard)";
+      addRow(rows, {
+        desc: `Tiling — ${matLbl}`,
+        subdesc: "Supply & install — foyer / kitchen floor / laundry / etc. (non-bathroom)",
+        qty: sqft, unit: "sqft",
+        labour: sqft * r.labour,
+        material: sqft * r.material
+      });
+    }
+    if(rows.length) groups.push({ cat:"tiling", title:"Tiling", rows });
+  }
+
+  // ---- Kitchen (main + optional basement)
+  if(state.enabled.kitchen){
+    const s = state.kitchen;
+    const p = prices.kitchen;
+    const rows = [];
+    function pushKitchenRows(k, hdr){
+      const sizeLbl = ({small:"Small (<70 sqft)", medium:"Medium (70–150 sqft)", large:"Large (150+ sqft)"})[k.size] || k.size;
+      const tierLbl = (k.tier === "custom") ? "Custom — fully custom cabinets, premium fixtures & finishes" : "Standard — stock or semi-custom cabinets, builder-grade finishes";
+      const prefix = hdr ? `${hdr} — ` : "";
+      const baseR = p.base && p.base[k.size] && p.base[k.size][k.tier];
+      if(baseR){
+        addRow(rows, {
+          desc: `${prefix}Kitchen base — ${sizeLbl}`,
+          subdesc: `${tierLbl}. Cabinets, sink, faucet, plumbing adjustments, install, all hardware.`,
+          qty: 1, unit: "ea",
+          labour: baseR.labour, material: baseR.material
+        });
+      }
+      if(k.counter && p.counter && p.counter[k.size] && p.counter[k.size][k.tier]){
+        const cr = p.counter[k.size][k.tier];
+        addRow(rows, {
+          desc: `${prefix}Countertops`,
+          subdesc: "Quartz — priced by kitchen size & tier",
+          qty: 1, unit: "ea",
+          labour: cr.labour, material: cr.material
+        });
+      }
+      if(k.island && p.island && p.island[k.tier]){
+        const ir = p.island[k.tier];
+        addRow(rows, {
+          desc: `${prefix}Island add-on`,
+          subdesc: `${k.tier === "custom" ? "Custom" : "Standard"} build — top & supports`,
+          qty: 1, unit: "ea",
+          labour: ir.labour, material: ir.material
+        });
+      }
+      if(k.undercabLighting && p.undercab){
+        addRow(rows, {
+          desc: `${prefix}Under-cabinet lighting`,
+          subdesc: "LED strip + driver, typical run",
+          qty: 1, unit: "ea",
+          labour: p.undercab.labour, material: p.undercab.material
+        });
+      }
+      if(k.backsplash && p.backsplash){
+        const t = k.backsplashType || "subway";
+        if(t === "quartz" && p.backsplash.quartz && p.backsplash.quartz[k.size]){
+          const q = p.backsplash.quartz[k.size];
+          addRow(rows, {
+            desc: `${prefix}Backsplash — Quartz (matches countertop)`,
+            subdesc: `${cap(k.size)} kitchen — lump-sum based on typical upper-cabinet count`,
+            qty: 1, unit: "ea",
+            labour: q.labour, material: q.material
+          });
+        } else if(t === "subway" && p.backsplash.subway){
+          const sq = num(k.backsplashSqft);
+          if(sq > 0){
+            addRow(rows, {
+              desc: `${prefix}Backsplash — Subway tile`,
+              subdesc: "Supply & install",
+              qty: sq, unit: "sqft",
+              labour: sq * p.backsplash.subway.labour,
+              material: sq * p.backsplash.subway.material
+            });
+          }
+        }
+      }
+    }
+    const hasBasementKitchen = !!(s.basement && s.basement.enabled);
+    if(hasBasementKitchen){
+      pushKitchenRows(s, "Main Kitchen");
+      pushKitchenRows(s.basement, "Basement Kitchen");
+    } else {
+      pushKitchenRows(s, null);
+    }
+    if(rows.length) groups.push({ cat:"kitchen", title:"Kitchen", rows });
+  }
+
+  // ---- Bathrooms (one set of rows per bathroom)
+  if(state.enabled.bathroom){
+    const p = prices.bathroom;
+    const rows = [];
+    state.bathroom.rooms.forEach((b, i) => {
+      const lbl = `Bathroom #${i+1}`;
+      const pieces = b.pieces || "4";
+      const baseRow = p.base && p.base[pieces];
+      if(baseRow){
+        addRow(rows, {
+          desc: `${lbl} — ${bathroomLabel(pieces)}`,
+          subdesc: "Refresh: new fixtures, toilet, vanity, mirror, light, accessories. Existing plumbing & tub re-used unless noted.",
+          qty: 1, unit: "ea",
+          labour: baseRow.labour, material: baseRow.material
+        });
+      }
+      const ft = num(b.floorTileSqft);
+      if(p.floorTile && ft > 0){
+        addRow(rows, {
+          desc: `${lbl} — Floor tile`,
+          subdesc: "Supply & install (waterproof membrane where required)",
+          qty: ft, unit: "sqft",
+          labour: ft * p.floorTile.labour,
+          material: ft * p.floorTile.material
+        });
+      }
+      const wt = num(b.wallTileSqft);
+      if(p.wallTile && wt > 0){
+        addRow(rows, {
+          desc: `${lbl} — Wall tile`,
+          subdesc: "Tub surround / shower walls — supply & install",
+          qty: wt, unit: "sqft",
+          labour: wt * p.wallTile.labour,
+          material: wt * p.wallTile.material
+        });
+      }
+      if(b.newTub && p.newTub){
+        addRow(rows, {
+          desc: `${lbl} — New tub (replaces existing)`,
+          subdesc: "Supply & install, reuse existing tub plumbing",
+          qty: 1, unit: "ea",
+          labour: p.newTub.labour, material: p.newTub.material
+        });
+      }
+      if(b.doubleVanity && p.doubleVanity){
+        addRow(rows, {
+          desc: `${lbl} — Double vanity upgrade`,
+          subdesc: "Plumbed for two sinks (from single)",
+          qty: 1, unit: "ea",
+          labour: p.doubleVanity.labour, material: p.doubleVanity.material
+        });
+      }
+      if(b.standUpShower && p.standUpShower){
+        const st = b.showerType || "convert";
+        const sR = p.standUpShower[st] || p.standUpShower.convert;
+        if(sR){
+          const sw = (num(b.showerWidth)||4), sd = (num(b.showerDepth)||3), sh = (num(b.showerHeight)||8);
+          const stLbl =
+            st === "new"     ? "New build — new framing & plumbing rough-in" :
+            st === "refresh" ? "Refresh existing — reuse plumbing & framing" :
+                               "Convert tub → shower — reuse tub plumbing";
+          addRow(rows, {
+            desc: `${lbl} — Stand-up shower (${stLbl})`,
+            subdesc: `${sw}′ × ${sd}′ × ${sh}′ high — waterproofing, tile, fixtures, glass enclosure`,
+            qty: 1, unit: "ea",
+            labour: sR.labour, material: sR.material
+          });
+        }
+      }
+    });
+    if(rows.length) groups.push({ cat:"bathroom", title:"Bathrooms", rows });
+  }
+
+  // ---- Pot Lights
+  if(state.enabled.potlights){
+    const s = state.potlights;
+    const p = prices.potlights;
+    const rows = [];
+    const n = num(s.count);
+    const r = p[s.tier] || p.replace;
+    if(r && n > 0){
+      const tLbl = (s.tier === "new")
+        ? "Install new — cut hole, run wiring, install fixture + driver, drywall patch & paint touch-up"
+        : "Replace existing — swap fixture in existing pot, minor wiring tweak only";
+      addRow(rows, {
+        desc: `Pot lights — ${(s.tier === "new") ? "Install new" : "Replace existing"}`,
+        subdesc: tLbl,
+        qty: n, unit: "lights",
+        labour: n * r.labour,
+        material: n * r.material
+      });
+    }
+    if(rows.length) groups.push({ cat:"potlights", title:"Pot Lights", rows });
+  }
+
+  return groups;
+}
+
+function renderClientEstimate(){
+  const el = document.getElementById("estimateSheet");
+  if(!el) return;
+  const today = new Date().toLocaleDateString("en-CA", {year:"numeric", month:"long", day:"numeric"});
+  const validUntil = (() => {
+    const d = new Date(); d.setDate(d.getDate() + 30);
+    return d.toLocaleDateString("en-CA", {year:"numeric", month:"long", day:"numeric"});
+  })();
+  const ci = loadCompanyInfo();
+  const propName = (state.propName || "").trim();
+  const propAddr = (state.propAddress || "").trim();
+  const propSqft = state.propSqft || "";
+  const seller = (state.sellerName || "").trim();
+  const sellerPhone = (state.sellerPhone || "").trim();
+  const sellerEmail = (state.sellerEmail || "").trim();
+
+  const groups = buildEstimateLineItems();
+  const totals = computeTotals();
+
+  // Header
+  let html = `
+    <div class="es-header">
+      <div class="es-h-left">
+        <input id="esCompanyName" class="es-company-input" type="text"
+               placeholder="Your Company Name"
+               value="${escapeHtml(ci.name)}"
+               oninput="saveCompanyInfo()">
+        <div class="es-contact-line">
+          <input id="esCompanyPhone"   type="text" placeholder="Phone"   value="${escapeHtml(ci.phone)}"   oninput="saveCompanyInfo()">
+          <input id="esCompanyEmail"   type="text" placeholder="Email"   value="${escapeHtml(ci.email)}"   oninput="saveCompanyInfo()">
+          <input id="esCompanyAddress" type="text" placeholder="Address" value="${escapeHtml(ci.address)}" oninput="saveCompanyInfo()">
+        </div>
+      </div>
+      <div class="es-h-right">
+        <div class="es-badge">Estimate</div>
+        <div class="es-quote-meta">
+          <div><b>Quote #</b> ${escapeHtml(quoteNumber())}</div>
+          <div><b>Date</b> ${escapeHtml(today)}</div>
+          <div><b>Valid until</b> ${escapeHtml(validUntil)}</div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Prepared For / Project
+  const billto = [
+    seller && `<div class="name">${escapeHtml(seller)}</div>`,
+    sellerPhone && `<div>${escapeHtml(sellerPhone)}</div>`,
+    sellerEmail && `<div>${escapeHtml(sellerEmail)}</div>`
+  ].filter(Boolean).join("") || `<div style="color:#aaa;">—</div>`;
+
+  const project = [
+    propName && `<div class="name">${escapeHtml(propName)}</div>`,
+    propAddr && `<div>${escapeHtml(propAddr)}</div>`,
+    propSqft && `<div>${escapeHtml(String(propSqft))} sqft</div>`
+  ].filter(Boolean).join("") || `<div style="color:#aaa;">—</div>`;
+
+  html += `
+    <div class="es-meta-grid">
+      <div class="es-meta-block">
+        <div class="lbl">Prepared For</div>
+        <div class="body">${billto}</div>
+      </div>
+      <div class="es-meta-block">
+        <div class="lbl">Project Property</div>
+        <div class="body">${project}</div>
+      </div>
+    </div>
+  `;
+
+  // Line items
+  if(!groups.length){
+    html += `<div class="es-empty">No categories are enabled — turn on the scopes you want quoted from the estimator, then come back here.</div>`;
+  } else {
+    html += `
+      <table class="es-table">
+        <thead>
+          <tr>
+            <th class="desc">Description</th>
+            <th class="num" style="width:9%;">Qty</th>
+            <th style="width:9%;">Unit</th>
+            <th class="num" style="width:13%;">Labour</th>
+            <th class="num" style="width:13%;">Material</th>
+            <th class="num" style="width:14%;">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+    groups.forEach(g => {
+      html += `<tr class="es-cat-row"><td colspan="6">${escapeHtml(g.title)}</td></tr>`;
+      let subL = 0, subM = 0;
+      g.rows.forEach(r => {
+        subL += r.labour; subM += r.material;
+        html += `
+          <tr>
+            <td class="desc"><b>${escapeHtml(r.desc)}</b>${r.subdesc?`<span class="sub">${escapeHtml(r.subdesc)}</span>`:""}</td>
+            <td class="num">${formatQty(r.qty)}</td>
+            <td>${escapeHtml(r.unit||"")}</td>
+            <td class="num">${fmtCurrency(r.labour)}</td>
+            <td class="num">${fmtCurrency(r.material)}</td>
+            <td class="num">${fmtCurrency(r.total)}</td>
+          </tr>
+        `;
+      });
+      html += `
+        <tr class="es-subtotal-row">
+          <td colspan="3">${escapeHtml(g.title)} subtotal</td>
+          <td class="num">${fmtCurrency(subL)}</td>
+          <td class="num">${fmtCurrency(subM)}</td>
+          <td class="num">${fmtCurrency(subL + subM)}</td>
+        </tr>
+      `;
+    });
+    html += `</tbody></table>`;
+  }
+
+  // Totals
+  if(groups.length){
+    const t = totals;
+    html += `
+      <div class="es-totals">
+        <div class="es-totals-box">
+          <div class="row"><span>Labour subtotal</span><span class="v">${fmtCurrency(t.labour)}</span></div>
+          <div class="row"><span>Material subtotal</span><span class="v">${fmtCurrency(t.material)}</span></div>
+          <div class="row"><span>Subtotal</span><span class="v">${fmtCurrency(t.subtotal)}</span></div>
+          ${t.listingDisc ? `<div class="row discount"><span>Listing discount</span><span class="v">−${fmtCurrency(t.listingDisc)}</span></div>` : ""}
+          ${t.customDisc ? `<div class="row discount"><span>Discount${state.discount && state.discount.customNote ? ` (${escapeHtml(state.discount.customNote)})` : ""}</span><span class="v">−${fmtCurrency(t.customDisc)}</span></div>` : ""}
+          <div class="row"><span>HST (13%)</span><span class="v">${fmtCurrency(t.hst)}</span></div>
+          <div class="row grand"><span>Total</span><span class="v">${fmtCurrency(t.total)}</span></div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Signatures
+  html += `
+    <div class="es-signatures">
+      <div class="es-sig">
+        <div class="sig-line"></div>
+        <div class="sig-label">Client signature</div>
+        <div class="sig-date">
+          <div class="sig-line"></div>
+          <div class="sig-label">Date</div>
+        </div>
+      </div>
+      <div class="es-sig">
+        <div class="sig-line"></div>
+        <div class="sig-label">Contractor signature</div>
+        <div class="sig-date">
+          <div class="sig-line"></div>
+          <div class="sig-label">Date</div>
+        </div>
+      </div>
+    </div>
+    <div class="es-footer">Prepared with Reno to Sold &middot; renotosold.homes</div>
+  `;
+
+  el.innerHTML = html;
+}
+
+function printEstimate(){
+  // Re-render in case the estimator was just edited
+  renderClientEstimate();
+  window.print();
 }
 
 /* ---------- Toast ---------- */
