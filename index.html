@@ -931,6 +931,79 @@
   }
   .es-subtotal-row td.num{ color:#0a0a0a; font-size:13px; letter-spacing:.02em; }
 
+  /* ============================================================
+     Renovation scope blocks — one card per category.
+     Replaces the old line-by-line table; each category shows a
+     bulleted summary of work + one combined labour+material total.
+     ============================================================ */
+  .es-category-block{
+    margin-bottom:18px;
+    border:1px solid #e6dec7;
+    background:#ffffff;
+    page-break-inside:avoid;
+    break-inside:avoid;
+  }
+  .es-category-head{
+    background:#0a0a0a;
+    color:#ffffff;
+    padding:11px 14px;
+    font-size:12.5px; font-weight:800;
+    letter-spacing:.18em; text-transform:uppercase;
+    border-bottom:2px solid #d4af6a;
+  }
+  .es-category-body{
+    padding:14px 16px 12px;
+  }
+  .es-bullet-list{
+    list-style:none; margin:0; padding:0;
+  }
+  .es-bullet-list li{
+    position:relative;
+    padding-left:16px;
+    font-size:12px; line-height:1.55;
+    color:#1a1a1a;
+    margin-bottom:5px;
+  }
+  .es-bullet-list li:last-child{ margin-bottom:0; }
+  .es-bullet-list li::before{
+    content:"•"; position:absolute; left:0; top:-1px;
+    color:#a8853f; font-weight:900; font-size:15px; line-height:1.4;
+  }
+  .es-cat-total{
+    margin-top:12px; padding-top:10px;
+    border-top:1px solid #e6dec7;
+    display:flex; justify-content:space-between; align-items:baseline;
+    gap:12px;
+  }
+  .es-cat-total .lbl{
+    font-size:10.5px; letter-spacing:.18em; text-transform:uppercase;
+    color:#555; font-weight:700;
+  }
+  .es-cat-total .v{
+    font-size:15px; font-weight:800;
+    color:#a8853f;
+    font-variant-numeric:tabular-nums;
+  }
+  /* Sub-block inside a category — used for individual bathrooms
+     and main vs basement kitchens. Cream background + gold accent. */
+  .es-subblock{
+    margin-top:12px; padding:11px 13px;
+    background:#fbf5e6;
+    border-left:3px solid #d4af6a;
+  }
+  .es-subblock:first-child{ margin-top:0; }
+  .es-subblock + .es-subblock{ margin-top:12px; }
+  .es-subblock-title{
+    font-size:11.5px; font-weight:800; letter-spacing:.14em;
+    text-transform:uppercase; color:#0a0a0a;
+    margin-bottom:7px;
+  }
+  .es-subblock .es-cat-total{
+    margin-top:8px; padding-top:7px;
+    border-top:1px dashed #d4af6a;
+  }
+  .es-subblock .es-cat-total .v{ font-size:14px; }
+
   /* Totals block — the Quote Summary header + totals box ALWAYS stay together.
      `page-break-inside:avoid` here is the hard rule that prevents the table
      from being split across pages mid-summary. */
@@ -1294,6 +1367,8 @@
     body.show-estimate .es-payments-table,
     body.show-estimate .es-payments-table tr.pm-total td,
     body.show-estimate .es-cat-row td,
+    body.show-estimate .es-category-head,
+    body.show-estimate .es-subblock,
     body.show-estimate .es-disclaimer,
     body.show-estimate .es-disclaimer .es-disc-title,
     body.show-estimate .es-disclaimer .es-disc-title::before{
@@ -1301,7 +1376,9 @@
     }
     body.show-estimate .es-savings-card,
     body.show-estimate .es-payments-wrap,
-    body.show-estimate .es-payments-table tr{
+    body.show-estimate .es-payments-table tr,
+    body.show-estimate .es-category-block,
+    body.show-estimate .es-subblock{
       page-break-inside:avoid !important; break-inside:avoid !important;
     }
     body.show-estimate .es-disclaimer{
@@ -3986,10 +4063,12 @@ function printEstimateViaIframe(){
     .es-savings-card .es-sav-amount, .es-savings-card .es-sav-tag,
     .es-payments-title, .es-payments-intro, .es-payments-table,
     .es-payments-table tr.pm-total td,
+    .es-category-head, .es-subblock,
     .es-disclaimer, .es-disclaimer .es-disc-title, .es-disclaimer .es-disc-title::before {
       -webkit-print-color-adjust:exact; print-color-adjust:exact;
     }
-    .es-savings-card, .es-payments-wrap, .es-payments-table tr {
+    .es-savings-card, .es-payments-wrap, .es-payments-table tr,
+    .es-category-block, .es-subblock {
       page-break-inside:avoid !important; break-inside:avoid !important;
     }
     .es-table thead { display:table-header-group; }
@@ -4410,6 +4489,201 @@ function buildEstimateLineItems(){
   return groups;
 }
 
+/* Per-bathroom + per-kitchen labour+material totals.
+   Kept separate from computeCategory() so the bathroom card can show one
+   total per bathroom (and the kitchen card can split main vs basement). */
+function computeBathroomRoom(b, priceSet){
+  const p = (priceSet || prices).bathroom;
+  let L = 0, M = 0;
+  const pieces = b.pieces || "4";
+  const baseRow = p.base && p.base[pieces];
+  if(baseRow){ L += baseRow.labour; M += baseRow.material; }
+  const ft = num(b.floorTileSqft);
+  if(p.floorTile && ft > 0){ L += ft * p.floorTile.labour; M += ft * p.floorTile.material; }
+  const wt = num(b.wallTileSqft);
+  if(p.wallTile && wt > 0){ L += wt * p.wallTile.labour; M += wt * p.wallTile.material; }
+  if(b.newTub && p.newTub){ L += p.newTub.labour; M += p.newTub.material; }
+  if(b.doubleVanity && p.doubleVanity){ L += p.doubleVanity.labour; M += p.doubleVanity.material; }
+  if(b.standUpShower && p.standUpShower){
+    const sR = p.standUpShower[b.showerType || "convert"] || p.standUpShower.convert;
+    if(sR){ L += sR.labour; M += sR.material; }
+  }
+  return { labour:L, material:M };
+}
+function computeKitchenInstance(k, priceSet){
+  const p = (priceSet || prices).kitchen;
+  let L = 0, M = 0;
+  const tier = k.tier || "standard";
+  const size = k.size || "medium";
+  const baseR = p.base && p.base[size] && p.base[size][tier];
+  if(baseR){ L += baseR.labour; M += baseR.material; }
+  if(k.counter && p.counter && p.counter[size] && p.counter[size][tier]){
+    const cr = p.counter[size][tier]; L += cr.labour; M += cr.material;
+  }
+  if(k.island && p.island && p.island[tier]){
+    const ir = p.island[tier]; L += ir.labour; M += ir.material;
+  }
+  if(k.undercabLighting && p.undercab){
+    L += p.undercab.labour; M += p.undercab.material;
+  }
+  if(k.backsplash && p.backsplash){
+    const t = k.backsplashType || "subway";
+    if(t === "quartz" && p.backsplash.quartz && p.backsplash.quartz[size]){
+      const q = p.backsplash.quartz[size]; L += q.labour; M += q.material;
+    } else if(t === "subway" && p.backsplash.subway){
+      const sq = num(k.backsplashSqft);
+      L += sq * p.backsplash.subway.labour;
+      M += sq * p.backsplash.subway.material;
+    }
+  }
+  return { labour:L, material:M };
+}
+
+/* Bullet-summary structure used by the client-facing print/PDF.
+   Returns one section per enabled category. Bathrooms (and kitchens with a
+   basement counterpart) emit `subblocks` instead of `bullets` so each
+   bathroom/kitchen has its own header + bullets + total. */
+function buildEstimateSummary(){
+  const sections = [];
+  const sizeLbl = sz => ({small:"Small (<70 sqft)", medium:"Medium (70–150 sqft)", large:"Large (150+ sqft)"})[sz] || sz;
+
+  // -- Painting
+  if(state.enabled.painting){
+    const s = state.painting;
+    const psqft = paintingSqft();
+    const bullets = [];
+    const coatsLbl = s.coats === "two" ? "Two coats" : "One coat";
+    const scopeLbl = s.scope === "custom" ? `specific area (${psqft||'?'} sqft)` : `entire property (${psqft||'?'} sqft)`;
+    bullets.push(`Wall painting — ${coatsLbl}, ${scopeLbl}, premium prep & paint`);
+    if(s.popcorn){
+      const popSqft = num(s.popcornSqft) || num(s.ceilingSqft) || psqft;
+      const tierLbl = (s.popcornTier === "premium") ? "Premium" : "Standard";
+      bullets.push(`Popcorn ceiling removal — ${tierLbl} tier, ${popSqft||'?'} sqft (scrape, skim-coat, prime, repaint)`);
+    }
+    if(s.ceiling){
+      const cSqft = num(s.ceilingSqft) || psqft;
+      const tierLbl = (s.ceilingTier === "premium") ? "Premium" : "Standard";
+      bullets.push(`Ceiling painting — ${tierLbl} tier, ${cSqft||'?'} sqft`);
+    }
+    if(s.trim){
+      const lf = num(s.trimLinFt) || suggestedTrimLinFt();
+      bullets.push(`Baseboards &amp; trim refresh — ${lf||'?'} lin ft`);
+    }
+    if(s.doors){
+      bullets.push(`Interior doors — ${num(s.doorCount)||'?'} doors painted (both sides)`);
+    }
+    const { labour, material } = computeCategory("painting");
+    sections.push({ cat:"painting", title:"Painting", bullets, total: labour + material });
+  }
+
+  // -- Flooring
+  if(state.enabled.flooring){
+    const s = state.flooring;
+    const totalSqft = num(s.sqft) || num(state.propSqft);
+    const sec = s.secondary || {};
+    const secEnabled = !!sec.enabled && num(sec.sqft) > 0 && sec.type;
+    const secSqft = secEnabled ? Math.min(num(sec.sqft), totalSqft) : 0;
+    const primarySqft = Math.max(0, totalSqft - secSqft);
+    const bullets = [];
+    bullets.push(`${FLOORING_LABELS[s.type || "vinyl"] || s.type} — ${primarySqft||'?'} sqft, supply &amp; install`);
+    if(secEnabled){
+      bullets.push(`Secondary material: ${FLOORING_LABELS[sec.type] || sec.type} — ${secSqft||'?'} sqft (carved out of primary area)`);
+    }
+    bullets.push(`Removal &amp; disposal of existing flooring (${num(s.removalSqft) || totalSqft || '?'} sqft) — included`);
+    if(s.baseboards){
+      const lf = num(s.baseboardLinFt) || suggestedTrimLinFt();
+      bullets.push(`New baseboards — ${lf||'?'} lin ft, supply &amp; install`);
+    }
+    const { labour, material } = computeCategory("flooring");
+    sections.push({ cat:"flooring", title:"Flooring", bullets, total: labour + material });
+  }
+
+  // -- Tiling
+  if(state.enabled.tiling){
+    const s = state.tiling;
+    const matLbl = (s.tier === "premium") ? "Large-format porcelain (premium)" : "Ceramic (standard)";
+    const bullets = [
+      `${matLbl} — ${num(s.sqft)||'?'} sqft (foyer, kitchen, laundry, etc.)`,
+      `Removal &amp; disposal of existing tile — included`
+    ];
+    const { labour, material } = computeCategory("tiling");
+    sections.push({ cat:"tiling", title:"Tiling", bullets, total: labour + material });
+  }
+
+  // -- Kitchen
+  if(state.enabled.kitchen){
+    const s = state.kitchen;
+    const hasBasementKitchen = !!(s.basement && s.basement.enabled);
+    const kitchenBullets = (k) => {
+      const b = [];
+      b.push(`Tier: <b>${k.tier === "custom" ? "Custom" : "Standard"}</b> · Size: <b>${sizeLbl(k.size)}</b>`);
+      b.push("Cabinets, sink, faucet, plumbing adjustments &amp; all hardware");
+      if(k.counter) b.push("Quartz countertops");
+      if(k.island)  b.push(`Island add-on (${k.tier === "custom" ? "custom" : "standard"} build)`);
+      if(k.undercabLighting) b.push("Under-cabinet LED lighting");
+      if(k.backsplash){
+        if((k.backsplashType||"subway") === "quartz"){
+          b.push("Quartz backsplash (matches countertop)");
+        } else {
+          b.push(`Subway tile backsplash — ${num(k.backsplashSqft)||'?'} sqft`);
+        }
+      }
+      return b;
+    };
+    if(hasBasementKitchen){
+      const mainT = computeKitchenInstance(s);
+      const basT  = computeKitchenInstance(s.basement);
+      sections.push({
+        cat:"kitchen", title:"Kitchen",
+        subblocks: [
+          { title:"Main Kitchen",     bullets: kitchenBullets(s),          total: mainT.labour + mainT.material },
+          { title:"Basement Kitchen", bullets: kitchenBullets(s.basement), total: basT.labour + basT.material }
+        ],
+        total: mainT.labour + mainT.material + basT.labour + basT.material
+      });
+    } else {
+      const { labour, material } = computeCategory("kitchen");
+      sections.push({ cat:"kitchen", title:"Kitchen", bullets: kitchenBullets(s), total: labour + material });
+    }
+  }
+
+  // -- Bathrooms (one subblock per bathroom)
+  if(state.enabled.bathroom){
+    const subblocks = state.bathroom.rooms.map((b, i) => {
+      const bullets = [];
+      bullets.push(`Layout: <b>${bathroomLabel(b.pieces || "4")}</b> — full refresh (fixtures, toilet, vanity, mirror, light, accessories)`);
+      if(num(b.floorTileSqft)) bullets.push(`Floor tile — ${b.floorTileSqft} sqft`);
+      if(num(b.wallTileSqft))  bullets.push(`Wall tile (shower/tub surround) — ${b.wallTileSqft} sqft`);
+      if(b.newTub)        bullets.push("New tub installed (replaces existing)");
+      if(b.doubleVanity)  bullets.push("Double vanity upgrade (plumbed for two sinks)");
+      if(b.standUpShower){
+        const st = b.showerType || "convert";
+        const stLbl = st === "new" ? "new build, new plumbing rough-in"
+                    : st === "refresh" ? "refresh existing, reuse plumbing"
+                    : "convert from tub, reuse tub plumbing";
+        const sw = (num(b.showerWidth)||4), sd = (num(b.showerDepth)||3), sh = (num(b.showerHeight)||8);
+        bullets.push(`Stand-up shower (${stLbl}) — ${sw}′ × ${sd}′ × ${sh}′ high, new tile/fixtures/glass`);
+      }
+      const { labour, material } = computeBathroomRoom(b);
+      return { title:`Bathroom #${i+1}`, bullets, total: labour + material };
+    });
+    const catTotal = subblocks.reduce((a,s) => a + s.total, 0);
+    sections.push({ cat:"bathroom", title:"Bathrooms", subblocks, total: catTotal });
+  }
+
+  // -- Pot Lights
+  if(state.enabled.potlights){
+    const s = state.potlights;
+    const tLbl = s.tier === "new" ? "Install new (cut hole, wire, fixture, drywall patch, paint touch-up)"
+                                  : "Replace existing (drop-in fixture swap, minor wiring tweak)";
+    const bullets = [`${num(s.count)||'?'} pot lights — ${tLbl}`];
+    const { labour, material } = computeCategory("potlights");
+    sections.push({ cat:"potlights", title:"Pot Lights", bullets, total: labour + material });
+  }
+
+  return sections;
+}
+
 function renderClientEstimate(){
   const el = document.getElementById("estimateSheet");
   if(!el) return;
@@ -4433,7 +4707,7 @@ function renderClientEstimate(){
     }));
   const sellers = allSellers.filter(s => s.name || s.phone || s.email);
 
-  const groups = buildEstimateLineItems();
+  const sections = buildEstimateSummary();
   const totals = computeTotals();
 
   // Header
@@ -4489,54 +4763,45 @@ function renderClientEstimate(){
     </div>
   `;
 
-  // Line items
-  if(!groups.length){
+  // Renovation scope — bullet summary per category, one combined total per category
+  if(!sections.length){
     html += `<div class="es-empty">No categories are enabled — turn on the scopes you want quoted from the estimator, then come back here.</div>`;
   } else {
-    html += `
-      <table class="es-table">
-        <thead>
-          <tr>
-            <th class="desc">Description</th>
-            <th class="num" style="width:9%;">Qty</th>
-            <th style="width:9%;">Unit</th>
-            <th class="num" style="width:13%;">Labour</th>
-            <th class="num" style="width:13%;">Material</th>
-            <th class="num" style="width:14%;">Total</th>
-          </tr>
-        </thead>
-        <tbody>
+    const renderBullets = bullets => `<ul class="es-bullet-list">${bullets.map(b => `<li>${b}</li>`).join("")}</ul>`;
+    const renderTotalRow = (label, total) => `
+      <div class="es-cat-total">
+        <span class="lbl">${escapeHtml(label)}</span>
+        <span class="v">${fmtCurrency(total)}</span>
+      </div>
     `;
-    groups.forEach(g => {
-      html += `<tr class="es-cat-row"><td colspan="6">${escapeHtml(g.title)}</td></tr>`;
-      let subL = 0, subM = 0;
-      g.rows.forEach(r => {
-        subL += r.labour; subM += r.material;
-        html += `
-          <tr>
-            <td class="desc"><b>${escapeHtml(r.desc)}</b>${r.subdesc?`<span class="sub">${escapeHtml(r.subdesc)}</span>`:""}</td>
-            <td class="num">${formatQty(r.qty)}</td>
-            <td>${escapeHtml(r.unit||"")}</td>
-            <td class="num">${fmtCurrency(r.labour)}</td>
-            <td class="num">${fmtCurrency(r.material)}</td>
-            <td class="num">${fmtCurrency(r.total)}</td>
-          </tr>
-        `;
-      });
+    sections.forEach(sec => {
+      let body = "";
+      if(sec.subblocks && sec.subblocks.length){
+        // Bathrooms / multi-instance kitchens — one sub-block per item
+        body += sec.subblocks.map(sb => `
+          <div class="es-subblock">
+            <div class="es-subblock-title">${escapeHtml(sb.title)}</div>
+            ${renderBullets(sb.bullets)}
+            ${renderTotalRow(`${sb.title} — Labour & Material`, sb.total)}
+          </div>
+        `).join("");
+        // Category-level total under all sub-blocks
+        body += renderTotalRow(`${sec.title} — Combined Total`, sec.total);
+      } else {
+        body += renderBullets(sec.bullets || []);
+        body += renderTotalRow("Total Labour & Material", sec.total);
+      }
       html += `
-        <tr class="es-subtotal-row">
-          <td colspan="3">${escapeHtml(g.title)} subtotal</td>
-          <td class="num">${fmtCurrency(subL)}</td>
-          <td class="num">${fmtCurrency(subM)}</td>
-          <td class="num">${fmtCurrency(subL + subM)}</td>
-        </tr>
+        <div class="es-category-block">
+          <div class="es-category-head">${escapeHtml(sec.title)}</div>
+          <div class="es-category-body">${body}</div>
+        </div>
       `;
     });
-    html += `</tbody></table>`;
   }
 
   // Totals — wrapped with a clear "Quote Summary" header
-  if(groups.length){
+  if(sections.length){
     const t = totals;
     html += `
       <div class="es-totals-wrap">
