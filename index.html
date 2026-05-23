@@ -4569,39 +4569,30 @@ function renderClientEstimate(){
     }
 
     // ============================================================
-    // PAYMENT SCHEDULE & TIMELINE
-    // Industry-standard GTA renovation milestone draw schedule.
-    // Sums to 100% of the grand total (Total with HST). Aligned to
-    // Ontario Consumer Protection Act (10% max deposit) and the
-    // Ontario Construction Act (10% statutory lien holdback released
-    // 60 days after Substantial Completion).
+    // PAYMENT SCHEDULE & TIMELINE — 4-stage milestone schedule.
+    // Sums to 100% of the grand total (Total with HST).
     // ============================================================
     const grand = t.total;
     const milestones = [
       {
         n: 1, pct: 10,
-        name: "Deposit — On Acceptance",
-        desc: "Due on signed acceptance of this estimate. Reserves your project start date, schedules subcontractors, and initiates material ordering. Aligned with Ontario Consumer Protection Act guidance on pre-work deposits."
+        name: "Deposit &mdash; On Acceptance",
+        desc: "Due on signed acceptance of this estimate. This deposit locks in your project start date on our calendar, secures the schedule of all subcontracted trades (carpentry, electrical, plumbing, tiling, painting, flooring), kicks off any required permitting, and funds the immediate ordering of long-lead materials such as cabinetry, countertops, tile, plumbing fixtures, and lighting so that they arrive on site in time for each trade's installation window. No work begins until the deposit clears."
       },
       {
-        n: 2, pct: 25,
-        name: "Project Start &amp; Demolition",
-        desc: "Due on the day demolition begins and rough materials are delivered to site."
+        n: 2, pct: 40,
+        name: "Start of Demolition",
+        desc: "Due on the day demolition begins on site. This payment covers full site protection setup (floor coverings, dust containment walls, HVAC vent sealing), disposal bins and debris removal, complete demolition of all finishes and fixtures being replaced, any structural / framing modifications required for the new layout, and delivery of the first round of rough materials &mdash; lumber, sub-floor, insulation, drywall, vapour barriers &mdash; to the property. The bulk of the demolition crew's labour and the initial materials draw are funded by this stage."
       },
       {
-        n: 3, pct: 25,
-        name: "Mechanical Rough-Ins Complete",
-        desc: "Due when electrical, plumbing, and HVAC rough-ins are installed and have passed any required municipal inspection. Walls are ready for drywall."
+        n: 3, pct: 40,
+        name: "Flooring, Painting, Electrical &amp; Plumbing Rough-Ins",
+        desc: "Due once the major trade work is substantially complete and the property is ready for finishes. This stage funds all electrical rough-in (new wiring runs, junction boxes, panel upgrades where required, pot-light cut-ins), all plumbing rough-in (supply lines and drainage to every relocated or new fixture), HVAC adjustments where applicable, full drywall installation with taping, mudding, sanding and priming, every coat of wall and ceiling paint, and complete supply-and-install of the flooring across the entire scope (sub-floor preparation, underlay, planks or tiles laid, finished and trimmed). Because this is the most labour-intensive phase and the point at which the largest finished materials (cabinets, countertops, tubs, vanities, toilets, light fixtures) arrive on site, it is the largest single payment in the schedule."
       },
       {
-        n: 4, pct: 25,
-        name: "Drywall, Paint &amp; Trim Complete",
-        desc: "Due when drywall, paint, and trim are installed. All surfaces ready for fixtures, finishes, and final installations."
-      },
-      {
-        n: 5, pct: 15,
-        name: "Substantial Completion + Lien Holdback Release",
-        desc: "Due in two parts: <b>5%</b> on Substantial Completion (all visible work complete, deep-cleaned, MLS&reg;-ready) and <b>10%</b> statutory lien holdback released no earlier than <b>60 calendar days</b> after Substantial Completion, per the Ontario Construction Act, on clearance of all deficiencies from the final walkthrough."
+        n: 4, pct: 10,
+        name: "Final Completion &amp; Cleaning",
+        desc: "Due on Substantial Completion of the project. This final stage covers all finishing work &mdash; installation of trim, baseboards, interior doors and hardware, electrical trim-out (light fixtures, switches, outlets, pot-light bezels), plumbing trim-out (faucets, toilets, shower glass), grouting and caulking, and any paint touch-ups &mdash; followed by a full professional deep-clean of the property (windows, all surfaces, floors, fixtures) so that it is delivered move-in clean and ready to photograph and list on MLS&reg;. A final walkthrough is conducted with the seller(s) before this payment is released."
       }
     ];
 
@@ -4642,7 +4633,7 @@ function renderClientEstimate(){
           </tbody>
         </table>
         <div class="es-payments-fineprint">
-          Holdback amounts are administered in accordance with the Ontario Construction Act. Milestone descriptions are typical and may be adjusted on a project-by-project basis; the final payment schedule will form part of the executed renovation agreement.
+          Milestone descriptions are typical and may be adjusted on a project-by-project basis based on the agreed scope. The final payment schedule will form part of the executed renovation agreement between the seller(s) and Reno to Sold Inc.
         </div>
       </div>
     `;
