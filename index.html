@@ -905,10 +905,10 @@
   }
   .es-table thead th.num{ text-align:right; }
   .es-cat-row td{
-    background:#fbf5e6; color:#0a0a0a;
-    font-size:12px; font-weight:800; letter-spacing:.10em; text-transform:uppercase;
-    padding:9px 10px;
-    border-top:1px solid #e6dec7; border-bottom:1px solid #e6dec7;
+    background:#0a0a0a; color:#e8c989;
+    font-size:12.5px; font-weight:800; letter-spacing:.18em; text-transform:uppercase;
+    padding:11px 12px;
+    border-top:2px solid #d4af6a; border-bottom:2px solid #d4af6a;
   }
   .es-table tbody td{
     font-size:12px; padding:9px 10px;
@@ -966,6 +966,84 @@
     border-bottom:3px solid #d4af6a;
   }
   .es-totals-box .row.grand .v{ color:#a8853f; }
+
+  /* Payment Schedule & Timeline — industry-standard GTA milestone draw schedule.
+     Lives under the Quote Summary + Savings card. Each row is a milestone with
+     a percentage, description, and dollar amount. Marked page-break-inside:avoid
+     on each row so individual milestones never split across pages. */
+  .es-payments-wrap{
+    margin:0 0 30px;
+    page-break-inside:avoid;
+    break-inside:avoid;
+  }
+  .es-payments-title{
+    font-size:11px; letter-spacing:.22em; text-transform:uppercase;
+    font-weight:800; color:#fff; background:#0a0a0a;
+    padding:11px 14px;
+    border-bottom:2px solid #d4af6a;
+  }
+  .es-payments-intro{
+    background:#fffaf0;
+    padding:11px 14px;
+    border:1px solid #e6dec7;
+    border-top:none; border-bottom:none;
+    font-size:11px; color:#444; line-height:1.5;
+  }
+  .es-payments-table{
+    width:100%; border-collapse:collapse;
+    background:#fff;
+    border:1px solid #e6dec7;
+    border-top:none;
+  }
+  .es-payments-table tr{ page-break-inside:avoid; break-inside:avoid; }
+  .es-payments-table td{
+    padding:12px 14px;
+    border-bottom:1px solid #efe7d0;
+    vertical-align:top;
+  }
+  .es-payments-table tr:last-child td{ border-bottom:none; }
+  .es-payments-table .pm-num{
+    width:42px;
+    font-family:'Cormorant Garamond', Georgia, serif;
+    font-size:28px; font-weight:700;
+    color:#a8853f; line-height:1;
+    padding-top:10px;
+  }
+  .es-payments-table .pm-pct{
+    width:60px;
+    font-size:17px; font-weight:800;
+    color:#0a0a0a;
+    padding-top:14px;
+    font-variant-numeric:tabular-nums;
+  }
+  .es-payments-table .pm-body .pm-milestone{
+    font-size:11.5px; font-weight:800; letter-spacing:.14em;
+    text-transform:uppercase; color:#0a0a0a;
+    margin-bottom:4px;
+  }
+  .es-payments-table .pm-body .pm-desc{
+    font-size:11px; line-height:1.5; color:#444;
+  }
+  .es-payments-table .pm-amount{
+    width:110px; text-align:right;
+    font-size:14px; font-weight:700; color:#0a0a0a;
+    font-variant-numeric:tabular-nums; padding-top:14px;
+    white-space:nowrap;
+  }
+  .es-payments-table tr.pm-total td{
+    background:#fbf5e6;
+    color:#0a0a0a;
+    font-size:12px; font-weight:800; letter-spacing:.14em; text-transform:uppercase;
+    padding:13px 14px;
+    border-top:2px solid #d4af6a; border-bottom:3px solid #d4af6a;
+  }
+  .es-payments-table tr.pm-total .pm-amount{
+    color:#a8853f; font-size:18px; letter-spacing:.02em;
+  }
+  .es-payments-fineprint{
+    margin-top:8px;
+    font-size:10px; color:#666; line-height:1.5; font-style:italic;
+  }
 
   /* Savings card — eye-catching black/gold box that shouts the discount.
      Only rendered when there's an active discount. Sits directly under
@@ -1206,12 +1284,19 @@
     body.show-estimate .es-savings-card .es-sav-eyebrow,
     body.show-estimate .es-savings-card .es-sav-amount,
     body.show-estimate .es-savings-card .es-sav-tag,
+    body.show-estimate .es-payments-title,
+    body.show-estimate .es-payments-intro,
+    body.show-estimate .es-payments-table,
+    body.show-estimate .es-payments-table tr.pm-total td,
+    body.show-estimate .es-cat-row td,
     body.show-estimate .es-disclaimer,
     body.show-estimate .es-disclaimer .es-disc-title,
     body.show-estimate .es-disclaimer .es-disc-title::before{
       -webkit-print-color-adjust:exact; print-color-adjust:exact;
     }
-    body.show-estimate .es-savings-card{
+    body.show-estimate .es-savings-card,
+    body.show-estimate .es-payments-wrap,
+    body.show-estimate .es-payments-table tr{
       page-break-inside:avoid !important; break-inside:avoid !important;
     }
     body.show-estimate .es-disclaimer{
@@ -3894,10 +3979,12 @@ function printEstimateViaIframe(){
     .es-totals-title, .es-totals, .es-totals-box .row.grand,
     .es-savings-card, .es-savings-card .es-sav-eyebrow,
     .es-savings-card .es-sav-amount, .es-savings-card .es-sav-tag,
+    .es-payments-title, .es-payments-intro, .es-payments-table,
+    .es-payments-table tr.pm-total td,
     .es-disclaimer, .es-disclaimer .es-disc-title, .es-disclaimer .es-disc-title::before {
       -webkit-print-color-adjust:exact; print-color-adjust:exact;
     }
-    .es-savings-card {
+    .es-savings-card, .es-payments-wrap, .es-payments-table tr {
       page-break-inside:avoid !important; break-inside:avoid !important;
     }
     .es-table thead { display:table-header-group; }
@@ -4475,6 +4562,85 @@ function renderClientEstimate(){
         </div>
       `;
     }
+
+    // ============================================================
+    // PAYMENT SCHEDULE & TIMELINE
+    // Industry-standard GTA renovation milestone draw schedule.
+    // Sums to 100% of the grand total (Total with HST). Aligned to
+    // Ontario Consumer Protection Act (10% max deposit) and the
+    // Ontario Construction Act (10% statutory lien holdback released
+    // 60 days after Substantial Completion).
+    // ============================================================
+    const grand = t.total;
+    const milestones = [
+      {
+        n: 1, pct: 10,
+        name: "Deposit — On Acceptance",
+        desc: "Due on signed acceptance of this estimate. Reserves your project start date, schedules subcontractors, and initiates material ordering. Aligned with Ontario Consumer Protection Act guidance on pre-work deposits."
+      },
+      {
+        n: 2, pct: 25,
+        name: "Project Start &amp; Demolition",
+        desc: "Due on the day demolition begins and rough materials are delivered to site."
+      },
+      {
+        n: 3, pct: 25,
+        name: "Mechanical Rough-Ins Complete",
+        desc: "Due when electrical, plumbing, and HVAC rough-ins are installed and have passed any required municipal inspection. Walls are ready for drywall."
+      },
+      {
+        n: 4, pct: 25,
+        name: "Drywall, Paint &amp; Trim Complete",
+        desc: "Due when drywall, paint, and trim are installed. All surfaces ready for fixtures, finishes, and final installations."
+      },
+      {
+        n: 5, pct: 15,
+        name: "Substantial Completion + Lien Holdback Release",
+        desc: "Due in two parts: <b>5%</b> on Substantial Completion (all visible work complete, deep-cleaned, MLS&reg;-ready) and <b>10%</b> statutory lien holdback released no earlier than <b>60 calendar days</b> after Substantial Completion, per the Ontario Construction Act, on clearance of all deficiencies from the final walkthrough."
+      }
+    ];
+
+    // Sanity check: percentages should sum to 100
+    const pctSum = milestones.reduce((a,m) => a + m.pct, 0);
+
+    const milestoneRows = milestones.map(m => {
+      const amount = "$" + Math.round(grand * (m.pct/100)).toLocaleString("en-CA");
+      return `
+        <tr>
+          <td class="pm-num">${m.n}</td>
+          <td class="pm-pct">${m.pct}%</td>
+          <td class="pm-body">
+            <div class="pm-milestone">${m.name}</div>
+            <div class="pm-desc">${m.desc}</div>
+          </td>
+          <td class="pm-amount">${amount}</td>
+        </tr>
+      `;
+    }).join("");
+
+    const totalAmt = "$" + Math.round(grand).toLocaleString("en-CA");
+    html += `
+      <div class="es-payments-wrap">
+        <div class="es-payments-title">Payment Schedule &amp; Timeline</div>
+        <div class="es-payments-intro">
+          Payments are tied to project milestones rather than calendar dates. Each draw is invoiced on completion of the milestone described below and is due within <b>3 business days</b> of invoice. All amounts are in Canadian dollars and include HST where applicable.
+        </div>
+        <table class="es-payments-table">
+          <tbody>
+            ${milestoneRows}
+            <tr class="pm-total">
+              <td></td>
+              <td class="pm-pct">${pctSum}%</td>
+              <td class="pm-body">Total Project Payment</td>
+              <td class="pm-amount">${totalAmt}</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="es-payments-fineprint">
+          Holdback amounts are administered in accordance with the Ontario Construction Act. Milestone descriptions are typical and may be adjusted on a project-by-project basis; the final payment schedule will form part of the executed renovation agreement.
+        </div>
+      </div>
+    `;
   }
 
   // ============================================================
