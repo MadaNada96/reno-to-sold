@@ -926,8 +926,14 @@
   }
   .es-subtotal-row td.num{ color:#0a0a0a; font-size:13px; letter-spacing:.02em; }
 
-  /* Totals block */
-  .es-totals-wrap{ margin:30px 0 30px; }
+  /* Totals block — the Quote Summary header + totals box ALWAYS stay together.
+     `page-break-inside:avoid` here is the hard rule that prevents the table
+     from being split across pages mid-summary. */
+  .es-totals-wrap{
+    margin:30px 0 30px;
+    page-break-inside:avoid;
+    break-inside:avoid;
+  }
   .es-totals-title{
     font-size:11px; letter-spacing:.22em; text-transform:uppercase;
     font-weight:800; color:#fff; background:#0a0a0a;
@@ -961,13 +967,18 @@
   }
   .es-totals-box .row.grand .v{ color:#a8853f; }
 
-  /* Page-2 wrapper — disclaimer + signatures travel together on their own sheet */
+  /* Page-2 wrapper — disclaimer + signatures travel together on their own sheet.
+     `page-break-inside:avoid` here guarantees the signatures cannot detach
+     from the disclaimer block. If the content overflows a single page, the
+     browser will move the whole block to the next page rather than split it. */
   .es-page-break{
     /* On screen we just leave breathing room. In print we force a new page. */
     height:0; margin:0; padding:0;
   }
   .es-disclaimer-page{
     margin-top:48px;
+    page-break-inside:avoid;
+    break-inside:avoid;
   }
 
   /* Exclusive-listing disclaimer */
@@ -997,30 +1008,36 @@
   }
   .es-disclaimer .es-disc-title-text{ flex:1; }
   .es-disclaimer p{
-    margin:0 0 10px; font-size:12px; line-height:1.6; color:#1a1a1a;
+    margin:0 0 7px; font-size:11.5px; line-height:1.5; color:#1a1a1a;
   }
   .es-disclaimer p:last-child{ margin-bottom:0; }
   .es-disclaimer .es-disc-ack{
-    font-size:11.5px; color:#1a1a1a; font-style:italic; margin-top:14px;
-    padding-top:12px; border-top:1px dashed #d4af6a;
+    font-size:11px; color:#1a1a1a; font-style:italic; margin-top:10px;
+    padding-top:8px; border-top:1px dashed #d4af6a;
   }
 
-  /* Signatures */
+  /* Signatures — compact so they always fit alongside the disclaimer */
   .es-signatures{
-    display:grid; grid-template-columns:1fr 1fr; gap:40px 50px;
-    margin-top:8px; page-break-inside:avoid;
+    display:grid; grid-template-columns:1fr 1fr; gap:18px 40px;
+    margin-top:10px; page-break-inside:avoid;
   }
-  .es-signatures-multi{ row-gap:34px; }
+  .es-signatures-multi{ row-gap:14px; }
   @media (max-width:720px){ .es-signatures{ grid-template-columns:1fr; gap:30px; } }
+  .es-sig{ display:flex; gap:14px; align-items:flex-end; }
+  .es-sig > .sig-col{ flex:1 1 0; min-width:0; }
+  .es-sig > .sig-col.sig-col-date{ flex:0 0 110px; }
   .es-sig .sig-line{
-    border-bottom:1px solid #0a0a0a; height:42px;
+    border-bottom:1px solid #0a0a0a; height:26px;
   }
   .es-sig .sig-label{
-    font-size:10px; letter-spacing:.18em; text-transform:uppercase;
-    color:#555; margin-top:6px; font-weight:700;
+    font-size:9.5px; letter-spacing:.16em; text-transform:uppercase;
+    color:#555; margin-top:4px; font-weight:700;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   }
-  .es-sig .sig-date{ margin-top:18px; }
-  .es-sig .sig-date .sig-line{ height:30px; }
+  @media (max-width:720px){
+    .es-sig{ flex-wrap:wrap; }
+    .es-sig > .sig-col.sig-col-date{ flex:1 1 100%; margin-top:6px; }
+  }
 
   /* Footer note */
   .es-footer{
@@ -1171,9 +1188,17 @@
       page-break-inside:avoid !important; break-inside:avoid !important;
       margin-top:0 !important;
     }
+    body.show-estimate .es-sig{
+      page-break-inside:avoid !important; break-inside:avoid !important;
+    }
     body.show-estimate .es-table thead{ display:table-header-group; }
     body.show-estimate .es-table tr{
       page-break-inside:avoid !important; break-inside:avoid !important;
+    }
+    /* Quote Summary — the entire title + totals block is one indivisible unit */
+    body.show-estimate .es-totals-wrap{
+      page-break-inside:avoid !important; break-inside:avoid !important;
+      page-break-before:auto;
     }
     body.show-estimate .es-logo img{ max-height:70px !important; }
 
@@ -3835,7 +3860,14 @@ function printEstimateViaIframe(){
     .es-table tr, .es-header, .es-meta-grid, .es-totals, .es-signatures, .es-disclaimer, .es-footer {
       page-break-inside:avoid !important; break-inside:avoid !important;
     }
-    /* Disclaimer + signatures always print on a fresh sheet, kept together */
+    /* Quote Summary is one indivisible block */
+    .es-totals-wrap {
+      page-break-inside:avoid !important; break-inside:avoid !important;
+    }
+    /* Disclaimer + signatures always print on a fresh sheet, kept together.
+       The .es-disclaimer-page wrapper carries page-break-inside:avoid so the
+       browser will push the entire block to the next page rather than split
+       the signatures away from the disclaimer text. */
     .es-page-break {
       page-break-before:always !important;
       break-before:page !important;
@@ -3844,6 +3876,9 @@ function printEstimateViaIframe(){
     .es-disclaimer-page {
       page-break-inside:avoid !important; break-inside:avoid !important;
       margin-top:0 !important;
+    }
+    .es-disclaimer, .es-signatures, .es-sig {
+      page-break-inside:avoid !important; break-inside:avoid !important;
     }
     .es-logo img { max-height:70px !important; }
   `);
@@ -4397,32 +4432,29 @@ function renderClientEstimate(){
   const signingSellers = sellers.length ? sellers : [{ name:"" }];
 
   // Disclaimer signature rows — every seller signs both the estimate and
-  // the disclaimer. Stack them top-to-bottom, two per row when there's
-  // room (handled by the grid columns rule).
-  const sellerSigBlocks = signingSellers.map((s, i) => {
-    const nameLine = s.name ? `Seller signature &mdash; ${escapeHtml(s.name)}` : `Seller signature${signingSellers.length>1 ? ` &mdash; Seller ${i+1}` : ""}`;
-    return `
-      <div class="es-sig">
-        <div class="sig-line"></div>
-        <div class="sig-label">${nameLine}</div>
-        <div class="sig-date">
-          <div class="sig-line"></div>
-          <div class="sig-label">Date</div>
-        </div>
-      </div>
-    `;
-  }).join("");
-
-  const brokerSigBlock = `
+  // the disclaimer. Signature + date sit on the same horizontal line so
+  // the whole signing block stays compact enough to fit on the same page
+  // as the disclaimer above, even with several sellers.
+  const sigRow = (label) => `
     <div class="es-sig">
-      <div class="sig-line"></div>
-      <div class="sig-label">${escapeHtml(ci.signatureName)}</div>
-      <div class="sig-date">
+      <div class="sig-col">
+        <div class="sig-line"></div>
+        <div class="sig-label">${label}</div>
+      </div>
+      <div class="sig-col sig-col-date">
         <div class="sig-line"></div>
         <div class="sig-label">Date</div>
       </div>
     </div>
   `;
+  const sellerSigBlocks = signingSellers.map((s, i) => {
+    const nameLine = s.name
+      ? `Seller signature &mdash; ${escapeHtml(s.name)}`
+      : `Seller signature${signingSellers.length>1 ? ` &mdash; Seller ${i+1}` : ""}`;
+    return sigRow(nameLine);
+  }).join("");
+
+  const brokerSigBlock = sigRow(escapeHtml(ci.signatureName));
 
   html += `
     <div class="es-page-break"></div>
