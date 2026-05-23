@@ -853,26 +853,19 @@
     margin-bottom:28px;
   }
   .es-h-left{ flex:1; min-width:0; }
-  .es-company-input{
-    font-family:inherit;
-    font-size:24px; font-weight:800; letter-spacing:.04em;
-    color:#0a0a0a; background:transparent; border:none; padding:0;
-    width:100%; max-width:480px;
-    border-bottom:1px dashed transparent;
+  .es-logo{ display:block; margin-bottom:12px; }
+  .es-logo img{
+    display:block; width:auto;
+    max-width:260px; max-height:80px;
+    object-fit:contain; object-position:left center;
   }
-  .es-company-input:focus{ outline:none; border-bottom-color:#d4af6a; }
-  .es-company-input::placeholder{ color:#bdbdbd; font-weight:600; }
-  .es-contact-line{
-    display:flex; flex-wrap:wrap; gap:18px;
-    margin-top:10px; font-size:11px; color:#555;
+  @media (max-width:720px){
+    .es-logo img{ max-width:220px; max-height:64px; }
   }
-  .es-contact-line input{
-    border:none; border-bottom:1px dashed transparent;
-    background:transparent; font:inherit; color:#444; padding:2px 0;
-    min-width:140px;
+  .es-contact-block{
+    margin-top:6px; font-size:11px; color:#444; line-height:1.55;
   }
-  .es-contact-line input:focus{ outline:none; border-bottom-color:#d4af6a; }
-  .es-contact-line input::placeholder{ color:#bdbdbd; }
+  .es-contact-block .ln{ display:block; }
 
   .es-h-right{ text-align:right; min-width:200px; }
   .es-badge{
@@ -934,9 +927,19 @@
   .es-subtotal-row td.num{ color:#0a0a0a; font-size:13px; letter-spacing:.02em; }
 
   /* Totals block */
+  .es-totals-wrap{ margin:30px 0 30px; }
+  .es-totals-title{
+    font-size:11px; letter-spacing:.22em; text-transform:uppercase;
+    font-weight:800; color:#fff; background:#0a0a0a;
+    padding:11px 14px; margin-bottom:0;
+    border-bottom:2px solid #d4af6a;
+  }
   .es-totals{
     display:flex; justify-content:flex-end;
-    margin:24px 0 30px;
+    background:#faf6ec;
+    padding:18px 18px 8px;
+    border:1px solid #e6dec7;
+    border-top:none;
   }
   .es-totals-box{
     min-width:340px; max-width:100%;
@@ -1102,6 +1105,8 @@
     }
     body.show-estimate .es-subtotal-row,
     body.show-estimate .es-table thead th,
+    body.show-estimate .es-totals-title,
+    body.show-estimate .es-totals,
     body.show-estimate .es-totals-box .row.grand{
       -webkit-print-color-adjust:exact; print-color-adjust:exact;
     }
@@ -1109,14 +1114,7 @@
     body.show-estimate .es-table tr{
       page-break-inside:avoid !important; break-inside:avoid !important;
     }
-    /* In print, make typed-in inputs read as plain text */
-    body.show-estimate .es-company-input,
-    body.show-estimate .es-contact-line input{
-      border:none !important; padding:0 !important; color:#0a0a0a !important;
-      background:transparent !important;
-    }
-    body.show-estimate .es-contact-line input::placeholder{ color:transparent !important; }
-    body.show-estimate .es-company-input::placeholder{ color:transparent !important; }
+    body.show-estimate .es-logo img{ max-height:70px !important; }
 
     /* Internal Mode print — light-on-white, sections kept together */
     body.show-internal{ background:#fff !important; color:#000 !important; }
@@ -1339,6 +1337,9 @@
 </div>
 
 <!-- Client Estimate (professional Print/PDF overlay) -->
+<!-- Normally invisible: openClientEstimate() renders + triggers print immediately,
+     and the afterprint event hides the overlay again. If the print dialog is
+     cancelled or never appears, this toolbar gives the user a way out. -->
 <div id="estimateView" class="estimate-view">
   <div class="estimate-toolbar no-print">
     <div class="et-title">Client Estimate</div>
@@ -3581,32 +3582,34 @@ function renderContractorSheet(){
    Client Estimate (professional Print/PDF) — data layer + render
    ============================================================ */
 
+/* Fixed company branding for every estimate */
+const COMPANY_INFO = {
+  logoSrc: "logo.png",
+  logoAlt: "Reno to Sold Inc.",
+  phone:   "416-832-3779",
+  email:   "renotosold@gmail.com",
+  addressLine1: "1195 Queensway E #28",
+  addressLine2: "Mississauga, ON  L4Y 0G4",
+  signatureName: "RENO TO SOLD INC."
+};
+
 function openClientEstimate(){
+  // Nothing is editable on the estimate — render it and go straight to the
+  // print / Save-as-PDF dialog. The overlay is briefly visible while the
+  // browser opens its dialog; afterprint cleans it up.
   renderClientEstimate();
   document.body.classList.add("show-estimate");
   window.scrollTo(0,0);
+  const cleanup = () => {
+    document.body.classList.remove("show-estimate");
+    window.removeEventListener("afterprint", cleanup);
+  };
+  window.addEventListener("afterprint", cleanup);
+  // Defer print to next tick so the sheet is fully painted first
+  setTimeout(() => { try{ window.print(); }catch(e){ /* ignore */ } }, 60);
 }
 function closeClientEstimate(){
   document.body.classList.remove("show-estimate");
-}
-
-/* Persist company-header info across estimates */
-function loadCompanyInfo(){
-  try{
-    const raw = localStorage.getItem("reno_company_info_v1");
-    if(raw) return JSON.parse(raw);
-  }catch(e){}
-  return { name:"", phone:"", email:"", address:"" };
-}
-function saveCompanyInfo(){
-  const get = id => { const el = document.getElementById(id); return el ? el.value : ""; };
-  const info = {
-    name:    get("esCompanyName"),
-    phone:   get("esCompanyPhone"),
-    email:   get("esCompanyEmail"),
-    address: get("esCompanyAddress")
-  };
-  try{ localStorage.setItem("reno_company_info_v1", JSON.stringify(info)); }catch(e){}
 }
 
 /* Deterministic quote number: Q-YYMMDD-#### derived from address + date */
@@ -3991,7 +3994,7 @@ function renderClientEstimate(){
     const d = new Date(); d.setDate(d.getDate() + 30);
     return d.toLocaleDateString("en-CA", {year:"numeric", month:"long", day:"numeric"});
   })();
-  const ci = loadCompanyInfo();
+  const ci = COMPANY_INFO;
   const propName = (state.propName || "").trim();
   const propAddr = (state.propAddress || "").trim();
   const propSqft = state.propSqft || "";
@@ -4006,14 +4009,12 @@ function renderClientEstimate(){
   let html = `
     <div class="es-header">
       <div class="es-h-left">
-        <input id="esCompanyName" class="es-company-input" type="text"
-               placeholder="Your Company Name"
-               value="${escapeHtml(ci.name)}"
-               oninput="saveCompanyInfo()">
-        <div class="es-contact-line">
-          <input id="esCompanyPhone"   type="text" placeholder="Phone"   value="${escapeHtml(ci.phone)}"   oninput="saveCompanyInfo()">
-          <input id="esCompanyEmail"   type="text" placeholder="Email"   value="${escapeHtml(ci.email)}"   oninput="saveCompanyInfo()">
-          <input id="esCompanyAddress" type="text" placeholder="Address" value="${escapeHtml(ci.address)}" oninput="saveCompanyInfo()">
+        <div class="es-logo"><img src="${escapeHtml(ci.logoSrc)}" alt="${escapeHtml(ci.logoAlt)}"></div>
+        <div class="es-contact-block">
+          <span class="ln">${escapeHtml(ci.phone)}</span>
+          <span class="ln">${escapeHtml(ci.email)}</span>
+          <span class="ln">${escapeHtml(ci.addressLine1)}</span>
+          <span class="ln">${escapeHtml(ci.addressLine2)}</span>
         </div>
       </div>
       <div class="es-h-right">
@@ -4099,19 +4100,22 @@ function renderClientEstimate(){
     html += `</tbody></table>`;
   }
 
-  // Totals
+  // Totals — wrapped with a clear "Quote Summary" header
   if(groups.length){
     const t = totals;
     html += `
-      <div class="es-totals">
-        <div class="es-totals-box">
-          <div class="row"><span>Labour subtotal</span><span class="v">${fmtCurrency(t.labour)}</span></div>
-          <div class="row"><span>Material subtotal</span><span class="v">${fmtCurrency(t.material)}</span></div>
-          <div class="row"><span>Subtotal</span><span class="v">${fmtCurrency(t.subtotal)}</span></div>
-          ${t.listingDisc ? `<div class="row discount"><span>Listing discount</span><span class="v">−${fmtCurrency(t.listingDisc)}</span></div>` : ""}
-          ${t.customDisc ? `<div class="row discount"><span>Discount${state.discount && state.discount.customNote ? ` (${escapeHtml(state.discount.customNote)})` : ""}</span><span class="v">−${fmtCurrency(t.customDisc)}</span></div>` : ""}
-          <div class="row"><span>HST (13%)</span><span class="v">${fmtCurrency(t.hst)}</span></div>
-          <div class="row grand"><span>Total</span><span class="v">${fmtCurrency(t.total)}</span></div>
+      <div class="es-totals-wrap">
+        <div class="es-totals-title">Quote Summary</div>
+        <div class="es-totals">
+          <div class="es-totals-box">
+            <div class="row"><span>Labour subtotal</span><span class="v">${fmtCurrency(t.labour)}</span></div>
+            <div class="row"><span>Material subtotal</span><span class="v">${fmtCurrency(t.material)}</span></div>
+            <div class="row"><span>Subtotal</span><span class="v">${fmtCurrency(t.subtotal)}</span></div>
+            ${t.listingDisc ? `<div class="row discount"><span>Listing discount</span><span class="v">−${fmtCurrency(t.listingDisc)}</span></div>` : ""}
+            ${t.customDisc ? `<div class="row discount"><span>Discount${state.discount && state.discount.customNote ? ` (${escapeHtml(state.discount.customNote)})` : ""}</span><span class="v">−${fmtCurrency(t.customDisc)}</span></div>` : ""}
+            <div class="row"><span>HST (13%)</span><span class="v">${fmtCurrency(t.hst)}</span></div>
+            <div class="row grand"><span>Total</span><span class="v">${fmtCurrency(t.total)}</span></div>
+          </div>
         </div>
       </div>
     `;
@@ -4130,14 +4134,14 @@ function renderClientEstimate(){
       </div>
       <div class="es-sig">
         <div class="sig-line"></div>
-        <div class="sig-label">Contractor signature</div>
+        <div class="sig-label">${escapeHtml(ci.signatureName)}</div>
         <div class="sig-date">
           <div class="sig-line"></div>
           <div class="sig-label">Date</div>
         </div>
       </div>
     </div>
-    <div class="es-footer">Prepared with Reno to Sold &middot; renotosold.homes</div>
+    <div class="es-footer">Prepared by Reno to Sold Inc.</div>
   `;
 
   el.innerHTML = html;
