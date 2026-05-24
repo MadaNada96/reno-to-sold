@@ -19,6 +19,9 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>if(window.pdfjsLib){pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';}</script>
+<!-- html2pdf.js — used to rasterize the Estimate sheet into a PDF blob client-side
+     so it can be base64-encoded and POSTed to the email-estimate Supabase function. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <style>
   :root{
     /* Reno to Sold black & gold */
@@ -216,6 +219,33 @@
   .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:100;padding:20px;}
   .modal-bg.show{display:flex;}
   .modal{background:var(--panel);border:1px solid var(--gold-deep);border-radius:12px;max-width:720px;width:100%;max-height:90vh;overflow:auto;box-shadow:var(--shadow);}
+  /* Email Estimate modal fields */
+  .email-field{ display:flex; flex-direction:column; margin-bottom:14px; }
+  .email-field label{
+    font-size:11px; color:var(--gold-bright); text-transform:uppercase;
+    letter-spacing:.14em; font-weight:600; margin-bottom:6px;
+  }
+  .email-field input,
+  .email-field textarea{
+    background:var(--panel-2); border:1px solid var(--line-strong);
+    color:var(--ink); padding:9px 12px; border-radius:6px;
+    font:inherit; font-size:13px; resize:vertical;
+  }
+  .email-field input:focus,
+  .email-field textarea:focus{
+    outline:none; border-color:var(--gold); box-shadow:0 0 0 2px rgba(212,175,106,.15);
+  }
+  .email-cc{ display:flex; align-items:center; gap:8px; font-size:12px; color:var(--ink); margin:4px 0 14px; cursor:pointer; }
+  .email-cc input{ accent-color:var(--gold); }
+  .email-status{
+    padding:10px 12px; border-radius:6px; font-size:12px; margin-bottom:12px;
+    border:1px solid var(--line-strong); background:var(--panel-2);
+    color:var(--ink);
+  }
+  .email-status.success{ border-color:#3a7a3a; background:rgba(58,122,58,.12); color:#9bcca0; }
+  .email-status.error{ border-color:#8a3a3a; background:rgba(138,58,58,.12); color:#ff9b9b; }
+  .email-status.working{ border-color:var(--gold-deep); background:rgba(212,175,106,.08); color:var(--gold-bright); }
+  .email-actions{ display:flex; justify-content:flex-end; gap:8px; }
   .modal h3{margin:0;padding:18px 22px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;color:var(--gold-bright);font-size:13px;text-transform:uppercase;letter-spacing:.18em;font-weight:700;}
   .modal-body{padding:20px 22px;}
 
@@ -1632,6 +1662,7 @@
     <div class="et-title">Client Estimate</div>
     <div class="et-actions">
       <button onclick="closeClientEstimate()">&larr; Back to Estimator</button>
+      <button onclick="openEmailEstimateModal()">Email to Client</button>
       <button class="primary" onclick="printEstimate()">Print / Save as PDF</button>
     </div>
   </div>
@@ -1731,6 +1762,42 @@
     <div class="modal-body">
       <ul class="saved-list" id="savedList"></ul>
       <p id="savedEmpty" class="footnote" style="display:none">No saved estimates yet.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Email Estimate modal — sends the rendered estimate sheet as a PDF
+     attachment via the email-estimate Supabase Edge Function (Resend). -->
+<div class="modal-bg" id="emailEstimateModal" onclick="if(event.target===this)closeEmailEstimateModal()">
+  <div class="modal" style="max-width:560px;">
+    <h3>Email Estimate to Client
+      <button class="ghost" onclick="closeEmailEstimateModal()">Close</button>
+    </h3>
+    <div class="modal-body">
+      <div class="email-field">
+        <label for="emailTo">To (comma-separated for multiple)</label>
+        <input type="text" id="emailTo" placeholder="jane@example.com, john@example.com" autocomplete="off">
+      </div>
+      <div class="email-field">
+        <label for="emailSubject">Subject</label>
+        <input type="text" id="emailSubject" placeholder="Your renovation estimate" autocomplete="off">
+      </div>
+      <div class="email-field">
+        <label for="emailBody">Message</label>
+        <textarea id="emailBody" rows="6" placeholder="Add a personal note..."></textarea>
+      </div>
+      <label class="email-cc">
+        <input type="checkbox" id="emailCcSelf">
+        <span>CC me a copy at <span id="emailCcSelfAddr" style="color:var(--gold-bright);font-weight:600;"></span></span>
+      </label>
+      <div id="emailStatus" class="email-status" style="display:none;"></div>
+      <div class="email-actions">
+        <button class="ghost" onclick="closeEmailEstimateModal()">Cancel</button>
+        <button class="primary" id="emailSendBtn" onclick="sendEstimateEmail()">Generate PDF &amp; Send</button>
+      </div>
+      <p class="footnote" style="margin-top:14px;line-height:1.5;">
+        A PDF of the estimate will be generated and attached automatically. The email is sent from <b style="color:var(--gold-bright);">estimates@renotosold.homes</b> via Resend.
+      </p>
     </div>
   </div>
 </div>
@@ -4985,6 +5052,176 @@ function printEstimate(){
   // Re-render in case the estimator was just edited, then print via iframe
   renderClientEstimate();
   printEstimateViaIframe();
+}
+
+/* ============================================================
+   Email Estimate to Client
+   Generates a PDF of #estimateSheet client-side with html2pdf.js,
+   then invokes the `email-estimate` Supabase Edge Function which
+   sends the PDF via Resend. See EMAIL_SETUP.md for deploy steps.
+   ============================================================ */
+
+function openEmailEstimateModal(){
+  // Re-render so the modal sees the current state of the estimate
+  renderClientEstimate();
+
+  // Pre-fill recipients from sellers' emails
+  const sellers = Array.isArray(state.sellers) ? state.sellers : [];
+  const sellerEmails = sellers.map(s => (s && s.email || "").trim()).filter(Boolean);
+  document.getElementById("emailTo").value = sellerEmails.join(", ");
+
+  // Pre-fill subject + body
+  const addr = (state.propAddress || state.propName || "your property").trim();
+  document.getElementById("emailSubject").value = `Renovation Estimate — ${addr}`;
+  document.getElementById("emailBody").value =
+    `Hi${sellers[0] && sellers[0].name ? " " + sellers[0].name.split(/\s+/)[0] : ""},\n\n`+
+    `Please find attached your renovation estimate from Reno to Sold Inc.\n`+
+    `Take a look through the scope of work, payment schedule, and the listing disclaimer on the second page.\n\n`+
+    `Let me know if you have any questions — happy to walk through any of it.\n\n`+
+    `Best,\nMohamed Nada\nBroker, RE/MAX West Realty Inc.\nReno to Sold Inc.`;
+
+  // CC self — defaults to logged-in Supabase user, hides if not signed in
+  const ccLabel = document.getElementById("emailCcSelfAddr");
+  const ccCheckbox = document.getElementById("emailCcSelf");
+  const ccRow = ccCheckbox && ccCheckbox.closest(".email-cc");
+  if(currentUser && currentUser.email){
+    ccLabel.textContent = currentUser.email;
+    ccCheckbox.checked = false;
+    if(ccRow) ccRow.style.display = "";
+  } else {
+    if(ccRow) ccRow.style.display = "none";
+  }
+
+  setEmailStatus("", "");
+  const btn = document.getElementById("emailSendBtn");
+  if(btn){ btn.disabled = false; btn.textContent = "Generate PDF & Send"; }
+
+  document.getElementById("emailEstimateModal").classList.add("show");
+}
+function closeEmailEstimateModal(){
+  document.getElementById("emailEstimateModal").classList.remove("show");
+}
+
+function setEmailStatus(msg, kind){
+  const el = document.getElementById("emailStatus");
+  if(!el) return;
+  if(!msg){ el.style.display = "none"; el.className = "email-status"; el.textContent = ""; return; }
+  el.style.display = "";
+  el.className = "email-status" + (kind ? " " + kind : "");
+  el.textContent = msg;
+}
+
+function blobToBase64(blob){
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => {
+      const result = r.result || "";
+      // strip the "data:application/pdf;base64," prefix
+      const idx = String(result).indexOf(",");
+      resolve(idx >= 0 ? String(result).slice(idx + 1) : String(result));
+    };
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(blob);
+  });
+}
+
+function sanitizeFilename(s){
+  return String(s || "").replace(/[\\\/:*?"<>|]+/g, "").replace(/\s+/g, "-").slice(0, 80) || "estimate";
+}
+
+function parseRecipients(raw){
+  return String(raw || "")
+    .split(/[,;\n]+/)
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+function isValidEmail(e){
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+}
+
+async function sendEstimateEmail(){
+  const toRaw    = document.getElementById("emailTo").value;
+  const subject  = (document.getElementById("emailSubject").value || "").trim();
+  const body     = document.getElementById("emailBody").value || "";
+  const ccSelf   = !!(document.getElementById("emailCcSelf") && document.getElementById("emailCcSelf").checked);
+
+  // ---- Validate ----
+  const recipients = parseRecipients(toRaw);
+  if(!recipients.length){
+    setEmailStatus("Please add at least one recipient email.", "error");
+    return;
+  }
+  const bad = recipients.filter(e => !isValidEmail(e));
+  if(bad.length){
+    setEmailStatus(`Invalid email${bad.length>1?"s":""}: ${bad.join(", ")}`, "error");
+    return;
+  }
+  if(!subject){
+    setEmailStatus("Please add a subject.", "error");
+    return;
+  }
+  if(typeof html2pdf !== "function"){
+    setEmailStatus("PDF generator failed to load. Refresh the page and try again.", "error");
+    return;
+  }
+  if(!supa){
+    setEmailStatus("Supabase is not configured — see EMAIL_SETUP.md.", "error");
+    return;
+  }
+
+  const btn = document.getElementById("emailSendBtn");
+  if(btn){ btn.disabled = true; btn.textContent = "Working..."; }
+
+  try{
+    // ---- 1. Generate PDF from the estimate sheet ----
+    setEmailStatus("Generating PDF...", "working");
+    const sheetEl = document.getElementById("estimateSheet");
+    if(!sheetEl) throw new Error("Estimate sheet not found");
+
+    const addr = sanitizeFilename(state.propAddress || state.propName || "estimate");
+    const filename = `Estimate-${addr}.pdf`;
+
+    const blob = await html2pdf().set({
+      margin: 0.45,
+      filename,
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+      jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' },
+      pagebreak:    { mode: ['css', 'legacy'], avoid: ['.es-category-block', '.es-subblock', '.es-totals-wrap', '.es-savings-card', '.es-payments-wrap', '.es-disclaimer-page'] }
+    }).from(sheetEl).outputPdf('blob');
+
+    const pdfBase64 = await blobToBase64(blob);
+    const sizeKB = Math.round(blob.size / 1024);
+
+    // ---- 2. Send via Supabase Edge Function (calls Resend) ----
+    setEmailStatus(`Sending (${sizeKB} KB attachment)...`, "working");
+
+    const payload = {
+      to: recipients,
+      cc: (ccSelf && currentUser && currentUser.email) ? [currentUser.email] : [],
+      subject,
+      body,
+      pdfBase64,
+      filename
+    };
+
+    const { data, error } = await supa.functions.invoke('email-estimate', { body: payload });
+    if(error){
+      throw new Error(error.message || "Edge Function error");
+    }
+    if(data && data.error){
+      throw new Error(data.error);
+    }
+
+    setEmailStatus(`Sent to ${recipients.join(", ")}${ccSelf?" (cc'd to you)":""}.`, "success");
+    if(btn){ btn.textContent = "Sent ✓"; btn.disabled = true; }
+    // Auto-close after a short pause
+    setTimeout(closeEmailEstimateModal, 2200);
+  }catch(e){
+    console.error("Email send failed:", e);
+    setEmailStatus("Failed: " + (e && e.message ? e.message : String(e)), "error");
+    if(btn){ btn.disabled = false; btn.textContent = "Generate PDF & Send"; }
+  }
 }
 
 /* ---------- Toast ---------- */
