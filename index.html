@@ -862,6 +862,21 @@
   }
   .estimate-toolbar .et-actions{ display:flex; gap:8px; flex-wrap:wrap; }
 
+  /* While the PDF is being rasterized (sendEstimateEmail adds body.pdf-export),
+     strip the on-screen "card" treatment so the PDF doesn't carry a fat top
+     margin or a drop-shadow. The 0.45in @page margin set in jsPDF supplies
+     the actual page margins. */
+  body.pdf-export .estimate-sheet{
+    margin:0 !important;
+    padding:0 !important;
+    box-shadow:none !important;
+    max-width:none !important;
+    background:#fff !important;
+  }
+  body.pdf-export .estimate-view{
+    background:#fff !important;
+  }
+
   /* The printed sheet itself */
   .estimate-sheet{
     background:#ffffff;
@@ -1185,6 +1200,18 @@
   }
   .es-savings-card .es-sav-tag b{ color:#e8c989; font-weight:700; }
 
+  /* Summary page wrapper — Quote Summary + Savings card + Payment Schedule
+     always print together on their own sheet. Forced page-break-before keeps
+     this trio off the line-items page; page-break-inside:avoid keeps them
+     bonded. */
+  .es-summary-page{
+    page-break-before:always;
+    break-before:page;
+    page-break-inside:avoid;
+    break-inside:avoid;
+  }
+  .es-summary-page > *:first-child{ margin-top:0 !important; }
+
   /* Page-2 wrapper — disclaimer + signatures travel together on their own sheet.
      `page-break-inside:avoid` here guarantees the signatures cannot detach
      from the disclaimer block. If the content overflows a single page, the
@@ -1428,6 +1455,12 @@
     body.show-estimate .es-disclaimer-page{
       page-break-inside:avoid !important; break-inside:avoid !important;
       margin-top:0 !important;
+    }
+    /* Same treatment for the Summary page (Quote Summary + Savings + Payments) */
+    body.show-estimate .es-summary-page{
+      page-break-before:always !important;
+      break-before:page !important;
+      page-break-inside:avoid !important; break-inside:avoid !important;
     }
     body.show-estimate .es-sig{
       page-break-inside:avoid !important; break-inside:avoid !important;
@@ -4203,16 +4236,35 @@ function quoteNumber(){
   return `Q-${yy}${mm}${dd}-${seq}`;
 }
 
-function fmtCurrency(n){
+// Manual comma-grouped formatter — fully locale-independent.
+// `Intl.NumberFormat` / `Number.prototype.toLocaleString("en-CA")` in some
+// browsers (and inside html2canvas / html2pdf) inserts a NARROW NO-BREAK SPACE
+// (U+202F) as the thousands separator instead of a comma, which renders as
+// "$1 2,900.00" in the generated PDF. Building the string manually avoids it.
+function fmtMoney(n, decimals){
   if(!isFinite(n)) n = 0;
-  return "$" + n.toLocaleString("en-CA", {minimumFractionDigits:2, maximumFractionDigits:2});
+  if(decimals == null) decimals = 2;
+  const sign = n < 0 ? "-" : "";
+  const abs  = Math.abs(n);
+  const fixed = decimals > 0 ? abs.toFixed(decimals) : String(Math.round(abs));
+  const dot  = fixed.indexOf(".");
+  const intP = dot >= 0 ? fixed.slice(0, dot) : fixed;
+  const decP = dot >= 0 ? fixed.slice(dot)    : "";
+  const grouped = intP.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return sign + "$" + grouped + decP;
 }
+function fmtCurrency(n){ return fmtMoney(n, 2); }
 function formatQty(q){
   if(q == null || q === "") return "—";
   const n = +q;
   if(!isFinite(n)) return String(q);
-  if(Math.abs(n - Math.round(n)) < 0.01) return Math.round(n).toLocaleString("en-CA");
-  return n.toLocaleString("en-CA", {maximumFractionDigits:2});
+  const intMode = Math.abs(n - Math.round(n)) < 0.01;
+  const val = intMode ? Math.round(n) : n;
+  const fixed = intMode ? String(val) : val.toFixed(2).replace(/\.?0+$/, "");
+  const dot = fixed.indexOf(".");
+  const intP = dot >= 0 ? fixed.slice(0, dot) : fixed;
+  const decP = dot >= 0 ? fixed.slice(dot)    : "";
+  return intP.replace(/\B(?=(\d{3})+(?!\d))/g, ",") + decP;
 }
 
 /* Build one structured row per task, grouped by category.
@@ -4875,10 +4927,13 @@ function renderClientEstimate(){
     });
   }
 
-  // Totals — wrapped with a clear "Quote Summary" header
+  // Totals + Savings + Payment Schedule — wrapped in .es-summary-page so they
+  // ALWAYS print together on their own sheet (forced via page-break-before in
+  // CSS and the explicit `before` selector passed to html2pdf).
   if(sections.length){
     const t = totals;
     html += `
+      <div class="es-summary-page">
       <div class="es-totals-wrap">
         <div class="es-totals-title">Quote Summary</div>
         <div class="es-totals">
@@ -4902,7 +4957,7 @@ function renderClientEstimate(){
     // Eye-catching savings card — only when there's an active discount worth showing.
     // Rounded to the nearest dollar, formatted with thousands separators.
     if(state.discount && state.discount.enabled && t.discount > 0){
-      const savingsAmt = "$" + Math.round(t.discount).toLocaleString("en-CA");
+      const savingsAmt = fmtMoney(t.discount, 0);
       html += `
         <div class="es-savings-card">
           <div class="es-sav-eyebrow">By Listing With Us You Save</div>
@@ -4944,7 +4999,7 @@ function renderClientEstimate(){
     const pctSum = milestones.reduce((a,m) => a + m.pct, 0);
 
     const milestoneRows = milestones.map(m => {
-      const amount = "$" + Math.round(grand * (m.pct/100)).toLocaleString("en-CA");
+      const amount = fmtMoney(grand * (m.pct/100), 0);
       return `
         <tr>
           <td class="pm-num">${m.n}</td>
@@ -4958,7 +5013,7 @@ function renderClientEstimate(){
       `;
     }).join("");
 
-    const totalAmt = "$" + Math.round(grand).toLocaleString("en-CA");
+    const totalAmt = fmtMoney(grand, 0);
     html += `
       <div class="es-payments-wrap">
         <div class="es-payments-title">Payment Schedule &amp; Timeline</div>
@@ -4980,6 +5035,7 @@ function renderClientEstimate(){
           Milestone descriptions are typical and may be adjusted on a project-by-project basis based on the agreed scope. The final payment schedule will form part of the executed renovation agreement between the seller(s) and Reno to Sold Inc.
         </div>
       </div>
+      </div><!-- /.es-summary-page -->
     `;
   }
 
@@ -5074,8 +5130,22 @@ function openEmailEstimateModal(){
   // Pre-fill subject + body
   const addr = (state.propAddress || state.propName || "your property").trim();
   document.getElementById("emailSubject").value = `Renovation Estimate — ${addr}`;
+
+  // Build the greeting from ALL sellers' first names.
+  //   1 seller   → "Hi John,"
+  //   2 sellers  → "Hi John & Jane,"
+  //   3+ sellers → "Hi John, Jane & Bob,"
+  const firstNames = sellers
+    .map(s => ((s && s.name) || "").trim().split(/\s+/)[0])
+    .filter(Boolean);
+  let greeting;
+  if(firstNames.length === 0)       greeting = "Hi,";
+  else if(firstNames.length === 1)  greeting = `Hi ${firstNames[0]},`;
+  else if(firstNames.length === 2)  greeting = `Hi ${firstNames[0]} & ${firstNames[1]},`;
+  else                              greeting = `Hi ${firstNames.slice(0,-1).join(", ")} & ${firstNames[firstNames.length-1]},`;
+
   document.getElementById("emailBody").value =
-    `Hi${sellers[0] && sellers[0].name ? " " + sellers[0].name.split(/\s+/)[0] : ""},\n\n`+
+    `${greeting}\n\n`+
     `Please find attached your renovation estimate from Reno to Sold Inc.\n`+
     `Take a look through the scope of work, payment schedule, and the listing disclaimer on the second page.\n\n`+
     `Let me know if you have any questions — happy to walk through any of it.\n\n`+
@@ -5173,22 +5243,41 @@ async function sendEstimateEmail(){
   const btn = document.getElementById("emailSendBtn");
   if(btn){ btn.disabled = true; btn.textContent = "Working..."; }
 
+  let exportClassApplied = false;
   try{
     // ---- 1. Generate PDF from the estimate sheet ----
     setEmailStatus("Generating PDF...", "working");
     const sheetEl = document.getElementById("estimateSheet");
     if(!sheetEl) throw new Error("Estimate sheet not found");
 
+    // Apply the PDF-export overrides (strips the on-screen card padding/shadow)
+    // and ensure the estimate-view overlay is on-screen so html2canvas can
+    // actually measure + paint the layout.
+    document.body.classList.add("pdf-export", "show-estimate");
+    exportClassApplied = true;
+
     const addr = sanitizeFilename(state.propAddress || state.propName || "estimate");
     const filename = `Estimate-${addr}.pdf`;
 
     const blob = await html2pdf().set({
-      margin: 0.45,
+      margin: [0.45, 0.45, 0.45, 0.45],
       filename,
       image:        { type: 'jpeg', quality: 0.98 },
-      html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+      html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: sheetEl.scrollWidth },
       jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' },
-      pagebreak:    { mode: ['css', 'legacy'], avoid: ['.es-category-block', '.es-subblock', '.es-totals-wrap', '.es-savings-card', '.es-payments-wrap', '.es-disclaimer-page'] }
+      // Force a fresh page BEFORE the summary-page block AND the disclaimer-page
+      // block, and forbid breaks INSIDE any structural element. CSS rules are
+      // also respected via mode:['css','legacy'].
+      pagebreak: {
+        mode:   ['css', 'legacy'],
+        before: ['.es-summary-page', '.es-disclaimer-page'],
+        avoid:  [
+          '.es-category-block', '.es-subblock',
+          '.es-totals-wrap', '.es-savings-card', '.es-payments-wrap',
+          '.es-summary-page',
+          '.es-disclaimer-page', '.es-disclaimer', '.es-signatures', '.es-sig'
+        ]
+      }
     }).from(sheetEl).outputPdf('blob');
 
     const pdfBase64 = await blobToBase64(blob);
@@ -5222,6 +5311,12 @@ async function sendEstimateEmail(){
     console.error("Email send failed:", e);
     setEmailStatus("Failed: " + (e && e.message ? e.message : String(e)), "error");
     if(btn){ btn.disabled = false; btn.textContent = "Generate PDF & Send"; }
+  }finally{
+    // Always strip the PDF-export classes, even if the render or send failed,
+    // otherwise the on-screen estimator stays stuck in the export view.
+    if(exportClassApplied){
+      document.body.classList.remove("pdf-export", "show-estimate");
+    }
   }
 }
 
