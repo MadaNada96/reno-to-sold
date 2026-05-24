@@ -1296,6 +1296,32 @@
     background:#faf8f1; border:1px dashed #d4af6a;
   }
 
+  /* ============================================================
+     MONEY DISPLAY LOCKDOWN
+     The label cells on `.row.grand` (Total) and `.pm-total` (Total Project
+     Payment) carry letter-spacing for the uppercase label text — which
+     inherits to the dollar amount in the same row and stretches the digits
+     out as if there were spaces between them. Also, font-variant-numeric:
+     tabular-nums renders with visible gaps inside html2canvas → carries into
+     the generated PDF as fake "spaces".
+     This block forces normal character/word/feature settings on every money
+     display in the estimate sheet so dollar amounts always render as a tight
+     "$12,900.00" string in both on-screen and PDF rendering.
+     ============================================================ */
+  .estimate-sheet .es-cat-total .v,
+  .estimate-sheet .es-totals-box .row .v,
+  .estimate-sheet .es-totals-box .row.grand .v,
+  .estimate-sheet .es-payments-table .pm-amount,
+  .estimate-sheet .es-payments-table tr.pm-total .pm-amount,
+  .estimate-sheet .es-payments-table .pm-pct,
+  .estimate-sheet .es-savings-card .es-sav-amount{
+    letter-spacing:normal !important;
+    word-spacing:normal !important;
+    font-variant-numeric:normal !important;
+    font-feature-settings:normal !important;
+    font-kerning:normal !important;
+  }
+
   /* Print */
   @media print{
     body{background:#fff;color:#000;}
@@ -4188,6 +4214,22 @@ function printEstimateViaIframe(){
     }
     /* PDF renderers turn text-shadow glows into muddy halos. Off in print. */
     .es-savings-card .es-sav-amount { text-shadow:none !important; }
+    /* Money display lockdown — duplicated in the iframe so PDF rendering
+       sees the override even if specificity-ordering inside the iframe DOM
+       is different. */
+    .estimate-sheet .es-cat-total .v,
+    .estimate-sheet .es-totals-box .row .v,
+    .estimate-sheet .es-totals-box .row.grand .v,
+    .estimate-sheet .es-payments-table .pm-amount,
+    .estimate-sheet .es-payments-table tr.pm-total .pm-amount,
+    .estimate-sheet .es-payments-table .pm-pct,
+    .estimate-sheet .es-savings-card .es-sav-amount {
+      letter-spacing:normal !important;
+      word-spacing:normal !important;
+      font-variant-numeric:normal !important;
+      font-feature-settings:normal !important;
+      font-kerning:normal !important;
+    }
     .es-table thead { display:table-header-group; }
     .es-table tr, .es-header, .es-meta-grid, .es-totals, .es-signatures, .es-disclaimer, .es-footer {
       page-break-inside:avoid !important; break-inside:avoid !important;
