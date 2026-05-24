@@ -1522,7 +1522,7 @@
         <button onclick="openContractorBid()">Contractor Bid</button>
         <button id="authBtn" onclick="onAuthClick()">Sign in</button>
         <button onclick="openEmailEstimateModal()">Email to Client</button>
-        <button class="primary" onclick="openClientEstimate()">Print / PDF</button>
+        <button onclick="openClientEstimate()">Print / PDF</button>
       </div>
     </div>
     <div class="toolbar-row-2 no-print">
@@ -2783,7 +2783,11 @@ function renderTotals(){
   }
   if(dTotal){
     if(state.discount && state.discount.enabled && t.discount > 0){
-      dTotal.textContent = "−" + fmt(t.discount);
+      // Display as a positive value on the Client Savings toggle — this is the
+      // amount being saved, not a subtraction. The minus prefix is still used
+      // in the individual line-item rows of the totals breakdown where it
+      // represents a discount being applied to the subtotal.
+      dTotal.textContent = fmt(t.discount);
       dTotal.style.color = "var(--gold-bright)";
     } else {
       dTotal.textContent = "—";
@@ -6112,14 +6116,16 @@ function setCurrentUser(u){
 function updateAuthUI(){
   const btn = document.getElementById("authBtn");
   if(!btn) return;
+  // Keep the button visually neutral regardless of signed-in state — the gold
+  // "primary" highlight was over-emphasising it next to the other toolbar
+  // buttons. Title attribute still surfaces the account context on hover.
+  btn.classList.remove("primary");
   if(currentUser){
     btn.textContent = "Account";
     btn.title = "Signed in as " + currentUser.email + " — tap to sign out";
-    btn.classList.add("primary");
   } else {
     btn.textContent = "Sign in";
     btn.title = "Sync your estimates across devices";
-    btn.classList.remove("primary");
   }
 }
 
