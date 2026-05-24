@@ -2564,8 +2564,13 @@ function computeTotals(){
 }
 
 function fmt(n){
+  // Manual comma-grouped to avoid the NARROW NO-BREAK SPACE that
+  // Intl.NumberFormat("en-CA") inserts in some browsers (renders as
+  // "$1 2,900" instead of "$12,900").
   if(!isFinite(n)) n = 0;
-  return "$" + Math.round(n).toLocaleString("en-CA");
+  const sign = n < 0 ? "-" : "";
+  const abs  = Math.round(Math.abs(n));
+  return sign + "$" + String(abs).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
 /* ---------- Render ---------- */
@@ -2809,7 +2814,7 @@ function renderTotals(){
     const q = flooringMaterialQty();
     if(q){
       fmro.style.display = "";
-      fmro.textContent = `≈ ${Math.ceil(q.qty).toLocaleString("en-CA")} sqft of material to order (${q.sqft.toLocaleString("en-CA")} + ${q.pct}% waste)`;
+      fmro.textContent = `≈ ${String(Math.ceil(q.qty)).replace(/\B(?=(\d{3})+(?!\d))/g, ',')} sqft of material to order (${String(q.sqft).replace(/\B(?=(\d{3})+(?!\d))/g, ',')} + ${q.pct}% waste)`;
     } else {
       fmro.style.display = "none";
     }
@@ -3011,7 +3016,7 @@ function renderCatBody(cat){
           <label>Sqft of space to floor ${num(state.propSqft) > 0 ? `<span style="text-transform:none;letter-spacing:0;color:var(--gold-bright);font-weight:600;">&middot; auto from property sqft</span>` : ""}</label>
           <input type="number" min="0" value="${s.sqft || (num(state.propSqft) > 0 ? state.propSqft : '')}" placeholder="Type to override property total" oninput="state.flooring.sqft=this.value;renderTotals()">
           <div class="info-readout" id="floor-mat-readout" style="display:${q?'':'none'};">
-            ${q ? `≈ ${Math.ceil(q.qty).toLocaleString("en-CA")} sqft of material to order (${q.sqft.toLocaleString("en-CA")} + ${q.pct}% waste)` : ""}
+            ${q ? `≈ ${String(Math.ceil(q.qty)).replace(/\B(?=(\d{3})+(?!\d))/g, ',')} sqft of material to order (${String(q.sqft).replace(/\B(?=(\d{3})+(?!\d))/g, ',')} + ${q.pct}% waste)` : ""}
           </div>
         </div>
       </div>
@@ -3898,7 +3903,7 @@ function renderContractorSheet(){
     items.push({ html:`Total area: <b>${effectiveTotal || '?'} sqft</b> of finished space` });
     const q = flooringMaterialQty();
     if(q){
-      items.push({ html:`Approx. material to order: <b>${Math.ceil(q.qty).toLocaleString("en-CA")} sqft</b> (includes ${q.pct}% waste factor)` });
+      items.push({ html:`Approx. material to order: <b>${String(Math.ceil(q.qty)).replace(/\B(?=(\d{3})+(?!\d))/g, ',')} sqft</b> (includes ${q.pct}% waste factor)` });
     }
     {
       const rsq = num(s.removalSqft) || effectiveTotal;
@@ -5881,7 +5886,7 @@ function scopeItemsFor(cat){
     }
     items.push({ html:`Total: <b>${effectiveTotal||'?'} sqft</b>` });
     const q = flooringMaterialQty();
-    if(q) items.push({ html:`Material to order: <b>${Math.ceil(q.qty).toLocaleString("en-CA")} sqft</b> (incl. ${q.pct}% waste)` });
+    if(q) items.push({ html:`Material to order: <b>${String(Math.ceil(q.qty)).replace(/\B(?=(\d{3})+(?!\d))/g, ',')} sqft</b> (incl. ${q.pct}% waste)` });
     {
       const rsq = num(s.removalSqft) || effectiveTotal;
       items.push({ html:`Removal &amp; disposal: <b>${rsq||'?'} sqft</b> <i style="color:var(--muted);font-weight:400;">(included)</i>` });
