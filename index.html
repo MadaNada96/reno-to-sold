@@ -22,6 +22,60 @@
 <!-- html2pdf.js — used to rasterize the Estimate sheet into a PDF blob client-side
      so it can be base64-encoded and POSTed to the email-estimate Supabase function. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+<!-- ============================================================
+     SITE ACCESS GATE
+     Client-side PIN gate. Set SITE_ACCESS_HASH below to the
+     SHA-256 hash of your chosen PIN to enable the gate.
+     To generate a hash in your browser console (no PIN ever
+     leaves your machine):
+       crypto.subtle.digest("SHA-256", new TextEncoder().encode("YOUR-PIN"))
+         .then(h => console.log(Array.from(new Uint8Array(h))
+         .map(b => b.toString(16).padStart(2,'0')).join('')))
+     Paste the hash into SITE_ACCESS_HASH below.
+     Leave SITE_ACCESS_HASH empty to disable the gate.
+     ============================================================ -->
+<script>
+window.SITE_ACCESS_HASH    = ""; // <-- set this to your PIN's SHA-256 hash to lock the site
+window.SITE_ACCESS_TTL_DAYS = 30; // how long an unlocked browser stays unlocked
+window.SITE_ACCESS_KEY     = "reno_site_access_v1";
+</script>
+<style id="siteGateCriticalCss">
+  /* Critical inline CSS — hides EVERYTHING until the gate decides whether to
+     show the app or the lock screen, so there's no flash of either. */
+  html.site-gate-checking, html.site-gate-checking body { visibility:hidden; background:#0a0a0a; }
+  html.site-gate-locked   body > *:not(#siteGate) { display:none !important; }
+  html.site-gate-locked   body { background:#0a0a0a !important; visibility:visible !important; }
+  html.site-gate-locked   #siteGate { display:flex !important; }
+  /* When the gate is satisfied (or disabled) we leave it as `display:none` */
+  #siteGate { display:none; }
+</style>
+<script>
+// Apply the gate state BEFORE the body renders so nothing flashes.
+(function(){
+  document.documentElement.classList.add("site-gate-checking");
+  const requiredHash = (window.SITE_ACCESS_HASH || "").trim();
+  if(!requiredHash){
+    // Gate disabled — let the app render normally.
+    document.documentElement.classList.remove("site-gate-checking");
+    return;
+  }
+  try{
+    const raw = localStorage.getItem(window.SITE_ACCESS_KEY);
+    if(raw){
+      const data = JSON.parse(raw);
+      if(data && data.hash === requiredHash && data.exp && data.exp > Date.now()){
+        // Still within unlock window — let the app render.
+        document.documentElement.classList.remove("site-gate-checking");
+        return;
+      }
+    }
+  }catch(e){}
+  // Otherwise — show the gate.
+  document.documentElement.classList.remove("site-gate-checking");
+  document.documentElement.classList.add("site-gate-locked");
+})();
+</script>
 <style>
   :root{
     /* Reno to Sold black & gold */
@@ -1297,6 +1351,73 @@
   }
 
   /* ============================================================
+     SITE ACCESS GATE — full-screen lock screen styling.
+     The structural display:none/flex toggling is in the critical
+     inline CSS at the top of <head>; the look-and-feel lives here.
+     ============================================================ */
+  #siteGate{
+    position:fixed; inset:0;
+    z-index:99999;
+    align-items:center; justify-content:center;
+    padding:20px;
+    background:radial-gradient(ellipse at top, #161616 0%, #0a0a0a 60%);
+    font-family:'Montserrat',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:#f5f1e6;
+  }
+  #siteGate .sg-card{
+    background:#15151a;
+    border:1px solid var(--gold-deep);
+    border-radius:14px;
+    box-shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 32px rgba(0,0,0,.6), 0 0 0 1px rgba(212,175,106,.18);
+    padding:42px 42px 34px;
+    width:100%; max-width:420px;
+    text-align:center;
+  }
+  #siteGate .sg-logo{
+    display:block; margin:0 auto 20px;
+    width:auto; max-width:200px; max-height:60px; object-fit:contain;
+  }
+  #siteGate .sg-title{
+    font-size:18px; font-weight:800; letter-spacing:.20em; text-transform:uppercase;
+    color:var(--gold-bright); margin-bottom:8px;
+  }
+  #siteGate .sg-sub{
+    font-size:13px; line-height:1.5; color:var(--ink); margin-bottom:22px;
+  }
+  #siteGate form{ display:flex; flex-direction:column; gap:10px; margin-bottom:8px; }
+  #siteGate input{
+    background:var(--panel-2); border:1px solid var(--line-strong);
+    color:var(--ink); padding:13px 14px; border-radius:8px;
+    font:inherit; font-size:15px; text-align:center; letter-spacing:.10em;
+  }
+  #siteGate input:focus{
+    outline:none; border-color:var(--gold);
+    box-shadow:0 0 0 2px rgba(212,175,106,.20);
+  }
+  #siteGate button{
+    background:var(--gold); color:#0a0a0a;
+    border:1px solid var(--gold-deep); border-radius:8px;
+    padding:12px 14px; cursor:pointer;
+    font:inherit; font-size:13px; font-weight:800; letter-spacing:.16em; text-transform:uppercase;
+    transition:background .15s, border-color .15s;
+  }
+  #siteGate button:hover{ background:var(--gold-bright); }
+  #siteGate .sg-msg{
+    font-size:12px; min-height:18px; margin:8px 0 2px;
+    color:#ff9b9b;
+  }
+  #siteGate .sg-foot{
+    margin-top:18px; padding-top:18px;
+    border-top:1px solid var(--line);
+    font-size:11px; letter-spacing:.10em; text-transform:uppercase;
+    color:var(--muted);
+  }
+  @media (max-width:480px){
+    #siteGate .sg-card{ padding:32px 24px 26px; }
+    #siteGate .sg-title{ font-size:15px; letter-spacing:.18em; }
+  }
+
+  /* ============================================================
      MONEY DISPLAY LOCKDOWN
      The label cells on `.row.grand` (Total) and `.pm-total` (Total Project
      Payment) carry letter-spacing for the uppercase label text — which
@@ -1533,6 +1654,22 @@
 </style>
 </head>
 <body>
+<!-- Site Access Gate — only visible when html.site-gate-locked is set.
+     The early-running script in <head> decides whether to add that class. -->
+<div id="siteGate" role="dialog" aria-label="Internal access only">
+  <div class="sg-card">
+    <img src="logo.png" alt="Reno to Sold" class="sg-logo" onerror="this.style.display='none'">
+    <div class="sg-title">Internal Access Only</div>
+    <div class="sg-sub">This site is for the Reno to Sold team. Enter the access code to continue.</div>
+    <form id="sgForm" onsubmit="event.preventDefault(); submitSiteAccess();">
+      <input type="password" id="sgInput" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Access code">
+      <button type="submit">Unlock</button>
+    </form>
+    <div id="sgMsg" class="sg-msg"></div>
+    <div class="sg-foot">Forgot the code? Contact Mohamed Nada.</div>
+  </div>
+</div>
+
 <div class="app">
   <div class="brandbar">
     <div class="brandbar-row">
@@ -1549,6 +1686,7 @@
         <button id="authBtn" onclick="onAuthClick()">Sign in</button>
         <button onclick="openEmailEstimateModal()">Email to Client</button>
         <button onclick="openClientEstimate()">Print / PDF</button>
+        <button onclick="lockSite()" title="Sign out of this site — re-prompts for the access code on next visit">Lock</button>
       </div>
     </div>
     <div class="toolbar-row-2 no-print">
@@ -4079,6 +4217,56 @@ function renderContractorSheet(){
 
   el.innerHTML = html;
 }
+
+/* ============================================================
+   Site Access Gate — submit + lock handlers.
+   The early-running script in <head> decides on page load whether to
+   show the gate. These functions handle PIN submission + manual lock.
+   ============================================================ */
+async function _sha256Hex(text){
+  const buf = new TextEncoder().encode(text);
+  const hash = await crypto.subtle.digest("SHA-256", buf);
+  return Array.from(new Uint8Array(hash))
+    .map(b => b.toString(16).padStart(2,'0'))
+    .join('');
+}
+async function submitSiteAccess(){
+  const inp = document.getElementById("sgInput");
+  const msg = document.getElementById("sgMsg");
+  const val = (inp && inp.value || "").trim();
+  msg.textContent = "";
+  if(!val){ msg.textContent = "Please enter your access code."; return; }
+  const required = (window.SITE_ACCESS_HASH || "").trim();
+  if(!required){
+    document.documentElement.classList.remove("site-gate-locked");
+    return;
+  }
+  let hash;
+  try{ hash = await _sha256Hex(val); }
+  catch(e){ msg.textContent = "Couldn't hash the code in this browser."; return; }
+  if(hash === required){
+    const exp = Date.now() + (window.SITE_ACCESS_TTL_DAYS || 30) * 24 * 60 * 60 * 1000;
+    try{ localStorage.setItem(window.SITE_ACCESS_KEY, JSON.stringify({hash, exp})); }catch(e){}
+    document.documentElement.classList.remove("site-gate-locked");
+    if(inp) inp.value = "";
+  } else {
+    msg.textContent = "Incorrect code. Try again or contact Mohamed Nada.";
+    if(inp){ inp.value = ""; inp.focus(); }
+  }
+}
+function lockSite(){
+  if(!confirm("Lock the site? You'll need to re-enter the access code to use it again on this browser.")) return;
+  try{ localStorage.removeItem(window.SITE_ACCESS_KEY); }catch(e){}
+  location.reload();
+}
+
+// Auto-focus the PIN input if the gate is showing on load.
+document.addEventListener("DOMContentLoaded", () => {
+  if(document.documentElement.classList.contains("site-gate-locked")){
+    const inp = document.getElementById("sgInput");
+    if(inp) setTimeout(() => inp.focus(), 50);
+  }
+});
 
 /* ============================================================
    Client Estimate (professional Print/PDF) — data layer + render
