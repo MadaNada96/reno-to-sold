@@ -1093,6 +1093,55 @@
   }
   .es-subblock .es-cat-total .v{ font-size:14px; }
 
+  /* Material allowance block — appears below the bullet list within a category
+     or sub-block. Calls out the dollar budget baked into the estimate for each
+     finish/fixture so the client knows where over-spec selections add cost. */
+  .es-allowance-block{
+    margin-top:12px;
+    padding:10px 13px;
+    background:#fff8e7;
+    border:1px solid #ead8a6;
+    border-left:3px solid #c9a14a;
+    border-radius:3px;
+    page-break-inside:avoid;
+    break-inside:avoid;
+  }
+  .es-allowance-title{
+    font-size:9.5px; letter-spacing:.18em; text-transform:uppercase;
+    font-weight:700; color:#7a5a18;
+    margin:0 0 7px 0;
+  }
+  .es-allowance-list{
+    list-style:none; margin:0; padding:0;
+    display:flex; flex-direction:column;
+  }
+  .es-allowance-list li{
+    display:flex; justify-content:space-between; align-items:baseline;
+    font-size:11.5px; color:#3a2f17;
+    padding:4px 0;
+    border-bottom:1px dotted rgba(192,160,80,.4);
+  }
+  .es-allowance-list li:last-child{ border-bottom:none; }
+  .es-allowance-list li .item{ flex:1; padding-right:10px; }
+  .es-allowance-list li .item .sub{
+    display:block;
+    font-size:10px; font-style:italic;
+    color:#7a6a48; margin-top:2px; line-height:1.4;
+  }
+  .es-allowance-list li .val{
+    font-weight:700; color:#1a1a1a; white-space:nowrap;
+    letter-spacing:normal !important;
+    word-spacing:normal !important;
+    font-variant-numeric:normal !important;
+    font-feature-settings:normal !important;
+    font-kerning:normal !important;
+  }
+  .es-allowance-note{
+    font-size:10px; color:#6e5f47; font-style:italic;
+    margin-top:9px; line-height:1.45;
+    padding-top:7px; border-top:1px dotted rgba(192,160,80,.4);
+  }
+
   /* Totals block — the Quote Summary header + totals box ALWAYS stay together.
      `page-break-inside:avoid` here is the hard rule that prevents the table
      from being split across pages mid-summary. */
@@ -1425,7 +1474,8 @@
   .estimate-sheet .es-payments-table .pm-amount,
   .estimate-sheet .es-payments-table tr.pm-total .pm-amount,
   .estimate-sheet .es-payments-table .pm-pct,
-  .estimate-sheet .es-savings-card .es-sav-amount{
+  .estimate-sheet .es-savings-card .es-sav-amount,
+  .estimate-sheet .es-allowance-list li .val{
     letter-spacing:normal !important;
     word-spacing:normal !important;
     font-variant-numeric:normal !important;
@@ -3293,31 +3343,9 @@ function renderCatBody(cat){
           <div class="footnote" style="margin-top:4px;">Tile removal, fixture tear-out, haul-away &amp; dump fees are all baked into every bathroom price.</div>
         </div>
       </div>
-      <div class="included-box">
-        <div class="included-title">Bathroom refresh includes</div>
-        <div class="included-grid">
-          <div class="included-col new">
-            <div class="included-head">New</div>
-            <ul>
-              <li>Floor tiles</li>
-              <li>Shower wall tiles</li>
-              <li>Shower fixtures</li>
-              <li>Toilet</li>
-              <li>Vanity</li>
-              <li>Mirror</li>
-              <li>Light fixture</li>
-              <li>Bathroom accessories</li>
-            </ul>
-          </div>
-          <div class="included-col existing">
-            <div class="included-head">Existing (re-used)</div>
-            <ul>
-              <li>Plumbing rough-in</li>
-              <li>Tub (toggle below to replace)</li>
-            </ul>
-          </div>
-        </div>
-      </div>
+      <!-- Per-bathroom "refresh includes" panels are rendered inside each
+           bathroom row by renderBathrooms() (they adapt to the room's pieces
+           and new-tub setting), so no shared/static box is needed here. -->
       <div id="bath-rooms">${renderBathrooms()}</div>
       <button class="add-btn no-print" onclick="addBath()">+ Add another bathroom</button>
       <div style="margin-top:14px">${breakdownRows(cat)}</div>
@@ -3466,31 +3494,97 @@ function kitchenBacksplashQuartzPrice(size){
   return q ? q.labour + q.material : 0;
 }
 
+/* ----------------------------------------------------------
+   Per-bathroom "refresh includes" panel — rendered inside each
+   bath-row in the form. Adapts to the room's piece-count and
+   new-tub setting:
+     • 2-pc  → no tub / shower lines, no "tub re-used" point.
+     • new tub checked → "Tub re-used" is dropped (tub is replaced).
+     • 3 / 3s / 4 → shows the relevant tub/shower lines.
+   ---------------------------------------------------------- */
+function bathroomIncludesPanel(b, i){
+  const pieces = b.pieces || "2";
+  const layoutHasTub = (pieces === "3" || pieces === "4");
+  const layoutHasShower = (pieces === "3s" || pieces === "4");
+  const hasShower = layoutHasShower || !!b.standUpShower;
+  // Existing tub stays in place only if there IS a built-in tub AND we're
+  // not adding a new one. If they convert the tub to a shower, the tub is
+  // gone too — handled by the standUpShower=="convert" case.
+  const convertingTubToShower = !!b.standUpShower && (b.showerType||"convert") === "convert" && layoutHasTub;
+  const tubReused = layoutHasTub && !b.newTub && !convertingTubToShower;
+
+  // "New" column — items installed/included by default
+  const newItems = [];
+  newItems.push("Floor tiles");
+  if(hasShower)               newItems.push("Shower wall tiles");
+  if(hasShower)               newItems.push("Shower fixtures");
+  if(layoutHasTub && !b.newTub && !convertingTubToShower) newItems.push("Tub wall tiles");
+  if(b.newTub)                newItems.push("New tub &amp; tub wall tiles");
+  newItems.push("Toilet");
+  newItems.push("Vanity");
+  newItems.push("Mirror");
+  newItems.push("Light fixture");
+  newItems.push("Bathroom accessories");
+
+  // "Existing" column — only show items that actually carry over
+  const existingItems = [];
+  existingItems.push("Plumbing rough-in");
+  if(tubReused) existingItems.push("Tub (re-used)");
+
+  const newHtml = newItems.map(t => `<li>${t}</li>`).join("");
+  const existingHtml = existingItems.map(t => `<li>${t}</li>`).join("");
+
+  return `
+    <div class="included-box" style="margin-top:14px;margin-bottom:0;">
+      <div class="included-title">Bathroom #${i+1} refresh includes</div>
+      <div class="included-grid">
+        <div class="included-col new">
+          <div class="included-head">New</div>
+          <ul>${newHtml}</ul>
+        </div>
+        <div class="included-col existing">
+          <div class="included-head">Existing (re-used)</div>
+          <ul>${existingHtml}</ul>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function renderBathrooms(){
   return state.bathroom.rooms.map((b,i) => {
-    const hasTub = (b.pieces === "3" || b.pieces === "4" || b.newTub);
+    const pieces = b.pieces || "2";
+    // Does this bathroom layout have a built-in tub? (Stand-up-shower-only
+    // layouts and 2-pc do not.)
+    const layoutHasTub = (pieces === "3" || pieces === "4");
+    // Show tub-size inputs whenever there's a tub in scope (built-in OR newly added)
+    const hasTub = layoutHasTub || b.newTub;
+    // Wall tile only applies when there's a tub surround or stand-up shower
+    const showsWallTile = pieces !== "2";
     return `
     <div class="bath-row">
       <div class="grid grid-2">
         <div>
           <label>Bathroom #${i+1} &mdash; pieces</label>
           <select onchange="state.bathroom.rooms[${i}].pieces=this.value;applyTubTileAuto(${i});renderBathBody()">
-            <option value="2"  ${b.pieces==='2'?'selected':''}>2-piece (toilet, vanity)</option>
-            <option value="3"  ${b.pieces==='3'?'selected':''}>3-piece (toilet, vanity, tub)</option>
-            <option value="3s" ${b.pieces==='3s'?'selected':''}>3-piece (toilet, vanity, stand-up shower)</option>
-            <option value="4"  ${b.pieces==='4'?'selected':''}>4-piece (toilet, vanity, tub, stand-up shower)</option>
+            <option value="2"  ${pieces==='2'?'selected':''}>2-piece (toilet, vanity)</option>
+            <option value="3"  ${pieces==='3'?'selected':''}>3-piece (toilet, vanity, tub)</option>
+            <option value="3s" ${pieces==='3s'?'selected':''}>3-piece (toilet, vanity, stand-up shower)</option>
+            <option value="4"  ${pieces==='4'?'selected':''}>4-piece (toilet, vanity, tub, stand-up shower)</option>
           </select>
         </div>
       </div>
-      <div class="grid grid-2" style="margin-top:10px;">
+      ${bathroomIncludesPanel(b, i)}
+      <div class="grid ${showsWallTile ? 'grid-2' : ''}" style="margin-top:10px;">
         <div>
           <label>Floor tiling required (sqft)</label>
           <input type="number" min="0" value="${b.floorTileSqft||""}" oninput="state.bathroom.rooms[${i}].floorTileSqft=this.value;renderTotals()">
         </div>
+        ${showsWallTile ? `
         <div>
           <label>Wall tiling required (sqft)</label>
           <input type="number" min="0" value="${b.wallTileSqft||""}" oninput="state.bathroom.rooms[${i}].wallTileSqft=this.value;renderTotals()">
-        </div>
+        </div>` : ""}
       </div>
       ${hasTub ? `
         <div class="shower-size-row">
@@ -4407,13 +4501,15 @@ function printEstimateViaIframe(){
     .estimate-sheet .es-payments-table .pm-amount,
     .estimate-sheet .es-payments-table tr.pm-total .pm-amount,
     .estimate-sheet .es-payments-table .pm-pct,
-    .estimate-sheet .es-savings-card .es-sav-amount {
+    .estimate-sheet .es-savings-card .es-sav-amount,
+    .estimate-sheet .es-allowance-list li .val {
       letter-spacing:normal !important;
       word-spacing:normal !important;
       font-variant-numeric:normal !important;
       font-feature-settings:normal !important;
       font-kerning:normal !important;
     }
+    .es-allowance-block { page-break-inside:avoid !important; break-inside:avoid !important; }
     .es-table thead { display:table-header-group; }
     .es-table tr, .es-header, .es-meta-grid, .es-totals, .es-signatures, .es-disclaimer, .es-footer {
       page-break-inside:avoid !important; break-inside:avoid !important;
@@ -4905,9 +5001,49 @@ function computeKitchenInstance(k, priceSet){
    Returns one section per enabled category. Bathrooms (and kitchens with a
    basement counterpart) emit `subblocks` instead of `bullets` so each
    bathroom/kitchen has its own header + bullets + total. */
+/* ============================================================
+   Material allowances surfaced on the client estimate.
+   These are the per-item budgets baked into the quoted prices.
+   Selections above these allowances add to the project total.
+   ============================================================ */
+const MATERIAL_ALLOWANCES = {
+  // Bathroom items
+  toilet:                 { label:"Toilet",                          value:"$300"        },
+  bathTile:               { label:"Floor &amp; wall tile material",  value:"$4.00/sq.ft." },
+  vanityFaucet:           { label:"Vanity faucet",                   value:"$200/set"    },
+  singleVanity:           { label:"Single-sink vanity",              value:"$500"        },
+  doubleVanity:           { label:"Double-sink vanity",              value:"$1,000"      },
+  showerFixtureSet:       { label:"Shower faucet / fixture set",     value:"$500"        },
+  freestandingTub:        { label:"Freestanding tub",                value:"$800"        },
+  freestandingTubFaucet:  { label:"Freestanding tub faucet",         value:"$500"        },
+  // Kitchen items
+  kitchenSink:            { label:"Kitchen sink",                    value:"$250"        },
+  kitchenFaucet:          { label:"Kitchen faucet",                  value:"$250"        },
+  // Tile (general tiling category)
+  tileStandard:           { label:"Standard tile material",          value:"$4.00/sq.ft.",
+                            sub: "Covers field tile up to 24&Prime; &times; 24&Prime;. Larger formats are billed as premium." },
+  tilePremium:            { label:"Premium tile material",           value:"$9.00/sq.ft.",
+                            sub: "Covers large-format tile up to 36&Prime; &times; 72&Prime;. Slab or oversized formats add to cost." },
+  // Flooring (per material)
+  floorVinyl:             { label:"Vinyl (LVP) &mdash; material",         value:"$2.50/sq.ft." },
+  floorLaminate:          { label:"Waterproof laminate &mdash; material", value:"$3.50/sq.ft." },
+  floorEngineered:        { label:"Engineered hardwood &mdash; material", value:"$5.50/sq.ft." },
+  floorHardwood:          { label:"Solid hardwood &mdash; material",      value:"$7.50/sq.ft." }
+};
+const FLOORING_ALLOWANCE_KEY = {
+  vinyl:      "floorVinyl",
+  laminate:   "floorLaminate",
+  engineered: "floorEngineered",
+  hardwood:   "floorHardwood"
+};
+const ALLOWANCE_FOOTNOTE_DEFAULT =
+  "These allowances are the material budgets included in your estimate. " +
+  "Upgrades beyond these amounts are charged at the supplier's price.";
+
 function buildEstimateSummary(){
   const sections = [];
   const sizeLbl = sz => ({small:"Small (<70 sqft)", medium:"Medium (70–150 sqft)", large:"Large (150+ sqft)"})[sz] || sz;
+  const A = MATERIAL_ALLOWANCES;
 
   // -- Painting
   if(state.enabled.painting){
@@ -4956,8 +5092,19 @@ function buildEstimateSummary(){
       const lf = num(s.baseboardLinFt) || suggestedTrimLinFt();
       bullets.push(`New baseboards — ${lf||'?'} lin ft, supply &amp; install`);
     }
+    // Material allowance — dynamic per the selected flooring type(s)
+    const fNotes = [];
+    const primKey = FLOORING_ALLOWANCE_KEY[s.type] || "floorVinyl";
+    if(A[primKey]) fNotes.push(A[primKey]);
+    if(secEnabled){
+      const secKey = FLOORING_ALLOWANCE_KEY[sec.type];
+      if(secKey && A[secKey] && secKey !== primKey) fNotes.push(A[secKey]);
+    }
     const { labour, material } = computeCategory("flooring");
-    sections.push({ cat:"flooring", title:"Flooring", bullets, total: labour + material });
+    sections.push({
+      cat:"flooring", title:"Flooring", bullets, total: labour + material,
+      notes: fNotes, notesIntro: ALLOWANCE_FOOTNOTE_DEFAULT
+    });
   }
 
   // -- Tiling
@@ -4968,8 +5115,13 @@ function buildEstimateSummary(){
       `${matLbl} — ${num(s.sqft)||'?'} sqft (foyer, kitchen, laundry, etc.)`,
       `Removal &amp; disposal of existing tile — included`
     ];
+    // Material allowance — depends on the tile tier (standard or premium)
+    const tNotes = [ s.tier === "premium" ? A.tilePremium : A.tileStandard ];
     const { labour, material } = computeCategory("tiling");
-    sections.push({ cat:"tiling", title:"Tiling", bullets, total: labour + material });
+    sections.push({
+      cat:"tiling", title:"Tiling", bullets, total: labour + material,
+      notes: tNotes, notesIntro: ALLOWANCE_FOOTNOTE_DEFAULT
+    });
   }
 
   // -- Kitchen
@@ -4992,20 +5144,26 @@ function buildEstimateSummary(){
       }
       return b;
     };
+    const kitchenNotes = [ A.kitchenSink, A.kitchenFaucet ];
     if(hasBasementKitchen){
       const mainT = computeKitchenInstance(s);
       const basT  = computeKitchenInstance(s.basement);
       sections.push({
         cat:"kitchen", title:"Kitchen",
         subblocks: [
-          { title:"Main Kitchen",     bullets: kitchenBullets(s),          total: mainT.labour + mainT.material },
-          { title:"Basement Kitchen", bullets: kitchenBullets(s.basement), total: basT.labour + basT.material }
+          { title:"Main Kitchen",     bullets: kitchenBullets(s),          total: mainT.labour + mainT.material, notes: kitchenNotes },
+          { title:"Basement Kitchen", bullets: kitchenBullets(s.basement), total: basT.labour + basT.material,   notes: kitchenNotes }
         ],
-        total: mainT.labour + mainT.material + basT.labour + basT.material
+        total: mainT.labour + mainT.material + basT.labour + basT.material,
+        notesIntro: ALLOWANCE_FOOTNOTE_DEFAULT
       });
     } else {
       const { labour, material } = computeCategory("kitchen");
-      sections.push({ cat:"kitchen", title:"Kitchen", bullets: kitchenBullets(s), total: labour + material });
+      sections.push({
+        cat:"kitchen", title:"Kitchen", bullets: kitchenBullets(s),
+        total: labour + material,
+        notes: kitchenNotes, notesIntro: ALLOWANCE_FOOTNOTE_DEFAULT
+      });
     }
   }
 
@@ -5013,7 +5171,8 @@ function buildEstimateSummary(){
   if(state.enabled.bathroom){
     const subblocks = state.bathroom.rooms.map((b, i) => {
       const bullets = [];
-      bullets.push(`Layout: <b>${bathroomLabel(b.pieces || "4")}</b> — full refresh (fixtures, toilet, vanity, mirror, light, accessories)`);
+      const pieces = b.pieces || "4";
+      bullets.push(`Layout: <b>${bathroomLabel(pieces)}</b> — full refresh (fixtures, toilet, vanity, mirror, light, accessories)`);
       if(num(b.floorTileSqft)) bullets.push(`Floor tile — ${b.floorTileSqft} sqft`);
       if(num(b.wallTileSqft))  bullets.push(`Wall tile (shower/tub surround) — ${b.wallTileSqft} sqft`);
       if(b.newTub)        bullets.push("New tub installed (replaces existing)");
@@ -5026,11 +5185,41 @@ function buildEstimateSummary(){
         const sw = (num(b.showerWidth)||4), sd = (num(b.showerDepth)||3), sh = (num(b.showerHeight)||8);
         bullets.push(`Stand-up shower (${stLbl}) — ${sw}′ × ${sd}′ × ${sh}′ high, new tile/fixtures/glass`);
       }
+
+      // Per-bathroom material allowances — driven by this bathroom's configuration
+      const bNotes = [];
+      // Every bathroom has a toilet + vanity in scope
+      bNotes.push(A.toilet);
+      bNotes.push(b.doubleVanity ? A.doubleVanity : A.singleVanity);
+      bNotes.push(A.vanityFaucet);
+      // Tile allowance — applies if either floor or wall tile is in scope
+      if(num(b.floorTileSqft) || num(b.wallTileSqft)){
+        bNotes.push(A.bathTile);
+      }
+      // Shower fixtures — for any bathroom containing a stand-up shower
+      const hasShower = (pieces === "3s" || pieces === "4" || !!b.standUpShower);
+      if(hasShower){
+        bNotes.push(A.showerFixtureSet);
+      }
+      // Freestanding-tub allowance — only when explicitly adding a new tub
+      if(b.newTub){
+        bNotes.push(A.freestandingTub);
+        bNotes.push(A.freestandingTubFaucet);
+      }
+
       const { labour, material } = computeBathroomRoom(b);
-      return { title:`Bathroom #${i+1}`, bullets, total: labour + material };
+      return {
+        title:`Bathroom #${i+1}`,
+        bullets,
+        total: labour + material,
+        notes: bNotes
+      };
     });
     const catTotal = subblocks.reduce((a,s) => a + s.total, 0);
-    sections.push({ cat:"bathroom", title:"Bathrooms", subblocks, total: catTotal });
+    sections.push({
+      cat:"bathroom", title:"Bathrooms", subblocks, total: catTotal,
+      notesIntro: ALLOWANCE_FOOTNOTE_DEFAULT
+    });
   }
 
   // -- Pot Lights
@@ -5136,22 +5325,49 @@ function renderClientEstimate(){
         <span class="v">${fmtCurrency(total)}</span>
       </div>
     `;
+    // Material allowance pill rendered under the bullet list.
+    // `notes` is an array of {label, value, sub?}; `intro` is an optional caption.
+    const renderAllowances = (notes, intro) => {
+      if(!notes || !notes.length) return "";
+      const items = notes.map(n => `
+        <li>
+          <span class="item">${n.label}${n.sub ? `<span class="sub">${n.sub}</span>` : ""}</span>
+          <span class="val">${n.value}</span>
+        </li>
+      `).join("");
+      const footer = intro ? `<div class="es-allowance-note">${intro}</div>` : "";
+      return `
+        <div class="es-allowance-block">
+          <div class="es-allowance-title">Material Allowances</div>
+          <ul class="es-allowance-list">${items}</ul>
+          ${footer}
+        </div>
+      `;
+    };
     sections.forEach(sec => {
       let body = "";
       if(sec.subblocks && sec.subblocks.length){
-        // Bathrooms / multi-instance kitchens — one sub-block per item
+        // Bathrooms / multi-instance kitchens — one sub-block per item.
+        // Each sub-block carries its own allowance set (e.g., per-bathroom
+        // fixture allowances depend on that room's pieces / new-tub setting).
         body += sec.subblocks.map(sb => `
           <div class="es-subblock">
             <div class="es-subblock-title">${escapeHtml(sb.title)}</div>
             ${renderBullets(sb.bullets)}
             ${renderTotalRow(`${sb.title} — Labour & Material`, sb.total)}
+            ${renderAllowances(sb.notes, null)}
           </div>
         `).join("");
         // Category-level total under all sub-blocks
         body += renderTotalRow(`${sec.title} — Combined Total`, sec.total);
+        // Category-level footnote caption (renders once at the bottom)
+        if(sec.notesIntro){
+          body += `<div class="es-allowance-note" style="margin-top:10px;padding-top:0;border-top:none;">${sec.notesIntro}</div>`;
+        }
       } else {
         body += renderBullets(sec.bullets || []);
         body += renderTotalRow("Total Labour & Material", sec.total);
+        body += renderAllowances(sec.notes, sec.notesIntro);
       }
       html += `
         <div class="es-category-block">
@@ -5507,7 +5723,7 @@ async function sendEstimateEmail(){
         mode:   ['css', 'legacy'],
         before: ['.es-summary-page', '.es-disclaimer-page'],
         avoid:  [
-          '.es-category-block', '.es-subblock',
+          '.es-category-block', '.es-subblock', '.es-allowance-block',
           '.es-totals-wrap', '.es-savings-card', '.es-payments-wrap',
           '.es-summary-page',
           '.es-disclaimer-page', '.es-disclaimer', '.es-signatures', '.es-sig'
