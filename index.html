@@ -1888,24 +1888,25 @@
 </div>
 
 <!-- PIN modal (gates Internal Mode) -->
+<!-- NOTE: hash for the correct PIN lives in site-gate-config.js as
+     window.INTERNAL_ACCESS_HASH. There is no first-time-setup or reset
+     flow exposed here — that's intentional. To change the PIN, regenerate
+     the hash and edit site-gate-config.js. -->
 <div class="modal-bg" id="pinModal" onclick="if(event.target===this)closePinModal()">
   <div class="modal" style="max-width:420px;">
     <h3>
-      <span id="pinModalTitle">Enter Internal Code</span>
+      <span>Enter Internal Code</span>
       <button class="ghost" onclick="closePinModal()">Close</button>
     </h3>
     <div class="modal-body">
-      <p class="footnote" id="pinModalIntro" style="margin-top:0;font-size:12px;line-height:1.6;">Enter your code to access Internal Mode.</p>
+      <p class="footnote" style="margin-top:0;font-size:12px;line-height:1.6;">Enter your code to access Internal Mode.</p>
       <form onsubmit="event.preventDefault();submitPin();">
-        <input type="password" id="pinInput" class="pin-modal-input" inputmode="numeric" autocomplete="off" maxlength="20" placeholder="Code">
+        <input type="password" id="pinInput" class="pin-modal-input" inputmode="numeric" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="20" placeholder="Code">
       </form>
       <div class="pin-msg" id="pinMsg" style="display:none"></div>
-      <div style="display:flex;gap:8px;margin-top:14px;justify-content:space-between;align-items:center;flex-wrap:wrap;">
-        <button class="ghost" id="pinResetBtn" onclick="resetPinPrompt()" style="display:none;font-size:11px;">Forgot / Reset Code</button>
-        <div style="display:flex;gap:8px;margin-left:auto;">
-          <button class="ghost" onclick="closePinModal()">Cancel</button>
-          <button class="primary" onclick="submitPin()">Unlock</button>
-        </div>
+      <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end;align-items:center;flex-wrap:wrap;">
+        <button class="ghost" onclick="closePinModal()">Cancel</button>
+        <button class="primary" onclick="submitPin()">Unlock</button>
       </div>
     </div>
   </div>
@@ -5561,7 +5562,12 @@ function flash(msg){
   setTimeout(()=>t.remove(), 1800);
 }
 
-/* ---------- Internal Mode (PIN-gated, cost analysis) ---------- */
+/* ---------- Internal Mode (PIN-gated, cost analysis) ----------
+   The required PIN hash lives in site-gate-config.js as
+   window.INTERNAL_ACCESS_HASH. Unlock state is runtime-only (no
+   localStorage), so every page refresh re-prompts. There is
+   intentionally no first-time-setup or reset path — the only way to
+   change the PIN is to update the hash in site-gate-config.js. */
 let internalUnlocked = false;
 let contractorPrices = null;
 
@@ -5570,8 +5576,6 @@ async function sha256(s){
   const hash = await crypto.subtle.digest("SHA-256", buf);
   return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
-function pinHashKey(){ return "reno_internal_pin_v1"; }
-function hasPinSet(){ return !!localStorage.getItem(pinHashKey()); }
 
 function onLockClick(){
   if(internalUnlocked){ openInternal(); }
@@ -5579,14 +5583,8 @@ function onLockClick(){
 }
 
 function openPinModal(){
-  const setMode = !hasPinSet();
-  document.getElementById("pinModalTitle").textContent = setMode ? "Set Internal Code" : "Enter Internal Code";
-  document.getElementById("pinModalIntro").innerHTML = setMode
-    ? "First-time setup. Choose a 4&ndash;8 digit code. This unlocks Internal Mode &mdash; where you can see contractor costs &amp; margins. The code is stored only on this device."
-    : "Enter your code to access Internal Mode.";
   document.getElementById("pinInput").value = "";
-  document.getElementById("pinInput").placeholder = setMode ? "Choose 4-8 digits" : "Enter code";
-  document.getElementById("pinResetBtn").style.display = setMode ? "none" : "";
+  document.getElementById("pinInput").placeholder = "Enter code";
   const msg = document.getElementById("pinMsg");
   msg.style.display = "none"; msg.className = "pin-msg"; msg.textContent = "";
   document.getElementById("pinModal").classList.add("show");
@@ -5598,24 +5596,23 @@ async function submitPin(){
   const inp = document.getElementById("pinInput");
   const msg = document.getElementById("pinMsg");
   const code = (inp.value || "").trim();
-  if(!hasPinSet()){
-    if(!/^\d{4,8}$/.test(code)){
-      msg.style.display = ""; msg.className = "pin-msg"; msg.textContent = "Code must be 4-8 digits.";
-      return;
-    }
-    const h = await sha256(code);
-    localStorage.setItem(pinHashKey(), h);
-    msg.style.display = ""; msg.className = "pin-msg ok"; msg.textContent = "Code set. Unlocking…";
-    setTimeout(() => {
-      internalUnlocked = true;
-      closePinModal();
-      updateLockUI();
-      openInternal();
-    }, 500);
+  const required = (window.INTERNAL_ACCESS_HASH || "").trim();
+  if(!required){
+    msg.style.display = ""; msg.className = "pin-msg";
+    msg.textContent = "Internal Mode is not configured. Set INTERNAL_ACCESS_HASH in site-gate-config.js.";
     return;
   }
-  const h = await sha256(code);
-  if(h === localStorage.getItem(pinHashKey())){
+  if(!code){
+    msg.style.display = ""; msg.className = "pin-msg"; msg.textContent = "Enter your code.";
+    return;
+  }
+  let h;
+  try{ h = await sha256(code); }
+  catch(e){
+    msg.style.display = ""; msg.className = "pin-msg"; msg.textContent = "Couldn't hash the code in this browser.";
+    return;
+  }
+  if(h === required){
     internalUnlocked = true;
     msg.style.display = "none";
     closePinModal();
@@ -5627,19 +5624,15 @@ async function submitPin(){
   }
 }
 
-function resetPinPrompt(){
-  if(!confirm("Reset your internal code? You'll set a new one next time you unlock. (Contractor rates are not affected.)")) return;
-  localStorage.removeItem(pinHashKey());
-  internalUnlocked = false;
-  updateLockUI();
-  closePinModal();
-  flash("Internal code reset");
-}
-
 function updateLockUI(){
   const btn = document.getElementById("lockBtn");
   if(btn){ btn.classList.toggle("unlocked", internalUnlocked); }
 }
+
+/* One-time cleanup: older versions of this app stored a self-chosen PIN
+   in localStorage under "reno_internal_pin_v1". That field is no longer
+   used or trusted — wipe it on load so it can't be revived. */
+try{ localStorage.removeItem("reno_internal_pin_v1"); }catch(e){}
 
 function openInternal(){
   if(!internalUnlocked){ openPinModal(); return; }
