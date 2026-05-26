@@ -132,7 +132,7 @@
   .logo-img-print{display:none;}  /* shown only on print/PDF — see @media print */
 
   .toolbar{display:flex;gap:8px;flex-wrap:wrap;}
-  .toolbar-row-2{display:flex;justify-content:center;margin-top:10px;padding-top:10px;border-top:1px dashed rgba(212,175,106,.18);position:relative;}
+  .toolbar-row-2{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:10px;padding-top:10px;border-top:1px dashed rgba(212,175,106,.18);position:relative;}
   .import-pdf-link{
     display:inline-flex;align-items:center;gap:6px;
     font:inherit;font-size:12px;font-weight:600;letter-spacing:.08em;
@@ -1667,23 +1667,25 @@
         <img src="RENO_to_SOLD_logo_only.png" alt="Reno to Sold" class="logo-img">
         <img src="updated-logo-trans.png" alt="Reno to Sold &mdash; Renovate for less. Sell for more. Fully managed from start to sold." class="logo-img-print">
       </a>
+      <!-- Row 1: admin / account buttons -->
       <div class="toolbar no-print">
-        <button onclick="newEstimate()">+ New</button>
-        <button onclick="openSavedModal()">Saved</button>
-        <button onclick="saveEstimate()">Save</button>
         <button onclick="openSettings()">Pricing</button>
         <button onclick="openContractorBid()">Contractor Bid</button>
         <button id="authBtn" onclick="onAuthClick()">Sign in</button>
-        <button onclick="openEmailEstimateModal()">Email to Client</button>
-        <button onclick="openClientEstimate()">Print / PDF</button>
         <button onclick="lockSite()" title="Sign out of this site — re-prompts for the access code on next visit">Lock</button>
       </div>
     </div>
+    <!-- Row 2: workflow buttons (New, Save, Saved, Import from PDF, Print/PDF, Email to Client) -->
     <div class="toolbar-row-2 no-print">
+      <button onclick="newEstimate()">+ New</button>
+      <button onclick="saveEstimate()">Save</button>
+      <button onclick="openSavedModal()">Saved</button>
       <button class="import-pdf-link" onclick="triggerPdfImport()" title="Auto-fill a new estimate from an iGUIDE floor plan PDF">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 12 15 15"/></svg>
         <span>Import from PDF</span>
       </button>
+      <button onclick="openClientEstimate()">Print / PDF</button>
+      <button onclick="openEmailEstimateModal()">Email to Client</button>
       <input type="file" id="pdfImportInput" accept="application/pdf,.pdf" style="display:none;" onchange="onPdfFileChosen(event)">
     </div>
   </div>
