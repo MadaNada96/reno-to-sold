@@ -12,6 +12,6 @@
 //
 // To DISABLE the gate entirely: set SITE_ACCESS_HASH to "".
 // ============================================================
-window.SITE_ACCESS_HASH     = "a9ee0daf1402a9053c05a149fd28dbe7bc273d66428b3aa9cba74e51c4fcc8fa";
+window.SITE_ACCESS_HASH     = "70252984654c35f9f8f37247ae126116e93be2f3acf82061cf06981916e8f828";
 window.SITE_ACCESS_TTL_DAYS = 30;            // how long an unlocked browser stays unlocked
 window.SITE_ACCESS_KEY      = "reno_site_access_v1";
