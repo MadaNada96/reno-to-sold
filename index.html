@@ -384,6 +384,61 @@
     font-weight:800;
     font-size:13px;
   }
+  /* Material allowances — surfaced on the on-screen estimator (dark theme).
+     The same MATERIAL_ALLOWANCES data also powers the printed client estimate
+     where it's rendered with a light-theme style (.es-allowance-block). */
+  .allowance-card{
+    margin-top:14px;
+    padding:12px 14px 10px;
+    background:linear-gradient(135deg, rgba(212,175,106,.10) 0%, rgba(212,175,106,.04) 100%);
+    border:1px solid rgba(212,175,106,.28);
+    border-left:3px solid var(--gold);
+    border-radius:5px;
+  }
+  .allowance-card-title{
+    font-size:10px; letter-spacing:.20em; text-transform:uppercase;
+    font-weight:700; color:var(--gold-bright);
+    margin:0 0 9px 0;
+  }
+  .allowance-card-list{
+    list-style:none; margin:0; padding:0;
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));
+    column-gap:18px;
+    row-gap:0;
+  }
+  .allowance-card-list li{
+    display:flex; justify-content:space-between; align-items:baseline;
+    font-size:12.5px; color:var(--ink);
+    padding:5px 0;
+    border-bottom:1px dotted rgba(212,175,106,.18);
+  }
+  .allowance-card-list li:last-child{ border-bottom:none; }
+  .allowance-card-list li .item{ flex:1; padding-right:10px; line-height:1.35; }
+  .allowance-card-list li .item .sub{
+    display:block;
+    font-size:10.5px; font-style:italic;
+    color:var(--muted); margin-top:2px; line-height:1.4;
+    letter-spacing:0;
+  }
+  .allowance-card-list li .val{
+    font-weight:700; color:var(--gold-bright); white-space:nowrap;
+    letter-spacing:normal;
+  }
+  .allowance-card-note{
+    font-size:10.5px; color:var(--muted); font-style:italic;
+    margin-top:10px; line-height:1.45;
+    padding-top:8px; border-top:1px dotted rgba(212,175,106,.18);
+  }
+  /* When the allowance card lives inside a .included-box (bathroom panel),
+     remove the outer box styling so it visually flows as part of that panel. */
+  .included-box .allowance-card{
+    margin-top:14px;
+    background:rgba(232,201,137,.03);
+    border:1px dashed rgba(212,175,106,.28);
+    border-left:3px solid var(--gold);
+  }
+
   .included-col.existing li::before{
     content:"●";
     position:absolute;
@@ -3248,7 +3303,7 @@ function renderCatBody(cat){
           <div class="grid grid-2">
             <div>
               <label>Secondary material</label>
-              <select onchange="state.flooring.secondary.type=this.value;renderTotals()">
+              <select onchange="state.flooring.secondary.type=this.value;renderCatBodyOnly('flooring');renderTotals()">
                 <option value="vinyl"      ${(s.secondary.type||'vinyl')==='vinyl'      ?'selected':''}>Vinyl</option>
                 <option value="laminate"   ${s.secondary.type==='laminate'   ?'selected':''}>Waterproof Laminate</option>
                 <option value="engineered" ${s.secondary.type==='engineered' ?'selected':''}>Engineered Hardwood</option>
@@ -3265,6 +3320,19 @@ function renderCatBody(cat){
           </div>
         ` : ""}
       </div>
+
+      ${(() => {
+        // Material allowance — dynamic per selected flooring type(s).
+        const primKey = FLOORING_ALLOWANCE_KEY[s.type] || "floorVinyl";
+        const items = [];
+        if(MATERIAL_ALLOWANCES[primKey]) items.push(MATERIAL_ALLOWANCES[primKey]);
+        const sec = s.secondary || {};
+        if(sec.enabled && sec.type){
+          const secKey = FLOORING_ALLOWANCE_KEY[sec.type];
+          if(secKey && secKey !== primKey && MATERIAL_ALLOWANCES[secKey]) items.push(MATERIAL_ALLOWANCES[secKey]);
+        }
+        return renderAllowanceCard(items, ALLOWANCE_FOOTNOTE_DEFAULT);
+      })()}
 
       <div class="addon last">
         <label class="check-row" style="margin-bottom:${s.baseboards?'10px':'0'};">
@@ -3302,6 +3370,12 @@ function renderCatBody(cat){
         </div>
       </div>
       <div class="footnote">Standard = ceramic. Premium = large-format porcelain. Use this for non-bathroom areas (entryway, laundry, kitchen floor, etc.). Bathroom tile is captured in the Bathrooms section.</div>
+
+      ${renderAllowanceCard(
+        [ s.tier === "premium" ? MATERIAL_ALLOWANCES.tilePremium : MATERIAL_ALLOWANCES.tileStandard ],
+        ALLOWANCE_FOOTNOTE_DEFAULT
+      )}
+
       <div style="margin-top:14px">${breakdownRows(cat)}</div>
     `;
   }
@@ -3475,6 +3549,11 @@ function renderKitchenInstance(k, prefix, slug){
           <span class="addon-title">Under-cabinet lighting <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(${fmt((prices.kitchen.undercab.labour||0)+(prices.kitchen.undercab.material||0))} flat — typical run)</span></span>
         </label>
       </div>
+
+      ${renderAllowanceCard(
+        [ MATERIAL_ALLOWANCES.kitchenSink, MATERIAL_ALLOWANCES.kitchenFaucet ],
+        ALLOWANCE_FOOTNOTE_DEFAULT
+      )}
     </div>
   `;
 }
@@ -3534,6 +3613,16 @@ function bathroomIncludesPanel(b, i){
   const newHtml = newItems.map(t => `<li>${t}</li>`).join("");
   const existingHtml = existingItems.map(t => `<li>${t}</li>`).join("");
 
+  // Material allowances inside the same panel — per the user's recommendation,
+  // the includes section also houses the dollar budgets for bathroom items
+  // so the client can see both "what's included" and "how much is allotted"
+  // in one place. The list adapts to this bathroom's configuration via
+  // bathroomAllowanceNotes().
+  const allowanceHtml = renderAllowanceCard(
+    bathroomAllowanceNotes(b),
+    "Selections beyond these allowances are billed at the supplier's price."
+  );
+
   return `
     <div class="included-box" style="margin-top:14px;margin-bottom:0;">
       <div class="included-title">Bathroom #${i+1} refresh includes</div>
@@ -3547,6 +3636,7 @@ function bathroomIncludesPanel(b, i){
           <ul>${existingHtml}</ul>
         </div>
       </div>
+      ${allowanceHtml}
     </div>
   `;
 }
@@ -3578,12 +3668,12 @@ function renderBathrooms(){
       <div class="grid ${showsWallTile ? 'grid-2' : ''}" style="margin-top:10px;">
         <div>
           <label>Floor tiling required (sqft)</label>
-          <input type="number" min="0" value="${b.floorTileSqft||""}" oninput="state.bathroom.rooms[${i}].floorTileSqft=this.value;renderTotals()">
+          <input type="number" min="0" value="${b.floorTileSqft||""}" oninput="state.bathroom.rooms[${i}].floorTileSqft=this.value;renderTotals()" onchange="renderBathBody()">
         </div>
         ${showsWallTile ? `
         <div>
           <label>Wall tiling required (sqft)</label>
-          <input type="number" min="0" value="${b.wallTileSqft||""}" oninput="state.bathroom.rooms[${i}].wallTileSqft=this.value;renderTotals()">
+          <input type="number" min="0" value="${b.wallTileSqft||""}" oninput="state.bathroom.rooms[${i}].wallTileSqft=this.value;renderTotals()" onchange="renderBathBody()">
         </div>` : ""}
       </div>
       ${hasTub ? `
@@ -3612,7 +3702,7 @@ function renderBathrooms(){
           <span>Add new tub <span style="color:var(--muted);font-weight:400;font-size:12px;">(replaces existing tub)</span></span>
         </label>
         <label class="check-row">
-          <input type="checkbox" ${b.doubleVanity?'checked':''} onchange="state.bathroom.rooms[${i}].doubleVanity=this.checked;renderTotals()">
+          <input type="checkbox" ${b.doubleVanity?'checked':''} onchange="state.bathroom.rooms[${i}].doubleVanity=this.checked;renderBathBody()">
           <span>Add double vanity <span style="color:var(--muted);font-weight:400;font-size:12px;">(upgrade from single vanity, plumbed for two sinks)</span></span>
         </label>
         <label class="check-row">
@@ -3621,7 +3711,7 @@ function renderBathrooms(){
         </label>
         ${b.standUpShower ? `
           <div style="margin-left:25px;margin-top:-2px;">
-            <select onchange="state.bathroom.rooms[${i}].showerType=this.value;renderTotals()">
+            <select onchange="state.bathroom.rooms[${i}].showerType=this.value;renderBathBody()">
               <option value="refresh" ${(b.showerType||'convert')==='refresh'?'selected':''}>Refresh existing stand-up shower (reuse plumbing &amp; structure &mdash; re-tile, new fixtures &amp; glass)</option>
               <option value="convert" ${(b.showerType||'convert')==='convert'?'selected':''}>Convert existing tub into stand-up shower (reuses tub plumbing)</option>
               <option value="new"     ${b.showerType==='new'?'selected':''}>Add new stand-up shower (new framing &amp; plumbing rough-in)</option>
@@ -3735,6 +3825,7 @@ function setTier(cat, tier){
   if(cat === "painting"){ state.painting.coats = tier; renderTotals(); return; }
   if(cat === "flooring"){ state.flooring.type = tier; renderCatBodyOnly("flooring"); renderTotals(); return; }
   if(cat === "kitchen"){ state.kitchen.tier = tier; renderCatBodyOnly("kitchen"); renderTotals(); return; }
+  if(cat === "tiling"){ state.tiling.tier = tier; renderCatBodyOnly("tiling"); renderTotals(); return; }
   state[cat].tier = tier;
   renderTotals();
 }
@@ -5040,6 +5131,48 @@ const ALLOWANCE_FOOTNOTE_DEFAULT =
   "These allowances are the material budgets included in your estimate. " +
   "Upgrades beyond these amounts are charged at the supplier's price.";
 
+/* Per-bathroom allowance notes — shared between the on-screen panel and the
+   client Print/PDF. Same input, same output, so both views stay in sync. */
+function bathroomAllowanceNotes(b){
+  const A = MATERIAL_ALLOWANCES;
+  const pieces = (b && b.pieces) || "2";
+  const notes = [];
+  notes.push(A.toilet);
+  notes.push(b && b.doubleVanity ? A.doubleVanity : A.singleVanity);
+  notes.push(A.vanityFaucet);
+  if(num(b && b.floorTileSqft) || num(b && b.wallTileSqft)){
+    notes.push(A.bathTile);
+  }
+  const hasShower = (pieces === "3s" || pieces === "4" || !!(b && b.standUpShower));
+  if(hasShower) notes.push(A.showerFixtureSet);
+  if(b && b.newTub){
+    notes.push(A.freestandingTub);
+    notes.push(A.freestandingTubFaucet);
+  }
+  return notes;
+}
+
+/* Form-side allowance card — dark-theme variant used on the live estimator.
+   The Print/PDF version (.es-allowance-block) is rendered separately by
+   renderClientEstimate(). Both pull from the SAME MATERIAL_ALLOWANCES data. */
+function renderAllowanceCard(notes, intro){
+  if(!notes || !notes.length) return "";
+  const items = notes.map(n => `
+    <li>
+      <span class="item">${n.label}${n.sub ? `<span class="sub">${n.sub}</span>` : ""}</span>
+      <span class="val">${n.value}</span>
+    </li>
+  `).join("");
+  const footer = intro ? `<div class="allowance-card-note">${intro}</div>` : "";
+  return `
+    <div class="allowance-card">
+      <div class="allowance-card-title">Material Allowances</div>
+      <ul class="allowance-card-list">${items}</ul>
+      ${footer}
+    </div>
+  `;
+}
+
 function buildEstimateSummary(){
   const sections = [];
   const sizeLbl = sz => ({small:"Small (<70 sqft)", medium:"Medium (70–150 sqft)", large:"Large (150+ sqft)"})[sz] || sz;
@@ -5186,26 +5319,9 @@ function buildEstimateSummary(){
         bullets.push(`Stand-up shower (${stLbl}) — ${sw}′ × ${sd}′ × ${sh}′ high, new tile/fixtures/glass`);
       }
 
-      // Per-bathroom material allowances — driven by this bathroom's configuration
-      const bNotes = [];
-      // Every bathroom has a toilet + vanity in scope
-      bNotes.push(A.toilet);
-      bNotes.push(b.doubleVanity ? A.doubleVanity : A.singleVanity);
-      bNotes.push(A.vanityFaucet);
-      // Tile allowance — applies if either floor or wall tile is in scope
-      if(num(b.floorTileSqft) || num(b.wallTileSqft)){
-        bNotes.push(A.bathTile);
-      }
-      // Shower fixtures — for any bathroom containing a stand-up shower
-      const hasShower = (pieces === "3s" || pieces === "4" || !!b.standUpShower);
-      if(hasShower){
-        bNotes.push(A.showerFixtureSet);
-      }
-      // Freestanding-tub allowance — only when explicitly adding a new tub
-      if(b.newTub){
-        bNotes.push(A.freestandingTub);
-        bNotes.push(A.freestandingTubFaucet);
-      }
+      // Per-bathroom material allowances — driven by this bathroom's configuration.
+      // Shared with the on-screen form (bathroomIncludesPanel) so both stay in sync.
+      const bNotes = bathroomAllowanceNotes(b);
 
       const { labour, material } = computeBathroomRoom(b);
       return {
