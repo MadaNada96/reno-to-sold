@@ -36,7 +36,7 @@
      Leave SITE_ACCESS_HASH empty to disable the gate.
      ============================================================ -->
 <script>
-window.SITE_ACCESS_HASH    = "d5cc14cd6db7413b121173d0e9c612734dada307c9c2780d83333bd44e3c7b79"; // <-- set this to your PIN's SHA-256 hash to lock the site
+window.SITE_ACCESS_HASH    = ""; // <-- set this to your PIN's SHA-256 hash to lock the site
 window.SITE_ACCESS_TTL_DAYS = 30; // how long an unlocked browser stays unlocked
 window.SITE_ACCESS_KEY     = "reno_site_access_v1";
 </script>
@@ -2033,69 +2033,73 @@ window.SITE_ACCESS_KEY     = "reno_site_access_v1";
 <script>
 /* ---------- Default GTA pricing — 2026 averages (CAD) ---------- */
 const DEFAULT_PRICES = {
+  // ============================================================================
+  // GTA defaults — set May 2026 from Reno to Sold's working rates.
+  // Cross-checked against published GTA professional-renovation rates; sits in
+  // the mid-to-upper professional band on almost every line.
+  // ============================================================================
   painting: {
     // walls + trim (NOT ceiling) per sqft of property — premium paint, full prep both
     walls: {
-      one: { labour: 1.50, material: 0.85 },        // 1 coat (light->similar light)
-      two: { labour: 2.30, material: 1.25 }         // 2 coats (dark->lighter)
+      one: { labour: 2.25, material: 1.00 },        // 1 coat (light->similar light)
+      two: { labour: 3.00, material: 1.25 }         // 2 coats (dark->lighter)
     },
     ceiling: {
-      standard: { labour: 0.75, material: 0.30 },   // $/sqft of ceiling (flat, 8-9ft)
-      premium:  { labour: 1.10, material: 0.45 }    // textured / vaulted
+      standard: { labour: 0.90, material: 0.35 },   // $/sqft of ceiling (flat, 8-9ft)
+      premium:  { labour: 1.70, material: 0.55 }    // textured / vaulted
     },
     // Baseboards & trim — paint refresh per linear foot
-    trim: { labour: 1.75, material: 0.50 },         // $/lin ft
+    trim: { labour: 2.55, material: 0.70 },         // $/lin ft
     // Doors — paint per interior door
-    door: { labour: 65, material: 25 },             // $/door
+    door: { labour: 80, material: 30 },             // $/door
     // Popcorn ceiling removal — scrape, skim-coat smooth, prime, repaint
-    // GTA 2026 going rate ~$3–$6/sqft for non-asbestos popcorn removal.
-    // Standard (8-9ft flat) = $3.75/sqft; Premium (textured / vaulted / 10ft+)
-    // = $5.00/sqft due to scaffolding, harder substrate, and longer reach.
+    // Standard (8-9ft flat); Premium (textured / vaulted / 10ft+) is higher due
+    // to scaffolding, harder substrate, and longer reach.
     popcorn: {
-      standard: { labour: 2.75, material: 1.00 },   // $/sqft — flat 8-9ft ceiling
-      premium:  { labour: 3.75, material: 1.25 }    // $/sqft — textured / vaulted / 10ft+
+      standard: { labour: 5.00, material: 1.50 },   // $/sqft — flat 8-9ft ceiling
+      premium:  { labour: 6.75, material: 1.75 }    // $/sqft — textured / vaulted / 10ft+
     }
   },
   flooring: {
     // Per sqft installed — labour is per sqft of space, material is per sqft × waste factor
-    vinyl:      { labour: 1.80, material: 2.20 },
-    laminate:   { labour: 2.20, material: 3.50 },   // waterproof laminate
-    engineered: { labour: 3.50, material: 6.00 },
-    hardwood:   { labour: 4.50, material: 8.50 },   // solid hardwood
-    removal:    { labour: 1.40, material: 0.35 },   // strip + haul + dump
-    baseboards: { labour: 2.50, material: 1.50 }    // new baseboards installed $/lin ft
+    vinyl:      { labour: 2.50, material: 3.00 },
+    laminate:   { labour: 2.75, material: 4.00 },   // waterproof laminate
+    engineered: { labour: 4.50, material: 6.00 },
+    hardwood:   { labour: 5.50, material: 8.50 },   // solid hardwood
+    removal:    { labour: 2.00, material: 0.50 },   // strip + haul + dump
+    baseboards: { labour: 4.00, material: 2.50 }    // new baseboards installed $/lin ft
   },
   tiling: {
-    standard: { labour: 7.00, material: 5.00 },     // $/sqft ceramic
-    premium:  { labour: 10.00, material: 8.00 }     // $/sqft porcelain large-format
+    standard: { labour: 8.00,  material: 5.00 },    // $/sqft ceramic
+    premium:  { labour: 14.00, material: 8.00 }     // $/sqft porcelain large-format
   },
   kitchen: {
     // Base — cabinets + sink/faucet + plumbing adjustments + all hardware + install
     base: {
-      small:  { standard:{labour:7000,  material:12500}, custom:{labour:13500, material:23500} },
-      medium: { standard:{labour:13000, material:24000}, custom:{labour:23500, material:42500} },
-      large:  { standard:{labour:19000, material:34500}, custom:{labour:32500, material:58500} }
+      small:  { standard:{labour:9550,  material:12575}, custom:{labour:14500, material:24750} },
+      medium: { standard:{labour:14500, material:25725}, custom:{labour:24500, material:43250} },
+      large:  { standard:{labour:20300, material:31500}, custom:{labour:33000, material:58750} }
     },
     // Countertops — by kitchen size, tier follows kitchen tier
     counter: {
-      small:  { standard:{labour:600,  material:1400}, custom:{labour:1000, material:2900} },
-      medium: { standard:{labour:1000, material:2400}, custom:{labour:1600, material:4900} },
-      large:  { standard:{labour:1500, material:3500}, custom:{labour:2200, material:7400} }
+      small:  { standard:{labour:800,  material:2000}, custom:{labour:1200, material:3600} },
+      medium: { standard:{labour:1250, material:2975}, custom:{labour:1900, material:5200} },
+      large:  { standard:{labour:1815, material:4240}, custom:{labour:2700, material:7700} }
     },
     // Island add-on (priced by tier only — sizing follows kitchen size)
     island: {
-      standard: { labour: 1800, material: 3500 },
-      custom:   { labour: 3500, material: 7500 }
+      standard: { labour: 2240, material: 3815 },
+      custom:   { labour: 4020, material: 8035 }
     },
     // Under-cabinet lighting — typical run, flat
-    undercab: { labour: 350, material: 450 },
+    undercab: { labour: 765, material: 525 },
     // Backsplash — subway is per sqft; quartz is a lump sum keyed by kitchen size (based on typical upper-cabinet count)
     backsplash: {
-      subway: { labour: 10.00, material: 6.00 },
+      subway: { labour: 18.00, material: 9.00 },
       quartz: {
-        small:  { labour: 1400, material: 1100 },   // ~8 uppers → ~25 sqft
-        medium: { labour: 2200, material: 1800 },   // ~12 uppers → ~40 sqft
-        large:  { labour: 3000, material: 2500 }    // ~16 uppers → ~55 sqft
+        small:  { labour: 1720, material: 1295 },   // ~8 uppers → ~25 sqft
+        medium: { labour: 2780, material: 1990 },   // ~12 uppers → ~40 sqft
+        large:  { labour: 3460, material: 2590 }    // ~16 uppers → ~55 sqft
       }
     }
   },
@@ -2104,40 +2108,39 @@ const DEFAULT_PRICES = {
     // (toilet, vanity, mirror, light, fixtures, accessories + tub or shower if present).
     // Floor tile + wall tile priced per sqft. Add-ons are structural changes only.
     base: {
-      "2":  { labour: 3500, material: 4000 },   // toilet, vanity
-      "3":  { labour: 4500, material: 5500 },   // toilet, vanity, tub
-      "3s": { labour: 5500, material: 7000 },   // toilet, vanity, stand-up shower (existing)
-      "4":  { labour: 7000, material: 9000 }    // toilet, vanity, tub, stand-up shower
+      "2":  { labour: 2750, material: 2590 },   // toilet, vanity
+      "3":  { labour: 4680, material: 6650 },   // toilet, vanity, tub
+      "3s": { labour: 5490, material: 6955 },   // toilet, vanity, stand-up shower (existing)
+      "4":  { labour: 6350, material: 7275 }    // toilet, vanity, tub, stand-up shower
     },
-    floorTile: { labour: 10.00, material: 8.00 },
-    wallTile:  { labour: 12.00, material: 9.00 },
-    newTub:        { labour: 1500, material: 1800 },
-    doubleVanity:  { labour: 900,  material: 1800 },   // upgrade single -> double vanity
+    floorTile: { labour: 12.00, material: 8.00 },
+    wallTile:  { labour: 17.00, material: 11.00 },
+    newTub:        { labour: 2345, material: 1600 },
+    doubleVanity:  { labour: 1485, material: 1825 },   // upgrade single -> double vanity
     standUpShower: {
       // GTA 2026 rates per stand-up shower scenario (single bathroom):
       //   refresh — existing shower stays in place. Reuse plumbing rough-in + framing/curb.
       //             Demo old tile + waterproofing, install new waterproof membrane,
       //             new tile, new fixtures (valve trim, head, drain cover), new glass
-      //             enclosure. ~$4–5k all-in.
+      //             enclosure.
       //   convert — bathroom currently has a TUB. Remove tub, frame curb & sloped pan,
       //             reuse existing tub plumbing, then waterproof + tile + fixtures + glass.
-      //             ~$5.5–7k all-in.
       //   new     — bathroom has no shower today. Build the whole stall from scratch:
       //             new framing, new plumbing rough-in, drain, waterproof, tile, fixtures,
-      //             glass enclosure. ~$9–11k all-in.
-      refresh: { labour: 1800, material: 2700 },       // ~$4.5k all-in: re-tile + new fixtures + new glass
-      convert: { labour: 2500, material: 3500 },       // ~$6k all-in: existing tub plumbing reused
-      new:     { labour: 4500, material: 5500 }        // ~$10k all-in: new framing + plumbing rough-in
+      //             glass enclosure.
+      refresh: { labour: 1800, material: 2700 },
+      convert: { labour: 3425, material: 4570 },
+      new:     { labour: 4500, material: 7670 }
     }
   },
   potlights: {
     // GTA 2026 going rates for residential pot light work
     // "Replace existing" — swap fixture in an existing pot, minor wiring tweak,
-    //                     no drywall cutting/patching. ~$50–$100 each installed.
+    //                     no drywall cutting/patching. ~$80–$100 each installed.
     // "Install new"     — cut hole, run new wiring, install fixture + driver,
-    //                     drywall patch & paint touch-up around the cut. ~$200–$300 each.
-    replace: { labour: 60,  material: 40 },         // ~$100/light (drop-in swap)
-    new:     { labour: 160, material: 90 }          // ~$250/light (cut & wire from scratch)
+    //                     drywall patch & paint touch-up around the cut. ~$200/light.
+    replace: { labour: 55,  material: 40 },         // ~$95/light (drop-in swap)
+    new:     { labour: 130, material: 70 }          // ~$200/light (cut & wire from scratch)
   },
   // Listing discount percent (applies to subtotal when toggle is on)
   listingDiscount: { percent: 10 }
