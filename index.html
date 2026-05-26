@@ -24,22 +24,12 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
 <!-- ============================================================
-     SITE ACCESS GATE
-     Client-side PIN gate. Set SITE_ACCESS_HASH below to the
-     SHA-256 hash of your chosen PIN to enable the gate.
-     To generate a hash in your browser console (no PIN ever
-     leaves your machine):
-       crypto.subtle.digest("SHA-256", new TextEncoder().encode("YOUR-PIN"))
-         .then(h => console.log(Array.from(new Uint8Array(h))
-         .map(b => b.toString(16).padStart(2,'0')).join('')))
-     Paste the hash into SITE_ACCESS_HASH below.
-     Leave SITE_ACCESS_HASH empty to disable the gate.
+     SITE ACCESS GATE — config lives in site-gate-config.js so
+     edits to this file never wipe out your PIN setting. To change
+     or disable the PIN, edit site-gate-config.js (instructions
+     are in that file).
      ============================================================ -->
-<script>
-window.SITE_ACCESS_HASH    = ""; // <-- set this to your PIN's SHA-256 hash to lock the site
-window.SITE_ACCESS_TTL_DAYS = 30; // how long an unlocked browser stays unlocked
-window.SITE_ACCESS_KEY     = "reno_site_access_v1";
-</script>
+<script src="site-gate-config.js"></script>
 <style id="siteGateCriticalCss">
   /* Critical inline CSS — hides EVERYTHING until the gate decides whether to
      show the app or the lock screen, so there's no flash of either. */
