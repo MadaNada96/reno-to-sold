@@ -1950,6 +1950,16 @@
   #etApp table.pr-table th.r, #etApp table.pr-table td.r{text-align:right}
   #etApp table.pr-table td{padding:7px 8px;border-bottom:1px solid #eee}
   #etApp table.pr-table tr.cat-row td{background:#f6f3ea;font-weight:700;border-bottom:1px solid #e6dcc0}
+  /* Never let a category header sit alone at the bottom of a page with its
+     items orphaned to the next. If a break would land here, push the entire
+     row to the next page so it stays attached to its first expense item. */
+  #etApp table.pr-table tr.cat-row{
+    page-break-after:avoid; break-after:avoid-page;
+    page-break-inside:avoid; break-inside:avoid;
+  }
+  #etApp table.pr-table tr.cat-row td{
+    page-break-after:avoid; break-after:avoid-page;
+  }
   #etApp table.pr-table tfoot td{border-top:2px solid #111;font-weight:700;font-size:13.5px;padding-top:10px}
   /* Grand total row lives inside <tbody> (not <tfoot>) so it appears once at
      the natural end of the list instead of being repeated as a footer at the
