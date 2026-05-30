@@ -1796,6 +1796,8 @@
     color:var(--gold-soft);
   }
   #etApp .exp-summary .es-val.plain{ color:var(--text); }
+  #etApp .exp-summary .es-val.pos{ color:var(--green-soft); }
+  #etApp .exp-summary .es-val.neg{ color:var(--red); }
   #etApp .exp-summary .es-sub{ font-size:11px; color:var(--muted); margin-top:1px; }
   @media (max-width:640px){
     #etApp .exp-summary{ padding:12px 14px; }
@@ -2226,12 +2228,22 @@
 
   <!-- EXPENSES -->
   <div id="pane-exp">
-    <!-- Sticky running total — stays in view regardless of how long the
-         expense list gets. Replaces the previous bottom-of-table tfoot. -->
+    <!-- Sticky project snapshot — Invoice / Expenses / Profit / Margin
+         stay in view regardless of how long the expense list gets.
+         Replaces the previous bottom-of-table tfoot total. -->
     <div class="exp-summary hidden" id="exp-summary">
+      <div class="es-card">
+        <span class="es-lbl">Invoice</span>
+        <span class="es-val plain" id="es-invoice-val">$0.00</span>
+      </div>
       <div class="es-card">
         <span class="es-lbl">Total Expenses</span>
         <span class="es-val" id="es-total-val">$0.00</span>
+      </div>
+      <div class="es-card">
+        <span class="es-lbl">Profit</span>
+        <span class="es-val" id="es-profit-val">$0.00</span>
+        <span class="es-sub" id="es-margin-sub">Set an invoice amount</span>
       </div>
       <div class="es-card">
         <span class="es-lbl">Entries</span>
@@ -8254,6 +8266,35 @@ function onInvoiceEdit(){
   p.updatedAt=Date.now();
   clearTimeout(metaTimer); metaTimer=setTimeout(save,400);
   renderProfit();
+  // Keep the sticky Expenses-tab summary in sync when invoice changes
+  // (the user might be editing from the Profit tab but expects to see the
+  // Invoice / Profit / Margin numbers on the Expenses tab match).
+  renderExpenseSummary();
+}
+/* Populates the Invoice / Total Expenses / Profit / Margin / Entries cards
+   in the sticky summary at the top of the Expenses tab. Shared by
+   renderExpenses() and onInvoiceEdit() so both views stay in sync. */
+function renderExpenseSummary(){
+  const p = curr(); if(!p) return;
+  const summary = document.getElementById("exp-summary");
+  if(!summary) return;
+  const allCount = (p.expenses||[]).length;
+  if(!allCount){ summary.classList.add("hidden"); return; }
+  summary.classList.remove("hidden");
+  const inv    = Number(p.invoice) || 0;
+  const exp    = totalExpenses(p);
+  const profit = inv - exp;
+  const margin = inv > 0 ? (profit / inv * 100) : null;
+  document.getElementById("es-invoice-val").textContent = money2(inv);
+  document.getElementById("es-total-val").textContent   = money2(exp);
+  document.getElementById("es-entries-val").textContent = allCount;
+  const pv = document.getElementById("es-profit-val");
+  pv.textContent = money2(profit);
+  pv.classList.remove("pos","neg");
+  if(profit > 0)       pv.classList.add("pos");
+  else if(profit < 0)  pv.classList.add("neg");
+  document.getElementById("es-margin-sub").textContent =
+    margin === null ? "Set an invoice amount" : (margin.toFixed(1) + "% margin");
 }
 
 /* ---------- Project rendering ---------- */
@@ -8318,12 +8359,10 @@ function renderExpenses(){
       <button class="iconbtn danger" title="Delete" onclick="ET.deleteExpense('${e.id}')">🗑</button>
     </span></td>
   </tr>`).join("");
-  // Populate the sticky summary at the top — running total + entry count,
-  // and a Filtered card that appears only when a search/filter is active.
+  // Sticky summary at the top — Invoice / Total Expenses / Profit / Margin / Entries
+  renderExpenseSummary();
+  // Filtered card — only visible when a search/filter is active
   const shownTotal=rows.reduce((s,e)=>s+(Number(e.amount)||0),0);
-  const allTotal=totalExpenses(p);
-  document.getElementById("es-total-val").textContent = money2(allTotal);
-  document.getElementById("es-entries-val").textContent = allCount;
   const filtCard = document.getElementById("es-filt-card");
   if(rows.length !== allCount){
     filtCard.classList.remove("hidden");
