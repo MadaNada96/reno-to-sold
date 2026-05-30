@@ -1925,8 +1925,16 @@
   #etApp .pr-head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #111;padding-bottom:14px;margin-bottom:6px}
   #etApp .pr-brand b{font-size:20px;letter-spacing:.14em}
   #etApp .pr-brand b .to{color:#c9a23f}
-  #etApp .pr-brand .tag{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#666;margin-top:4px}
   #etApp .pr-meta{text-align:right;font-size:12px;color:#444;line-height:1.6}
+  /* Document title — centred across the page, sized to match the RENO TO
+     SOLD wordmark so the two read as a clear pair on the printed statement. */
+  #etApp .pr-doctitle{
+    text-align:center;
+    font-size:20px; font-weight:700;
+    letter-spacing:.14em; text-transform:uppercase;
+    color:#0a0a0a;
+    margin:14px 0 20px;
+  }
   #etApp .pr-title{font-size:13px;letter-spacing:.18em;text-transform:uppercase;color:#888;margin:18px 0 4px}
   #etApp .pr-proj{font-size:24px;font-weight:700;margin:0}
   #etApp .pr-proj-addr{color:#555;font-size:14px;margin:2px 0 18px}
@@ -8762,9 +8770,10 @@ function printStatement(){
   const today=new Date().toLocaleDateString("en-CA",{year:"numeric",month:"long",day:"numeric"});
   document.getElementById("print-area").innerHTML=`
    <div class="pr-head">
-     <div class="pr-brand"><b>RENO <span class="to">TO</span> SOLD</b><div class="tag">Project Expense Tracker</div></div>
+     <div class="pr-brand"><b>RENO <span class="to">TO</span> SOLD</b></div>
      <div class="pr-meta">Statement date: ${today}<br>${exps.length} expense ${exps.length===1?'entry':'entries'}</div>
    </div>
+   <div class="pr-doctitle">Project Expense Tracker</div>
    <div class="pr-title">Project</div>
    <h2 class="pr-proj">${esc(p.name)||"Untitled project"}</h2>
    <div class="pr-proj-addr">${esc(p.address)||""}</div>
