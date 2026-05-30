@@ -2313,7 +2313,9 @@
       </div>
       <div class="frow">
         <label class="fld"><small>Category</small>
-          <select id="ex-cat"></select></label>
+          <select id="ex-cat" onchange="ET.onCatChange()"></select>
+          <input id="ex-cat-custom" class="hidden" placeholder="Name this category" style="margin-top:8px"
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();ET.saveExpense();}" /></label>
         <label class="fld"><small>Vendor / Contractor</small>
           <input id="ex-vendor" placeholder="Who was paid" /></label>
       </div>
@@ -8053,8 +8055,26 @@ let pendingLinkEstimateId = null;
 
 /* ---------- Storage ---------- */
 function load(){
-  try{ const r = JSON.parse(localStorage.getItem(STORE_KEY)); if(r&&r.projects) return r; }catch(e){}
-  return {version:1, projects:[]};
+  try{
+    const r = JSON.parse(localStorage.getItem(STORE_KEY));
+    if(r && r.projects){
+      // Backfill the Previously-used-categories list and seed it from any
+      // existing expense categories that are not in the standard set.
+      if(!Array.isArray(r.customCategories)) r.customCategories = [];
+      const std = new Set(CATEGORIES);
+      const seen = new Set(r.customCategories.map(c => String(c).toLowerCase()));
+      (r.projects||[]).forEach(p => {
+        (p.expenses||[]).forEach(e => {
+          const c = (e && e.category) || "";
+          if(!c || std.has(c)) return;
+          const key = c.toLowerCase();
+          if(!seen.has(key)){ r.customCategories.push(c); seen.add(key); }
+        });
+      });
+      return r;
+    }
+  }catch(e){}
+  return {version:1, projects:[], customCategories:[]};
 }
 function save(){ localStorage.setItem(STORE_KEY, JSON.stringify(DB)); }
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
@@ -8188,9 +8208,8 @@ function renderProject(){
   document.getElementById("pv-linked").classList.toggle("hidden",!p.linkedEstimateId);
   if(p.linkedEstimateId)
     document.getElementById("pv-back-est").onclick=function(){ ET.openEstimate(p.linkedEstimateId); return false; };
-  // category filter
-  const fcat=document.getElementById("exp-filter-cat");
-  fcat.innerHTML=`<option value="all">All categories</option>`+CATEGORIES.map(c=>`<option>${c}</option>`).join("");
+  // category filter — standard set + Previously used (custom) categories
+  refreshFilterCategories();
   renderExpenses();
 }
 
@@ -8253,54 +8272,141 @@ function setPlanned(v){
   document.getElementById("ex-planned-btn").classList.toggle("on-planned",v);
   document.getElementById("ex-unplanned-btn").classList.toggle("on-unplanned",!v);
 }
+/* Sorted, deduplicated list of user-created category names that aren't part
+   of the standard set. Powers the "Previously used" optgroup in both the
+   expense modal and the filter dropdown. */
+function previouslyUsedCategories(){
+  const std = new Set(CATEGORIES);
+  const list = (DB.customCategories || []).filter(c => c && !std.has(c));
+  return list.slice().sort((a,b)=>a.localeCompare(b));
+}
+function categoryOptions(selected){
+  const sel = String(selected==null?"":selected);
+  const opt = (c) => `<option${c===sel?" selected":""}>${esc(c)}</option>`;
+  const std = CATEGORIES.map(opt).join("");
+  const customs = previouslyUsedCategories();
+  const grp = customs.length
+    ? `<optgroup label="Previously used">${customs.map(opt).join("")}</optgroup>`
+    : "";
+  return std + grp;
+}
+/* Toggle the custom-name input below the category select. Shown only when
+   the user explicitly picks "Other" (so they can name a new category). */
+function onCatChange(){
+  const sel = document.getElementById("ex-cat");
+  const inp = document.getElementById("ex-cat-custom");
+  if(!sel || !inp) return;
+  if(sel.value === "Other"){
+    inp.classList.remove("hidden");
+    inp.value = "";
+    setTimeout(()=>inp.focus(), 50);
+  } else {
+    inp.classList.add("hidden");
+    inp.value = "";
+  }
+}
 function openExpense(id){
-  const sel=document.getElementById("ex-cat");
-  sel.innerHTML=CATEGORIES.map(c=>`<option>${c}</option>`).join("");
-  editingExpenseId=id||null;
+  const sel = document.getElementById("ex-cat");
+  const customInp = document.getElementById("ex-cat-custom");
+  editingExpenseId = id || null;
   if(id){
-    const e=curr().expenses.find(x=>x.id===id);
-    document.getElementById("exp-modal-title").textContent="Edit Expense";
-    document.getElementById("ex-amount").value=e.amount;
-    document.getElementById("ex-date").value=e.date||"";
-    document.getElementById("ex-desc").value=e.description||"";
-    document.getElementById("ex-cat").value=e.category||"Other";
-    document.getElementById("ex-vendor").value=e.vendor||"";
-    document.getElementById("ex-note").value=e.note||"";
+    const e = curr().expenses.find(x=>x.id===id);
+    const std = new Set(CATEGORIES);
+    const customs = new Set(previouslyUsedCategories());
+    const cat = e.category || "Other";
+    const knownCat = std.has(cat) || customs.has(cat);
+    // If this is an orphan custom name we haven't catalogued, render it once
+    // in the dropdown via the customs list so the select can show it selected.
+    sel.innerHTML = categoryOptions(knownCat ? cat : "Other");
+    document.getElementById("exp-modal-title").textContent = "Edit Expense";
+    document.getElementById("ex-amount").value = e.amount;
+    document.getElementById("ex-date").value = e.date||"";
+    document.getElementById("ex-desc").value = e.description||"";
+    if(knownCat){
+      sel.value = cat;
+      customInp.classList.add("hidden");
+      customInp.value = "";
+    } else {
+      // Treat orphan as an "Other" entry — show the name in the custom input
+      sel.value = "Other";
+      customInp.classList.remove("hidden");
+      customInp.value = cat;
+    }
+    document.getElementById("ex-vendor").value = e.vendor||"";
+    document.getElementById("ex-note").value = e.note||"";
     setPlanned(e.planned!==false);
-  }else{
-    document.getElementById("exp-modal-title").textContent="Add Expense";
-    document.getElementById("ex-amount").value="";
-    document.getElementById("ex-date").value=new Date().toISOString().slice(0,10);
-    document.getElementById("ex-desc").value="";
-    document.getElementById("ex-cat").value="Labour";
-    document.getElementById("ex-vendor").value="";
-    document.getElementById("ex-note").value="";
+  } else {
+    sel.innerHTML = categoryOptions("Labour");
+    document.getElementById("exp-modal-title").textContent = "Add Expense";
+    document.getElementById("ex-amount").value = "";
+    document.getElementById("ex-date").value = new Date().toISOString().slice(0,10);
+    document.getElementById("ex-desc").value = "";
+    sel.value = "Labour";
+    customInp.classList.add("hidden");
+    customInp.value = "";
+    document.getElementById("ex-vendor").value = "";
+    document.getElementById("ex-note").value = "";
     setPlanned(true);
   }
   openModal("m-expense");
   setTimeout(()=>document.getElementById("ex-amount").focus(),50);
 }
 function saveExpense(){
-  const p=curr(); if(!p) return;
-  const amount=parseNum(document.getElementById("ex-amount").value);
+  const p = curr(); if(!p) return;
+  const amount = parseNum(document.getElementById("ex-amount").value);
   if(!amount){ toast("Enter an amount"); return; }
-  const data={
+  let category = document.getElementById("ex-cat").value;
+  // "Other" with a typed name → use the typed name AND remember it for
+  // next time under "Previously used". Case-insensitive de-dupe so the
+  // list doesn't pile up trivial variants ("plumbing" vs "Plumbing").
+  if(category === "Other"){
+    const custom = (document.getElementById("ex-cat-custom").value || "").trim();
+    if(custom){
+      category = custom;
+      DB.customCategories = DB.customCategories || [];
+      const std = new Set(CATEGORIES.map(c => c.toLowerCase()));
+      const already = DB.customCategories.some(c => String(c).toLowerCase() === custom.toLowerCase());
+      if(!already && !std.has(custom.toLowerCase())){
+        DB.customCategories.push(custom);
+      }
+    }
+  }
+  const data = {
     amount,
-    date:document.getElementById("ex-date").value,
-    description:document.getElementById("ex-desc").value.trim(),
-    category:document.getElementById("ex-cat").value,
-    vendor:document.getElementById("ex-vendor").value.trim(),
-    note:document.getElementById("ex-note").value.trim(),
-    planned:pendingPlanned
+    date: document.getElementById("ex-date").value,
+    description: document.getElementById("ex-desc").value.trim(),
+    category: category,
+    vendor: document.getElementById("ex-vendor").value.trim(),
+    note: document.getElementById("ex-note").value.trim(),
+    planned: pendingPlanned
   };
   if(editingExpenseId){
-    const e=p.expenses.find(x=>x.id===editingExpenseId); Object.assign(e,data);
-  }else{
+    const e = p.expenses.find(x=>x.id===editingExpenseId); Object.assign(e,data);
+  } else {
     p.expenses.push({id:uid(),createdAt:Date.now(),...data});
   }
-  p.updatedAt=Date.now(); save(); closeModal("m-expense");
+  p.updatedAt = Date.now(); save(); closeModal("m-expense");
+  // Refresh the filter dropdown so a newly-added custom category appears there too
+  if(typeof renderProject==="function" && curr()) refreshFilterCategories();
   renderExpenses(); if(activeTab==="profit") renderProfit();
   toast(editingExpenseId?"Expense updated":"Expense added");
+}
+/* Re-populates the category-filter dropdown without resetting the user's
+   current selection. Called after a new custom category is saved. */
+function refreshFilterCategories(){
+  const fcat = document.getElementById("exp-filter-cat");
+  if(!fcat) return;
+  const prev = fcat.value;
+  const customs = previouslyUsedCategories();
+  const grp = customs.length
+    ? `<optgroup label="Previously used">${customs.map(c => `<option>${esc(c)}</option>`).join("")}</optgroup>`
+    : "";
+  fcat.innerHTML = `<option value="all">All categories</option>`
+    + CATEGORIES.map(c => `<option>${esc(c)}</option>`).join("")
+    + grp;
+  // Restore the previously-selected value if it still exists
+  const opts = Array.from(fcat.options).map(o=>o.value);
+  fcat.value = opts.indexOf(prev) >= 0 ? prev : "all";
 }
 function deleteExpense(id){
   const p=curr(); if(!p) return;
@@ -8740,6 +8846,7 @@ window.ET={ goHome:goHome, openNewProject:openNewProject, switchHome:switchHome,
   toggleSelect:toggleSelect, onMetaEdit:onMetaEdit, onInvoiceEdit:onInvoiceEdit, acInput:acInput,
   acPick:acPick, printStatement:printStatement, closeModal:closeModal, createProject:createProject,
   setPlanned:setPlanned, saveExpense:saveExpense, deleteExpense:deleteExpense, openProject:openProject,
+  onCatChange:onCatChange,
   deleteProject:deleteProject, show:show, backToEstimator:backToEstimator,
   openFromEstimator:openFromEstimator, syncLinkedFromEstimate:syncLinkedFromEstimate,
   openEstimate:openEstimate };
