@@ -5,6 +5,38 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta name="theme-color" content="#0a0a0a" />
 <title>Reno to Sold — Project Profit Tracker</title>
+
+<!-- ===== SITE ACCESS GATE (shared PIN with the estimator) =====
+     Config lives in the site-wide site-gate-config.js at the repo root.
+     Because it uses the same storage key, unlocking the main site also
+     unlocks this page (and vice-versa). -->
+<script src="../site-gate-config.js"></script>
+<style id="siteGateCriticalCss">
+  html.site-gate-checking, html.site-gate-checking body { visibility:hidden; background:#0a0a0a; }
+  html.site-gate-locked   body > *:not(#siteGate) { display:none !important; }
+  html.site-gate-locked   body { background:#0a0a0a !important; visibility:visible !important; }
+  html.site-gate-locked   #siteGate { display:flex !important; }
+  #siteGate { display:none; }
+</style>
+<script>
+(function(){
+  document.documentElement.classList.add("site-gate-checking");
+  var requiredHash = (window.SITE_ACCESS_HASH || "").trim();
+  if(!requiredHash){ document.documentElement.classList.remove("site-gate-checking"); return; }
+  try{
+    var raw = localStorage.getItem(window.SITE_ACCESS_KEY);
+    if(raw){
+      var data = JSON.parse(raw);
+      if(data && data.hash === requiredHash && data.exp && data.exp > Date.now()){
+        document.documentElement.classList.remove("site-gate-checking"); return;
+      }
+    }
+  }catch(e){}
+  document.documentElement.classList.remove("site-gate-checking");
+  document.documentElement.classList.add("site-gate-locked");
+})();
+</script>
+
 <style>
   :root{
     --bg:#0a0a0a;
@@ -37,7 +69,7 @@
   a{color:inherit}
   button{font-family:inherit}
   .wrap{max-width:1100px;margin:0 auto;padding:0 20px 80px}
- 
+
   /* Header */
   header.topbar{
     position:sticky;top:0;z-index:50;
@@ -67,13 +99,13 @@
   .btn.ghost{background:transparent}
   .btn.danger:hover{border-color:var(--red);color:var(--red)}
   .btn.sm{padding:6px 11px;font-size:12.5px;border-radius:8px}
- 
+
   /* Hero / home */
   .hero{padding:40px 0 18px}
   .hero h1{font-size:30px;margin:0 0 6px;letter-spacing:-.01em}
   .hero p{color:var(--muted);margin:0;font-size:15px}
   .tagline{color:var(--gold-soft);font-style:italic;font-size:13.5px;letter-spacing:.02em}
- 
+
   .grid{display:grid;gap:16px}
   .projects-grid{grid-template-columns:repeat(auto-fill,minmax(290px,1fr));margin-top:22px}
   .card{
@@ -92,13 +124,13 @@
     width:28px;height:28px;cursor:pointer;font-size:14px;line-height:1}
   .card:hover .del{opacity:1}
   .card .del:hover{color:var(--red);border-color:var(--red)}
- 
+
   .empty{
     text-align:center;padding:60px 20px;border:1px dashed var(--line);border-radius:var(--radius);
     color:var(--muted);margin-top:22px;
   }
   .empty h3{color:var(--text);margin:0 0 6px}
- 
+
   /* Project view */
   .pv-head{display:flex;align-items:flex-start;gap:16px;padding:26px 0 10px;flex-wrap:wrap}
   .pv-head .titles{flex:1;min-width:240px}
@@ -113,7 +145,7 @@
     padding:2px 6px;border-radius:8px;margin:-2px -6px;width:100%;max-width:560px;font-family:inherit}
   .pv-addr:hover{border-color:var(--line-soft)}
   .pv-addr:focus{outline:none;border-color:var(--gold);background:var(--panel);color:var(--text)}
- 
+
   /* Tabs */
   .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line-soft);margin:18px 0 22px}
   .tab{padding:11px 18px;border:none;background:transparent;color:var(--muted);font-size:14px;font-weight:600;
@@ -121,7 +153,7 @@
   .tab:hover{color:var(--text)}
   .tab.active{color:var(--text);border-bottom-color:var(--gold)}
   .tab .pill{background:var(--panel-2);border:1px solid var(--line);border-radius:20px;font-size:11px;padding:1px 8px;color:var(--muted)}
- 
+
   /* Expense tab */
   .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
   .toolbar .search{flex:1;min-width:180px}
@@ -133,7 +165,7 @@
   input::placeholder,textarea::placeholder{color:#6a6a66}
   label.fld{display:block}
   label.fld small{display:block;color:var(--muted);font-size:11px;letter-spacing:.05em;text-transform:uppercase;margin-bottom:5px}
- 
+
   table{width:100%;border-collapse:collapse;font-size:13.5px}
   thead th{text-align:left;color:var(--muted);font-size:11px;letter-spacing:.07em;text-transform:uppercase;
     font-weight:600;padding:10px 12px;border-bottom:1px solid var(--line)}
@@ -152,10 +184,10 @@
   .iconbtn:hover{color:var(--text);border-color:#3a3a3a}
   .iconbtn.danger:hover{color:var(--red);border-color:var(--red)}
   .amt{font-variant-numeric:tabular-nums;font-weight:600}
- 
+
   .panel{background:var(--panel);border:1px solid var(--line-soft);border-radius:var(--radius);padding:18px}
   .panel h3{margin:0 0 14px;font-size:14px;letter-spacing:.03em}
- 
+
   /* Profit tab */
   .stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:18px}
   .stat{background:var(--panel);border:1px solid var(--line-soft);border-radius:var(--radius);padding:18px 18px}
@@ -163,20 +195,20 @@
   .stat .v{font-size:25px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
   .stat.hl{border-color:#3a3010;background:linear-gradient(180deg,#15120a,#0f0d08)}
   .stat .sub{font-size:12px;color:var(--muted);margin-top:6px}
- 
+
   .barwrap{margin-top:6px}
   .barline{display:flex;align-items:center;gap:12px;margin:10px 0}
   .barline .bl-label{width:140px;font-size:13px;color:var(--text);display:flex;align-items:center;gap:8px}
   .barline .bl-track{flex:1;height:10px;background:var(--panel-2);border-radius:20px;overflow:hidden}
   .barline .bl-fill{height:100%;border-radius:20px}
   .barline .bl-val{width:110px;text-align:right;font-size:13px;font-variant-numeric:tabular-nums;color:var(--muted)}
- 
+
   .profit-bar{height:30px;border-radius:8px;background:var(--panel-2);overflow:hidden;display:flex;margin:6px 0 4px}
   .profit-bar .seg{height:100%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#0a0a0a;min-width:0;white-space:nowrap;overflow:hidden}
- 
+
   .twocol{display:grid;grid-template-columns:1.3fr 1fr;gap:16px}
   @media(max-width:820px){.twocol{grid-template-columns:1fr}}
- 
+
   /* Modal */
   .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.65);backdrop-filter:blur(3px);
     display:none;align-items:flex-start;justify-content:center;z-index:100;padding:40px 16px;overflow:auto}
@@ -197,20 +229,20 @@
     color:var(--muted);font-weight:600;font-size:13px;cursor:pointer}
   .seg-toggle button.on-planned{border-color:#143a22;background:#0f1a12;color:var(--green-soft)}
   .seg-toggle button.on-unplanned{border-color:#3a1814;background:#1c1210;color:var(--red)}
- 
+
   .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1d1d1d;border:1px solid var(--line);
     padding:11px 18px;border-radius:10px;font-size:13.5px;box-shadow:var(--shadow);z-index:200;opacity:0;
     transition:.25s;pointer-events:none}
   .toast.show{opacity:1;transform:translateX(-50%) translateY(-4px)}
   .foot{color:#56564f;font-size:12px;text-align:center;padding:30px 0 0;letter-spacing:.03em}
- 
+
   /* Home header row + toggle */
   .hero-row{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
   .seg-switch{display:inline-flex;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:3px}
   .seg-switch button{border:none;background:transparent;color:var(--muted);font-weight:600;font-size:13px;
     padding:7px 16px;border-radius:8px;cursor:pointer}
   .seg-switch button.on{background:var(--gold);color:#1a1405}
- 
+
   /* Autocomplete */
   .ac-wrap{position:relative}
   .ac-list{position:absolute;left:0;right:0;top:calc(100% + 4px);background:var(--panel-2);border:1px solid var(--line);
@@ -220,7 +252,7 @@
   .ac-item:last-child{border-bottom:none}
   .ac-item:hover,.ac-item.active{background:#232323}
   .ac-item .sub{color:var(--muted);font-size:12px}
- 
+
   /* Dashboard */
   .dash-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin:22px 0 18px}
   .dash-table .r{text-align:right}
@@ -228,7 +260,7 @@
   .dash-bar i{display:block;height:100%}
   .mini-name{font-weight:700;cursor:pointer}
   .mini-name:hover{color:var(--gold-soft)}
- 
+
   /* Print statement */
   #print-area{display:none}
   @media print{
@@ -263,12 +295,47 @@
   .pr-foot{margin-top:26px;border-top:1px solid #ddd;padding-top:12px;font-size:11px;color:#888;display:flex;justify-content:space-between}
   .pr-badge{display:inline-block;font-size:10px;padding:1px 7px;border-radius:10px;border:1px solid #ccc;color:#666}
   .pr-badge.un{border-color:#e0b4ad;color:#c0392b;background:#fcefed}
- 
+
   .hidden{display:none!important}
+
+  /* ===== Site access gate overlay ===== */
+  #siteGate{position:fixed;inset:0;z-index:99999;align-items:center;justify-content:center;padding:20px;
+    background:radial-gradient(ellipse at top,#161616 0%,#0a0a0a 60%);
+    font-family:var(--font);color:#f5f1e6}
+  #siteGate .sg-card{background:#15151a;border:1px solid #a8853f;border-radius:14px;
+    box-shadow:0 8px 32px rgba(0,0,0,.6),0 0 0 1px rgba(212,175,106,.18);padding:42px 42px 34px;width:100%;max-width:420px;text-align:center}
+  #siteGate .sg-logo{display:block;margin:0 auto 20px;width:auto;max-width:200px;max-height:60px;object-fit:contain}
+  #siteGate .sg-title{font-size:18px;font-weight:800;letter-spacing:.20em;text-transform:uppercase;color:#e8c989;margin-bottom:8px}
+  #siteGate .sg-sub{font-size:13px;line-height:1.5;color:#f5f1e6;margin-bottom:22px}
+  #siteGate form{display:flex;flex-direction:column;gap:10px;margin-bottom:8px}
+  #siteGate input{background:#1c1c22;border:1px solid #3a3a42;color:#f5f1e6;padding:13px 14px;border-radius:8px;
+    font:inherit;font-size:15px;text-align:center;letter-spacing:.10em;width:100%}
+  #siteGate input:focus{outline:none;border-color:#d4af6a;box-shadow:0 0 0 2px rgba(212,175,106,.20)}
+  #siteGate button{background:#d4af6a;color:#0a0a0a;border:1px solid #a8853f;border-radius:8px;padding:12px 14px;
+    cursor:pointer;font:inherit;font-size:13px;font-weight:800;letter-spacing:.16em;text-transform:uppercase}
+  #siteGate button:hover{background:#e8c989}
+  #siteGate .sg-msg{font-size:12px;min-height:18px;margin:8px 0 2px;color:#ff9b9b}
+  #siteGate .sg-foot{margin-top:18px;padding-top:18px;border-top:1px solid #2a2a30;font-size:11px;
+    letter-spacing:.10em;text-transform:uppercase;color:#8a8579}
+  @media (max-width:480px){#siteGate .sg-card{padding:32px 24px 26px}#siteGate .sg-title{font-size:15px;letter-spacing:.18em}}
 </style>
 </head>
 <body>
- 
+
+<div id="siteGate" role="dialog" aria-label="Internal access only">
+  <div class="sg-card">
+    <img src="https://renotosold.homes/logo.png" alt="Reno to Sold" class="sg-logo" onerror="this.style.display='none'">
+    <div class="sg-title">Internal Access Only</div>
+    <div class="sg-sub">This site is for the Reno to Sold team. Enter the access code to continue.</div>
+    <form id="sgForm" onsubmit="event.preventDefault(); submitSiteAccess();">
+      <input type="password" id="sgInput" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Access code">
+      <button type="submit">Unlock</button>
+    </form>
+    <div id="sgMsg" class="sg-msg"></div>
+    <div class="sg-foot">Forgot the code? Contact Mohamed Nada.</div>
+  </div>
+</div>
+
 <header class="topbar">
   <div class="topbar-inner">
     <div class="brand" onclick="goHome()">
@@ -283,7 +350,7 @@
     <button class="btn gold" onclick="openNewProject()">＋ New Project</button>
   </div>
 </header>
- 
+
 <!-- HOME -->
 <div class="wrap" id="view-home">
   <div class="hero">
@@ -304,7 +371,7 @@
   </div>
   <div class="foot">Data saves locally to this browser · Reno to Sold · Internal use only</div>
 </div>
- 
+
 <!-- PROJECT -->
 <div class="wrap hidden" id="view-project">
   <div class="pv-head">
@@ -316,20 +383,21 @@
                oninput="onMetaEdit();acInput('pv-addr','ac-pv')" autocomplete="off" />
         <div class="ac-list" id="ac-pv"></div>
       </div>
-      <div id="pv-linked" class="hidden" style="margin-top:9px">
+      <div id="pv-linked" class="hidden" style="margin-top:9px;display:flex;gap:8px;align-items:center">
         <span class="pr-badge" style="border-color:#3a3010;color:var(--gold-soft);background:#19170f">🔗 Linked to estimate</span>
+        <a id="pv-back-est" href="../" class="pr-badge" style="border-color:#2a2a30;color:var(--muted);background:transparent;text-decoration:none">← Back to estimate</a>
       </div>
     </div>
     <div style="display:flex;gap:9px;flex-wrap:wrap">
       <button class="btn" onclick="printStatement()">🖨 Print / PDF</button>
     </div>
   </div>
- 
+
   <div class="tabs">
     <button class="tab active" id="tab-exp" onclick="switchTab('exp')">🧾 Expenses <span class="pill" id="exp-count">0</span></button>
     <button class="tab" id="tab-profit" onclick="switchTab('profit')">📈 Profit &amp; Revenue</button>
   </div>
- 
+
   <!-- EXPENSES -->
   <div id="pane-exp">
     <div class="toolbar">
@@ -373,7 +441,7 @@
       </div>
     </div>
   </div>
- 
+
   <!-- PROFIT -->
   <div id="pane-profit" class="hidden">
     <div class="stat-row">
@@ -394,7 +462,7 @@
         <div class="sub" id="s-margin">— margin</div>
       </div>
     </div>
- 
+
     <div class="panel" style="margin-bottom:16px">
       <h3>Invoice vs. Expenses</h3>
       <div class="profit-bar" id="profit-bar"></div>
@@ -403,7 +471,7 @@
         <span id="pb-right">Profit —</span>
       </div>
     </div>
- 
+
     <div class="twocol">
       <div class="panel">
         <h3>Expenses by Category</h3>
@@ -418,7 +486,7 @@
     </div>
   </div>
 </div>
- 
+
 <!-- NEW PROJECT MODAL -->
 <div class="modal-bg" id="m-project">
   <div class="modal">
@@ -441,7 +509,7 @@
     </div>
   </div>
 </div>
- 
+
 <!-- EXPENSE MODAL -->
 <div class="modal-bg" id="m-expense">
   <div class="modal">
@@ -481,17 +549,17 @@
     </div>
   </div>
 </div>
- 
+
 <div id="print-area"></div>
- 
+
 <div class="toast" id="toast"></div>
- 
+
 <script>
 /* ---------- Constants ---------- */
 const STORE_KEY = "rts_projects_v1";
 const CATEGORIES = ["Labour","Materials","Permits & Fees","Demolition","Plumbing",
   "Electrical","Flooring","Paint","Kitchen","Bathroom","Staging","Disposal","Miscellaneous","Other"];
- 
+
 /* ---------- State ---------- */
 let DB = load();
 let currentId = null;       // open project id
@@ -500,7 +568,7 @@ let pendingPlanned = true;
 let activeTab = "exp";
 let selectedExpenses = new Set();
 let pendingLinkEstimateId = null;
- 
+
 /* ---------- Storage ---------- */
 function load(){
   try{ const r = JSON.parse(localStorage.getItem(STORE_KEY)); if(r&&r.projects) return r; }catch(e){}
@@ -508,7 +576,7 @@ function load(){
 }
 function save(){ localStorage.setItem(STORE_KEY, JSON.stringify(DB)); }
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
- 
+
 /* ---------- Helpers ---------- */
 function money(n){
   const v = Number(n)||0;
@@ -527,7 +595,7 @@ function fmtDate(d){ if(!d) return "—"; const dt=new Date(d+"T00:00:00"); if(i
 function esc(s){ return String(s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 function toast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show");
   clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove("show"),2000); }
- 
+
 /* ---------- Navigation ---------- */
 function goHome(){ currentId=null; document.getElementById("view-project").classList.add("hidden");
   document.getElementById("view-home").classList.remove("hidden"); renderHome(); window.scrollTo(0,0); }
@@ -542,11 +610,11 @@ function switchTab(t){ activeTab=t;
   document.getElementById("pane-profit").classList.toggle("hidden",t!=="profit");
   if(t==="profit") renderProfit();
 }
- 
+
 /* ---------- Modals ---------- */
 function openModal(id){ document.getElementById(id).classList.add("show"); }
 function closeModal(id){ document.getElementById(id).classList.remove("show"); }
- 
+
 /* ---------- Home rendering ---------- */
 function renderHome(){
   const grid=document.getElementById("projects-grid");
@@ -570,7 +638,7 @@ function renderHome(){
     </div>`;
   }).join("");
 }
- 
+
 /* ---------- Project: new / meta ---------- */
 function openNewProject(){
   pendingLinkEstimateId=null;
@@ -592,7 +660,7 @@ function createProject(){
   pendingLinkEstimateId=null;
   openProject(p.id); toast("Project created");
 }
- 
+
 /* ---------- Link from estimator (?est=ID&name=&address=&invoice=) ---------- */
 function handleIncomingLink(){
   let params; try{ params=new URLSearchParams(location.search); }catch(e){ return; }
@@ -628,7 +696,7 @@ function onInvoiceEdit(){
   clearTimeout(metaTimer); metaTimer=setTimeout(save,400);
   renderProfit();
 }
- 
+
 /* ---------- Project rendering ---------- */
 function renderProject(){
   const p=curr(); if(!p) return;
@@ -636,12 +704,14 @@ function renderProject(){
   document.getElementById("pv-addr").value=p.address||"";
   document.getElementById("invoice-input").value=p.invoice?String(p.invoice):"";
   document.getElementById("pv-linked").classList.toggle("hidden",!p.linkedEstimateId);
+  if(p.linkedEstimateId)
+    document.getElementById("pv-back-est").href="../?estimate="+encodeURIComponent(p.linkedEstimateId);
   // category filter
   const fcat=document.getElementById("exp-filter-cat");
   fcat.innerHTML=`<option value="all">All categories</option>`+CATEGORIES.map(c=>`<option>${c}</option>`).join("");
   renderExpenses();
 }
- 
+
 function filteredExpenses(){
   const p=curr(); if(!p) return [];
   const q=(document.getElementById("exp-search").value||"").toLowerCase();
@@ -656,7 +726,7 @@ function filteredExpenses(){
     return true;
   }).sort((a,b)=>(b.date||"").localeCompare(a.date||"")|| (b.createdAt||0)-(a.createdAt||0));
 }
- 
+
 function renderExpenses(){
   const p=curr(); if(!p) return;
   document.getElementById("exp-count").textContent=(p.expenses||[]).length;
@@ -694,7 +764,7 @@ function renderExpenses(){
   if(selAll) selAll.checked = rows.length>0 && rows.every(e=>selectedExpenses.has(e.id));
   updateBulkBar();
 }
- 
+
 /* ---------- Expense add/edit ---------- */
 function setPlanned(v){
   pendingPlanned=v;
@@ -757,7 +827,7 @@ function deleteExpense(id){
   p.updatedAt=Date.now(); save();
   renderExpenses(); if(activeTab==="profit") renderProfit(); toast("Expense deleted");
 }
- 
+
 /* ---------- Bulk select / delete expenses ---------- */
 function toggleSelect(id,cb){
   if(cb.checked) selectedExpenses.add(id); else selectedExpenses.delete(id);
@@ -789,7 +859,7 @@ function deleteSelected(){
   renderExpenses(); if(activeTab==="profit") renderProfit();
   toast("Deleted "+n+" expense"+(n===1?"":"s"));
 }
- 
+
 /* ---------- Profit tab ---------- */
 function renderProfit(){
   const p=curr(); if(!p) return;
@@ -797,7 +867,7 @@ function renderProfit(){
   const exp=totalExpenses(p);
   const profit=inv-exp;
   const margin=inv>0?(profit/inv*100):null;
- 
+
   document.getElementById("s-invoice").textContent=money(inv);
   document.getElementById("s-expenses").textContent=money(exp);
   document.getElementById("s-expenses-sub").textContent=`${(p.expenses||[]).length} ${(p.expenses||[]).length===1?"entry":"entries"}`;
@@ -807,7 +877,7 @@ function renderProfit(){
   document.getElementById("s-margin").textContent = margin===null?"Set an invoice amount":`${margin.toFixed(1)}% margin`;
   if(!document.getElementById("invoice-input").matches(":focus"))
     document.getElementById("invoice-input").value=p.invoice?String(p.invoice):"";
- 
+
   // profit bar (expenses vs profit out of invoice)
   const bar=document.getElementById("profit-bar");
   if(inv<=0 && exp<=0){
@@ -830,7 +900,7 @@ function renderProfit(){
     document.getElementById("pb-left").textContent="Invoice "+money(inv);
     document.getElementById("pb-right").textContent="Over budget "+money(-profit);
   }
- 
+
   // category bars
   const byCat={};
   (p.expenses||[]).forEach(e=>{ const c=e.category||"Other"; byCat[c]=(byCat[c]||0)+(Number(e.amount)||0); });
@@ -843,7 +913,7 @@ function renderProfit(){
       <div class="bl-track"><div class="bl-fill" style="width:${(v/maxCat*100).toFixed(1)}%;background:linear-gradient(90deg,#c9a23f,#e7c97a)"></div></div>
       <div class="bl-val">${money(v)} · ${exp?Math.round(v/exp*100):0}%</div>
     </div>`).join(""):`<div style="color:var(--muted);font-size:13px">No expenses yet.</div>`;
- 
+
   // planned vs unplanned
   let planned=0,unplanned=0;
   (p.expenses||[]).forEach(e=>{ if(e.planned===false) unplanned+=Number(e.amount)||0; else planned+=Number(e.amount)||0; });
@@ -860,7 +930,7 @@ function renderProfit(){
     ? `⚠ <b style="color:var(--red)">${money(unplanned)}</b> (${overPct}% of spend) came from unplanned expenses.`
     : `✓ All expenses so far were planned.`;
 }
- 
+
 /* ---------- Home view toggle + Dashboard ---------- */
 function switchHome(v){
   const proj=v==="projects";
@@ -914,7 +984,7 @@ function renderDashboard(){
        <td class="r">${tMargin===null?'—':tMargin.toFixed(1)+'%'}</td><td></td></tr></tfoot>
    </table></div>`;
 }
- 
+
 /* ---------- Address autocomplete (Photon, GTA-biased, no key) ---------- */
 let acTimer=null, acCtrl=null;
 function acInput(inputId, listId){
@@ -954,7 +1024,7 @@ document.addEventListener("click",e=>{
   if(!e.target.closest(".ac-wrap"))
     document.querySelectorAll(".ac-list").forEach(l=>l.classList.remove("show"));
 });
- 
+
 /* ---------- Print / PDF: clean P&L statement ---------- */
 function catTotal(items){ return items.reduce((s,e)=>s+(Number(e.amount)||0),0); }
 function printStatement(){
@@ -1006,7 +1076,7 @@ function printStatement(){
      <span>Renovate for less. Sell for more.</span></div>`;
   window.print();
 }
- 
+
 /* ---------- CSV export / import ---------- */
 function csvCell(v){ v=String(v==null?"":v); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }
 function exportCSV(){
@@ -1076,13 +1146,48 @@ function importCSV(ev){
   };
   reader.readAsText(file);
 }
- 
+
 /* ---------- Keyboard ---------- */
 document.addEventListener("keydown",e=>{
   if(e.key==="Escape"){ closeModal("m-project"); closeModal("m-expense"); }
   if(e.key==="Enter" && document.getElementById("m-project").classList.contains("show")) createProject();
 });
- 
+
+/* ---------- Site access gate (shared PIN with estimator) ---------- */
+async function _sha256Hex(text){
+  const buf=new TextEncoder().encode(text);
+  const hash=await crypto.subtle.digest("SHA-256",buf);
+  return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+async function submitSiteAccess(){
+  const inp=document.getElementById("sgInput"), msg=document.getElementById("sgMsg");
+  const val=(inp&&inp.value||"").trim(); msg.textContent="";
+  if(!val){ msg.textContent="Please enter your access code."; return; }
+  const required=(window.SITE_ACCESS_HASH||"").trim();
+  if(!required){ document.documentElement.classList.remove("site-gate-locked"); return; }
+  let hash; try{ hash=await _sha256Hex(val); }
+  catch(e){ msg.textContent="Couldn't hash the code in this browser."; return; }
+  if(hash===required){
+    const exp=Date.now()+(window.SITE_ACCESS_TTL_DAYS||30)*24*60*60*1000;
+    try{ localStorage.setItem(window.SITE_ACCESS_KEY, JSON.stringify({hash,exp})); }catch(e){}
+    document.documentElement.classList.remove("site-gate-locked");
+    if(inp) inp.value="";
+  }else{
+    msg.textContent="Incorrect code. Try again or contact Mohamed Nada.";
+    if(inp){ inp.value=""; inp.focus(); }
+  }
+}
+function lockSite(){
+  if(!confirm("Lock the site? You'll need to re-enter the access code on this browser.")) return;
+  try{ localStorage.removeItem(window.SITE_ACCESS_KEY); }catch(e){}
+  location.reload();
+}
+document.addEventListener("DOMContentLoaded",()=>{
+  if(document.documentElement.classList.contains("site-gate-locked")){
+    const i=document.getElementById("sgInput"); if(i) i.focus();
+  }
+});
+
 /* ---------- Init ---------- */
 renderHome();
 handleIncomingLink();
