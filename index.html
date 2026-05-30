@@ -1686,6 +1686,7 @@
       </button>
       <button onclick="openClientEstimate()">Print / PDF</button>
       <button onclick="openEmailEstimateModal()">Email to Client</button>
+      <button onclick="openExpenseTracker()" title="Track renovation expenses & profit for this estimate">🧾 Expense Tracker</button>
       <input type="file" id="pdfImportInput" accept="application/pdf,.pdf" style="display:none;" onchange="onPdfFileChosen(event)">
     </div>
   </div>
@@ -7473,6 +7474,40 @@ function applyPdfImport(){
 /* ---------- Init ---------- */
 renderAll();
 initSupabase();
+</script>
+
+<script>
+/* ============================================================
+   Expense Tracker bridge (added)
+   Opens the linked expense tracker for the current estimate,
+   passing its id, name, address and total. Also supports the
+   reverse deep-link: /?estimate=<id> auto-loads that estimate.
+   ============================================================ */
+function openExpenseTracker(){
+  try{
+    if(typeof renderTotals === "function") renderTotals();      // sync inputs -> state
+    if(typeof state === "object" && state && !state._id && typeof saveEstimate === "function"){
+      saveEstimate();                                           // ensure a stable id to link to
+    }
+    var total = 0;
+    try{ total = Math.round(computeTotals().total) || 0; }catch(e){}
+    var q = new URLSearchParams({
+      est:     (state && state._id) || "",
+      name:    (state && (state.propName||"")).trim(),
+      address: (state && (state.propAddress||"")).trim(),
+      invoice: total || ""
+    });
+    window.location.href = "tracker/?" + q.toString();
+  }catch(e){
+    window.location.href = "tracker/";
+  }
+}
+window.addEventListener("load", function(){
+  try{
+    var id = new URLSearchParams(location.search).get("estimate");
+    if(id && typeof loadEstimate === "function"){ loadEstimate(id); }
+  }catch(e){}
+});
 </script>
 </body>
 </html>
