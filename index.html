@@ -1943,6 +1943,14 @@
   #etApp table.pr-table td{padding:7px 8px;border-bottom:1px solid #eee}
   #etApp table.pr-table tr.cat-row td{background:#f6f3ea;font-weight:700;border-bottom:1px solid #e6dcc0}
   #etApp table.pr-table tfoot td{border-top:2px solid #111;font-weight:700;font-size:13.5px;padding-top:10px}
+  /* Grand total row lives inside <tbody> (not <tfoot>) so it appears once at
+     the natural end of the list instead of being repeated as a footer at the
+     bottom of every printed page. Same look as the old tfoot for continuity. */
+  #etApp table.pr-table tr.pr-grand-total td{
+    border-top:2px solid #111; font-weight:700; font-size:13.5px;
+    padding-top:10px; background:#fff;
+    page-break-inside:avoid; break-inside:avoid;
+  }
   #etApp .pr-foot{margin-top:26px;border-top:1px solid #ddd;padding-top:12px;font-size:11px;color:#888;display:flex;justify-content:space-between}
   #etApp .pr-badge{display:inline-block;font-size:10px;padding:1px 7px;border-radius:10px;border:1px solid #ccc;color:#666}
   #etApp .pr-badge.un{border-color:#e0b4ad;color:#c0392b;background:#fcefed}
@@ -8769,8 +8777,7 @@ function printStatement(){
    <table class="pr-table">
      <thead><tr><th style="width:78px">Date</th><th>Description</th><th>Vendor</th>
        <th style="width:88px">Type</th><th class="r" style="width:108px">Amount</th></tr></thead>
-     <tbody>${rows||'<tr><td colspan="5" style="color:#999;padding:14px">No expenses logged.</td></tr>'}</tbody>
-     <tfoot><tr><td colspan="4">Total Expenses</td><td class="r">${money2(exp)}</td></tr></tfoot>
+     <tbody>${rows||'<tr><td colspan="5" style="color:#999;padding:14px">No expenses logged.</td></tr>'}${rows?`<tr class="pr-grand-total"><td colspan="4">Total Expenses</td><td class="r">${money2(exp)}</td></tr>`:""}</tbody>
    </table>
    <div style="font-size:12px;color:#555;margin-top:10px">
      Planned spend: <b>${money2(planned)}</b> &nbsp;·&nbsp; Unplanned spend: <b style="color:#c0392b">${money2(unplanned)}</b></div>
