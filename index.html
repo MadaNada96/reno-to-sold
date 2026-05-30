@@ -1762,6 +1762,48 @@
   #etApp .tab .pill{background:var(--panel-2);border:1px solid var(--line);border-radius:20px;font-size:11px;padding:1px 8px;color:var(--muted)}
 
   /* Expense tab */
+  /* Sticky running-total card — replaces the bottom tfoot total so the
+     summary stays visible regardless of how long the expense list grows. */
+  #etApp .exp-summary{
+    position:sticky; top:10px; z-index:5;
+    display:flex; flex-wrap:wrap; align-items:stretch; gap:0;
+    background:linear-gradient(180deg, #1a1a1a 0%, #141414 100%);
+    border:1px solid var(--line);
+    border-left:3px solid var(--gold);
+    border-radius:12px;
+    padding:13px 18px;
+    margin-bottom:16px;
+    box-shadow:0 6px 16px rgba(0,0,0,.4);
+  }
+  #etApp .exp-summary.hidden{ display:none; }
+  #etApp .exp-summary .es-card{
+    display:flex; flex-direction:column; gap:3px;
+    padding:2px 22px 2px 0;
+    min-width:130px;
+  }
+  #etApp .exp-summary .es-card + .es-card{
+    border-left:1px solid var(--line);
+    padding-left:22px;
+  }
+  #etApp .exp-summary .es-lbl{
+    font-size:10px; letter-spacing:.16em; text-transform:uppercase;
+    color:var(--muted); font-weight:700;
+  }
+  #etApp .exp-summary .es-val{
+    font-size:22px; font-weight:800;
+    font-variant-numeric:tabular-nums;
+    line-height:1.15;
+    color:var(--gold-soft);
+  }
+  #etApp .exp-summary .es-val.plain{ color:var(--text); }
+  #etApp .exp-summary .es-sub{ font-size:11px; color:var(--muted); margin-top:1px; }
+  @media (max-width:640px){
+    #etApp .exp-summary{ padding:12px 14px; }
+    #etApp .exp-summary .es-card{ min-width:0; padding:2px 14px 2px 0; }
+    #etApp .exp-summary .es-card + .es-card{ padding-left:14px; }
+    #etApp .exp-summary .es-val{ font-size:18px; }
+  }
+
   #etApp .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
   #etApp .toolbar .search{flex:1;min-width:180px}
   #etApp input, #etApp select, #etApp textarea{
@@ -2184,6 +2226,23 @@
 
   <!-- EXPENSES -->
   <div id="pane-exp">
+    <!-- Sticky running total — stays in view regardless of how long the
+         expense list gets. Replaces the previous bottom-of-table tfoot. -->
+    <div class="exp-summary hidden" id="exp-summary">
+      <div class="es-card">
+        <span class="es-lbl">Total Expenses</span>
+        <span class="es-val" id="es-total-val">$0.00</span>
+      </div>
+      <div class="es-card">
+        <span class="es-lbl">Entries</span>
+        <span class="es-val plain" id="es-entries-val">0</span>
+      </div>
+      <div class="es-card hidden" id="es-filt-card">
+        <span class="es-lbl">Filtered</span>
+        <span class="es-val plain" id="es-filt-val">$0.00</span>
+        <span class="es-sub" id="es-filt-sub">0 shown</span>
+      </div>
+    </div>
     <div class="toolbar">
       <input class="search" id="exp-search" placeholder="Search expenses, vendors, notes…" oninput="ET.renderExpenses()" />
       <select id="exp-filter-cat" style="max-width:200px" onchange="ET.renderExpenses()"></select>
@@ -8233,10 +8292,18 @@ function renderExpenses(){
   const body=document.getElementById("exp-body");
   const foot=document.getElementById("exp-foot");
   const emptyEl=document.getElementById("exp-empty");
-  if(!(p.expenses||[]).length){ body.innerHTML=""; foot.innerHTML=""; emptyEl.classList.remove("hidden");
-    document.querySelector("#pane-exp table").classList.add("hidden"); return; }
+  const summary=document.getElementById("exp-summary");
+  const allCount=(p.expenses||[]).length;
+  if(!allCount){
+    body.innerHTML=""; foot.innerHTML="";
+    emptyEl.classList.remove("hidden");
+    document.querySelector("#pane-exp table").classList.add("hidden");
+    if(summary) summary.classList.add("hidden");
+    return;
+  }
   document.querySelector("#pane-exp table").classList.remove("hidden");
   emptyEl.classList.add("hidden");
+  if(summary) summary.classList.remove("hidden");
   selectedExpenses.forEach(id=>{ if(!(p.expenses||[]).some(e=>e.id===id)) selectedExpenses.delete(id); });
   body.innerHTML=rows.map(e=>`<tr class="${selectedExpenses.has(e.id)?'sel':''}">
     <td><input type="checkbox" style="width:auto;cursor:pointer" ${selectedExpenses.has(e.id)?'checked':''} onclick="ET.toggleSelect('${e.id}',this)"></td>
@@ -8251,13 +8318,23 @@ function renderExpenses(){
       <button class="iconbtn danger" title="Delete" onclick="ET.deleteExpense('${e.id}')">🗑</button>
     </span></td>
   </tr>`).join("");
+  // Populate the sticky summary at the top — running total + entry count,
+  // and a Filtered card that appears only when a search/filter is active.
   const shownTotal=rows.reduce((s,e)=>s+(Number(e.amount)||0),0);
   const allTotal=totalExpenses(p);
-  foot.innerHTML=`<tr>
-    <td colspan="6" style="padding:13px 12px;color:var(--muted);font-weight:600">
-      ${rows.length} of ${(p.expenses||[]).length} expenses${rows.length!==(p.expenses||[]).length?` · filtered ${money2(shownTotal)}`:""}</td>
-    <td class="r amt" style="padding:13px 12px;font-size:15px">${money2(allTotal)}</td><td></td>
-  </tr>`;
+  document.getElementById("es-total-val").textContent = money2(allTotal);
+  document.getElementById("es-entries-val").textContent = allCount;
+  const filtCard = document.getElementById("es-filt-card");
+  if(rows.length !== allCount){
+    filtCard.classList.remove("hidden");
+    document.getElementById("es-filt-val").textContent = money2(shownTotal);
+    document.getElementById("es-filt-sub").textContent = rows.length + " of " + allCount + " shown";
+  } else {
+    filtCard.classList.add("hidden");
+  }
+  // The bottom tfoot used to carry the running total; it's now redundant
+  // and intentionally left empty so the visual weight sits at the top.
+  foot.innerHTML="";
   // sync select-all + bulk bar
   const selAll=document.getElementById("exp-selall");
   if(selAll) selAll.checked = rows.length>0 && rows.every(e=>selectedExpenses.has(e.id));
