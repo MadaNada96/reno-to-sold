@@ -926,62 +926,62 @@
     background:#ffffff;
     max-width:840px;
     margin:24px auto;
-    padding:50px 56px;
+    padding:36px 44px;
     box-shadow:0 6px 28px rgba(0,0,0,.18);
     color:#0a0a0a;
   }
   @media (max-width:720px){
-    .estimate-sheet{ padding:28px 22px; margin:14px; }
+    .estimate-sheet{ padding:22px 18px; margin:12px; }
   }
 
   /* Header — company block + estimate badge */
   .es-header{
     display:flex; justify-content:space-between; align-items:flex-start;
-    gap:24px; padding-bottom:22px;
-    border-bottom:3px solid #d4af6a;
-    margin-bottom:28px;
+    gap:20px; padding-bottom:14px;
+    border-bottom:2px solid #d4af6a;
+    margin-bottom:18px;
   }
   .es-h-left{ flex:1; min-width:0; }
-  .es-logo{ display:block; margin-bottom:12px; }
+  .es-logo{ display:block; margin-bottom:8px; }
   .es-logo img{
     display:block; width:auto;
-    max-width:260px; max-height:80px;
+    max-width:220px; max-height:64px;
     object-fit:contain; object-position:left center;
   }
   @media (max-width:720px){
-    .es-logo img{ max-width:220px; max-height:64px; }
+    .es-logo img{ max-width:180px; max-height:54px; }
   }
   .es-contact-block{
-    margin-top:6px; font-size:11px; color:#444; line-height:1.55;
+    margin-top:4px; font-size:10px; color:#444; line-height:1.45;
   }
   .es-contact-block .ln{ display:block; }
 
-  .es-h-right{ text-align:right; min-width:200px; }
+  .es-h-right{ text-align:right; min-width:180px; }
   .es-badge{
     display:inline-block;
-    font-size:26px; font-weight:800; letter-spacing:.20em;
+    font-size:22px; font-weight:800; letter-spacing:.20em;
     text-transform:uppercase; color:#a8853f;
-    border-bottom:2px solid #d4af6a; padding-bottom:4px;
+    border-bottom:2px solid #d4af6a; padding-bottom:3px;
   }
   .es-h-right .es-quote-meta{
-    margin-top:14px; font-size:11px; color:#444; line-height:1.7;
+    margin-top:10px; font-size:10px; color:#444; line-height:1.5;
   }
-  .es-h-right .es-quote-meta b{ color:#0a0a0a; display:inline-block; min-width:78px; text-transform:uppercase; letter-spacing:.10em; font-size:10px; }
+  .es-h-right .es-quote-meta b{ color:#0a0a0a; display:inline-block; min-width:70px; text-transform:uppercase; letter-spacing:.10em; font-size:9px; }
 
   /* Meta grid — BILL TO | PROJECT */
   .es-meta-grid{
-    display:grid; grid-template-columns:1fr 1fr; gap:30px;
-    margin-bottom:28px;
+    display:grid; grid-template-columns:1fr 1fr; gap:22px;
+    margin-bottom:18px;
   }
-  @media (max-width:720px){ .es-meta-grid{ grid-template-columns:1fr; gap:18px; } }
+  @media (max-width:720px){ .es-meta-grid{ grid-template-columns:1fr; gap:14px; } }
   .es-meta-block .lbl{
-    font-size:10px; letter-spacing:.22em; text-transform:uppercase;
-    color:#a8853f; font-weight:700; margin-bottom:6px;
+    font-size:9px; letter-spacing:.22em; text-transform:uppercase;
+    color:#a8853f; font-weight:700; margin-bottom:4px;
   }
   .es-meta-block .body{
-    font-size:13px; line-height:1.55; color:#1a1a1a;
+    font-size:11.5px; line-height:1.45; color:#1a1a1a;
   }
-  .es-meta-block .body .name{ font-weight:700; font-size:14px; }
+  .es-meta-block .body .name{ font-weight:700; font-size:12.5px; }
 
   /* Line item table */
   .es-table{ width:100%; border-collapse:collapse; margin-bottom:14px; }
@@ -1026,7 +1026,7 @@
      bulleted summary of work + one combined labour+material total.
      ============================================================ */
   .es-category-block{
-    margin-bottom:18px;
+    margin-bottom:11px;
     border:1px solid #e6dec7;
     background:#ffffff;
     page-break-inside:avoid;
@@ -1035,82 +1035,82 @@
   .es-category-head{
     background:#0a0a0a;
     color:#ffffff;
-    padding:11px 14px;
-    font-size:12.5px; font-weight:800;
+    padding:8px 12px;
+    font-size:11px; font-weight:800;
     letter-spacing:.18em; text-transform:uppercase;
     border-bottom:2px solid #d4af6a;
   }
   .es-category-body{
-    padding:14px 16px 12px;
+    padding:10px 13px 8px;
   }
   .es-bullet-list{
     list-style:none; margin:0; padding:0;
   }
   .es-bullet-list li{
     position:relative;
-    padding-left:16px;
-    font-size:12px; line-height:1.55;
+    padding-left:13px;
+    font-size:10.5px; line-height:1.4;
     color:#1a1a1a;
-    margin-bottom:5px;
+    margin-bottom:3px;
   }
   .es-bullet-list li:last-child{ margin-bottom:0; }
   .es-bullet-list li::before{
     content:"•"; position:absolute; left:0; top:-1px;
-    color:#a8853f; font-weight:900; font-size:15px; line-height:1.4;
+    color:#a8853f; font-weight:900; font-size:13px; line-height:1.4;
   }
   .es-cat-total{
-    margin-top:12px; padding-top:10px;
+    margin-top:8px; padding-top:6px;
     border-top:1px solid #e6dec7;
     display:flex; justify-content:space-between; align-items:baseline;
-    gap:12px;
+    gap:10px;
   }
   .es-cat-total .lbl{
-    font-size:10.5px; letter-spacing:.18em; text-transform:uppercase;
+    font-size:9.5px; letter-spacing:.18em; text-transform:uppercase;
     color:#555; font-weight:700;
   }
   .es-cat-total .v{
-    font-size:15px; font-weight:800;
+    font-size:13px; font-weight:800;
     color:#a8853f;
     font-variant-numeric:tabular-nums;
   }
   /* Sub-block inside a category — used for individual bathrooms
      and main vs basement kitchens. Cream background + gold accent. */
   .es-subblock{
-    margin-top:12px; padding:11px 13px;
+    margin-top:8px; padding:8px 10px;
     background:#fbf5e6;
     border-left:3px solid #d4af6a;
   }
   .es-subblock:first-child{ margin-top:0; }
-  .es-subblock + .es-subblock{ margin-top:12px; }
+  .es-subblock + .es-subblock{ margin-top:8px; }
   .es-subblock-title{
-    font-size:11.5px; font-weight:800; letter-spacing:.14em;
+    font-size:10px; font-weight:800; letter-spacing:.14em;
     text-transform:uppercase; color:#0a0a0a;
-    margin-bottom:7px;
+    margin-bottom:5px;
   }
   .es-subblock .es-cat-total{
-    margin-top:8px; padding-top:7px;
+    margin-top:6px; padding-top:5px;
     border-top:1px dashed #d4af6a;
   }
-  .es-subblock .es-cat-total .v{ font-size:14px; }
+  .es-subblock .es-cat-total .v{ font-size:12px; }
 
   /* Totals block — the Quote Summary header + totals box ALWAYS stay together.
      `page-break-inside:avoid` here is the hard rule that prevents the table
      from being split across pages mid-summary. */
   .es-totals-wrap{
-    margin:30px 0 30px;
+    margin:18px 0 18px;
     page-break-inside:avoid;
     break-inside:avoid;
   }
   .es-totals-title{
-    font-size:11px; letter-spacing:.22em; text-transform:uppercase;
+    font-size:10px; letter-spacing:.22em; text-transform:uppercase;
     font-weight:800; color:#fff; background:#0a0a0a;
-    padding:11px 14px; margin-bottom:0;
+    padding:9px 12px; margin-bottom:0;
     border-bottom:2px solid #d4af6a;
   }
   .es-totals{
     display:flex; justify-content:flex-start;
     background:#faf6ec;
-    padding:18px 18px 8px;
+    padding:14px 14px 6px;
     border:1px solid #e6dec7;
     border-top:none;
   }
@@ -1119,16 +1119,16 @@
   }
   .es-totals-box .row{
     display:flex; justify-content:space-between; align-items:baseline;
-    padding:7px 0; font-size:13px;
+    padding:5px 0; font-size:11.5px;
     border-bottom:1px dotted #ddd;
   }
   .es-totals-box .row .v{ font-variant-numeric:tabular-nums; }
   .es-totals-box .row.discount .v{ color:#a32a2a; }
   .es-totals-box .row.grand{
     border-top:2px solid #0a0a0a;
-    margin:8px -14px 0;
-    padding:14px 14px 14px;
-    font-size:18px; font-weight:800; letter-spacing:.04em;
+    margin:6px -12px 0;
+    padding:11px 12px 11px;
+    font-size:15px; font-weight:800; letter-spacing:.03em;
     background:#fbf5e6;
     border-bottom:3px solid #d4af6a;
   }
@@ -1139,22 +1139,22 @@
      a percentage, description, and dollar amount. Marked page-break-inside:avoid
      on each row so individual milestones never split across pages. */
   .es-payments-wrap{
-    margin:0 0 30px;
+    margin:0 0 18px;
     page-break-inside:avoid;
     break-inside:avoid;
   }
   .es-payments-title{
-    font-size:11px; letter-spacing:.22em; text-transform:uppercase;
+    font-size:10px; letter-spacing:.22em; text-transform:uppercase;
     font-weight:800; color:#fff; background:#0a0a0a;
-    padding:11px 14px;
+    padding:9px 12px;
     border-bottom:2px solid #d4af6a;
   }
   .es-payments-intro{
     background:#fffaf0;
-    padding:11px 14px;
+    padding:9px 12px;
     border:1px solid #e6dec7;
     border-top:none; border-bottom:none;
-    font-size:11px; color:#444; line-height:1.5;
+    font-size:10px; color:#444; line-height:1.4;
   }
   .es-payments-table{
     width:100%; border-collapse:collapse;
@@ -1164,62 +1164,62 @@
   }
   .es-payments-table tr{ page-break-inside:avoid; break-inside:avoid; }
   .es-payments-table td{
-    padding:12px 14px;
+    padding:9px 11px;
     border-bottom:1px solid #efe7d0;
     vertical-align:top;
   }
   .es-payments-table tr:last-child td{ border-bottom:none; }
   .es-payments-table .pm-num{
-    width:42px;
+    width:36px;
     font-family:'Cormorant Garamond', Georgia, serif;
-    font-size:28px; font-weight:700;
+    font-size:22px; font-weight:700;
     color:#a8853f; line-height:1;
-    padding-top:10px;
+    padding-top:8px;
   }
   .es-payments-table .pm-pct{
-    width:60px;
-    font-size:17px; font-weight:800;
+    width:52px;
+    font-size:14px; font-weight:800;
     color:#0a0a0a;
-    padding-top:14px;
+    padding-top:11px;
     font-variant-numeric:tabular-nums;
   }
   .es-payments-table .pm-body .pm-milestone{
-    font-size:11.5px; font-weight:800; letter-spacing:.14em;
+    font-size:10px; font-weight:800; letter-spacing:.14em;
     text-transform:uppercase; color:#0a0a0a;
-    margin-bottom:4px;
+    margin-bottom:3px;
   }
   .es-payments-table .pm-body .pm-desc{
-    font-size:11px; line-height:1.5; color:#444;
+    font-size:9.5px; line-height:1.4; color:#444;
   }
   .es-payments-table .pm-amount{
-    width:110px; text-align:right;
-    font-size:14px; font-weight:700; color:#0a0a0a;
-    font-variant-numeric:tabular-nums; padding-top:14px;
+    width:100px; text-align:right;
+    font-size:12px; font-weight:700; color:#0a0a0a;
+    font-variant-numeric:tabular-nums; padding-top:11px;
     white-space:nowrap;
   }
   .es-payments-table tr.pm-total td{
     background:#fbf5e6;
     color:#0a0a0a;
-    font-size:12px; font-weight:800; letter-spacing:.14em; text-transform:uppercase;
-    padding:13px 14px;
+    font-size:10.5px; font-weight:800; letter-spacing:.14em; text-transform:uppercase;
+    padding:10px 12px;
     border-top:2px solid #d4af6a; border-bottom:3px solid #d4af6a;
   }
   .es-payments-table tr.pm-total .pm-amount{
-    color:#a8853f; font-size:18px; letter-spacing:.02em;
+    color:#a8853f; font-size:15px; letter-spacing:.02em;
   }
   .es-payments-fineprint{
-    margin-top:8px;
-    font-size:10px; color:#666; line-height:1.5; font-style:italic;
+    margin-top:6px;
+    font-size:9px; color:#666; line-height:1.4; font-style:italic;
   }
 
   /* Savings card — eye-catching black/gold box that shouts the discount.
      Only rendered when there's an active discount. Sits directly under
      the Quote Summary; marked page-break-inside:avoid so it never splits. */
   .es-savings-card{
-    margin:18px 0 30px;
+    margin:12px 0 18px;
     background:#0a0a0a;
-    border:3px solid #d4af6a;
-    padding:22px 26px;
+    border:2px solid #d4af6a;
+    padding:14px 20px;
     text-align:center;
     color:#fff;
     box-shadow:0 0 0 1px #d4af6a inset;
@@ -1228,19 +1228,19 @@
     position:relative;
   }
   .es-savings-card .es-sav-eyebrow{
-    font-size:11px; letter-spacing:.24em; text-transform:uppercase;
+    font-size:9.5px; letter-spacing:.24em; text-transform:uppercase;
     font-weight:700; color:#e8c989;
-    margin:0 0 4px;
+    margin:0 0 3px;
   }
   .es-savings-card .es-sav-amount{
     font-family:'Cormorant Garamond', Georgia, 'Times New Roman', serif;
-    font-size:46px; line-height:1; font-weight:700;
+    font-size:34px; line-height:1; font-weight:700;
     color:#e8c989; letter-spacing:.02em;
-    margin:6px 0 10px;
+    margin:4px 0 6px;
     text-shadow:0 0 18px rgba(232,201,137,.35), 0 0 4px rgba(212,175,106,.5);
   }
   .es-savings-card .es-sav-tag{
-    font-size:12px; color:#f5f1e6; letter-spacing:.08em; font-weight:500;
+    font-size:10.5px; color:#f5f1e6; letter-spacing:.06em; font-weight:500;
   }
   .es-savings-card .es-sav-tag b{ color:#e8c989; font-weight:700; }
 
@@ -1265,75 +1265,75 @@
     height:0; margin:0; padding:0;
   }
   .es-disclaimer-page{
-    margin-top:48px;
+    margin-top:32px;
     page-break-inside:avoid;
     break-inside:avoid;
   }
 
   /* Exclusive-listing disclaimer */
   .es-disclaimer{
-    border:3px double #a8853f;
+    border:2px double #a8853f;
     background:#fffaf0;
-    padding:0 24px 18px;
-    margin-bottom:30px;
+    padding:0 18px 12px;
+    margin-bottom:18px;
     box-shadow:0 1px 0 #d4af6a inset, 0 -1px 0 #d4af6a inset;
   }
   /* Title bar — prominent, outlined */
   .es-disclaimer .es-disc-title{
     background:#0a0a0a;
     color:#e8c989;
-    margin:0 -24px 16px;
-    padding:13px 20px 13px;
-    border-bottom:3px solid #d4af6a;
-    display:flex; align-items:center; gap:10px;
-    font-size:13px; letter-spacing:.16em; text-transform:uppercase;
+    margin:0 -18px 10px;
+    padding:10px 16px 10px;
+    border-bottom:2px solid #d4af6a;
+    display:flex; align-items:center; gap:8px;
+    font-size:11px; letter-spacing:.16em; text-transform:uppercase;
     font-weight:800;
   }
   .es-disclaimer .es-disc-title::before{
     content:"!"; display:inline-flex; align-items:center; justify-content:center;
-    width:22px; height:22px; border-radius:50%;
+    width:18px; height:18px; border-radius:50%;
     background:#d4af6a; color:#0a0a0a;
-    font-size:14px; font-weight:900; flex:0 0 auto;
+    font-size:12px; font-weight:900; flex:0 0 auto;
   }
   .es-disclaimer .es-disc-title-text{ flex:1; }
   .es-disclaimer p{
-    margin:0 0 7px; font-size:11.5px; line-height:1.5; color:#1a1a1a;
+    margin:0 0 5px; font-size:10px; line-height:1.4; color:#1a1a1a;
   }
   .es-disclaimer p:last-child{ margin-bottom:0; }
   .es-disclaimer .es-disc-ack{
-    font-size:11px; color:#1a1a1a; font-style:italic; margin-top:10px;
-    padding-top:8px; border-top:1px dashed #d4af6a;
+    font-size:9.5px; color:#1a1a1a; font-style:italic; margin-top:7px;
+    padding-top:6px; border-top:1px dashed #d4af6a;
   }
 
   /* Signatures — compact so they always fit alongside the disclaimer */
   .es-signatures{
-    display:grid; grid-template-columns:1fr 1fr; gap:18px 40px;
-    margin-top:10px; page-break-inside:avoid;
+    display:grid; grid-template-columns:1fr 1fr; gap:12px 30px;
+    margin-top:8px; page-break-inside:avoid;
   }
-  .es-signatures-multi{ row-gap:14px; }
-  @media (max-width:720px){ .es-signatures{ grid-template-columns:1fr; gap:30px; } }
-  .es-sig{ display:flex; gap:14px; align-items:flex-end; }
+  .es-signatures-multi{ row-gap:10px; }
+  @media (max-width:720px){ .es-signatures{ grid-template-columns:1fr; gap:22px; } }
+  .es-sig{ display:flex; gap:12px; align-items:flex-end; }
   .es-sig > .sig-col{ flex:1 1 0; min-width:0; }
-  .es-sig > .sig-col.sig-col-date{ flex:0 0 110px; }
+  .es-sig > .sig-col.sig-col-date{ flex:0 0 96px; }
   .es-sig .sig-line{
-    border-bottom:1px solid #0a0a0a; height:26px;
+    border-bottom:1px solid #0a0a0a; height:22px;
   }
   .es-sig .sig-label{
-    font-size:9.5px; letter-spacing:.16em; text-transform:uppercase;
-    color:#555; margin-top:4px; font-weight:700;
+    font-size:8.5px; letter-spacing:.16em; text-transform:uppercase;
+    color:#555; margin-top:3px; font-weight:700;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   }
   @media (max-width:720px){
     .es-sig{ flex-wrap:wrap; }
-    .es-sig > .sig-col.sig-col-date{ flex:1 1 100%; margin-top:6px; }
+    .es-sig > .sig-col.sig-col-date{ flex:1 1 100%; margin-top:5px; }
   }
 
   /* Footer note */
   .es-footer{
-    margin-top:34px; padding-top:18px;
+    margin-top:22px; padding-top:12px;
     border-top:1px solid #ddd;
     text-align:center;
-    font-size:10px; letter-spacing:.18em; text-transform:uppercase; color:#888;
+    font-size:9px; letter-spacing:.18em; text-transform:uppercase; color:#888;
   }
   .es-empty{
     padding:30px; text-align:center; font-size:13px; color:#666;
@@ -5077,7 +5077,7 @@ function printEstimateViaIframe(){
     .es-disclaimer, .es-signatures, .es-sig {
       page-break-inside:avoid !important; break-inside:avoid !important;
     }
-    .es-logo img { max-height:70px !important; }
+    .es-logo img { max-height:58px !important; }
   `);
 }
 
