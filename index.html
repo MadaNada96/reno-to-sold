@@ -2132,6 +2132,7 @@
     </div>
     <div class="spacer"></div>
     <a href="javascript:void(0)" onclick="ET.backToEstimator()" class="btn" style="text-decoration:none" title="Back to the Reno to Sold estimator">← Estimator</a>
+    <button class="btn" onclick="ET.goHome()" title="View all saved tracker projects">🗂 Saved</button>
     <button class="btn gold" onclick="ET.openNewProject()">＋ New Project</button>
   </div>
 </header>
@@ -2837,6 +2838,21 @@ function saveEstimate(){
   flash("Saved estimate: " + name);
   // Mirror to cloud if signed in (fire-and-forget — local save is the source of truth offline)
   if(currentUser && supa){ upsertCloudEstimate(entry); }
+  // Keep any linked Expense Tracker project in sync with the estimate's
+  // name / address / invoice. No-op if the user hasn't created a linked
+  // tracker yet — does NOT auto-create one here, only updates existing.
+  try{
+    if(window.ET && ET.syncLinkedFromEstimate){
+      let total = 0;
+      try{ total = Math.round(computeTotals().total) || 0; }catch(e){}
+      ET.syncLinkedFromEstimate({
+        est:     id,
+        name:    name,
+        address: (state.propAddress || "").trim(),
+        invoice: total || ""
+      });
+    }
+  }catch(e){}
 }
 function loadEstimate(id){
   const list = loadSavedList();
@@ -7984,18 +8000,33 @@ initSupabase();
 </script>
 
 <script>
-/* ===== Expense Tracker button -> in-page view ===== */
+/* ===== Expense Tracker button -> in-page view =====
+   Behaviour:
+   • If the current estimate has already been saved (state._id present),
+     open or silently create its linked tracker project.
+   • If the estimator is blank / unsaved, just show the tracker's home view
+     so the user can pick or create a standalone (non-linked) project.
+   We never auto-save a blank estimate here — that was the old behaviour
+   that caused phantom "Untitled property" entries in the estimator Saved list. */
 function openExpenseTracker(){
   try{
-    if(typeof renderTotals==="function") renderTotals();
-    if(typeof state==="object" && state && !state._id && typeof saveEstimate==="function"){ saveEstimate(); }
-    var total=0; try{ total=Math.round(computeTotals().total)||0; }catch(e){}
+    if(typeof renderTotals === "function") renderTotals();
+    const estId = (typeof state === "object" && state && state._id) || "";
+    if(!estId){
+      // Blank/unsaved estimate → land on the tracker home; the user can
+      // create a standalone tracker project (or save the estimate first
+      // if they want it linked).
+      if(window.ET && ET.show) ET.show();
+      return;
+    }
+    let total = 0;
+    try{ total = Math.round(computeTotals().total) || 0; }catch(e){}
     if(window.ET && ET.openFromEstimator){
       ET.openFromEstimator({
-        est:(state&&state._id)||"",
-        name:(state&&(state.propName||"")).trim(),
-        address:(state&&(state.propAddress||"")).trim(),
-        invoice: total||""
+        est: estId,
+        name: ((state && state.propName) || "").trim(),
+        address: ((state && state.propAddress) || "").trim(),
+        invoice: total || ""
       });
     }
   }catch(e){ if(window.ET && ET.show) ET.show(); }
@@ -8657,16 +8688,47 @@ function backToEstimator(){
 }
 function openFromEstimator(ctx){
   show();
-  var est=ctx&&ctx.est;
+  var est = ctx && ctx.est;
   if(!est){ goHome(); return; }
-  var existing=DB.projects.find(function(x){return x.linkedEstimateId===est;});
-  if(existing){ openProject(existing.id); toast("Opened expense tracker for this estimate"); return; }
-  openNewProject();
-  pendingLinkEstimateId=est;
-  document.querySelector("#m-project .modal-head h3").textContent="New Expense Tracker · linked to estimate";
-  document.getElementById("np-name").value=(ctx.name||("Estimate "+est));
-  document.getElementById("np-addr").value=(ctx.address||"");
-  document.getElementById("np-invoice").value=ctx.invoice?String(parseNum(ctx.invoice)):"";
+  var existing = DB.projects.find(function(x){ return x.linkedEstimateId === est; });
+  if(existing){
+    // Sync the linked tracker's meta from the estimate so it always reflects
+    // the latest name / address / invoice (in case the estimate changed).
+    if(ctx.name)    existing.name    = ctx.name;
+    if(ctx.address) existing.address = ctx.address;
+    if(ctx.invoice !== "" && ctx.invoice != null) existing.invoice = parseNum(ctx.invoice);
+    existing.updatedAt = Date.now();
+    save();
+    openProject(existing.id);
+    return;
+  }
+  // No linked tracker yet → create it silently (no modal) and open it.
+  // This is the "automatically save synonymously with the estimate" path.
+  var p = {
+    id: uid(),
+    name: (ctx.name || ("Estimate " + est)),
+    address: (ctx.address || ""),
+    invoice: (ctx.invoice !== "" && ctx.invoice != null) ? parseNum(ctx.invoice) : 0,
+    expenses: [],
+    linkedEstimateId: est,
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  };
+  DB.projects.push(p);
+  save();
+  openProject(p.id);
+}
+/* Called by the estimator's saveEstimate() so any linked tracker project
+   stays in step with the estimate's latest name / address / invoice. */
+function syncLinkedFromEstimate(ctx){
+  if(!ctx || !ctx.est) return;
+  var p = DB.projects.find(function(x){ return x.linkedEstimateId === ctx.est; });
+  if(!p) return;
+  if(ctx.name)    p.name    = ctx.name;
+  if(ctx.address) p.address = ctx.address;
+  if(ctx.invoice !== "" && ctx.invoice != null) p.invoice = parseNum(ctx.invoice);
+  p.updatedAt = Date.now();
+  save();
 }
 function openEstimate(id){
   backToEstimator();
@@ -8679,7 +8741,8 @@ window.ET={ goHome:goHome, openNewProject:openNewProject, switchHome:switchHome,
   acPick:acPick, printStatement:printStatement, closeModal:closeModal, createProject:createProject,
   setPlanned:setPlanned, saveExpense:saveExpense, deleteExpense:deleteExpense, openProject:openProject,
   deleteProject:deleteProject, show:show, backToEstimator:backToEstimator,
-  openFromEstimator:openFromEstimator, openEstimate:openEstimate };
+  openFromEstimator:openFromEstimator, syncLinkedFromEstimate:syncLinkedFromEstimate,
+  openEstimate:openEstimate };
 
 })();
 </script>
