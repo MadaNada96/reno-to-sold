@@ -5089,7 +5089,7 @@ function renderContractorSheet(){
       <div class="cell"><strong>Address</strong>${escapeHtml(addr)}</div>
       <div class="cell"><strong>Total property sqft</strong>${escapeHtml(String(sqft))}</div>
       <div class="cell"><strong>Prepared by</strong>RENO TO SOLD INC.</div>
-      <div class="cell"><strong>Contractor</strong><input type="text" class="bid-input" id="bidContractorField" value="${escapeHtml(_bidContractorFieldValue())}" placeholder="Company / Contact"></div>
+      <div class="cell"><strong>Contractor</strong><input type="text" class="bid-input" id="bidContractorField" value="${escapeHtml(_bidContractorFieldValue())}"></div>
     </div>
     <p class="intro-note">Please review the scope below, fill in your labour, material &amp; section totals, then return this sheet. All quantities are estimated &mdash; verify on site before starting, any discrepancies will result in price adjustment.</p>
   `;
@@ -5269,7 +5269,7 @@ function renderContractorSheet(){
           ${rows}
           <div class="summary-row total"><span>Total Bid (before HST)</span><input type="text" class="bid-input" placeholder="$"></div>
           <div class="summary-row timeline"><span>Total renovation timeline</span><input type="text" class="bid-input"></div>
-          <div class="summary-row timeline"><span>Firm start date</span><input type="date" class="bid-input"></div>
+          <div class="summary-row timeline"><span>Firm start date</span><input type="text" class="bid-input"></div>
         </div>
       </div>
     `;
