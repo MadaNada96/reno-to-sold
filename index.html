@@ -7071,6 +7071,7 @@ function localToCloud(e){
     client_id: e.id,
     name: e.name,
     state: e.state,
+    type: "estimate",
     updated_at: e.savedAt || new Date().toISOString()
   };
 }
@@ -7082,6 +7083,7 @@ async function upsertCloudEstimate(entry){
       .select("id")
       .eq("user_id", currentUser.id)
       .eq("client_id", entry.id)
+      .eq("type", "estimate")
       .maybeSingle();
     const payload = localToCloud(entry);
     if(existing){
@@ -7101,7 +7103,8 @@ async function deleteCloudEstimate(clientId){
   try{
     await supa.from("estimates").delete()
       .eq("user_id", currentUser.id)
-      .eq("client_id", clientId);
+      .eq("client_id", clientId)
+      .eq("type", "estimate");
   }catch(e){
     console.error("Cloud delete failed:", e);
   }
@@ -7188,10 +7191,14 @@ async function bootstrapCloudSync(showMigratePrompt){
     localStorage.setItem(migrateKey, "1");
   }
 
-  // Pull cloud copy, merge with local (newer wins per client_id)
+  // Pull cloud copy, merge with local (newer wins per client_id).
+  // Filter by type='estimate' so tracker rows (type='tracker' or
+  // 'tracker_meta') in the same table don't leak into the estimator's
+  // Saved list. The tracker sync runs separately at the end of this function.
   const { data: cloud, error } = await supa.from("estimates")
     .select("client_id,name,state,updated_at")
-    .eq("user_id", currentUser.id);
+    .eq("user_id", currentUser.id)
+    .eq("type", "estimate");
   if(error){ console.error(error); return; }
 
   const cloudById = {};
@@ -7225,6 +7232,17 @@ async function bootstrapCloudSync(showMigratePrompt){
   if(document.getElementById("savedModal").classList.contains("show")){
     renderSavedList();
   }
+
+  // Sync the Expense Tracker — it lives in the SAME estimates table,
+  // distinguished by type='tracker' (projects) and type='tracker_meta'
+  // (e.g. customCategories). The tracker exposes its own bootstrap
+  // function so the IIFE owns the project-shape logic; we just hand
+  // it our auth context and let it pull/merge/push.
+  try{
+    if(window.ET && typeof ET.bootstrapCloudSync === "function"){
+      await ET.bootstrapCloudSync({ user: currentUser, supa: supa }, showMigratePrompt);
+    }
+  }catch(e){ console.error("Tracker cloud sync failed:", e); }
 }
 
 /* ---------- PDF Floor Plan Import ----------
@@ -8171,8 +8189,206 @@ function load(){
   }catch(e){}
   return {version:1, projects:[], customCategories:[]};
 }
-function save(){ localStorage.setItem(STORE_KEY, JSON.stringify(DB)); }
+/* Persist DB to localStorage; optionally push a single changed project to
+   the cloud (fire-and-forget). Most callers pass `curr()` or the project
+   they just mutated so it syncs across devices on the next sign-in. */
+function save(projectToPush){
+  localStorage.setItem(STORE_KEY, JSON.stringify(DB));
+  if(projectToPush && cloudReady()){
+    upsertCloudProject(projectToPush);
+  }
+}
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+
+/* ============================================================
+   Cloud sync — Expense Tracker projects + custom categories.
+   Reuses the same Supabase `estimates` table the renovation
+   estimator uses, distinguished by a `type` column:
+     'tracker'       → an Expense Tracker project
+     'tracker_meta'  → tracker-level metadata (customCategories)
+   The estimator's bootstrap calls ET.bootstrapCloudSync(ctx)
+   on sign-in; we pull rows, merge with local (newer wins per
+   client_id), and push back if local is fresher. New / edited
+   projects are pushed via save(p) — see the save() wrapper.
+   ============================================================ */
+let cloudCtx = null;
+const CUSTOM_CATS_CLIENT_ID = "__custom_categories__";
+function cloudReady(){ return !!(cloudCtx && cloudCtx.user && cloudCtx.supa); }
+
+function cloudProjToLocal(row){
+  const s = (row && row.state) || {};
+  const cT = new Date(row.updated_at).getTime();
+  return {
+    id: row.client_id,
+    name:    s.name    || row.name || "",
+    address: s.address || "",
+    invoice: Number(s.invoice) || 0,
+    expenses: Array.isArray(s.expenses) ? s.expenses : [],
+    linkedEstimateId: s.linkedEstimateId || null,
+    createdAt: s.createdAt || cT,
+    updatedAt: cT
+  };
+}
+function localProjToCloud(p){
+  return {
+    user_id: cloudCtx.user.id,
+    client_id: p.id,
+    name: p.name || "Untitled project",
+    type: "tracker",
+    state: {
+      name:    p.name    || "",
+      address: p.address || "",
+      invoice: Number(p.invoice) || 0,
+      expenses: Array.isArray(p.expenses) ? p.expenses : [],
+      linkedEstimateId: p.linkedEstimateId || null,
+      createdAt: p.createdAt || Date.now()
+    },
+    updated_at: new Date(p.updatedAt || Date.now()).toISOString()
+  };
+}
+
+async function upsertCloudProject(p){
+  if(!cloudReady() || !p || !p.id) return;
+  try{
+    const { data: existing } = await cloudCtx.supa.from("estimates")
+      .select("id")
+      .eq("user_id", cloudCtx.user.id)
+      .eq("client_id", p.id)
+      .eq("type", "tracker")
+      .maybeSingle();
+    const payload = localProjToCloud(p);
+    if(existing){
+      const { error } = await cloudCtx.supa.from("estimates").update(payload).eq("id", existing.id);
+      if(error) throw error;
+    } else {
+      const { error } = await cloudCtx.supa.from("estimates").insert(payload);
+      if(error) throw error;
+    }
+  }catch(e){ console.error("Tracker cloud upsert failed:", e); }
+}
+async function deleteCloudProject(clientId){
+  if(!cloudReady() || !clientId) return;
+  try{
+    await cloudCtx.supa.from("estimates").delete()
+      .eq("user_id", cloudCtx.user.id)
+      .eq("client_id", clientId)
+      .eq("type", "tracker");
+  }catch(e){ console.error("Tracker cloud delete failed:", e); }
+}
+async function upsertCloudCustomCategories(){
+  if(!cloudReady()) return;
+  try{
+    const { data: existing } = await cloudCtx.supa.from("estimates")
+      .select("id")
+      .eq("user_id", cloudCtx.user.id)
+      .eq("client_id", CUSTOM_CATS_CLIENT_ID)
+      .eq("type", "tracker_meta")
+      .maybeSingle();
+    const payload = {
+      user_id: cloudCtx.user.id,
+      client_id: CUSTOM_CATS_CLIENT_ID,
+      name: "Custom Categories",
+      type: "tracker_meta",
+      state: { categories: DB.customCategories || [] },
+      updated_at: new Date().toISOString()
+    };
+    if(existing){
+      await cloudCtx.supa.from("estimates").update(payload).eq("id", existing.id);
+    } else {
+      await cloudCtx.supa.from("estimates").insert(payload);
+    }
+  }catch(e){ console.error("Custom categories cloud upsert failed:", e); }
+}
+
+/* Called by the estimator's bootstrapCloudSync after estimate sync finishes.
+   Same auth context + same Supabase table — different `type` filter. */
+async function bootstrapCloudSync(ctx, showMigratePrompt){
+  cloudCtx = ctx || null;
+  if(!cloudReady()) return;
+  const migrateKey = "rts_cloud_migrated_" + cloudCtx.user.id;
+
+  // First-time-on-this-device prompt — offer to push local projects up
+  if(showMigratePrompt && !localStorage.getItem(migrateKey) && (DB.projects||[]).length > 0){
+    const n = DB.projects.length;
+    const ok = confirm("You have " + n + " local Expense Tracker project" + (n===1?"":"s")
+      + " on this device. Upload to your account so they sync across all your devices?");
+    if(ok){
+      for(const p of DB.projects){ await upsertCloudProject(p); }
+      if((DB.customCategories||[]).length) await upsertCloudCustomCategories();
+      toast("Uploaded " + n + " tracker project" + (n===1?"":"s"));
+    }
+    localStorage.setItem(migrateKey, "1");
+  }
+
+  // Pull tracker projects + tracker_meta from the cloud
+  const { data: cloudRows, error } = await cloudCtx.supa.from("estimates")
+    .select("client_id,name,state,updated_at,type")
+    .eq("user_id", cloudCtx.user.id)
+    .in("type", ["tracker","tracker_meta"]);
+  if(error){ console.error("Tracker pull failed:", error); return; }
+
+  const cloudProjects = (cloudRows||[]).filter(r => r.type === "tracker");
+  const metaRow = (cloudRows||[]).find(r => r.type === "tracker_meta" && r.client_id === CUSTOM_CATS_CLIENT_ID);
+
+  // Merge projects — newer-by-updated_at wins per client_id.
+  const cloudById = {};
+  cloudProjects.forEach(r => { if(r.client_id) cloudById[r.client_id] = r; });
+  const localById = {};
+  (DB.projects||[]).forEach(p => { localById[p.id] = p; });
+
+  const merged = [];
+  const ids = new Set([...Object.keys(cloudById), ...Object.keys(localById)]);
+  for(const id of ids){
+    const c = cloudById[id], l = localById[id];
+    if(c && l){
+      const cT = new Date(c.updated_at).getTime();
+      const lT = l.updatedAt || 0;
+      if(lT > cT){ await upsertCloudProject(l); merged.push(l); }
+      else        { merged.push(cloudProjToLocal(c)); }
+    } else if(c){
+      merged.push(cloudProjToLocal(c));
+    } else if(l){
+      await upsertCloudProject(l);
+      merged.push(l);
+    }
+  }
+  DB.projects = merged;
+
+  // Merge customCategories (union of cloud + local, case-insensitive dedup,
+  // excluding anything already in the standard set). Push back if local had
+  // additions not yet in the cloud.
+  const std = new Set(CATEGORIES.map(c => c.toLowerCase()));
+  const cloudCats = (metaRow && metaRow.state && Array.isArray(metaRow.state.categories))
+    ? metaRow.state.categories : [];
+  const seen = new Set();
+  const mergedCats = [];
+  [...cloudCats, ...(DB.customCategories||[])].forEach(c => {
+    const k = String(c||"").toLowerCase();
+    if(!k || std.has(k) || seen.has(k)) return;
+    seen.add(k); mergedCats.push(c);
+  });
+  const cloudKeys = new Set(cloudCats.map(c => String(c||"").toLowerCase()));
+  const hasLocalAdditions = mergedCats.some(c => !cloudKeys.has(String(c).toLowerCase()));
+  DB.customCategories = mergedCats;
+  if(hasLocalAdditions || (!metaRow && mergedCats.length)){
+    await upsertCloudCustomCategories();
+  }
+
+  // Persist the merged DB locally without triggering another cloud push
+  localStorage.setItem(STORE_KEY, JSON.stringify(DB));
+
+  // Refresh any visible tracker view so cloud-pulled data shows immediately
+  try{
+    const etApp = document.getElementById("etApp");
+    const visible = etApp && etApp.style.display && etApp.style.display !== "none";
+    const homeView = document.getElementById("view-home");
+    const projView = document.getElementById("view-project");
+    if(visible){
+      if(homeView && !homeView.classList.contains("hidden")) renderHome();
+      else if(projView && !projView.classList.contains("hidden") && currentId) renderProject();
+    }
+  }catch(e){}
+}
 
 /* ---------- Helpers ---------- */
 function money(n){
@@ -8253,7 +8469,7 @@ function createProject(){
     invoice:parseNum(document.getElementById("np-invoice").value), expenses:[],
     linkedEstimateId: pendingLinkEstimateId||null,
     createdAt:Date.now(), updatedAt:Date.now() };
-  DB.projects.push(p); save(); closeModal("m-project");
+  DB.projects.push(p); save(p); closeModal("m-project");
   pendingLinkEstimateId=null;
   openProject(p.id); toast("Project created");
 }
@@ -8276,7 +8492,9 @@ function handleIncomingLink(){
 function deleteProject(id){
   const p=getProject(id); if(!p) return;
   if(!confirm(`Delete "${p.name||"this project"}" and all its expenses? This can't be undone.`)) return;
-  DB.projects=DB.projects.filter(x=>x.id!==id); save(); renderHome(); toast("Project deleted");
+  DB.projects=DB.projects.filter(x=>x.id!==id); save();
+  if(cloudReady()) deleteCloudProject(id);
+  renderHome(); toast("Project deleted");
 }
 let metaTimer=null;
 function onMetaEdit(){
@@ -8284,13 +8502,13 @@ function onMetaEdit(){
   p.name=document.getElementById("pv-name").value;
   p.address=document.getElementById("pv-addr").value;
   p.updatedAt=Date.now();
-  clearTimeout(metaTimer); metaTimer=setTimeout(save,400);
+  clearTimeout(metaTimer); metaTimer=setTimeout(()=>save(curr()),400);
 }
 function onInvoiceEdit(){
   const p=curr(); if(!p) return;
   p.invoice=parseNum(document.getElementById("invoice-input").value);
   p.updatedAt=Date.now();
-  clearTimeout(metaTimer); metaTimer=setTimeout(save,400);
+  clearTimeout(metaTimer); metaTimer=setTimeout(()=>save(curr()),400);
   renderProfit();
   // Keep the sticky Expenses-tab summary in sync when invoice changes
   // (the user might be editing from the Profit tab but expects to see the
@@ -8525,7 +8743,13 @@ function saveExpense(){
   } else {
     p.expenses.push({id:uid(),createdAt:Date.now(),...data});
   }
-  p.updatedAt = Date.now(); save(); closeModal("m-expense");
+  p.updatedAt = Date.now(); save(p);
+  // If a brand-new custom category was added, sync that meta row too.
+  if(cloudReady() && document.getElementById("ex-cat").value === "Other" &&
+     (document.getElementById("ex-cat-custom").value || "").trim()){
+    upsertCloudCustomCategories();
+  }
+  closeModal("m-expense");
   // Refresh the filter dropdown so a newly-added custom category appears there too
   if(typeof renderProject==="function" && curr()) refreshFilterCategories();
   renderExpenses(); if(activeTab==="profit") renderProfit();
@@ -8552,7 +8776,7 @@ function deleteExpense(id){
   const p=curr(); if(!p) return;
   if(!confirm("Delete this expense?")) return;
   p.expenses=p.expenses.filter(x=>x.id!==id); selectedExpenses.delete(id);
-  p.updatedAt=Date.now(); save();
+  p.updatedAt=Date.now(); save(p);
   renderExpenses(); if(activeTab==="profit") renderProfit(); toast("Expense deleted");
 }
 
@@ -8583,7 +8807,7 @@ function deleteSelected(){
   const n=selectedExpenses.size;
   if(!confirm("Delete "+n+" selected expense"+(n===1?"":"s")+"? This can't be undone.")) return;
   p.expenses=p.expenses.filter(e=>!selectedExpenses.has(e.id));
-  selectedExpenses.clear(); p.updatedAt=Date.now(); save();
+  selectedExpenses.clear(); p.updatedAt=Date.now(); save(p);
   renderExpenses(); if(activeTab==="profit") renderProfit();
   toast("Deleted "+n+" expense"+(n===1?"":"s"));
 }
@@ -8868,7 +9092,7 @@ function importCSV(ev){
         planned: typ.indexOf("unplan")===-1 });
       added++;
     }
-    p.updatedAt=Date.now(); save(); renderExpenses(); if(activeTab==="profit") renderProfit();
+    p.updatedAt=Date.now(); save(p); renderExpenses(); if(activeTab==="profit") renderProfit();
     toast("Imported "+added+" expense"+(added===1?"":"s"));
     ev.target.value="";
   };
@@ -8944,7 +9168,7 @@ function openFromEstimator(ctx){
     if(ctx.address) existing.address = ctx.address;
     if(ctx.invoice !== "" && ctx.invoice != null) existing.invoice = parseNum(ctx.invoice);
     existing.updatedAt = Date.now();
-    save();
+    save(existing);
     openProject(existing.id);
     return;
   }
@@ -8961,7 +9185,7 @@ function openFromEstimator(ctx){
     updatedAt: Date.now()
   };
   DB.projects.push(p);
-  save();
+  save(p);
   openProject(p.id);
 }
 /* Called by the estimator's saveEstimate() so any linked tracker project
@@ -8974,7 +9198,7 @@ function syncLinkedFromEstimate(ctx){
   if(ctx.address) p.address = ctx.address;
   if(ctx.invoice !== "" && ctx.invoice != null) p.invoice = parseNum(ctx.invoice);
   p.updatedAt = Date.now();
-  save();
+  save(p);
 }
 function openEstimate(id){
   backToEstimator();
@@ -8989,7 +9213,8 @@ window.ET={ goHome:goHome, openNewProject:openNewProject, switchHome:switchHome,
   onCatChange:onCatChange,
   deleteProject:deleteProject, show:show, backToEstimator:backToEstimator,
   openFromEstimator:openFromEstimator, syncLinkedFromEstimate:syncLinkedFromEstimate,
-  openEstimate:openEstimate };
+  openEstimate:openEstimate,
+  bootstrapCloudSync:bootstrapCloudSync };
 
 })();
 </script>
