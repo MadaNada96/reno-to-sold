@@ -5063,7 +5063,7 @@ function scopeSection(title, items){
           <div class="bid-cell"><label>Your labour $</label><input type="text" class="bid-input"></div>
           <div class="bid-cell"><label>Building material $</label><input type="text" class="bid-input"></div>
           <div class="bid-cell"><label>Section total $</label><input type="text" class="bid-input"></div>
-          <div class="bid-cell"><label>Timeline</label><input type="text" class="bid-input" placeholder="e.g. 2 weeks"></div>
+          <div class="bid-cell"><label>Timeline</label><input type="text" class="bid-input"></div>
         </div>
         <div class="bid-row-note">
           <b>Building material</b> = construction supplies you bring to do the work (drywall, lumber, mud, primer, fasteners, grout, adhesives, paint for walls / baseboards / doors / trims, etc.). <b class="excl">Does NOT</b> include finishing materials &mdash; tile, flooring, vanities, fixtures, faucets &mdash; those are supplied separately.
@@ -5089,7 +5089,7 @@ function renderContractorSheet(){
       <div class="cell"><strong>Address</strong>${escapeHtml(addr)}</div>
       <div class="cell"><strong>Total property sqft</strong>${escapeHtml(String(sqft))}</div>
       <div class="cell"><strong>Prepared by</strong>RENO TO SOLD INC.</div>
-      <div class="cell"><strong>Contractor</strong><input type="text" class="bid-input" id="bidContractorField" value="${escapeHtml(_bidContractorFieldValue())}" placeholder="Company / Contact"></div>
+      <div class="cell"><strong>Contractor</strong><input type="text" class="bid-input" id="bidContractorField" value="${escapeHtml(_bidContractorFieldValue())}"></div>
     </div>
     <p class="intro-note">Please review the scope below, fill in your labour, material &amp; section totals, then return this sheet. All quantities are estimated &mdash; verify on site before starting, any discrepancies will result in price adjustment.</p>
   `;
@@ -5259,7 +5259,7 @@ function renderContractorSheet(){
     let rows = "";
     Object.keys(labels).forEach(cat => {
       if(includeCat(cat)){
-        rows += `<div class="summary-row"><span>${labels[cat]}</span><input type="text" class="bid-input" placeholder="$"></div>`;
+        rows += `<div class="summary-row"><span>${labels[cat]}</span><input type="text" class="bid-input"></div>`;
       }
     });
     html += `
@@ -5267,8 +5267,8 @@ function renderContractorSheet(){
         <div class="summary-title">Bid Summary</div>
         <div class="summary-body">
           ${rows}
-          <div class="summary-row total"><span>Total Bid (before HST)</span><input type="text" class="bid-input" placeholder="$"></div>
-          <div class="summary-row timeline"><span>Total renovation timeline</span><input type="text" class="bid-input" placeholder="e.g. 6 weeks"></div>
+          <div class="summary-row total"><span>Total Bid (before HST)</span><input type="text" class="bid-input"></div>
+          <div class="summary-row timeline"><span>Total renovation timeline</span><input type="text" class="bid-input"></div>
           <div class="summary-row timeline"><span>Firm start date</span><input type="date" class="bid-input"></div>
         </div>
       </div>
