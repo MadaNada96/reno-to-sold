@@ -613,6 +613,33 @@
   .contractor-cat-bar .ccb-chip.disabled{
     opacity:.4; cursor:not-allowed;
   }
+  /* Contractor picker row — top of the bar, separated from the chips */
+  .contractor-cat-bar .ccb-pick-row{
+    display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    padding-bottom:10px; margin-bottom:8px;
+    border-bottom:1px dashed rgba(212,175,106,.18);
+  }
+  .contractor-cat-bar .ccb-pick-label{
+    font-size:10.5px; letter-spacing:.18em; text-transform:uppercase;
+    color:var(--gold-bright); font-weight:700; margin:0;
+  }
+  .contractor-cat-bar .ccb-pick{
+    flex:1; min-width:200px;
+    background:#0d0d11; color:var(--ink);
+    border:1px solid var(--line-strong);
+    border-radius:8px; padding:8px 10px;
+    font-size:12.5px; font-family:inherit;
+  }
+  .contractor-cat-bar .ccb-pick:focus{ outline:none; border-color:var(--gold); }
+  .contractor-cat-bar .ccb-manage-btn{
+    background:transparent; color:var(--muted);
+    border:1px solid var(--line-strong); border-radius:8px;
+    padding:7px 12px; font-size:11.5px; cursor:pointer; font-weight:600;
+    letter-spacing:.04em; transition:.12s;
+  }
+  .contractor-cat-bar .ccb-manage-btn:hover{
+    color:var(--gold-bright); border-color:var(--gold-deep);
+  }
 
   .contractor-sheet{
     max-width:880px;
@@ -4924,16 +4951,37 @@ const CONTRACTOR_CAT_LABELS = {
   kitchen:"Kitchen", bathroom:"Bathrooms", potlights:"Pot Lights"
 };
 let contractorBidCats = new Set();
+/* Currently-selected contractor for this bid. Drives the "Contractor"
+   field on the printable sheet and the email modal's recipient picker. */
+let currentBidContractorId = "";
+
+function _bidContractorFieldValue(){
+  if(!currentBidContractorId) return "";
+  const c = loadContractors().find(x => x.id === currentBidContractorId);
+  if(!c) return "";
+  // Prefer the company name; append contact if present so the printed bid
+  // shows both "ABC Renovations Ltd. — Mike Johnson" when applicable.
+  return c.contact ? `${c.company} — ${c.contact}` : (c.company || "");
+}
 
 function openContractorBid(){
   // Default the per-bid filter to every currently-enabled category
   contractorBidCats = new Set(
     Object.keys(CONTRACTOR_CAT_LABELS).filter(c => !!state.enabled[c])
   );
+  // Reset the selected contractor each time the bid is opened
+  currentBidContractorId = "";
   renderContractorCatBar();
   renderContractorSheet();
   document.body.classList.add("show-contractor");
   window.scrollTo(0,0);
+}
+function setBidContractor(id){
+  currentBidContractorId = String(id || "");
+  // Re-render the cat bar so the picker reflects the new selection,
+  // and re-render the sheet so the Contractor field shows the company.
+  renderContractorCatBar();
+  renderContractorSheet();
 }
 function closeContractorBid(){
   document.body.classList.remove("show-contractor");
@@ -4947,6 +4995,18 @@ function toggleContractorBidCat(cat){
 function renderContractorCatBar(){
   const bar = document.getElementById("contractorCatBar");
   if(!bar) return;
+
+  // ---- Contractor picker row ----
+  const contractors = loadContractors().slice().sort((a,b) =>
+    (a.company || "").toLowerCase().localeCompare((b.company || "").toLowerCase()));
+  const sel = currentBidContractorId;
+  let pickerOpts = `<option value="">${contractors.length ? "— pick a saved contractor —" : "— no saved contractors yet —"}</option>`;
+  contractors.forEach(c => {
+    const label = (c.company || "Untitled") + (c.contact ? ` · ${c.contact}` : "");
+    pickerOpts += `<option value="${escapeHtml(c.id)}"${c.id===sel?" selected":""}>${escapeHtml(label)}</option>`;
+  });
+
+  // ---- Category chip row ----
   const allCats = Object.keys(CONTRACTOR_CAT_LABELS);
   const chips = allCats.map(cat => {
     const enabled = !!state.enabled[cat];
@@ -4962,7 +5022,13 @@ function renderContractorCatBar(){
       <span>${CONTRACTOR_CAT_LABELS[cat]}</span>
     </label>`;
   }).join("");
+
   bar.innerHTML = `
+    <div class="ccb-pick-row">
+      <label class="ccb-pick-label" for="ccbContractorPick">Contractor for this bid</label>
+      <select id="ccbContractorPick" class="ccb-pick" onchange="setBidContractor(this.value)">${pickerOpts}</select>
+      <button class="ccb-manage-btn" onclick="openContractorsBookModal()" title="Manage saved contractors">+ Manage</button>
+    </div>
     <div class="ccb-head">Sections to include on this bid
       <span class="ccb-sub">&middot; not every contractor needs every category</span>
     </div>
@@ -5013,8 +5079,8 @@ function renderContractorSheet(){
       <div class="cell"><strong>Date prepared</strong>${escapeHtml(today)}</div>
       <div class="cell"><strong>Address</strong>${escapeHtml(addr)}</div>
       <div class="cell"><strong>Total property sqft</strong>${escapeHtml(String(sqft))}</div>
-      <div class="cell"><strong>Prepared by</strong>Reno to Sold</div>
-      <div class="cell"><strong>Contractor</strong><input type="text" class="bid-input" placeholder="Company / Contact"></div>
+      <div class="cell"><strong>Prepared by</strong>RENO TO SOLD INC.</div>
+      <div class="cell"><strong>Contractor</strong><input type="text" class="bid-input" id="bidContractorField" value="${escapeHtml(_bidContractorFieldValue())}" placeholder="Company / Contact"></div>
     </div>
     <p class="intro-note">Please review the scope below, fill in your labour, material &amp; section totals, then return this sheet. All quantities are estimated &mdash; verify on site before starting, any discrepancies will result in price adjustment.</p>
   `;
@@ -6864,9 +6930,11 @@ function onContractorPick(){
   if(!v) return;
   const c = loadContractors().find(x => x.id === v);
   if(!c) return;
-  // Replace recipient list with this contractor's email (de-duped append optional;
-  // we replace because the user explicitly picked one)
+  // Fill the email recipient
   if(c.email) document.getElementById("ecbTo").value = c.email;
+  // Also reflect the selection on the printed bid sheet so the "Contractor"
+  // field shows the company name when this PDF is generated.
+  setBidContractor(v);
 }
 function setContractorEmailStatus(msg, kind){
   const el = document.getElementById("ecbStatus");
