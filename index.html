@@ -290,6 +290,39 @@
   .email-status.error{ border-color:#8a3a3a; background:rgba(138,58,58,.12); color:#ff9b9b; }
   .email-status.working{ border-color:var(--gold-deep); background:rgba(212,175,106,.08); color:var(--gold-bright); }
   .email-actions{ display:flex; justify-content:flex-end; gap:8px; }
+
+  /* Contractors address book */
+  .contractors-list{ list-style:none; margin:0 0 14px; padding:0; max-height:300px; overflow:auto; border:1px solid var(--line); border-radius:8px; }
+  .contractors-list li{
+    display:flex; gap:10px; align-items:flex-start;
+    padding:10px 12px; border-bottom:1px solid var(--line);
+    cursor:default;
+  }
+  .contractors-list li:last-child{ border-bottom:none; }
+  .contractors-list .ctr-info{ flex:1; min-width:0; }
+  .contractors-list .ctr-co{ font-weight:700; color:var(--ink-strong); font-size:13px; }
+  .contractors-list .ctr-name{ font-size:12px; color:var(--gold-bright); margin-top:1px; }
+  .contractors-list .ctr-meta{ font-size:11px; color:var(--muted); margin-top:2px; }
+  .contractors-list .ctr-acts{ display:flex; gap:6px; flex-shrink:0; }
+  .contractors-list .ctr-acts button{ padding:5px 10px; font-size:11px; }
+  .contractors-empty{
+    padding:14px 16px; margin-bottom:14px;
+    color:var(--muted); font-size:12px; line-height:1.5;
+    border:1px dashed var(--line); border-radius:8px;
+  }
+  .contractors-form{
+    padding:14px; border:1px solid var(--line); border-radius:8px;
+    background:rgba(212,175,106,.04);
+  }
+  .contractors-form .cf-title{
+    font-size:10.5px; letter-spacing:.18em; text-transform:uppercase;
+    color:var(--gold-bright); font-weight:700; margin-bottom:10px;
+  }
+  .contractors-form .cf-row{ margin-bottom:10px; }
+  .contractors-form .cf-row label{ display:block; font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin-bottom:4px; font-weight:600; }
+  .contractors-form .cf-two{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  @media(max-width:520px){ .contractors-form .cf-two{ grid-template-columns:1fr; } }
+  .contractors-form .cf-actions{ display:flex; justify-content:flex-end; gap:8px; margin-top:6px; }
   .modal h3{margin:0;padding:18px 22px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;color:var(--gold-bright);font-size:13px;text-transform:uppercase;letter-spacing:.18em;font-weight:700;}
   .modal-body{padding:20px 22px;}
 
@@ -535,6 +568,45 @@
   }
   .contractor-toolbar .ct-actions{ display:flex; gap:8px; flex-wrap:wrap; }
 
+  /* Per-bid category selector — sits inside the contractor view above the
+     sheet. Hidden in print so it never appears on the printed bid. */
+  .contractor-cat-bar{
+    background:#15151a; border:1px solid var(--line-strong);
+    border-radius:10px; padding:13px 16px;
+    margin:14px auto 14px; max-width:860px;
+    display:flex; flex-direction:column; gap:8px;
+  }
+  .contractor-cat-bar .ccb-head{
+    display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    font-size:10.5px; letter-spacing:.18em; text-transform:uppercase;
+    color:var(--gold-bright); font-weight:700;
+  }
+  .contractor-cat-bar .ccb-sub{
+    color:var(--muted); font-size:11px; letter-spacing:0;
+    text-transform:none; font-weight:500;
+  }
+  .contractor-cat-bar .ccb-row{
+    display:flex; flex-wrap:wrap; gap:7px;
+  }
+  .contractor-cat-bar .ccb-chip{
+    display:inline-flex; align-items:center; gap:7px;
+    padding:7px 12px; border-radius:999px;
+    background:#0d0d11; border:1px solid var(--line-strong);
+    color:var(--muted); font-size:12px; font-weight:600;
+    cursor:pointer; user-select:none; transition:.12s;
+  }
+  .contractor-cat-bar .ccb-chip input{
+    accent-color:var(--gold); width:14px; height:14px; margin:0; cursor:pointer;
+  }
+  .contractor-cat-bar .ccb-chip.on{
+    background:rgba(212,175,106,.10);
+    border-color:var(--gold);
+    color:var(--gold-bright);
+  }
+  .contractor-cat-bar .ccb-chip.disabled{
+    opacity:.4; cursor:not-allowed;
+  }
+
   .contractor-sheet{
     max-width:880px;
     margin:24px auto;
@@ -613,6 +685,12 @@
     flex-wrap:wrap;
   }
   .contractor-sheet .bid-cell{ flex:1; min-width:140px; }
+  .contractor-sheet .bid-cell-note{
+    margin-top:6px;
+    font-size:10px; line-height:1.4; color:#555;
+    font-style:italic;
+  }
+  .contractor-sheet .bid-cell-note b{ color:#a32a2a; font-style:normal; font-weight:700; }
   .contractor-sheet .bid-cell label{
     display:block; font-size:9px;
     text-transform:uppercase; letter-spacing:.18em;
@@ -2551,9 +2629,14 @@
     <div class="ct-title">Contractor Bid Sheet</div>
     <div class="ct-actions">
       <button onclick="closeContractorBid()">&larr; Back to Estimator</button>
+      <button onclick="openContractorsBookModal()">Contractors</button>
+      <button onclick="openEmailContractorBidModal()">Email to Contractor</button>
       <button class="primary" onclick="printContractorBidViaIframe()">Print / PDF</button>
     </div>
   </div>
+  <!-- Per-bid category filter — pick which sections this contractor sees.
+       Defaults to all enabled categories from the estimator. Hidden in print. -->
+  <div class="contractor-cat-bar no-print" id="contractorCatBar"></div>
   <div class="contractor-sheet" id="contractorSheet"></div>
 </div>
 
@@ -2667,6 +2750,88 @@
     <div class="modal-body">
       <ul class="saved-list" id="savedList"></ul>
       <p id="savedEmpty" class="footnote" style="display:none">No saved estimates yet.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Contractors address book modal — list + add/edit/delete contacts.
+     Stored in localStorage (reno_contractors_v1). Used by the
+     Email-to-Contractor modal to populate the recipient picker. -->
+<div class="modal-bg" id="contractorsBookModal" onclick="if(event.target===this)closeContractorsBookModal()">
+  <div class="modal" style="max-width:620px;">
+    <h3>Contractors
+      <button class="ghost" onclick="closeContractorsBookModal()">Close</button>
+    </h3>
+    <div class="modal-body">
+      <ul class="contractors-list" id="contractorsList"></ul>
+      <div class="contractors-empty" id="contractorsEmpty" style="display:none;">
+        No contractors yet. Add your first one below — name, email, phone — and it'll save for future bids.
+      </div>
+      <div class="contractors-form">
+        <div class="cf-title" id="contractorFormTitle">Add a contractor</div>
+        <div class="cf-row">
+          <label>Company name</label>
+          <input type="text" id="cfCompany" placeholder="ABC Renovations Ltd." autocomplete="off">
+        </div>
+        <div class="cf-row">
+          <label>Contact name</label>
+          <input type="text" id="cfContact" placeholder="Mike Johnson" autocomplete="off">
+        </div>
+        <div class="cf-row cf-two">
+          <div>
+            <label>Email</label>
+            <input type="email" id="cfEmail" placeholder="mike@abcreno.ca" autocomplete="off">
+          </div>
+          <div>
+            <label>Phone</label>
+            <input type="tel" id="cfPhone" placeholder="416-555-1234" autocomplete="off">
+          </div>
+        </div>
+        <div class="cf-actions">
+          <button class="ghost" id="cfCancelBtn" onclick="cancelContractorEdit()" style="display:none;">Cancel</button>
+          <button class="primary" id="cfSaveBtn" onclick="saveContractorEntry()">Add Contractor</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Email Contractor Bid modal — sends the rendered contractor bid sheet
+     as a PDF attachment via the same email-estimate Supabase Edge Function. -->
+<div class="modal-bg" id="emailContractorBidModal" onclick="if(event.target===this)closeEmailContractorBidModal()">
+  <div class="modal" style="max-width:580px;">
+    <h3>Email Contractor Bid
+      <button class="ghost" onclick="closeEmailContractorBidModal()">Close</button>
+    </h3>
+    <div class="modal-body">
+      <div class="email-field">
+        <label for="ecbPick">Pick a saved contractor</label>
+        <select id="ecbPick" onchange="onContractorPick()"></select>
+      </div>
+      <div class="email-field">
+        <label for="ecbTo">To <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;">(comma-separated)</span></label>
+        <input type="text" id="ecbTo" placeholder="mike@abcreno.ca" autocomplete="off">
+      </div>
+      <div class="email-field">
+        <label for="ecbSubject">Subject</label>
+        <input type="text" id="ecbSubject" placeholder="Renovation bid request" autocomplete="off">
+      </div>
+      <div class="email-field">
+        <label for="ecbBody">Message</label>
+        <textarea id="ecbBody" rows="6" placeholder="Add a personal note..."></textarea>
+      </div>
+      <label class="email-cc">
+        <input type="checkbox" id="ecbCcSelf">
+        <span>CC me a copy at <span id="ecbCcSelfAddr" style="color:var(--gold-bright);font-weight:600;"></span></span>
+      </label>
+      <div id="ecbStatus" class="email-status" style="display:none;"></div>
+      <div class="email-actions">
+        <button class="ghost" onclick="closeEmailContractorBidModal()">Cancel</button>
+        <button class="primary" id="ecbSendBtn" onclick="sendContractorBidEmail()">Generate PDF &amp; Send</button>
+      </div>
+      <p class="footnote" style="margin-top:14px;line-height:1.5;">
+        A PDF of the contractor bid sheet will be generated and attached automatically. Sent from <b style="color:var(--gold-bright);">estimates@renotosold.homes</b> via Resend.
+      </p>
     </div>
   </div>
 </div>
@@ -4734,13 +4899,63 @@ function renderPricingEditor(){
 }
 
 /* ---------- Contractor Bid Sheet ---------- */
+/* ============================================================
+   Contractor Bid — per-bid category selection.
+   `contractorBidCats` is a transient runtime Set of category keys that
+   should appear in the current bid sheet. It defaults to every category
+   that's currently enabled in the estimator and is NOT persisted — so
+   each time the user opens the bid view it starts fresh from estimator
+   state. Excluded categories are skipped in renderContractorSheet().
+   ============================================================ */
+const CONTRACTOR_CAT_LABELS = {
+  painting:"Painting", flooring:"Flooring", tiling:"Tiling",
+  kitchen:"Kitchen", bathroom:"Bathrooms", potlights:"Pot Lights"
+};
+let contractorBidCats = new Set();
+
 function openContractorBid(){
+  // Default the per-bid filter to every currently-enabled category
+  contractorBidCats = new Set(
+    Object.keys(CONTRACTOR_CAT_LABELS).filter(c => !!state.enabled[c])
+  );
+  renderContractorCatBar();
   renderContractorSheet();
   document.body.classList.add("show-contractor");
   window.scrollTo(0,0);
 }
 function closeContractorBid(){
   document.body.classList.remove("show-contractor");
+}
+function toggleContractorBidCat(cat){
+  if(contractorBidCats.has(cat)) contractorBidCats.delete(cat);
+  else                            contractorBidCats.add(cat);
+  renderContractorCatBar();
+  renderContractorSheet();
+}
+function renderContractorCatBar(){
+  const bar = document.getElementById("contractorCatBar");
+  if(!bar) return;
+  const allCats = Object.keys(CONTRACTOR_CAT_LABELS);
+  const chips = allCats.map(cat => {
+    const enabled = !!state.enabled[cat];
+    const on      = contractorBidCats.has(cat);
+    const cls     = (on ? " on" : "") + (enabled ? "" : " disabled");
+    const title   = enabled
+      ? `${on?"Hide":"Show"} ${CONTRACTOR_CAT_LABELS[cat]} on this bid`
+      : `${CONTRACTOR_CAT_LABELS[cat]} isn't enabled in the estimate — toggle it on first`;
+    const onclick = enabled ? `onclick="toggleContractorBidCat('${cat}')"` : "";
+    return `<label class="ccb-chip${cls}" title="${title}" ${onclick}>
+      <input type="checkbox" ${on?"checked":""} ${enabled?"":"disabled"}
+             onclick="event.stopPropagation();toggleContractorBidCat('${cat}')">
+      <span>${CONTRACTOR_CAT_LABELS[cat]}</span>
+    </label>`;
+  }).join("");
+  bar.innerHTML = `
+    <div class="ccb-head">Sections to include on this bid
+      <span class="ccb-sub">&middot; not every contractor needs every category</span>
+    </div>
+    <div class="ccb-row">${chips}</div>
+  `;
 }
 
 function pieceDescription(p){
@@ -4760,7 +4975,11 @@ function scopeSection(title, items){
         <ul class="scope-list">${items.map(i=>`<li${i.sub?' class="sub"':(i.hdr?' class="bath-hdr"':'')}>${i.html}</li>`).join("")}</ul>
         <div class="bid-row">
           <div class="bid-cell"><label>Your labour $</label><input type="text" class="bid-input"></div>
-          <div class="bid-cell"><label>Your material $</label><input type="text" class="bid-input"></div>
+          <div class="bid-cell">
+            <label>Building material $</label>
+            <input type="text" class="bid-input">
+            <div class="bid-cell-note">Construction supplies needed to do the work &mdash; drywall, lumber, mud, primer, fasteners, grout, adhesives, etc. <b>Does NOT</b> include the finishing materials (tile, flooring, vanities, fixtures, faucets, paint colour) &mdash; those are supplied separately.</div>
+          </div>
           <div class="bid-cell"><label>Section total $</label><input type="text" class="bid-input"></div>
         </div>
       </div>
@@ -4786,13 +5005,16 @@ function renderContractorSheet(){
       <div class="cell"><strong>Prepared by</strong>Reno to Sold</div>
       <div class="cell"><strong>Contractor</strong><input type="text" class="bid-input" placeholder="Company / Contact"></div>
     </div>
-    <p class="intro-note">Please review the scope below, fill in your labour, material &amp; section totals, then return this sheet. All quantities are estimated &mdash; verify on site before quoting.</p>
+    <p class="intro-note">Please review the scope below, fill in your labour, material &amp; section totals, then return this sheet. All quantities are estimated &mdash; verify on site before starting, any discrepancies will result in price adjustment.</p>
   `;
 
   let anyEnabled = false;
 
+  // Helper — checks both the estimate-enabled flag AND the per-bid filter
+  const includeCat = (cat) => !!state.enabled[cat] && contractorBidCats.has(cat);
+
   // -- Painting --
-  if(state.enabled.painting){
+  if(includeCat("painting")){
     anyEnabled = true;
     const s = state.painting;
     const psqft = paintingSqft();
@@ -4822,7 +5044,7 @@ function renderContractorSheet(){
   }
 
   // -- Flooring --
-  if(state.enabled.flooring){
+  if(includeCat("flooring")){
     anyEnabled = true;
     const s = state.flooring;
     const items = [];
@@ -4855,7 +5077,7 @@ function renderContractorSheet(){
   }
 
   // -- Tiling --
-  if(state.enabled.tiling){
+  if(includeCat("tiling")){
     anyEnabled = true;
     const s = state.tiling;
     const items = [
@@ -4866,7 +5088,7 @@ function renderContractorSheet(){
   }
 
   // -- Kitchen --
-  if(state.enabled.kitchen){
+  if(includeCat("kitchen")){
     anyEnabled = true;
     const s = state.kitchen;
     const sizeLabel = sz => ({small:"Small (under 70 sqft)", medium:"Medium (70&ndash;150 sqft)", large:"Large (150+ sqft)"})[sz] || sz;
@@ -4900,7 +5122,7 @@ function renderContractorSheet(){
   }
 
   // -- Bathrooms --
-  if(state.enabled.bathroom){
+  if(includeCat("bathroom")){
     anyEnabled = true;
     const items = [];
     items.push({ sub:false, html:`<i>Refresh scope per bathroom: new floor tiles, tub wall tiles, shower fixtures, toilet, vanity, mirror, light fixture, accessories. Existing plumbing &amp; tub re-used (unless &ldquo;new tub&rdquo; is checked below).</i>` });
@@ -4930,7 +5152,7 @@ function renderContractorSheet(){
   }
 
   // -- Pot Lights --
-  if(state.enabled.potlights){
+  if(includeCat("potlights")){
     anyEnabled = true;
     const s = state.potlights;
     const items = [
@@ -4941,13 +5163,16 @@ function renderContractorSheet(){
   }
 
   if(!anyEnabled){
-    html += `<div class="empty-state">No categories are enabled. Turn on the categories you want bid on from the estimator, then come back here.</div>`;
+    const hasAnyEnabled = Object.keys(CONTRACTOR_CAT_LABELS).some(c => !!state.enabled[c]);
+    html += hasAnyEnabled
+      ? `<div class="empty-state">No categories are selected for this bid. Use the chips above to pick the sections you want this contractor to see.</div>`
+      : `<div class="empty-state">No categories are enabled in the estimate. Turn on the categories you want bid on from the estimator, then come back here.</div>`;
   } else {
     // Bid summary
     const labels = {painting:"Painting", flooring:"Flooring", tiling:"Tiling", kitchen:"Kitchen", bathroom:"Bathrooms", potlights:"Pot Lights"};
     let rows = "";
     Object.keys(labels).forEach(cat => {
-      if(state.enabled[cat]){
+      if(includeCat(cat)){
         rows += `<div class="summary-row"><span>${labels[cat]}</span><input type="text" class="bid-input" placeholder="$"></div>`;
       }
     });
@@ -6330,6 +6555,394 @@ async function sendEstimateEmail(){
   }
 }
 
+/* ============================================================
+   Contractors address book (localStorage-backed).
+   Each entry: { id, company, contact, email, phone }
+   Used by the Email Contractor Bid modal to populate the picker.
+   ============================================================ */
+const CONTRACTORS_KEY = "reno_contractors_v1";
+let editingContractorId = null;
+
+function loadContractors(){
+  try{
+    const a = JSON.parse(localStorage.getItem(CONTRACTORS_KEY) || "[]");
+    if(!Array.isArray(a)) return [];
+    // Backfill updatedAt on legacy entries so last-write-wins merge has a
+    // timestamp to compare against the cloud.
+    a.forEach(c => { if(!c.updatedAt) c.updatedAt = Date.now(); });
+    return a;
+  }catch(e){ return []; }
+}
+function saveContractors(list){
+  localStorage.setItem(CONTRACTORS_KEY, JSON.stringify(list));
+}
+
+/* ---- Contractor ↔ cloud row mapping (reuses the `estimates` table with
+   type='contractor', exactly the same pattern as tracker projects). ---- */
+function contractorToCloudRow(c){
+  return {
+    user_id: currentUser.id,
+    client_id: c.id,
+    name: c.company || "Untitled contractor",
+    type: "contractor",
+    state: {
+      company: c.company || "",
+      contact: c.contact || "",
+      email:   c.email   || "",
+      phone:   c.phone   || ""
+    },
+    updated_at: new Date(c.updatedAt || Date.now()).toISOString()
+  };
+}
+function cloudRowToContractor(row){
+  const s = (row && row.state) || {};
+  return {
+    id: row.client_id,
+    company: s.company || row.name || "",
+    contact: s.contact || "",
+    email:   s.email   || "",
+    phone:   s.phone   || "",
+    updatedAt: new Date(row.updated_at).getTime()
+  };
+}
+async function upsertCloudContractor(c){
+  if(!currentUser || !supa || !c || !c.id) return;
+  try{
+    const { data: existing } = await supa.from("estimates")
+      .select("id")
+      .eq("user_id", currentUser.id)
+      .eq("client_id", c.id)
+      .eq("type", "contractor")
+      .maybeSingle();
+    const payload = contractorToCloudRow(c);
+    if(existing){
+      const { error } = await supa.from("estimates").update(payload).eq("id", existing.id);
+      if(error) throw error;
+    } else {
+      const { error } = await supa.from("estimates").insert(payload);
+      if(error) throw error;
+    }
+  }catch(e){ console.error("Contractor cloud upsert failed:", e); }
+}
+async function deleteCloudContractor(id){
+  if(!currentUser || !supa || !id) return;
+  try{
+    await supa.from("estimates").delete()
+      .eq("user_id", currentUser.id)
+      .eq("client_id", id)
+      .eq("type", "contractor");
+  }catch(e){ console.error("Contractor cloud delete failed:", e); }
+}
+/* On sign-in: pull cloud contractors, merge with local last-write-wins,
+   push back anything that's locally newer. Optionally prompts the user
+   to upload local-only contractors on first sign-in per device. */
+async function pullCloudContractors(showMigratePrompt){
+  if(!currentUser || !supa) return;
+  const migrateKey = "reno_contractors_cloud_migrated_" + currentUser.id;
+  const localList = loadContractors();
+
+  // First-time-on-this-device prompt
+  if(showMigratePrompt && !localStorage.getItem(migrateKey) && localList.length > 0){
+    const n = localList.length;
+    const ok = confirm("You have " + n + " local contractor" + (n===1?"":"s")
+      + " on this device. Upload to your account so they sync across all your devices?");
+    if(ok){
+      for(const c of localList){
+        if(!c.updatedAt) c.updatedAt = Date.now();
+        await upsertCloudContractor(c);
+      }
+      saveContractors(localList);
+      flash("Uploaded " + n + " contractor" + (n===1?"":"s"));
+    }
+    localStorage.setItem(migrateKey, "1");
+  }
+
+  // Pull + merge (newer wins per client_id)
+  const { data: cloud, error } = await supa.from("estimates")
+    .select("client_id,name,state,updated_at")
+    .eq("user_id", currentUser.id)
+    .eq("type", "contractor");
+  if(error){ console.error("Contractor pull failed:", error); return; }
+
+  const cloudById = {};
+  (cloud || []).forEach(r => { if(r.client_id) cloudById[r.client_id] = r; });
+  const localById = {};
+  localList.forEach(c => { localById[c.id] = c; });
+
+  const merged = [];
+  const ids = new Set([...Object.keys(cloudById), ...Object.keys(localById)]);
+  for(const id of ids){
+    const c = cloudById[id], l = localById[id];
+    if(c && l){
+      const cT = new Date(c.updated_at).getTime();
+      const lT = l.updatedAt || 0;
+      if(lT > cT){ await upsertCloudContractor(l); merged.push(l); }
+      else        { merged.push(cloudRowToContractor(c)); }
+    } else if(c){
+      merged.push(cloudRowToContractor(c));
+    } else if(l){
+      if(!l.updatedAt) l.updatedAt = Date.now();
+      await upsertCloudContractor(l);
+      merged.push(l);
+    }
+  }
+  saveContractors(merged);
+
+  // Refresh any visible contractor UI so cloud data shows immediately
+  try{
+    const book = document.getElementById("contractorsBookModal");
+    if(book && book.classList.contains("show")) renderContractorsList();
+    const email = document.getElementById("emailContractorBidModal");
+    if(email && email.classList.contains("show")) populateContractorPicker();
+  }catch(e){}
+}
+function openContractorsBookModal(){
+  editingContractorId = null;
+  renderContractorsList();
+  resetContractorForm();
+  document.getElementById("contractorsBookModal").classList.add("show");
+}
+function closeContractorsBookModal(){
+  document.getElementById("contractorsBookModal").classList.remove("show");
+}
+function renderContractorsList(){
+  const list = loadContractors().slice().sort((a,b) =>
+    (a.company || "").toLowerCase().localeCompare((b.company || "").toLowerCase()));
+  const ul = document.getElementById("contractorsList");
+  const empty = document.getElementById("contractorsEmpty");
+  if(!list.length){ ul.innerHTML = ""; ul.style.display = "none"; empty.style.display = ""; return; }
+  ul.style.display = ""; empty.style.display = "none";
+  ul.innerHTML = list.map(c => `
+    <li>
+      <div class="ctr-info">
+        <div class="ctr-co">${escapeHtml(c.company || "—")}</div>
+        ${c.contact ? `<div class="ctr-name">${escapeHtml(c.contact)}</div>` : ""}
+        <div class="ctr-meta">${escapeHtml(c.email || "")}${c.email && c.phone ? " &middot; " : ""}${escapeHtml(c.phone || "")}</div>
+      </div>
+      <div class="ctr-acts">
+        <button onclick="startEditContractor('${c.id}')">Edit</button>
+        <button class="ghost danger" onclick="deleteContractor('${c.id}')">Delete</button>
+      </div>
+    </li>
+  `).join("");
+}
+function resetContractorForm(){
+  editingContractorId = null;
+  document.getElementById("contractorFormTitle").textContent = "Add a contractor";
+  document.getElementById("cfCompany").value = "";
+  document.getElementById("cfContact").value = "";
+  document.getElementById("cfEmail").value = "";
+  document.getElementById("cfPhone").value = "";
+  document.getElementById("cfSaveBtn").textContent = "Add Contractor";
+  document.getElementById("cfCancelBtn").style.display = "none";
+}
+function startEditContractor(id){
+  const c = loadContractors().find(x => x.id === id);
+  if(!c) return;
+  editingContractorId = id;
+  document.getElementById("contractorFormTitle").textContent = "Edit contractor";
+  document.getElementById("cfCompany").value = c.company || "";
+  document.getElementById("cfContact").value = c.contact || "";
+  document.getElementById("cfEmail").value = c.email || "";
+  document.getElementById("cfPhone").value = c.phone || "";
+  document.getElementById("cfSaveBtn").textContent = "Save Changes";
+  document.getElementById("cfCancelBtn").style.display = "";
+  document.getElementById("cfCompany").focus();
+}
+function cancelContractorEdit(){ resetContractorForm(); }
+function saveContractorEntry(){
+  const company = (document.getElementById("cfCompany").value || "").trim();
+  const contact = (document.getElementById("cfContact").value || "").trim();
+  const email   = (document.getElementById("cfEmail").value   || "").trim();
+  const phone   = (document.getElementById("cfPhone").value   || "").trim();
+  if(!company){ alert("Company name is required."); return; }
+  if(email && !isValidEmail(email)){ alert("That email doesn't look valid."); return; }
+  const list = loadContractors();
+  let touched = null;
+  if(editingContractorId){
+    const c = list.find(x => x.id === editingContractorId);
+    if(c){ c.company = company; c.contact = contact; c.email = email; c.phone = phone; c.updatedAt = Date.now(); touched = c; }
+  } else {
+    touched = { id: "c_"+Date.now(), company, contact, email, phone, updatedAt: Date.now() };
+    list.push(touched);
+  }
+  saveContractors(list);
+  // Fire-and-forget cloud push so the contractor follows the user to phone / other devices
+  if(currentUser && supa && touched) upsertCloudContractor(touched);
+  resetContractorForm();
+  renderContractorsList();
+  flash(editingContractorId ? "Contractor updated" : "Contractor saved");
+}
+function deleteContractor(id){
+  const c = loadContractors().find(x => x.id === id);
+  if(!c) return;
+  if(!confirm(`Delete "${c.company || "this contractor"}"? This can't be undone.`)) return;
+  const list = loadContractors().filter(x => x.id !== id);
+  saveContractors(list);
+  if(currentUser && supa) deleteCloudContractor(id);
+  if(editingContractorId === id) resetContractorForm();
+  renderContractorsList();
+  flash("Contractor deleted");
+}
+
+/* ============================================================
+   Email Contractor Bid — mirrors the Email-to-Client flow.
+   Generates a PDF of #contractorSheet via html2pdf and posts it to
+   the same email-estimate Supabase Edge Function. The picker pulls
+   recipients from the contractors address book.
+   ============================================================ */
+function openEmailContractorBidModal(){
+  // Re-render so the modal sees the current state of the bid (with current
+  // category filter applied) and the picker has the latest contractors list.
+  renderContractorSheet();
+  populateContractorPicker();
+
+  const addr = (state.propAddress || state.propName || "the property").trim();
+  document.getElementById("ecbSubject").value = `Renovation Bid Request — ${addr}`;
+  document.getElementById("ecbTo").value = "";
+  document.getElementById("ecbPick").value = "";
+  document.getElementById("ecbBody").value =
+    `Hi,\n\n`+
+    `Please find attached the scope of work for a renovation at ${addr}. ` +
+    `Have a look through the sections and fill in your labour, building material, and section totals where indicated.\n\n` +
+    `Let me know if you have any questions or need to walk the site before quoting.\n\n` +
+    `Thanks,\nMohamed Nada\nReno to Sold Inc.\n416-832-3779`;
+
+  // CC self — same pattern as the client email modal
+  const ccLabel = document.getElementById("ecbCcSelfAddr");
+  const ccCheckbox = document.getElementById("ecbCcSelf");
+  const ccRow = ccCheckbox && ccCheckbox.closest(".email-cc");
+  if(currentUser && currentUser.email){
+    ccLabel.textContent = currentUser.email;
+    ccCheckbox.checked = false;
+    if(ccRow) ccRow.style.display = "";
+  } else {
+    if(ccRow) ccRow.style.display = "none";
+  }
+
+  setContractorEmailStatus("", "");
+  const btn = document.getElementById("ecbSendBtn");
+  if(btn){ btn.disabled = false; btn.textContent = "Generate PDF & Send"; }
+
+  document.getElementById("emailContractorBidModal").classList.add("show");
+}
+function closeEmailContractorBidModal(){
+  document.getElementById("emailContractorBidModal").classList.remove("show");
+}
+function populateContractorPicker(){
+  const sel = document.getElementById("ecbPick");
+  const list = loadContractors().slice().sort((a,b) =>
+    (a.company || "").toLowerCase().localeCompare((b.company || "").toLowerCase()));
+  let opts = `<option value="">${list.length ? "— pick a saved contractor —" : "— no saved contractors yet —"}</option>`;
+  list.forEach(c => {
+    const label = (c.company || "Untitled") + (c.contact ? ` · ${c.contact}` : "");
+    opts += `<option value="${escapeHtml(c.id)}">${escapeHtml(label)}</option>`;
+  });
+  opts += `<option value="__manage__">+ Manage contractors…</option>`;
+  sel.innerHTML = opts;
+}
+function onContractorPick(){
+  const sel = document.getElementById("ecbPick");
+  const v = sel.value;
+  if(v === "__manage__"){
+    sel.value = "";
+    closeEmailContractorBidModal();
+    openContractorsBookModal();
+    return;
+  }
+  if(!v) return;
+  const c = loadContractors().find(x => x.id === v);
+  if(!c) return;
+  // Replace recipient list with this contractor's email (de-duped append optional;
+  // we replace because the user explicitly picked one)
+  if(c.email) document.getElementById("ecbTo").value = c.email;
+}
+function setContractorEmailStatus(msg, kind){
+  const el = document.getElementById("ecbStatus");
+  if(!el) return;
+  if(!msg){ el.style.display = "none"; el.className = "email-status"; el.textContent = ""; return; }
+  el.style.display = "";
+  el.className = "email-status" + (kind ? " " + kind : "");
+  el.textContent = msg;
+}
+async function sendContractorBidEmail(){
+  const toRaw   = document.getElementById("ecbTo").value;
+  const subject = (document.getElementById("ecbSubject").value || "").trim();
+  const body    = document.getElementById("ecbBody").value || "";
+  const ccSelf  = !!(document.getElementById("ecbCcSelf") && document.getElementById("ecbCcSelf").checked);
+
+  const recipients = parseRecipients(toRaw);
+  if(!recipients.length){
+    setContractorEmailStatus("Please add at least one recipient email.", "error"); return;
+  }
+  const bad = recipients.filter(e => !isValidEmail(e));
+  if(bad.length){
+    setContractorEmailStatus(`Invalid email${bad.length>1?"s":""}: ${bad.join(", ")}`, "error"); return;
+  }
+  if(!subject){ setContractorEmailStatus("Please add a subject.", "error"); return; }
+  if(typeof html2pdf !== "function"){
+    setContractorEmailStatus("PDF generator failed to load. Refresh the page and try again.", "error"); return;
+  }
+  if(!supa){
+    setContractorEmailStatus("Supabase is not configured — see EMAIL_SETUP.md.", "error"); return;
+  }
+
+  const btn = document.getElementById("ecbSendBtn");
+  if(btn){ btn.disabled = true; btn.textContent = "Working..."; }
+
+  let showApplied = false;
+  try{
+    setContractorEmailStatus("Generating PDF...", "working");
+    const sheetEl = document.getElementById("contractorSheet");
+    if(!sheetEl) throw new Error("Contractor sheet not found");
+
+    // The contractor view is overlay-based — ensure it's visible so html2canvas
+    // can measure + paint. Restore in finally.
+    if(!document.body.classList.contains("show-contractor")){
+      document.body.classList.add("show-contractor");
+      showApplied = true;
+    }
+
+    const addr = sanitizeFilename(state.propAddress || state.propName || "bid");
+    const filename = `ContractorBid-${addr}.pdf`;
+
+    const blob = await html2pdf().set({
+      margin: [0.4, 0.4, 0.4, 0.4],
+      filename,
+      image:       { type: 'jpeg', quality: 0.97 },
+      html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: sheetEl.scrollWidth },
+      jsPDF:       { unit: 'in', format: 'letter', orientation: 'portrait' },
+      pagebreak:   { mode: ['css','legacy'], avoid: ['.scope-section', '.summary', '.sig-area'] }
+    }).from(sheetEl).outputPdf('blob');
+
+    const pdfBase64 = await blobToBase64(blob);
+    const sizeKB = Math.round(blob.size / 1024);
+
+    setContractorEmailStatus(`Sending (${sizeKB} KB attachment)...`, "working");
+
+    const payload = {
+      to: recipients,
+      cc: (ccSelf && currentUser && currentUser.email) ? [currentUser.email] : [],
+      subject, body, pdfBase64, filename
+    };
+    const { data, error } = await supa.functions.invoke('email-estimate', { body: payload });
+    if(error) throw new Error(error.message || "Edge Function error");
+    if(data && data.error) throw new Error(data.error);
+
+    setContractorEmailStatus(`Sent to ${recipients.join(", ")}${ccSelf?" (cc'd to you)":""}.`, "success");
+    if(btn){ btn.textContent = "Sent ✓"; btn.disabled = true; }
+    setTimeout(closeEmailContractorBidModal, 2200);
+  }catch(e){
+    console.error("Contractor bid email failed:", e);
+    setContractorEmailStatus("Failed: " + (e && e.message ? e.message : String(e)), "error");
+    if(btn){ btn.disabled = false; btn.textContent = "Generate PDF & Send"; }
+  }finally{
+    if(showApplied){
+      // Leave the contractor view as the user found it
+    }
+  }
+}
+
 /* ---------- Toast ---------- */
 function flash(msg){
   const t = document.createElement("div");
@@ -7351,6 +7964,12 @@ async function bootstrapCloudSync(showMigratePrompt){
       await ET.bootstrapCloudSync({ user: currentUser, supa: supa }, showMigratePrompt);
     }
   }catch(e){ console.error("Tracker cloud sync failed:", e); }
+
+  // Sync the Contractors address book — same table, type='contractor'.
+  // Lives in estimator scope (not the tracker IIFE), so we just call
+  // pullCloudContractors directly with the migrate prompt flag.
+  try{ await pullCloudContractors(showMigratePrompt); }
+  catch(e){ console.error("Contractors cloud sync failed:", e); }
 }
 
 /* ---------- PDF Floor Plan Import ----------
