@@ -551,7 +551,14 @@
   body.show-contractor{ overflow:hidden; }
   body.show-contractor .contractor-view{ display:block; }
   body.show-contractor > .app,
-  body.show-contractor > .modal-bg{ display:none !important; }
+  /* Hide all modals while the Contractor Bid overlay is up — EXCEPT the
+     two modals that belong to the contractor view itself (address book +
+     Email-to-Contractor). Without these exceptions, clicking Contractors
+     from the bid view would silently do nothing. */
+  body.show-contractor > .modal-bg:not(#contractorsBookModal):not(#emailContractorBidModal){ display:none !important; }
+  /* When either contractor modal is open, layer it above the contractor sheet. */
+  body.show-contractor > .modal-bg#contractorsBookModal.show,
+  body.show-contractor > .modal-bg#emailContractorBidModal.show{ z-index:1000; }
 
   .contractor-toolbar{
     position:sticky; top:0;
@@ -685,12 +692,17 @@
     flex-wrap:wrap;
   }
   .contractor-sheet .bid-cell{ flex:1; min-width:140px; }
-  .contractor-sheet .bid-cell-note{
-    margin-top:6px;
-    font-size:10px; line-height:1.4; color:#555;
-    font-style:italic;
+  /* Subtle full-width explainer that sits directly below the bid row so
+     all three $ fields stay perfectly aligned on a single horizontal line.
+     Small italic text with a single accent on the exclusion phrase. */
+  .contractor-sheet .bid-row-note{
+    margin:6px 2px 0;
+    font-size:9.5px; line-height:1.4;
+    color:#7a7367; font-style:italic;
+    letter-spacing:.01em;
   }
-  .contractor-sheet .bid-cell-note b{ color:#a32a2a; font-style:normal; font-weight:700; }
+  .contractor-sheet .bid-row-note b{ color:#555; font-style:normal; font-weight:600; }
+  .contractor-sheet .bid-row-note b.excl{ color:#a32a2a; font-weight:700; }
   .contractor-sheet .bid-cell label{
     display:block; font-size:9px;
     text-transform:uppercase; letter-spacing:.18em;
@@ -4975,12 +4987,11 @@ function scopeSection(title, items){
         <ul class="scope-list">${items.map(i=>`<li${i.sub?' class="sub"':(i.hdr?' class="bath-hdr"':'')}>${i.html}</li>`).join("")}</ul>
         <div class="bid-row">
           <div class="bid-cell"><label>Your labour $</label><input type="text" class="bid-input"></div>
-          <div class="bid-cell">
-            <label>Building material $</label>
-            <input type="text" class="bid-input">
-            <div class="bid-cell-note">Construction supplies needed to do the work &mdash; drywall, lumber, mud, primer, fasteners, grout, adhesives, etc. <b>Does NOT</b> include the finishing materials (tile, flooring, vanities, fixtures, faucets, paint colour) &mdash; those are supplied separately.</div>
-          </div>
+          <div class="bid-cell"><label>Building material $</label><input type="text" class="bid-input"></div>
           <div class="bid-cell"><label>Section total $</label><input type="text" class="bid-input"></div>
+        </div>
+        <div class="bid-row-note">
+          <b>Building material</b> = construction supplies you bring to do the work (drywall, lumber, mud, primer, fasteners, grout, adhesives, paint for walls / baseboards / doors / trims, etc.). <b class="excl">Does NOT</b> include finishing materials &mdash; tile, flooring, vanities, fixtures, faucets &mdash; those are supplied separately.
         </div>
       </div>
     </div>
