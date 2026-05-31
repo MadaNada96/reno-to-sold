@@ -1860,6 +1860,75 @@
   #etApp .twocol{display:grid;grid-template-columns:1.3fr 1fr;gap:16px}
   @media(max-width:820px){#etApp .twocol{grid-template-columns:1fr}}
 
+  /* ============================================================
+     Mobile optimisation for the Expense Tracker (≤640px).
+     Fixes: project name cut-off, 8-column expense table overflow,
+     overly tall topbar, awkward sticky-summary card wrapping.
+     ============================================================ */
+  @media (max-width:640px){
+    /* Reclaim side space — every pixel counts on 375px iPhones */
+    #etApp .wrap{ padding:0 14px 80px; }
+
+    /* Topbar — denser, smaller buttons so brand + 3 buttons fit one row */
+    #etApp .topbar-inner{ padding:11px 14px; gap:10px; flex-wrap:wrap; }
+    #etApp .brand{ gap:9px; }
+    #etApp .brand .wordmark b{ font-size:14px; letter-spacing:.12em; }
+    #etApp .brand .wordmark span{ font-size:9px; letter-spacing:.16em; }
+    #etApp .btn{ padding:8px 12px; font-size:12.5px; border-radius:9px; }
+
+    /* Project view header — let the title use the full width and shrink the font */
+    #etApp .pv-head{ gap:10px; padding:18px 0 8px; }
+    #etApp .pv-head .titles{ min-width:0; width:100%; }
+    #etApp .pv-title{ font-size:19px; max-width:none; }
+    #etApp .pv-addr{ font-size:13px; max-width:none; }
+    #etApp .crumb{ font-size:12px; margin-bottom:7px; }
+
+    /* Tabs — tighter padding */
+    #etApp .tabs{ margin:14px 0 16px; }
+    #etApp .tab{ padding:10px 12px; font-size:13px; gap:6px; }
+
+    /* Sticky summary — 2 cards per row, no leftover vertical borders */
+    #etApp .exp-summary{ padding:11px 13px; gap:8px 14px; }
+    #etApp .exp-summary .es-card{
+      min-width:0; padding:0;
+      flex:1 1 calc(50% - 7px);
+    }
+    #etApp .exp-summary .es-card + .es-card{ border-left:none; padding-left:0; }
+    #etApp .exp-summary .es-val{ font-size:18px; }
+    #etApp .exp-summary .es-sub{ font-size:10.5px; }
+
+    /* Expense toolbar — search/filters/buttons row */
+    #etApp .toolbar{ gap:8px; }
+    #etApp .toolbar .btn{ padding:8px 11px; font-size:12.5px; }
+    #etApp .toolbar .search{ min-width:0; flex:1 1 100%; }
+
+    /* Expense table — let the 8-column table scroll sideways inside the
+       panel instead of getting clipped or pushing the whole page wider.
+       The inline overflow:hidden on .panel is overridden via !important. */
+    #etApp #pane-exp > .panel{
+      overflow-x:auto !important;
+      overflow-y:visible !important;
+      -webkit-overflow-scrolling:touch;
+    }
+    #etApp #pane-exp > .panel > table{ min-width:680px; }
+
+    /* Profit tab — already wraps via auto-fit, but tighten amounts */
+    #etApp .stat{ padding:14px 14px; }
+    #etApp .stat .v{ font-size:22px; }
+
+    /* Hero / home */
+    #etApp .hero{ padding:24px 0 10px; }
+    #etApp .hero h1{ font-size:24px; }
+    #etApp .projects-grid{ grid-template-columns:1fr; margin-top:16px; }
+
+    /* Modals — keep them comfortable on narrow screens */
+    #etApp .modal{ max-height:88vh; }
+  }
+  @media (max-width:380px){
+    /* Tightest tier — single card per row on the narrowest phones */
+    #etApp .exp-summary .es-card{ flex:1 1 100%; }
+  }
+
   /* Modal */
   #etApp .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.65);backdrop-filter:blur(3px);
     display:none;align-items:flex-start;justify-content:center;z-index:100;padding:40px 16px;overflow:auto}
