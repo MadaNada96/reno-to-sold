@@ -650,6 +650,23 @@
      Email-to-Contractor). Without these exceptions, clicking Contractors
      from the bid view would silently do nothing. */
   body.show-contractor > .modal-bg:not(#contractorsBookModal):not(#emailContractorBidModal):not(#receivedBidsModal){ display:none !important; }
+  /* While html2pdf is rasterising the contractor sheet for the email PDF,
+     strip on-screen chrome (toolbar, cat bar, sheet padding/shadow/max-width)
+     so the resulting PDF matches the clean Print/PDF iframe output instead
+     of the on-screen "card" look. Class is added/removed by sendContractorBidEmail. */
+  body.contractor-pdf-export .contractor-toolbar,
+  body.contractor-pdf-export .contractor-cat-bar{ display:none !important; }
+  body.contractor-pdf-export .contractor-view{
+    background:#fff !important;
+    position:static !important;
+    overflow:visible !important;
+  }
+  body.contractor-pdf-export .contractor-sheet{
+    margin:0 !important;
+    max-width:none !important;
+    box-shadow:none !important;
+    background:#fff !important;
+  }
   /* When any contractor-view modal is open, layer it above the contractor sheet. */
   body.show-contractor > .modal-bg#contractorsBookModal.show,
   body.show-contractor > .modal-bg#emailContractorBidModal.show,
@@ -7580,7 +7597,7 @@ async function sendContractorBidEmail(){
     // Build the public link
     const bidLink = `${location.origin}${location.pathname}?bid=${bid_token}`;
 
-    // ----- 2. Generate the PDF (fallback for contractors who prefer it) -----
+    // ----- 2. Generate the PDF (matches the Print/PDF view styling) -----
     setContractorEmailStatus("Generating PDF...", "working");
     const sheetEl = document.getElementById("contractorSheet");
     if(!sheetEl) throw new Error("Contractor sheet not found");
@@ -7589,43 +7606,136 @@ async function sendContractorBidEmail(){
       document.body.classList.add("show-contractor");
       showApplied = true;
     }
+    // Apply the PDF-export overrides so the rasterized PDF matches the clean
+    // Print/PDF iframe output (no toolbar, no cat bar, no on-screen card padding).
+    document.body.classList.add("contractor-pdf-export");
 
     const addr = sanitizeFilename(state.propAddress || state.propName || "bid");
     const filename = `ContractorBid-${addr}.pdf`;
 
-    const blob = await html2pdf().set({
-      margin: [0.4, 0.4, 0.4, 0.4],
-      filename,
-      image:       { type: 'jpeg', quality: 0.97 },
-      html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: sheetEl.scrollWidth },
-      jsPDF:       { unit: 'in', format: 'letter', orientation: 'portrait' },
-      pagebreak:   { mode: ['css','legacy'], avoid: ['.scope-section', '.summary', '.sig-area'] }
-    }).from(sheetEl).outputPdf('blob');
+    let blob;
+    try{
+      blob = await html2pdf().set({
+        margin: [0.4, 0.4, 0.4, 0.4],
+        filename,
+        image:       { type: 'jpeg', quality: 0.97 },
+        html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: sheetEl.scrollWidth },
+        jsPDF:       { unit: 'in', format: 'letter', orientation: 'portrait' },
+        pagebreak:   { mode: ['css','legacy'], avoid: ['.scope-section', '.summary', '.sig-area'] }
+      }).from(sheetEl).outputPdf('blob');
+    } finally {
+      // Always strip the PDF-export class so the on-screen view is restored
+      document.body.classList.remove("contractor-pdf-export");
+    }
 
     const pdfBase64 = await blobToBase64(blob);
     const sizeKB = Math.round(blob.size / 1024);
 
-    // ----- 3. Compose email body — link is the preferred path, PDF is the fallback.
-    // The Edge Function renders the bid_link as a styled CTA button at the top
-    // AND auto-links any URLs in the body, so this reads naturally without
-    // ASCII separator bars or all-caps headers. -----
-    const bodyWithLink =
-      body + "\n\n" +
-      "The fastest way to send your bid back is to fill it in online — drafts " +
-      "auto-save as you type, and you can come back to update your numbers " +
-      "any time until I accept the bid:\n\n" +
-      bidLink + "\n\n" +
-      "Prefer to print? The same bid sheet is attached as a PDF. Fill it in " +
-      "and reply to this email with the completed copy.";
+    // ----- 3. Build a branded HTML email body matching the Reno to Sold style -----
+    const contactName = (pickedContractor && pickedContractor.contact) || "";
+    const greeting = contactName ? `Hi ${contactName.split(/\s+/)[0]},` : "Hi,";
+    const rawAddr = (state.propAddress || "").trim();
+    // Split the address into up to 3 display lines for the email block
+    const addrParts = rawAddr.split(",").map(s => s.trim()).filter(Boolean);
+    let addrLines;
+    if(addrParts.length >= 4){
+      // street / city / province / postal → 3 lines: street | city + province | postal
+      addrLines = [addrParts[0]+",", addrParts.slice(1,3).join(", ")+",", addrParts[3]+"."];
+    } else if(addrParts.length === 3){
+      addrLines = [addrParts[0]+",", addrParts[1]+",", addrParts[2]+"."];
+    } else if(addrParts.length === 2){
+      addrLines = [addrParts[0]+",", addrParts[1]+"."];
+    } else if(addrParts.length === 1){
+      addrLines = [addrParts[0]+"."];
+    } else {
+      addrLines = ["—"];
+    }
+    const mapsUrl = "https://maps.google.com/?q=" + encodeURIComponent(rawAddr);
+    const addressBlock = addrLines.map(l => escapeHtml(l)).join("<br>");
+
+    const bodyHtml = `<!DOCTYPE html>
+<html><body style="margin:0;padding:0;background:#f5f1e6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f5f1e6;padding:24px 12px;">
+<tr><td align="center">
+<table cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 4px 18px rgba(0,0,0,.08);">
+  <!-- Logo header -->
+  <tr><td style="background:#0a0a0a;padding:24px 0;text-align:center;border-bottom:3px solid #d4af6a;">
+    <img src="https://renotosold.homes/logo.png" alt="Reno to Sold Inc." width="220" style="display:inline-block;height:auto;max-width:220px;max-height:60px;" />
+  </td></tr>
+
+  <!-- Body -->
+  <tr><td style="padding:30px 34px 18px;color:#1a1a1a;font-size:14.5px;line-height:1.65;">
+    <p style="margin:0 0 18px;">${escapeHtml(greeting)}</p>
+    <p style="margin:0 0 14px;">Please find attached the scope of work for a renovation at:</p>
+    <p style="margin:0 0 22px;">
+      <a href="${escapeHtml(mapsUrl)}" style="color:#a8853f;text-decoration:none;font-weight:700;">
+        ${addressBlock}
+      </a>
+    </p>
+    <p style="margin:0 0 26px;">Have a look through the sections and fill in your labour, building material, firm start date and section totals where indicated.</p>
+
+    <!-- PREFERRED card -->
+    <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#fbf5e6;border-left:4px solid #d4af6a;border-radius:0 6px 6px 0;margin:0 0 18px;">
+      <tr><td style="padding:18px 22px;">
+        <p style="margin:0 0 4px;font-size:10.5px;letter-spacing:.20em;text-transform:uppercase;font-weight:800;color:#a8853f;">★ Preferred</p>
+        <p style="margin:0 0 10px;font-size:16px;font-weight:800;color:#0a0a0a;letter-spacing:.04em;">Fill out your bid online</p>
+        <p style="margin:0 0 14px;font-size:13.5px;color:#3a3a3a;">Open this link on your phone or desktop. Drafts auto-save as you type, and the form is mobile-friendly:</p>
+        <p style="margin:0 0 14px;">
+          <a href="${escapeHtml(bidLink)}" style="display:inline-block;padding:13px 26px;background:#0a0a0a;color:#e8c989;border:2px solid #d4af6a;border-radius:6px;font-size:13.5px;font-weight:700;letter-spacing:.10em;text-transform:uppercase;text-decoration:none;">
+            Open Bid Sheet &rarr;
+          </a>
+        </p>
+        <p style="margin:0;font-size:11.5px;color:#666;">You can come back to the link any time until I accept your bid.</p>
+      </td></tr>
+    </table>
+
+    <!-- ALTERNATIVE card -->
+    <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f5f5f3;border-left:4px solid #999;border-radius:0 6px 6px 0;margin:0 0 26px;">
+      <tr><td style="padding:14px 22px;">
+        <p style="margin:0 0 4px;font-size:10.5px;letter-spacing:.20em;text-transform:uppercase;font-weight:800;color:#666;">Alternative</p>
+        <p style="margin:0 0 6px;font-size:14px;font-weight:800;color:#0a0a0a;letter-spacing:.04em;">Print / fill the PDF</p>
+        <p style="margin:0;font-size:13px;color:#555;">If you'd rather, the same bid sheet is attached as a PDF — print it, fill it in, and reply to this email with the completed copy.</p>
+      </td></tr>
+    </table>
+
+    <p style="margin:0 0 24px;">Let me know if you have any questions.</p>
+
+    <!-- Signature -->
+    <table cellpadding="0" cellspacing="0" border="0" width="100%" style="border-top:1px solid #e0dccf;margin-top:6px;">
+      <tr><td style="padding:18px 0 0;">
+        <p style="margin:0 0 3px;">Thanks,</p>
+        <p style="margin:0 0 3px;font-weight:700;font-size:15px;color:#0a0a0a;">Mohamed Nada</p>
+        <p style="margin:0 0 4px;font-size:11px;letter-spacing:.20em;font-weight:800;color:#a8853f;text-transform:uppercase;">RENO <span style="color:#d4af6a;">TO</span> SOLD INC.</p>
+        <p style="margin:0;font-size:13px;color:#555;">416-832-3779</p>
+      </td></tr>
+    </table>
+  </td></tr>
+
+  <!-- Footer note -->
+  <tr><td style="background:#0a0a0a;padding:12px 22px;text-align:center;">
+    <p style="margin:0;font-size:10px;letter-spacing:.18em;color:#888;text-transform:uppercase;">Renovate for less. Sell for more.</p>
+  </td></tr>
+</table>
+</td></tr></table>
+</body></html>`;
+
+    // Plain-text alternative for non-HTML mail clients (also helps deliverability)
+    const plainBody =
+      `${greeting}\n\n` +
+      `Please find attached the scope of work for a renovation at ${rawAddr}.\n\n` +
+      `Have a look through the sections and fill in your labour, building material, firm start date and section totals where indicated.\n\n` +
+      `PREFERRED — fill out your bid online:\n${bidLink}\n` +
+      `(Drafts auto-save as you type. You can come back to the link any time until I accept your bid.)\n\n` +
+      `ALTERNATIVE — the same bid sheet is attached as a PDF. Print it, fill it in, and reply to this email with the completed copy.\n\n` +
+      `Let me know if you have any questions.\n\n` +
+      `Thanks,\nMohamed Nada\nRENO TO SOLD INC.\n416-832-3779`;
 
     setContractorEmailStatus(`Sending (${sizeKB} KB attachment)...`, "working");
 
     const payload = {
       to: recipients,
       cc: (ccSelf && currentUser && currentUser.email) ? [currentUser.email] : [],
-      subject, body: bodyWithLink, pdfBase64, filename,
-      bid_link: bidLink,
-      bid_link_label: "Open Bid Sheet"
+      subject, body: plainBody, bodyHtml, pdfBase64, filename
     };
     const { data, error } = await supa.functions.invoke('email-estimate', { body: payload });
     if(error) throw new Error(error.message || "Edge Function error");
