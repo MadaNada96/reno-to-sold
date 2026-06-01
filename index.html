@@ -6053,17 +6053,116 @@ function printEstimateViaIframe(){
 /* Print the Contractor Bid Sheet via the iframe helper. Reuses the existing
    .contractor-sheet styles (which already have @media print rules), and adds
    iframe-specific overrides to unwrap the full-screen overlay. */
+/* Inline CSS that drives the Print/PDF contractor view. Shared between the
+   on-screen Print button (printContractorBidViaIframe) and the email PDF
+   generator (renderContractorBidPdfBlob) so both produce identical layouts. */
+const CONTRACTOR_PRINT_EXTRA_CSS = `
+  .contractor-view { display:block !important; position:static !important; background:#fff !important; overflow:visible !important; }
+  .contractor-toolbar { display:none !important; }
+  .contractor-cat-bar { display:none !important; }
+  .contractor-sheet { margin:0 !important; padding:0 !important; max-width:none !important; box-shadow:none !important; background:#fff !important; }
+  .scope-title, .summary-title { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .scope-section, .summary, .notes-block, .sig-area {
+    page-break-inside:avoid !important; break-inside:avoid !important;
+  }
+`;
 function printContractorBidViaIframe(){
   const sourceEl = document.getElementById("contractorView");
-  printNodeViaIframe(sourceEl, "show-contractor", `
-    .contractor-view { display:block !important; position:static !important; background:#fff !important; overflow:visible !important; }
-    .contractor-toolbar { display:none !important; }
-    .contractor-sheet { margin:0 !important; padding:0 !important; max-width:none !important; box-shadow:none !important; background:#fff !important; }
-    .scope-title, .summary-title { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-    .scope-section, .summary, .notes-block, .sig-area {
-      page-break-inside:avoid !important; break-inside:avoid !important;
+  printNodeViaIframe(sourceEl, "show-contractor", CONTRACTOR_PRINT_EXTRA_CSS);
+}
+/* Build a PDF blob of the contractor bid sheet via the SAME iframe-clone
+   approach the Print button uses. Then html2pdf rasterises the iframe's
+   body (which has full letter-page width + proper print CSS) instead of
+   the live on-screen DOM (which has narrowed columns + visible toolbar).
+   This guarantees the emailed PDF matches the Print/PDF output exactly. */
+async function renderContractorBidPdfBlob(){
+  const sourceEl = document.getElementById("contractorView");
+  if(!sourceEl) throw new Error("Contractor view not found");
+
+  // Clone + serialize the live DOM, mirroring printNodeViaIframe
+  const clone = sourceEl.cloneNode(true);
+  const liveInputs   = sourceEl.querySelectorAll("input, textarea, select");
+  const clonedInputs = clone.querySelectorAll("input, textarea, select");
+  liveInputs.forEach((live, i) => {
+    const c = clonedInputs[i];
+    if(!c) return;
+    const tag = (live.tagName || "").toUpperCase();
+    if(tag === "TEXTAREA"){ c.textContent = live.value || ""; }
+    else if(tag === "SELECT"){
+      Array.from(c.options).forEach(opt => {
+        if(opt.value === live.value) opt.setAttribute("selected","selected");
+        else opt.removeAttribute("selected");
+      });
+    } else {
+      if(live.type === "checkbox" || live.type === "radio"){
+        if(live.checked) c.setAttribute("checked","checked");
+        else c.removeAttribute("checked");
+      } else {
+        c.setAttribute("value", live.value || "");
+      }
     }
-  `);
+  });
+  const sourceHtml = clone.outerHTML;
+  const styleNodes = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+    .map(n => n.outerHTML).join("\n");
+
+  // Render at the same effective width as a letter page minus margins
+  // (7.7in @ 96dpi ≈ 740px). html2canvas needs a windowWidth that matches
+  // the iframe body, so the cloned columns lay out the way they would in
+  // the printed page rather than the on-screen window width.
+  const PRINT_WIDTH_PX = 740;
+  const doc = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title></title>
+${styleNodes}
+<style>
+  @page { size: letter; margin: 0.45in; }
+  html, body { background:#fff !important; margin:0 !important; padding:0 !important; width:${PRINT_WIDTH_PX}px !important; }
+  body { font-family:'Montserrat',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; color:#0a0a0a; }
+  ${CONTRACTOR_PRINT_EXTRA_CSS}
+</style></head>
+<body class="show-contractor">${sourceHtml}</body></html>`;
+
+  // Hidden iframe, sized to the print width so html2canvas captures the same
+  // layout the iframe printer would render.
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("aria-hidden","true");
+  iframe.style.cssText = `position:fixed;left:-10000px;top:0;width:${PRINT_WIDTH_PX}px;height:1800px;border:0;opacity:0;pointer-events:none;`;
+  document.body.appendChild(iframe);
+  try{
+    const win  = iframe.contentWindow;
+    const idoc = win.document;
+    idoc.open(); idoc.write(doc); idoc.close();
+
+    // Wait for fonts + a tick of layout
+    await new Promise(r => {
+      const go = () => setTimeout(r, 120);
+      if(idoc.fonts && idoc.fonts.ready && idoc.fonts.ready.then) idoc.fonts.ready.then(go);
+      else setTimeout(go, 400);
+    });
+
+    const target = idoc.body;
+    // Grow the iframe to whatever the body needs so html2canvas sees the
+    // full sheet on a single canvas pass (no clipping at viewport height).
+    const realHeight = Math.max(target.scrollHeight, target.offsetHeight, 1200);
+    iframe.style.height = (realHeight + 80) + "px";
+    await new Promise(r => setTimeout(r, 60));
+
+    const filenameAddr = sanitizeFilename(state.propAddress || state.propName || "bid");
+    const filename = `ContractorBid-${filenameAddr}.pdf`;
+
+    const blob = await html2pdf().set({
+      margin:      [0.45, 0.45, 0.45, 0.45],
+      filename,
+      image:       { type:'jpeg', quality:0.97 },
+      html2canvas: { scale:2, useCORS:true, backgroundColor:'#ffffff', windowWidth:PRINT_WIDTH_PX, scrollY:0 },
+      jsPDF:       { unit:'in', format:'letter', orientation:'portrait' },
+      pagebreak:   { mode:['css','legacy'], avoid:['.scope-section','.summary','.sig-area','.notes-block'] }
+    }).from(target).outputPdf('blob');
+
+    return { blob, filename };
+  } finally {
+    try { iframe.remove(); } catch(_){}
+  }
 }
 
 /* Deterministic quote number: Q-YYMMDD-#### derived from address + date */
@@ -7982,7 +8081,6 @@ async function sendContractorBidEmail(){
   const btn = document.getElementById("ecbSendBtn");
   if(btn){ btn.disabled = true; btn.textContent = "Working..."; }
 
-  let showApplied = false;
   try{
     const scopeData = buildScopeDataForBid();
     if(!scopeData.categories.length){
@@ -7990,29 +8088,11 @@ async function sendContractorBidEmail(){
     }
 
     // ----- 1. Generate the PDF ONCE (it's identical for every recipient) -----
+    // Uses the SAME iframe-clone approach as the Print/PDF button, so the
+    // emailed PDF matches the Print output exactly (full-width layout, no
+    // toolbar, no cat bar, columns laid out at letter-page width).
     setContractorEmailStatus("Generating PDF...", "working");
-    const sheetEl = document.getElementById("contractorSheet");
-    if(!sheetEl) throw new Error("Contractor sheet not found");
-    if(!document.body.classList.contains("show-contractor")){
-      document.body.classList.add("show-contractor");
-      showApplied = true;
-    }
-    document.body.classList.add("contractor-pdf-export");
-    const filenameAddr = sanitizeFilename(state.propAddress || state.propName || "bid");
-    const filename = `ContractorBid-${filenameAddr}.pdf`;
-    let blob;
-    try{
-      blob = await html2pdf().set({
-        margin: [0.4, 0.4, 0.4, 0.4],
-        filename,
-        image:       { type: 'jpeg', quality: 0.97 },
-        html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: sheetEl.scrollWidth },
-        jsPDF:       { unit: 'in', format: 'letter', orientation: 'portrait' },
-        pagebreak:   { mode: ['css','legacy'], avoid: ['.scope-section', '.summary', '.sig-area'] }
-      }).from(sheetEl).outputPdf('blob');
-    } finally {
-      document.body.classList.remove("contractor-pdf-export");
-    }
+    const { blob, filename } = await renderContractorBidPdfBlob();
     const pdfBase64 = await blobToBase64(blob);
     const sizeKB = Math.round(blob.size / 1024);
 
@@ -8072,10 +8152,6 @@ async function sendContractorBidEmail(){
     console.error("Contractor bid email failed:", e);
     setContractorEmailStatus("Failed: " + (e && e.message ? e.message : String(e)), "error");
     if(btn){ btn.disabled = false; btn.textContent = "Generate PDF & Send"; }
-  }finally{
-    if(showApplied){
-      // Leave the contractor view as the user found it
-    }
   }
 }
 
