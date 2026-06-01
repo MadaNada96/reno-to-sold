@@ -7605,29 +7605,27 @@ async function sendContractorBidEmail(){
     const pdfBase64 = await blobToBase64(blob);
     const sizeKB = Math.round(blob.size / 1024);
 
-    // ----- 3. Compose email body — link is the preferred path, PDF is the fallback -----
+    // ----- 3. Compose email body — link is the preferred path, PDF is the fallback.
+    // The Edge Function renders the bid_link as a styled CTA button at the top
+    // AND auto-links any URLs in the body, so this reads naturally without
+    // ASCII separator bars or all-caps headers. -----
     const bodyWithLink =
       body + "\n\n" +
-      "─────────────────────────────────\n" +
-      "PREFERRED: FILL OUT YOUR BID ONLINE\n" +
-      "─────────────────────────────────\n" +
-      "Open this link on your phone or desktop — drafts auto-save as you type, " +
-      "and the form is mobile-friendly:\n\n" +
+      "The fastest way to send your bid back is to fill it in online — drafts " +
+      "auto-save as you type, and you can come back to update your numbers " +
+      "any time until I accept the bid:\n\n" +
       bidLink + "\n\n" +
-      "You can come back to the link any time until I accept your bid — " +
-      "useful if you want to revise numbers after walking the site.\n\n" +
-      "─────────────────────────────────\n" +
-      "ALTERNATIVE: PRINT / FILL THE PDF\n" +
-      "─────────────────────────────────\n" +
-      "If you'd rather, the same bid sheet is attached as a PDF — print it, " +
-      "fill it in, and reply to this email with the completed copy.\n";
+      "Prefer to print? The same bid sheet is attached as a PDF. Fill it in " +
+      "and reply to this email with the completed copy.";
 
     setContractorEmailStatus(`Sending (${sizeKB} KB attachment)...`, "working");
 
     const payload = {
       to: recipients,
       cc: (ccSelf && currentUser && currentUser.email) ? [currentUser.email] : [],
-      subject, body: bodyWithLink, pdfBase64, filename
+      subject, body: bodyWithLink, pdfBase64, filename,
+      bid_link: bidLink,
+      bid_link_label: "Open Bid Sheet"
     };
     const { data, error } = await supa.functions.invoke('email-estimate', { body: payload });
     if(error) throw new Error(error.message || "Edge Function error");
