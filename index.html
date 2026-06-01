@@ -1858,7 +1858,10 @@
     padding:10px; border-bottom:1px solid #efe7d0; vertical-align:top;
   }
   #bidResponseView .brv-dash-cats td.r{ text-align:right; font-weight:700; font-variant-numeric:tabular-nums; }
-  #bidResponseView .brv-dash-cats td.cat{ font-weight:700; color:#0a0a0a; }
+  #bidResponseView .brv-dash-cats td.cat-name{
+    font-weight:700; color:#0a0a0a;
+    background:transparent; border-radius:0;
+  }
   #bidResponseView .brv-dash-cats td.meta{ color:#444; font-size:12px; }
   #bidResponseView .brv-dash-notes{
     padding:14px 20px 18px; border-top:1px solid #efe7d0; background:#fbf8ee;
@@ -11389,7 +11392,7 @@ window.ET={ goHome:goHome, openNewProject:openNewProject, switchHome:switchHome,
       const total = s.section_total || "—";
       const tline = s.timeline || "—";
       return `<tr>
-        <td class="cat">${esc(c.title)}</td>
+        <td class="cat-name">${esc(c.title)}</td>
         <td class="meta">Labour: ${esc(labour)}<br>Material: ${esc(material)}<br>Timeline: ${esc(tline)}</td>
         <td class="r">${esc(total)}</td>
       </tr>`;
