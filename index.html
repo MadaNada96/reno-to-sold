@@ -301,6 +301,29 @@
   }
   .email-cc{ display:flex; align-items:center; gap:8px; font-size:12px; color:var(--ink); margin:4px 0 14px; cursor:pointer; }
   .email-cc input{ accent-color:var(--gold); }
+  /* Email contractor multi-pick chips */
+  .ecb-chips{
+    display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px;
+    min-height:38px; padding:6px 8px;
+    border:1px dashed var(--line-strong); border-radius:6px;
+    background:var(--panel-2);
+  }
+  .ecb-chips .empty{ color:var(--muted); font-size:12px; padding:5px 4px; font-style:italic; }
+  .ecb-chip{
+    display:inline-flex; align-items:center; gap:8px;
+    padding:5px 10px 5px 12px; background:var(--gold-deep); color:#0a0a0a;
+    border-radius:999px; font-size:12px; font-weight:700;
+    border:1px solid var(--gold);
+  }
+  .ecb-chip .meta{ font-weight:500; color:#222; font-size:11px; }
+  .ecb-chip .x{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:18px; height:18px; border-radius:50%;
+    background:#0a0a0a; color:#d4af6a; cursor:pointer;
+    font-size:13px; font-weight:800; line-height:1;
+    border:none; padding:0;
+  }
+  .ecb-chip .x:hover{ background:#1a1a1a; }
   .email-status{
     padding:10px 12px; border-radius:6px; font-size:12px; margin-bottom:12px;
     border:1px solid var(--line-strong); background:var(--panel-2);
@@ -345,6 +368,34 @@
   .contractors-form .cf-actions{ display:flex; justify-content:flex-end; gap:8px; margin-top:6px; }
 
   /* Received Bids modal */
+  .rb-snapshot{
+    background:linear-gradient(180deg,#1a1814,#0f0d09);
+    border:1px solid var(--gold-deep); border-radius:9px;
+    padding:14px 16px; margin-bottom:14px;
+    display:grid; grid-template-columns:repeat(4,1fr); gap:0;
+  }
+  .rb-snapshot.empty{ display:none; }
+  .rb-snapshot .stat{
+    text-align:center; border-right:1px solid var(--line);
+    padding:6px 8px;
+  }
+  .rb-snapshot .stat:last-child{ border-right:none; }
+  .rb-snapshot .stat .l{
+    font-size:9.5px; letter-spacing:.16em; color:var(--muted);
+    text-transform:uppercase; font-weight:700; margin-bottom:4px;
+  }
+  .rb-snapshot .stat .v{
+    font-size:16px; font-weight:800; color:var(--ink-strong);
+    font-variant-numeric:tabular-nums;
+  }
+  .rb-snapshot .stat .v.gold{ color:var(--gold-bright); }
+  .rb-snapshot .stat .v.small{ font-size:14px; }
+  @media (max-width:600px){
+    .rb-snapshot{ grid-template-columns:repeat(2,1fr); }
+    .rb-snapshot .stat:nth-child(2){ border-right:none; }
+    .rb-snapshot .stat:nth-child(1),
+    .rb-snapshot .stat:nth-child(2){ border-bottom:1px solid var(--line); padding-bottom:10px; margin-bottom:4px; }
+  }
   .rb-filter{ display:flex; gap:4px; margin-bottom:14px; flex-wrap:wrap; }
   .rb-tab{
     padding:7px 13px; font-size:12px; font-weight:600;
@@ -391,6 +442,7 @@
   }
   .rb-detail th{ color:var(--muted); font-size:10px; letter-spacing:.08em; text-transform:uppercase; }
   .rb-detail td.num{ text-align:right; font-variant-numeric:tabular-nums; }
+  .rb-detail td.money, .rb-detail th.money{ text-align:center; font-variant-numeric:tabular-nums; font-weight:700; }
   .rb-detail .actions{ display:flex; gap:8px; margin-top:13px; flex-wrap:wrap; }
   .rb-detail .actions button{ font-size:12px; padding:7px 13px; }
   .rb-revisions{ margin-top:14px; }
@@ -1677,6 +1729,19 @@
   #bidResponseView .brv-field input:focus{
     outline:none; border-color:#a8853f; background:#fffbef;
   }
+  #bidResponseView .brv-field input[readonly]{
+    background:#f8f2e0; color:#0a0a0a; font-weight:700;
+    border-color:#d4af6a; cursor:default;
+  }
+  #bidResponseView .brv-field input[readonly]:focus{
+    background:#f8f2e0; border-color:#d4af6a;
+  }
+  #bidResponseView .brv-field label .brv-auto{
+    display:inline-block; margin-left:6px; padding:1px 7px;
+    background:#0a0a0a; color:#d4af6a; border-radius:999px;
+    font-size:8.5px; letter-spacing:.16em; font-weight:800;
+    vertical-align:middle;
+  }
   #bidResponseView .brv-bid-note{
     margin-top:8px; font-size:10px; line-height:1.4; color:#7a7367;
     font-style:italic;
@@ -1693,6 +1758,11 @@
     font-size:11.5px; font-weight:800; letter-spacing:.18em;
     text-transform:uppercase; border-bottom:2px solid #d4af6a;
   }
+  #bidResponseView .brv-summary .brv-sum-head .brv-sum-auto{
+    font-size:9.5px; letter-spacing:.05em; color:#d4af6a;
+    text-transform:none; font-weight:600; margin-left:8px;
+    font-style:italic;
+  }
   #bidResponseView .brv-summary .brv-sum-body{ padding:8px 16px; }
   #bidResponseView .brv-summary-row{
     display:flex; align-items:center; gap:10px;
@@ -1700,19 +1770,118 @@
   }
   #bidResponseView .brv-summary-row:last-child{ border-bottom:none; }
   #bidResponseView .brv-summary-row .lbl{
-    flex:1; font-size:12.5px; color:#444; font-weight:600;
+    flex:1; font-size:12.5px; color:#1a1a1a; font-weight:600;
   }
   #bidResponseView .brv-summary-row.total{
     background:#fbf5e6; margin:6px -16px 0; padding:13px 16px;
     border-top:2px solid #0a0a0a; border-bottom:3px solid #d4af6a;
   }
   #bidResponseView .brv-summary-row.total .lbl{ font-size:14px; font-weight:800; color:#0a0a0a; }
-  #bidResponseView .brv-summary-row.total input{ font-size:15px; font-weight:800; color:#a8853f; }
+  #bidResponseView .brv-summary-row.total input{ font-size:16px; font-weight:800; color:#0a0a0a; background:#fffaef; }
   #bidResponseView .brv-summary-row input{
     flex:0 0 160px; padding:8px 11px; font-size:13.5px;
     border:1px solid #c9bb95; border-radius:5px;
-    background:#fff; font-family:inherit;
+    background:#fff; color:#0a0a0a; font-weight:700; font-family:inherit;
     font-variant-numeric:tabular-nums;
+  }
+  #bidResponseView .brv-summary-row input[readonly]{
+    background:#f8f2e0; border-color:#d4af6a; cursor:default;
+  }
+  /* --- Post-submit dashboard --- */
+  #bidResponseView .brv-dash{
+    background:#fff; border:1px solid #d6c897; border-radius:10px;
+    box-shadow:0 2px 8px rgba(0,0,0,.06); padding:0; overflow:hidden;
+    margin-bottom:18px;
+  }
+  #bidResponseView .brv-dash-head{
+    background:#0a0a0a; color:#fff; padding:18px 22px;
+    display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;
+  }
+  #bidResponseView .brv-dash-head .ttl{
+    font-size:12.5px; letter-spacing:.20em; color:#d4af6a;
+    font-weight:800; text-transform:uppercase;
+  }
+  #bidResponseView .brv-dash-head .sub{
+    color:#e9e2cf; font-size:13px; margin-top:4px;
+  }
+  #bidResponseView .brv-pill{
+    display:inline-block; padding:5px 14px; border-radius:999px;
+    font-size:11px; letter-spacing:.18em; font-weight:800; text-transform:uppercase;
+    background:#d4af6a; color:#0a0a0a; border:1px solid #d4af6a;
+  }
+  #bidResponseView .brv-pill.submitted{ background:#d4af6a; color:#0a0a0a; }
+  #bidResponseView .brv-pill.accepted{ background:#1d7a3a; color:#fff; border-color:#1d7a3a; }
+  #bidResponseView .brv-pill.cancelled{ background:#8a2828; color:#fff; border-color:#8a2828; }
+  #bidResponseView .brv-dash-stats{
+    display:grid; grid-template-columns:repeat(3, 1fr); gap:0;
+    border-top:1px solid #efe7d0;
+  }
+  @media (max-width:560px){
+    #bidResponseView .brv-dash-stats{ grid-template-columns:1fr; }
+  }
+  #bidResponseView .brv-dash-stat{
+    padding:18px 20px; border-right:1px solid #efe7d0;
+    text-align:center;
+  }
+  #bidResponseView .brv-dash-stat:last-child{ border-right:none; }
+  @media (max-width:560px){
+    #bidResponseView .brv-dash-stat{ border-right:none; border-bottom:1px solid #efe7d0; }
+    #bidResponseView .brv-dash-stat:last-child{ border-bottom:none; }
+  }
+  #bidResponseView .brv-dash-stat .lbl{
+    font-size:10.5px; letter-spacing:.18em; color:#7a6a3a;
+    font-weight:700; text-transform:uppercase; margin-bottom:6px;
+  }
+  #bidResponseView .brv-dash-stat .val{
+    font-size:22px; font-weight:800; color:#0a0a0a; font-variant-numeric:tabular-nums;
+  }
+  #bidResponseView .brv-dash-stat.total .val{
+    font-size:30px; color:#a8853f;
+  }
+  #bidResponseView .brv-dash-cats{
+    padding:18px 20px; border-top:1px solid #efe7d0;
+  }
+  #bidResponseView .brv-dash-cats h4{
+    font-size:11px; letter-spacing:.20em; color:#7a6a3a;
+    font-weight:800; text-transform:uppercase; margin:0 0 12px;
+  }
+  #bidResponseView .brv-dash-cats table{
+    width:100%; border-collapse:collapse; font-size:13px;
+  }
+  #bidResponseView .brv-dash-cats th{
+    text-align:left; padding:8px 10px; font-size:10.5px;
+    letter-spacing:.16em; color:#7a6a3a; font-weight:700; text-transform:uppercase;
+    border-bottom:1.5px solid #d4af6a;
+  }
+  #bidResponseView .brv-dash-cats th.r{ text-align:right; }
+  #bidResponseView .brv-dash-cats td{
+    padding:10px; border-bottom:1px solid #efe7d0; vertical-align:top;
+  }
+  #bidResponseView .brv-dash-cats td.r{ text-align:right; font-weight:700; font-variant-numeric:tabular-nums; }
+  #bidResponseView .brv-dash-cats td.cat{ font-weight:700; color:#0a0a0a; }
+  #bidResponseView .brv-dash-cats td.meta{ color:#444; font-size:12px; }
+  #bidResponseView .brv-dash-notes{
+    padding:14px 20px 18px; border-top:1px solid #efe7d0; background:#fbf8ee;
+  }
+  #bidResponseView .brv-dash-notes h4{
+    font-size:11px; letter-spacing:.20em; color:#7a6a3a;
+    font-weight:800; text-transform:uppercase; margin:0 0 6px;
+  }
+  #bidResponseView .brv-dash-notes p{ margin:0; white-space:pre-wrap; color:#222; font-size:13px; }
+  #bidResponseView .brv-dash-actions{
+    padding:16px 20px; border-top:1px solid #efe7d0; background:#fff;
+    display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+  }
+  #bidResponseView .brv-dash-edit-btn{
+    background:#0a0a0a; color:#d4af6a; border:2px solid #d4af6a;
+    padding:11px 22px; border-radius:6px; font-size:13px;
+    font-weight:800; letter-spacing:.14em; text-transform:uppercase;
+    cursor:pointer; font-family:inherit;
+  }
+  #bidResponseView .brv-dash-edit-btn:hover{ background:#1a1a1a; }
+  #bidResponseView .brv-dash-edit-btn[disabled]{ opacity:.5; cursor:not-allowed; }
+  #bidResponseView .brv-dash-actions .hint{
+    font-size:12px; color:#555; line-height:1.5;
   }
   @media (max-width:640px){
     #bidResponseView .brv-summary-row input{ flex:0 0 130px; }
@@ -3002,7 +3171,7 @@
     <div class="ct-actions">
       <button onclick="closeContractorBid()">&larr; Back to Estimator</button>
       <button onclick="openContractorsBookModal()">Contractors</button>
-      <button onclick="openReceivedBidsModal()">Received Bids</button>
+      <button onclick="openReceivedBidsModal()">Bids</button>
       <button onclick="openEmailContractorBidModal()">Email to Contractor</button>
       <button class="primary" onclick="printContractorBidViaIframe()">Print / PDF</button>
     </div>
@@ -3178,12 +3347,13 @@
     </h3>
     <div class="modal-body">
       <div class="email-field">
-        <label for="ecbPick">Pick a saved contractor</label>
-        <select id="ecbPick" onchange="onContractorPick()"></select>
+        <label>Send bid to contractors <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;">(pick one or more)</span></label>
+        <div id="ecbChips" class="ecb-chips"></div>
+        <select id="ecbPickAdd" onchange="onContractorPickAdd()"></select>
       </div>
       <div class="email-field">
-        <label for="ecbTo">To <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;">(comma-separated)</span></label>
-        <input type="text" id="ecbTo" placeholder="mike@abcreno.ca" autocomplete="off">
+        <label for="ecbTo">Additional recipients <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;">(comma-separated, optional)</span></label>
+        <input type="text" id="ecbTo" placeholder="someone@example.com" autocomplete="off">
       </div>
       <div class="email-field">
         <label for="ecbSubject">Subject</label>
@@ -3214,10 +3384,12 @@
      contractor_bids Supabase table; only owner can see their own bids. -->
 <div class="modal-bg" id="receivedBidsModal" onclick="if(event.target===this)closeReceivedBidsModal()">
   <div class="modal" style="max-width:780px;">
-    <h3>Received Bids
+    <h3>Bids
       <button class="ghost" onclick="closeReceivedBidsModal()">Close</button>
     </h3>
     <div class="modal-body">
+      <!-- Dashboard snapshot above the list — totals and counts across visible bids. -->
+      <div id="rbSnapshot" class="rb-snapshot"></div>
       <div class="rb-filter">
         <button class="rb-tab on" data-tab="all"       onclick="setReceivedBidsTab('all')">All</button>
         <button class="rb-tab"    data-tab="pending"   onclick="setReceivedBidsTab('pending')">Pending</button>
@@ -7226,16 +7398,30 @@ function deleteContractor(id){
    the same email-estimate Supabase Edge Function. The picker pulls
    recipients from the contractors address book.
    ============================================================ */
+/* Multi-pick state for the Email Contractor modal — array of contractor IDs
+   that will each receive their own unique bid link. Cleared each time the
+   modal opens. Ad-hoc emails typed into the "Additional recipients" field
+   are handled separately (a single shared bid link for the ad-hoc batch). */
+let _ecbPickedIds = [];
+
 function openEmailContractorBidModal(){
   // Re-render so the modal sees the current state of the bid (with current
   // category filter applied) and the picker has the latest contractors list.
   renderContractorSheet();
+  _ecbPickedIds = [];
+  // If a contractor was already chosen for this bid via the sheet picker,
+  // pre-select them in the chips area.
+  if(currentBidContractorId){
+    const c = loadContractors().find(x => x.id === currentBidContractorId);
+    if(c) _ecbPickedIds.push(c.id);
+  }
   populateContractorPicker();
+  renderEcbChips();
 
   const addr = (state.propAddress || state.propName || "the property").trim();
   document.getElementById("ecbSubject").value = `Renovation Bid Request — ${addr}`;
   document.getElementById("ecbTo").value = "";
-  document.getElementById("ecbPick").value = "";
+  document.getElementById("ecbPickAdd").value = "";
   document.getElementById("ecbBody").value =
     `Hi,\n\n`+
     `Please find attached the scope of work for a renovation at ${addr}. ` +
@@ -7264,20 +7450,35 @@ function openEmailContractorBidModal(){
 function closeEmailContractorBidModal(){
   document.getElementById("emailContractorBidModal").classList.remove("show");
 }
+/* Populate the "Add saved contractor" dropdown. Contractors already in the
+   chip list are excluded so the user can't pick the same one twice. */
 function populateContractorPicker(){
-  const sel = document.getElementById("ecbPick");
-  const list = loadContractors().slice().sort((a,b) =>
+  const sel = document.getElementById("ecbPickAdd");
+  if(!sel) return;
+  const all = loadContractors().slice().sort((a,b) =>
     (a.company || "").toLowerCase().localeCompare((b.company || "").toLowerCase()));
-  let opts = `<option value="">${list.length ? "— pick a saved contractor —" : "— no saved contractors yet —"}</option>`;
-  list.forEach(c => {
-    const label = (c.company || "Untitled") + (c.contact ? ` · ${c.contact}` : "");
-    opts += `<option value="${escapeHtml(c.id)}">${escapeHtml(label)}</option>`;
-  });
-  opts += `<option value="__manage__">+ Manage contractors…</option>`;
+  const list = all.filter(c => !_ecbPickedIds.includes(c.id));
+  let opts;
+  if(!all.length){
+    opts = `<option value="">— no saved contractors yet —</option>`;
+  } else if(!list.length){
+    opts = `<option value="">— all saved contractors added —</option>`;
+  } else {
+    opts = `<option value="">+ Add saved contractor…</option>`;
+    list.forEach(c => {
+      const label = (c.company || "Untitled") + (c.contact ? ` · ${c.contact}` : "") + (c.email ? ` · ${c.email}` : "");
+      opts += `<option value="${escapeHtml(c.id)}">${escapeHtml(label)}</option>`;
+    });
+  }
+  opts += `<option value="__manage__">⚙ Manage contractors…</option>`;
   sel.innerHTML = opts;
+  sel.value = "";
 }
-function onContractorPick(){
-  const sel = document.getElementById("ecbPick");
+/* Handler when the user picks something from the "Add saved contractor"
+   dropdown — adds the picked contractor to the chip list (or jumps to
+   the address-book modal if they chose "Manage"). */
+function onContractorPickAdd(){
+  const sel = document.getElementById("ecbPickAdd");
   const v = sel.value;
   if(v === "__manage__"){
     sel.value = "";
@@ -7286,13 +7487,42 @@ function onContractorPick(){
     return;
   }
   if(!v) return;
-  const c = loadContractors().find(x => x.id === v);
-  if(!c) return;
-  // Fill the email recipient
-  if(c.email) document.getElementById("ecbTo").value = c.email;
-  // Also reflect the selection on the printed bid sheet so the "Contractor"
-  // field shows the company name when this PDF is generated.
-  setBidContractor(v);
+  if(!_ecbPickedIds.includes(v)) _ecbPickedIds.push(v);
+  // Reflect the FIRST picked contractor on the printed bid sheet (the PDF
+  // shows the Contractor field with the first company name).
+  if(_ecbPickedIds.length === 1) setBidContractor(v);
+  renderEcbChips();
+  populateContractorPicker();
+}
+/* Render the chip list. Each chip shows the contractor's company name + a
+   small email/contact line + an × to remove. */
+function renderEcbChips(){
+  const host = document.getElementById("ecbChips");
+  if(!host) return;
+  if(!_ecbPickedIds.length){
+    host.innerHTML = `<span class="empty">Pick one or more saved contractors below — each gets their own unique bid link.</span>`;
+    return;
+  }
+  const all = loadContractors();
+  host.innerHTML = _ecbPickedIds.map(id => {
+    const c = all.find(x => x.id === id);
+    if(!c) return "";
+    const meta = c.email || c.contact || "";
+    return `<span class="ecb-chip">
+      <span>${escapeHtml(c.company || "Untitled")}${meta ? ` <span class="meta">· ${escapeHtml(meta)}</span>` : ""}</span>
+      <button type="button" class="x" onclick="removeEcbPicked('${escapeHtml(id)}')" aria-label="Remove">×</button>
+    </span>`;
+  }).join("");
+}
+function removeEcbPicked(id){
+  _ecbPickedIds = _ecbPickedIds.filter(x => x !== id);
+  // If the contractor we removed was the one tagged on the bid sheet,
+  // re-tag with whichever picked contractor remains first (or clear it).
+  if(currentBidContractorId === id){
+    setBidContractor(_ecbPickedIds.length ? _ecbPickedIds[0] : "");
+  }
+  renderEcbChips();
+  populateContractorPicker();
 }
 function setContractorEmailStatus(msg, kind){
   const el = document.getElementById("ecbStatus");
@@ -7308,6 +7538,29 @@ function setContractorEmailStatus(msg, kind){
    ============================================================ */
 let _receivedBidsTab = "all";
 let _receivedBidsCache = [];
+/* Local currency parser/formatter (owner side). Mirrors the bid response
+   IIFE so legacy data ("1234") or already-formatted data ("$1,234.50") all
+   display consistently as $X,XXX.XX. Returns "" for empty / non-numeric. */
+function rbParseMoney(s){
+  if(s == null) return null;
+  const cleaned = String(s).replace(/[\$,\s]/g,"").trim();
+  if(!cleaned) return null;
+  const n = Number(cleaned);
+  return isFinite(n) ? n : null;
+}
+function rbFmtMoney(v){
+  const n = (typeof v === "number") ? v : rbParseMoney(v);
+  if(n == null) return "";
+  const sign = n < 0 ? "-" : "";
+  const abs  = Math.abs(n).toFixed(2);
+  const [intP, decP] = abs.split(".");
+  const grouped = intP.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return sign + "$" + grouped + "." + decP;
+}
+function rbMoneyDisplay(s){
+  const v = rbParseMoney(s);
+  return v != null ? rbFmtMoney(v) : (s ? String(s) : "—");
+}
 
 function openReceivedBidsModal(){
   document.getElementById("receivedBidsModal").classList.add("show");
@@ -7353,6 +7606,9 @@ function renderReceivedBidsList(){
   const list = (_receivedBidsCache || []).filter(b => filter === "all" || b.status === filter);
   const root = document.getElementById("rbList");
   const empty = document.getElementById("rbEmpty");
+  // Render the dashboard snapshot for whatever is in the current cache (all bids,
+  // ignoring tab filter — the snapshot answers "where do my bids stand overall?").
+  renderReceivedBidsSnapshot(_receivedBidsCache || []);
   if(!list.length){
     root.innerHTML = "";
     empty.style.display = "";
@@ -7361,7 +7617,7 @@ function renderReceivedBidsList(){
   empty.style.display = "none";
   root.innerHTML = list.map(b => {
     const sub = (b.submitted_data && b.submitted_data.bid_summary) || {};
-    const total = sub.total_bid || "";
+    const total = rbMoneyDisplay(sub.total_bid);
     const timeline = sub.total_timeline || "";
     const start = sub.firm_start_date || "";
     const co = b.contractor_company || b.sent_to_email || "Unknown contractor";
@@ -7380,7 +7636,7 @@ function renderReceivedBidsList(){
         </div>
         ${b.status === "submitted" || b.status === "accepted" ? `
         <div class="totals">
-          <span>Total Bid: <b>${escapeHtml(total || "—")}</b></span>
+          <span>Total Bid: <b>${escapeHtml(total)}</b></span>
           <span>Timeline: <b>${escapeHtml(timeline || "—")}</b></span>
           <span>Start: <b>${escapeHtml(start || "—")}</b></span>
         </div>` : ""}
@@ -7388,6 +7644,51 @@ function renderReceivedBidsList(){
       </div>
     `;
   }).join("");
+}
+/* Dashboard snapshot above the bids list — counts + financial totals across
+   ALL bids (not just the currently filtered tab). Lives in #rbSnapshot. */
+function renderReceivedBidsSnapshot(allBids){
+  const host = document.getElementById("rbSnapshot");
+  if(!host) return;
+  if(!allBids || !allBids.length){ host.classList.add("empty"); host.innerHTML = ""; return; }
+  host.classList.remove("empty");
+  let total = allBids.length, pending = 0, submitted = 0, accepted = 0, cancelled = 0;
+  const totals = [];   // numeric totals for submitted/accepted bids
+  let lowest = null, highest = null;
+  allBids.forEach(b => {
+    if(b.status === "pending")   pending++;
+    if(b.status === "submitted") submitted++;
+    if(b.status === "accepted")  accepted++;
+    if(b.status === "cancelled") cancelled++;
+    if(b.status === "submitted" || b.status === "accepted"){
+      const v = rbParseMoney(b.submitted_data && b.submitted_data.bid_summary && b.submitted_data.bid_summary.total_bid);
+      if(v != null){
+        totals.push(v);
+        if(lowest  == null || v < lowest)  lowest  = v;
+        if(highest == null || v > highest) highest = v;
+      }
+    }
+  });
+  const avg = totals.length ? (totals.reduce((a,c) => a+c, 0) / totals.length) : null;
+  host.innerHTML = `
+    <div class="stat">
+      <div class="l">Bids</div>
+      <div class="v">${total}</div>
+      <div class="l" style="margin-top:5px;font-size:9px;letter-spacing:.12em;">P${pending} &middot; S${submitted} &middot; A${accepted}${cancelled?` &middot; X${cancelled}`:""}</div>
+    </div>
+    <div class="stat">
+      <div class="l">Lowest</div>
+      <div class="v gold small">${lowest != null ? rbFmtMoney(lowest) : "—"}</div>
+    </div>
+    <div class="stat">
+      <div class="l">Average</div>
+      <div class="v small">${avg != null ? rbFmtMoney(avg) : "—"}</div>
+    </div>
+    <div class="stat">
+      <div class="l">Highest</div>
+      <div class="v small">${highest != null ? rbFmtMoney(highest) : "—"}</div>
+    </div>
+  `;
 }
 function expandReceivedBid(token){
   const card = document.querySelector(`.rb-card[data-id="${token}"]`);
@@ -7409,13 +7710,14 @@ function renderReceivedBidDetail(bid){
     const s = sec[c.key] || {};
     return `<tr>
       <td><b>${escapeHtml(c.title)}</b></td>
-      <td>L: ${escapeHtml(s.labour || "—")}<br>M: ${escapeHtml(s.material || "—")}</td>
-      <td class="num">${escapeHtml(s.section_total || "—")}</td>
+      <td>L: ${escapeHtml(rbMoneyDisplay(s.labour))}<br>M: ${escapeHtml(rbMoneyDisplay(s.material))}</td>
+      <td class="money">${escapeHtml(rbMoneyDisplay(s.section_total))}</td>
       <td>${escapeHtml(s.timeline || "—")}</td>
     </tr>`;
   }).join("") : `<tr><td colspan="4" style="text-align:center;color:var(--muted);">No submission yet</td></tr>`;
 
-  // Revision history
+  // Revision history — each revision shows BOTH the field-level change summary
+  // AND the full submission snapshot the contractor sent at that point.
   const revs = Array.isArray(bid.revision_history) ? bid.revision_history : [];
   const revsHtml = revs.length ? `
     <div class="rb-revisions">
@@ -7423,14 +7725,18 @@ function renderReceivedBidDetail(bid){
       ${revs.slice().reverse().map(r => {
         const changes = Array.isArray(r.changes) ? r.changes : [];
         const when = r.revised_at ? new Date(r.revised_at).toLocaleString() : "";
+        // Edge Function stores the previous submission under `previous_submission`
+        // (legacy alias: `snapshot`). Show whatever's there.
+        const snap = r.previous_submission || r.snapshot || {};
         return `<details>
           <summary>Revision #${r.revision_number || "?"} &middot; ${escapeHtml(when)} (${changes.length} change${changes.length===1?"":"s"})</summary>
-          ${changes.length ? changes.map(ch => `
+          ${changes.length ? `<div style="margin-top:8px;font-size:10.5px;letter-spacing:.10em;text-transform:uppercase;color:var(--gold-bright);font-weight:700;">What changed</div>` + changes.map(ch => `
             <div class="change-row">
               <span>${escapeHtml(String(ch.field))}</span>
-              <span><span class="from">${escapeHtml(String(ch.from ?? "—"))}</span> &rarr; <span class="to">${escapeHtml(String(ch.to ?? "—"))}</span></span>
+              <span><span class="from">${escapeHtml(rbMaybeMoney(ch.from))}</span> &rarr; <span class="to">${escapeHtml(rbMaybeMoney(ch.to))}</span></span>
             </div>
           `).join("") : "<div style='font-size:11px;color:var(--muted);margin-top:6px;'>No tracked field changes.</div>"}
+          ${renderRevisionSnapshot(snap, cats)}
         </details>`;
       }).join("")}
     </div>
@@ -7439,27 +7745,29 @@ function renderReceivedBidDetail(bid){
   const link = `${location.origin}${location.pathname}?bid=${bid.bid_token}`;
   const linkBox = `<div class="rb-link-box">Contractor link: <a href="${escapeHtml(link)}" target="_blank">${escapeHtml(link)}</a></div>`;
 
-  let actions = "";
+  // Action buttons — always include Delete on the right so the owner can
+  // remove the record entirely.
+  let primaryActions = "";
   if(bid.status === "submitted"){
-    actions = `
+    primaryActions = `
       <button class="primary" onclick="acceptReceivedBid('${escapeHtml(bid.bid_token)}')">Accept Bid</button>
-      <button onclick="reopenReceivedBid('${escapeHtml(bid.bid_token)}')">Allow Revisions (already open)</button>
       <button class="ghost danger" onclick="cancelReceivedBid('${escapeHtml(bid.bid_token)}')">Cancel Request</button>
     `;
   } else if(bid.status === "pending"){
-    actions = `<button class="ghost danger" onclick="cancelReceivedBid('${escapeHtml(bid.bid_token)}')">Cancel Request</button>`;
+    primaryActions = `<button class="ghost danger" onclick="cancelReceivedBid('${escapeHtml(bid.bid_token)}')">Cancel Request</button>`;
   } else if(bid.status === "accepted"){
-    actions = `<button onclick="reopenReceivedBid('${escapeHtml(bid.bid_token)}')">Reopen for Revision</button>`;
+    primaryActions = `<button onclick="reopenReceivedBid('${escapeHtml(bid.bid_token)}')">Reopen for Revision</button>`;
   }
+  const deleteBtn = `<button class="ghost danger" style="margin-left:auto;" onclick="deleteReceivedBid('${escapeHtml(bid.bid_token)}')">Delete Bid</button>`;
 
   const submitted = (bid.status === "submitted" || bid.status === "accepted") ? `
     <h4>Current submission</h4>
     <table>
-      <thead><tr><th>Category</th><th>Breakdown</th><th class="num">Section $</th><th>Timeline</th></tr></thead>
+      <thead><tr><th>Category</th><th>Breakdown</th><th class="money">Total $</th><th>Timeline</th></tr></thead>
       <tbody>${tableRows}</tbody>
       <tfoot><tr>
         <td colspan="2" style="font-weight:800;background:rgba(212,175,106,.08);">Total Bid</td>
-        <td class="num" style="font-weight:800;color:var(--gold-bright);background:rgba(212,175,106,.08);">${escapeHtml((sub.bid_summary && sub.bid_summary.total_bid) || "—")}</td>
+        <td class="money" style="font-weight:800;color:var(--gold-bright);background:rgba(212,175,106,.08);">${escapeHtml(rbMoneyDisplay((sub.bid_summary || {}).total_bid))}</td>
         <td style="background:rgba(212,175,106,.08);">${escapeHtml((sub.bid_summary && sub.bid_summary.total_timeline) || "—")} · start ${escapeHtml((sub.bid_summary && sub.bid_summary.firm_start_date) || "—")}</td>
       </tr></tfoot>
     </table>
@@ -7470,7 +7778,54 @@ function renderReceivedBidDetail(bid){
     ${submitted}
     ${linkBox}
     ${revsHtml}
-    <div class="actions">${actions}</div>
+    <div class="actions">${primaryActions}${deleteBtn}</div>
+  `;
+}
+
+/* Format a revision change value as $ if it parses as money; otherwise
+   pass through as-is. Used by the change-row diff display. */
+function rbMaybeMoney(v){
+  if(v == null || v === "") return "—";
+  const n = rbParseMoney(v);
+  // Heuristic: only show as $ if the raw string contained a $ or comma OR if it's a clean integer/float >= 1.
+  // The revision summary captures money fields by field NAME so we can be more liberal — but keep
+  // the parsed value to avoid double formatting like "$$1,234".
+  if(n != null && /[\$,0-9]/.test(String(v)) && !/[a-zA-Z]/.test(String(v))) return rbFmtMoney(n);
+  return String(v);
+}
+
+/* Render the full snapshot the contractor submitted at a given revision —
+   a compact table of section labour/material/total per category plus the
+   bid summary. Used inside each revision <details> block. */
+function renderRevisionSnapshot(snap, cats){
+  if(!snap || (!snap.sections && !snap.bid_summary)) return "";
+  const sec = snap.sections || {};
+  const sum = snap.bid_summary || {};
+  const safeCats = (cats && cats.length) ? cats : Object.keys(sec).map(k => ({ key:k, title:k }));
+  const rows = safeCats.map(c => {
+    const s = sec[c.key] || {};
+    return `<tr>
+      <td><b>${escapeHtml(c.title)}</b></td>
+      <td>L: ${escapeHtml(rbMoneyDisplay(s.labour))}<br>M: ${escapeHtml(rbMoneyDisplay(s.material))}</td>
+      <td class="money">${escapeHtml(rbMoneyDisplay(s.section_total))}</td>
+      <td>${escapeHtml(s.timeline || "—")}</td>
+    </tr>`;
+  }).join("");
+  const note = snap.notes ? `<div style="margin-top:8px;font-size:11.5px;color:var(--ink);white-space:pre-wrap;background:#0a0a0e;border:1px solid var(--line);padding:7px 9px;border-radius:5px;"><b style="color:var(--gold-bright);font-size:10px;letter-spacing:.10em;text-transform:uppercase;">Notes:</b><br>${escapeHtml(snap.notes)}</div>` : "";
+  return `
+    <div style="margin-top:10px;font-size:10.5px;letter-spacing:.10em;text-transform:uppercase;color:var(--gold-bright);font-weight:700;">Full submission</div>
+    <table style="margin-top:6px;">
+      <thead><tr>
+        <th>Category</th><th>Breakdown</th><th class="money">Total $</th><th>Timeline</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr>
+        <td colspan="2" style="font-weight:800;background:rgba(212,175,106,.06);">Total Bid</td>
+        <td class="money" style="font-weight:800;color:var(--gold-bright);background:rgba(212,175,106,.06);">${escapeHtml(rbMoneyDisplay(sum.total_bid))}</td>
+        <td style="background:rgba(212,175,106,.06);">${escapeHtml(sum.total_timeline || "—")} · start ${escapeHtml(sum.firm_start_date || "—")}</td>
+      </tr></tfoot>
+    </table>
+    ${note}
   `;
 }
 async function acceptReceivedBid(token){
@@ -7502,7 +7857,7 @@ async function reopenReceivedBid(token){
   }catch(e){ alert("Couldn't reopen: " + e.message); }
 }
 async function cancelReceivedBid(token){
-  if(!confirm("Cancel this bid request? The contractor's link will become read-only. This can't be undone (use Delete instead if you want to remove the record).")) return;
+  if(!confirm("Cancel this bid request? The contractor's link will become read-only. This keeps the record visible in your Bids list — use Delete to remove it entirely.")) return;
   try{
     const { error } = await supa.from("contractor_bids")
       .update({ status:"cancelled" })
@@ -7512,6 +7867,22 @@ async function cancelReceivedBid(token){
     flash("Bid cancelled");
     await loadReceivedBids();
   }catch(e){ alert("Couldn't cancel: " + e.message); }
+}
+/* Permanently removes the bid row. The contractor's link becomes invalid
+   (the Edge Function returns "Bid not found" once the row is gone). */
+async function deleteReceivedBid(token){
+  const bid = (_receivedBidsCache || []).find(b => b.bid_token === token);
+  const who = bid ? (bid.contractor_company || bid.sent_to_email || "this contractor") : "this contractor";
+  if(!confirm(`Permanently delete this bid from ${who}? The contractor's link will stop working immediately. This cannot be undone.`)) return;
+  try{
+    const { error } = await supa.from("contractor_bids")
+      .delete()
+      .eq("user_id", currentUser.id)
+      .eq("bid_token", token);
+    if(error) throw error;
+    flash("Bid deleted");
+    await loadReceivedBids();
+  }catch(e){ alert("Couldn't delete: " + e.message); }
 }
 
 /* Build the scope_data JSON that gets stored on the bid record and rendered
@@ -7544,11 +7915,34 @@ async function sendContractorBidEmail(){
   const body    = document.getElementById("ecbBody").value || "";
   const ccSelf  = !!(document.getElementById("ecbCcSelf") && document.getElementById("ecbCcSelf").checked);
 
-  const recipients = parseRecipients(toRaw);
-  if(!recipients.length){
-    setContractorEmailStatus("Please add at least one recipient email.", "error"); return;
+  // Build per-recipient envelopes. Each picked contractor gets its own
+  // unique bid link / record. Any ad-hoc emails the user typed into the
+  // "Additional recipients" field are grouped into one extra envelope
+  // (no contractor metadata — those recipients share a single bid link).
+  const allContractors = loadContractors();
+  const envelopes = [];
+  _ecbPickedIds.forEach(id => {
+    const c = allContractors.find(x => x.id === id);
+    if(!c) return;
+    if(!c.email){
+      // No email on file — skip and surface later
+      envelopes.push({ contractor:c, emails:[], skipReason:"no email on file" });
+      return;
+    }
+    envelopes.push({ contractor:c, emails:[c.email] });
+  });
+  const adHoc = parseRecipients(toRaw);
+  if(adHoc.length){
+    envelopes.push({ contractor:null, emails:adHoc });
   }
-  const bad = recipients.filter(e => !isValidEmail(e));
+
+  const haveAny = envelopes.some(e => e.emails.length);
+  if(!haveAny){
+    setContractorEmailStatus("Pick at least one contractor (with an email on file) or add an Additional recipient.", "error"); return;
+  }
+  const skipped = envelopes.filter(e => e.skipReason);
+  const allEmails = envelopes.flatMap(e => e.emails);
+  const bad = allEmails.filter(e => !isValidEmail(e));
   if(bad.length){
     setContractorEmailStatus(`Invalid email${bad.length>1?"s":""}: ${bad.join(", ")}`, "error"); return;
   }
@@ -7568,51 +7962,22 @@ async function sendContractorBidEmail(){
 
   let showApplied = false;
   try{
-    // ----- 1. Create the bid record so the contractor's link works -----
-    setContractorEmailStatus("Creating bid link...", "working");
     const scopeData = buildScopeDataForBid();
     if(!scopeData.categories.length){
       throw new Error("No categories are selected for this bid. Toggle some categories on first.");
     }
-    const bid_token = (crypto.randomUUID ? crypto.randomUUID().replace(/-/g,"") :
-      (Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2) + Date.now().toString(36)));
-    const pickedContractor = currentBidContractorId ? loadContractors().find(c => c.id === currentBidContractorId) : null;
-    const insertPayload = {
-      user_id:            currentUser.id,
-      bid_token:          bid_token,
-      sender_email:       currentUser.email || null,
-      sent_to_email:      recipients[0],
-      contractor_id:      pickedContractor ? pickedContractor.id : null,
-      contractor_company: pickedContractor ? pickedContractor.company : null,
-      contractor_contact: pickedContractor ? pickedContractor.contact : null,
-      property_name:      (state.propName || "").trim() || null,
-      property_address:   (state.propAddress || "").trim() || null,
-      property_sqft:      state.propSqft ? (parseInt(state.propSqft, 10) || null) : null,
-      scope_data:         scopeData,
-      status:             "pending"
-    };
-    const { error: insertErr } = await supa.from("contractor_bids").insert(insertPayload);
-    if(insertErr) throw new Error("Couldn't create bid link: " + insertErr.message);
 
-    // Build the public link
-    const bidLink = `${location.origin}${location.pathname}?bid=${bid_token}`;
-
-    // ----- 2. Generate the PDF (matches the Print/PDF view styling) -----
+    // ----- 1. Generate the PDF ONCE (it's identical for every recipient) -----
     setContractorEmailStatus("Generating PDF...", "working");
     const sheetEl = document.getElementById("contractorSheet");
     if(!sheetEl) throw new Error("Contractor sheet not found");
-
     if(!document.body.classList.contains("show-contractor")){
       document.body.classList.add("show-contractor");
       showApplied = true;
     }
-    // Apply the PDF-export overrides so the rasterized PDF matches the clean
-    // Print/PDF iframe output (no toolbar, no cat bar, no on-screen card padding).
     document.body.classList.add("contractor-pdf-export");
-
-    const addr = sanitizeFilename(state.propAddress || state.propName || "bid");
-    const filename = `ContractorBid-${addr}.pdf`;
-
+    const filenameAddr = sanitizeFilename(state.propAddress || state.propName || "bid");
+    const filename = `ContractorBid-${filenameAddr}.pdf`;
     let blob;
     try{
       blob = await html2pdf().set({
@@ -7624,22 +7989,85 @@ async function sendContractorBidEmail(){
         pagebreak:   { mode: ['css','legacy'], avoid: ['.scope-section', '.summary', '.sig-area'] }
       }).from(sheetEl).outputPdf('blob');
     } finally {
-      // Always strip the PDF-export class so the on-screen view is restored
       document.body.classList.remove("contractor-pdf-export");
     }
-
     const pdfBase64 = await blobToBase64(blob);
     const sizeKB = Math.round(blob.size / 1024);
 
-    // ----- 3. Build a branded HTML email body matching the Reno to Sold style -----
-    const contactName = (pickedContractor && pickedContractor.contact) || "";
+    // ----- 2. For each envelope: create a bid record + send the email -----
+    const results = [];
+    let i = 0;
+    for(const env of envelopes){
+      i++;
+      if(!env.emails.length) continue;
+      setContractorEmailStatus(`Sending ${i} of ${envelopes.filter(e=>e.emails.length).length} (${sizeKB} KB)…`, "working");
+
+      const bid_token = (crypto.randomUUID ? crypto.randomUUID().replace(/-/g,"") :
+        (Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2) + Date.now().toString(36)));
+      const c = env.contractor;
+      const insertPayload = {
+        user_id:            currentUser.id,
+        bid_token:          bid_token,
+        sender_email:       currentUser.email || null,
+        sent_to_email:      env.emails[0],
+        contractor_id:      c ? c.id : null,
+        contractor_company: c ? c.company : null,
+        contractor_contact: c ? c.contact : null,
+        property_name:      (state.propName || "").trim() || null,
+        property_address:   (state.propAddress || "").trim() || null,
+        property_sqft:      state.propSqft ? (parseInt(state.propSqft, 10) || null) : null,
+        scope_data:         scopeData,
+        status:             "pending"
+      };
+      const { error: insertErr } = await supa.from("contractor_bids").insert(insertPayload);
+      if(insertErr){ results.push({ ok:false, label:env.emails.join(", "), err:insertErr.message }); continue; }
+
+      const bidLink = `${location.origin}${location.pathname}?bid=${bid_token}`;
+      const { ok, err } = await sendContractorBidEnvelope({
+        recipients: env.emails, contractor:c, bidLink, subject, body, ccSelf, pdfBase64, filename
+      });
+      if(ok) results.push({ ok:true, label: (c ? c.company : env.emails.join(", ")) });
+      else   results.push({ ok:false, label: (c ? c.company : env.emails.join(", ")), err });
+    }
+
+    const sent = results.filter(r => r.ok);
+    const failed = results.filter(r => !r.ok);
+    const skipMsg = skipped.length ? ` Skipped ${skipped.length} (no email on file: ${skipped.map(s => s.contractor.company || "—").join(", ")}).` : "";
+    if(failed.length === 0){
+      setContractorEmailStatus(`Sent to ${sent.length} contractor${sent.length===1?"":"s"} (${sent.map(s=>s.label).join(", ")}).${skipMsg}`, "success");
+      if(btn){ btn.textContent = "Sent ✓"; btn.disabled = true; }
+      setTimeout(closeEmailContractorBidModal, 2400);
+    } else if(sent.length){
+      setContractorEmailStatus(
+        `Sent ${sent.length}, failed ${failed.length}. Failed: ${failed.map(f => f.label + " (" + f.err + ")").join("; ")}.${skipMsg}`,
+        "error"
+      );
+      if(btn){ btn.disabled = false; btn.textContent = "Retry failed"; }
+    } else {
+      throw new Error(failed.map(f => f.label + ": " + f.err).join("; "));
+    }
+  }catch(e){
+    console.error("Contractor bid email failed:", e);
+    setContractorEmailStatus("Failed: " + (e && e.message ? e.message : String(e)), "error");
+    if(btn){ btn.disabled = false; btn.textContent = "Generate PDF & Send"; }
+  }finally{
+    if(showApplied){
+      // Leave the contractor view as the user found it
+    }
+  }
+}
+
+/* Send one branded email envelope. The PDF is generated once by the caller
+   and reused across recipients. Each call sends to ONE contractor (or one
+   ad-hoc batch sharing a single link), with the bid link already minted. */
+async function sendContractorBidEnvelope({ recipients, contractor, bidLink, subject, body, ccSelf, pdfBase64, filename }){
+  try{
+    const contactName = (contractor && contractor.contact) || "";
     const greeting = contactName ? `Hi ${contactName.split(/\s+/)[0]},` : "Hi,";
     const rawAddr = (state.propAddress || "").trim();
-    // Split the address into up to 3 display lines for the email block
     const addrParts = rawAddr.split(",").map(s => s.trim()).filter(Boolean);
     let addrLines;
     if(addrParts.length >= 4){
-      // street / city / province / postal → 3 lines: street | city + province | postal
       addrLines = [addrParts[0]+",", addrParts.slice(1,3).join(", ")+",", addrParts[3]+"."];
     } else if(addrParts.length === 3){
       addrLines = [addrParts[0]+",", addrParts[1]+",", addrParts[2]+"."];
@@ -7658,12 +8086,9 @@ async function sendContractorBidEmail(){
 <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f5f1e6;padding:24px 12px;">
 <tr><td align="center">
 <table cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 4px 18px rgba(0,0,0,.08);">
-  <!-- Logo header -->
   <tr><td style="background:#0a0a0a;padding:24px 0;text-align:center;border-bottom:3px solid #d4af6a;">
     <img src="https://renotosold.homes/logo.png" alt="Reno to Sold Inc." width="220" style="display:inline-block;height:auto;max-width:220px;max-height:60px;" />
   </td></tr>
-
-  <!-- Body -->
   <tr><td style="padding:30px 34px 18px;color:#1a1a1a;font-size:14.5px;line-height:1.65;">
     <p style="margin:0 0 18px;">${escapeHtml(greeting)}</p>
     <p style="margin:0 0 14px;">Please find attached the scope of work for a renovation at:</p>
@@ -7673,8 +8098,6 @@ async function sendContractorBidEmail(){
       </a>
     </p>
     <p style="margin:0 0 26px;">Have a look through the sections and fill in your labour, building material, firm start date and section totals where indicated.</p>
-
-    <!-- PREFERRED card -->
     <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#fbf5e6;border-left:4px solid #d4af6a;border-radius:0 6px 6px 0;margin:0 0 18px;">
       <tr><td style="padding:18px 22px;">
         <p style="margin:0 0 4px;font-size:10.5px;letter-spacing:.20em;text-transform:uppercase;font-weight:800;color:#a8853f;">★ Preferred</p>
@@ -7688,8 +8111,6 @@ async function sendContractorBidEmail(){
         <p style="margin:0;font-size:11.5px;color:#666;">You can come back to the link any time until I accept your bid.</p>
       </td></tr>
     </table>
-
-    <!-- ALTERNATIVE card -->
     <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f5f5f3;border-left:4px solid #999;border-radius:0 6px 6px 0;margin:0 0 26px;">
       <tr><td style="padding:14px 22px;">
         <p style="margin:0 0 4px;font-size:10.5px;letter-spacing:.20em;text-transform:uppercase;font-weight:800;color:#666;">Alternative</p>
@@ -7697,10 +8118,7 @@ async function sendContractorBidEmail(){
         <p style="margin:0;font-size:13px;color:#555;">If you'd rather, the same bid sheet is attached as a PDF — print it, fill it in, and reply to this email with the completed copy.</p>
       </td></tr>
     </table>
-
     <p style="margin:0 0 24px;">Let me know if you have any questions.</p>
-
-    <!-- Signature -->
     <table cellpadding="0" cellspacing="0" border="0" width="100%" style="border-top:1px solid #e0dccf;margin-top:6px;">
       <tr><td style="padding:18px 0 0;">
         <p style="margin:0 0 3px;">Thanks,</p>
@@ -7710,8 +8128,6 @@ async function sendContractorBidEmail(){
       </td></tr>
     </table>
   </td></tr>
-
-  <!-- Footer note -->
   <tr><td style="background:#0a0a0a;padding:12px 22px;text-align:center;">
     <p style="margin:0;font-size:10px;letter-spacing:.18em;color:#888;text-transform:uppercase;">Renovate for less. Sell for more.</p>
   </td></tr>
@@ -7719,7 +8135,6 @@ async function sendContractorBidEmail(){
 </td></tr></table>
 </body></html>`;
 
-    // Plain-text alternative for non-HTML mail clients (also helps deliverability)
     const plainBody =
       `${greeting}\n\n` +
       `Please find attached the scope of work for a renovation at ${rawAddr}.\n\n` +
@@ -7730,28 +8145,17 @@ async function sendContractorBidEmail(){
       `Let me know if you have any questions.\n\n` +
       `Thanks,\nMohamed Nada\nRENO TO SOLD INC.\n416-832-3779`;
 
-    setContractorEmailStatus(`Sending (${sizeKB} KB attachment)...`, "working");
-
     const payload = {
       to: recipients,
       cc: (ccSelf && currentUser && currentUser.email) ? [currentUser.email] : [],
       subject, body: plainBody, bodyHtml, pdfBase64, filename
     };
     const { data, error } = await supa.functions.invoke('email-estimate', { body: payload });
-    if(error) throw new Error(error.message || "Edge Function error");
-    if(data && data.error) throw new Error(data.error);
-
-    setContractorEmailStatus(`Sent to ${recipients.join(", ")}${ccSelf?" (cc'd to you)":""}. Bid link is live.`, "success");
-    if(btn){ btn.textContent = "Sent ✓"; btn.disabled = true; }
-    setTimeout(closeEmailContractorBidModal, 2400);
+    if(error) return { ok:false, err: error.message || "Edge Function error" };
+    if(data && data.error) return { ok:false, err: data.error };
+    return { ok:true };
   }catch(e){
-    console.error("Contractor bid email failed:", e);
-    setContractorEmailStatus("Failed: " + (e && e.message ? e.message : String(e)), "error");
-    if(btn){ btn.disabled = false; btn.textContent = "Generate PDF & Send"; }
-  }finally{
-    if(showApplied){
-      // Leave the contractor view as the user found it
-    }
+    return { ok:false, err: (e && e.message) || String(e) };
   }
 }
 
@@ -10782,6 +11186,25 @@ window.ET={ goHome:goHome, openNewProject:openNewProject, switchHome:switchHome,
       .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
   }
   function escAttr(s){ return esc(s); }
+  /* Parse anything the contractor might type in a $ field (e.g. "1,234.50",
+     "$1234", "1234.5") into a finite Number — or null if there's no real value. */
+  function parseMoney(s){
+    if(s == null) return null;
+    const cleaned = String(s).replace(/[\$,\s]/g,"").trim();
+    if(!cleaned) return null;
+    const n = Number(cleaned);
+    return isFinite(n) ? n : null;
+  }
+  /* Format a number as "$1,234.50". Returns "" if no value. */
+  function fmtMoney(v){
+    const n = (typeof v === "number") ? v : parseMoney(v);
+    if(n == null) return "";
+    const sign = n < 0 ? "-" : "";
+    const abs  = Math.abs(n).toFixed(2);
+    const [intP, decP] = abs.split(".");
+    const grouped = intP.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    return sign + "$" + grouped + "." + decP;
+  }
 
   async function callApi(body){
     const resp = await fetch(FN_URL, {
@@ -10830,7 +11253,7 @@ window.ET={ goHome:goHome, openNewProject:openNewProject, switchHome:switchHome,
     const banners = [];
     if(isRev){
       banners.push(banner(
-        `<b>This bid has already been submitted</b><br>You can update your numbers below and resubmit. The owner will see what changed in a revision summary.`,
+        `<b>Editing your submitted bid</b><br>Make your changes and hit Resubmit Bid. The owner will see exactly what changed in a revision summary.`,
         "warn"
       ));
     } else if(bid.draft_data){
@@ -10844,16 +11267,24 @@ window.ET={ goHome:goHome, openNewProject:openNewProject, switchHome:switchHome,
       const key  = c.key;
       const s    = (initial.sections && initial.sections[key]) || {};
       const note = c.bid_note_html || defaultBidNote();
+      // Labour + material drive section total automatically (read-only).
+      const lab = parseMoney(s.labour);
+      const mat = parseMoney(s.material);
+      const secTot = (lab != null || mat != null) ? ((lab||0) + (mat||0)) : null;
       return `
         <div class="brv-section" data-cat="${escAttr(key)}">
           <div class="brv-sec-head">${esc(c.title)} &mdash; Scope of Work</div>
           <div class="brv-sec-body">
             <div class="brv-scope-readout">${c.scope_html || ""}</div>
             <div class="brv-bid-grid">
-              <div class="brv-field"><label>Your labour $</label><input type="text" inputmode="decimal" data-fld="labour"        value="${escAttr(s.labour || "")}"></div>
-              <div class="brv-field"><label>Building material $</label><input type="text" inputmode="decimal" data-fld="material"  value="${escAttr(s.material || "")}"></div>
-              <div class="brv-field"><label>Section total $</label><input type="text" inputmode="decimal" data-fld="section_total" value="${escAttr(s.section_total || "")}"></div>
-              <div class="brv-field"><label>Timeline</label><input type="text" data-fld="timeline" value="${escAttr(s.timeline || "")}"></div>
+              <div class="brv-field"><label>Your labour $</label>
+                <input type="text" inputmode="decimal" data-fld="labour" value="${escAttr(s.labour ? fmtMoney(s.labour) : "")}"></div>
+              <div class="brv-field"><label>Building material $</label>
+                <input type="text" inputmode="decimal" data-fld="material" value="${escAttr(s.material ? fmtMoney(s.material) : "")}"></div>
+              <div class="brv-field"><label>Section total $ <span class="brv-auto">auto</span></label>
+                <input type="text" data-fld="section_total" readonly value="${escAttr(secTot != null ? fmtMoney(secTot) : "")}"></div>
+              <div class="brv-field"><label>Timeline</label>
+                <input type="text" data-fld="timeline" value="${escAttr(s.timeline || "")}"></div>
             </div>
             <div class="brv-bid-note">${note}</div>
           </div>
@@ -10863,9 +11294,18 @@ window.ET={ goHome:goHome, openNewProject:openNewProject, switchHome:switchHome,
 
     const summary = initial.bid_summary || {};
     const catTotalRows = cats.map(c => {
-      const v = (summary.category_totals && summary.category_totals[c.key]) || "";
-      return `<div class="brv-summary-row"><span class="lbl">${esc(c.title)}</span><input type="text" inputmode="decimal" data-sum="${escAttr(c.key)}" value="${escAttr(v)}"></div>`;
+      const sec = (initial.sections && initial.sections[c.key]) || {};
+      const l = parseMoney(sec.labour), m = parseMoney(sec.material);
+      const t = (l != null || m != null) ? ((l||0)+(m||0)) : null;
+      return `<div class="brv-summary-row"><span class="lbl">${esc(c.title)}</span><input type="text" data-sum="${escAttr(c.key)}" readonly value="${escAttr(t!=null?fmtMoney(t):"")}"></div>`;
     }).join("");
+    // Grand total — sum across all sections
+    let grandTotal = 0, anyGrand = false;
+    cats.forEach(c => {
+      const sec = (initial.sections && initial.sections[c.key]) || {};
+      const l = parseMoney(sec.labour), m = parseMoney(sec.material);
+      if(l != null || m != null){ grandTotal += (l||0) + (m||0); anyGrand = true; }
+    });
 
     shellEl().innerHTML = `
       ${banners.join("")}
@@ -10877,12 +11317,12 @@ window.ET={ goHome:goHome, openNewProject:openNewProject, switchHome:switchHome,
       ${scope.intro_note ? `<div class="brv-intro-note">${scope.intro_note}</div>` : ""}
       ${sectionsHtml}
       <div class="brv-summary">
-        <div class="brv-sum-head">Bid Summary</div>
+        <div class="brv-sum-head">Bid Summary <span class="brv-sum-auto">Auto-calculated from your section entries</span></div>
         <div class="brv-sum-body">
           ${catTotalRows}
-          <div class="brv-summary-row total"><span class="lbl">Total Bid (before HST)</span><input type="text" inputmode="decimal" data-sum="__total__" value="${escAttr(summary.total_bid || "")}"></div>
+          <div class="brv-summary-row total"><span class="lbl">Total Bid (before HST)</span><input type="text" data-sum="__total__" readonly value="${escAttr(anyGrand?fmtMoney(grandTotal):"")}"></div>
           <div class="brv-summary-row"><span class="lbl">Total renovation timeline</span><input type="text" data-sum="__timeline__" value="${escAttr(summary.total_timeline || "")}"></div>
-          <div class="brv-summary-row"><span class="lbl">Firm start date</span><input type="text" data-sum="__startdate__" value="${escAttr(summary.firm_start_date || "")}"></div>
+          <div class="brv-summary-row"><span class="lbl">Firm start date</span><input type="date" data-sum="__startdate__" value="${escAttr(summary.firm_start_date || "")}"></div>
         </div>
       </div>
       <div class="brv-notes">
@@ -10901,9 +11341,110 @@ window.ET={ goHome:goHome, openNewProject:openNewProject, switchHome:switchHome,
 
   function renderAccepted(bid){
     shellEl().innerHTML = `
-      ${banner(`<b>Accepted</b> &mdash; this bid was accepted${bid.accepted_at?` on ${esc(new Date(bid.accepted_at).toLocaleDateString())}`:""}. The form is read-only.`)}
-      ${renderReadOnly(bid)}
+      ${banner(`<b>Accepted</b> &mdash; this bid was accepted${bid.accepted_at?` on ${esc(new Date(bid.accepted_at).toLocaleDateString())}`:""}. The form is read-only.`, "ok")}
+      ${dashboardHtml(bid, /*allowEdit*/ false)}
     `;
+  }
+
+  /* ----- Post-submit dashboard. Renders when status === 'submitted'.
+     Shows current numbers at a glance plus an Edit & Resubmit button
+     that drops back into the active form. ----- */
+  function renderDashboard(bid){
+    shellEl().innerHTML = `
+      ${banner(`<b>Your bid was submitted.</b> You can revise the numbers any time before the owner accepts &mdash; just hit Edit &amp; Resubmit below.`, "ok")}
+      ${dashboardHtml(bid, /*allowEdit*/ true)}
+    `;
+    const editBtn = document.getElementById("brvDashEdit");
+    if(editBtn) editBtn.addEventListener("click", () => {
+      renderActive(bid);
+      window.scrollTo({ top:0, behavior:"smooth" });
+    });
+  }
+
+  /* Returns the HTML for the dashboard card. Pure function — no event
+     wiring; the caller wires the Edit button if applicable. */
+  function dashboardHtml(bid, allowEdit){
+    const data = bid.submitted_data || {};
+    const cats = (bid.scope_data && bid.scope_data.categories) || [];
+    const sec  = data.sections || {};
+    const sum  = data.bid_summary || {};
+    const notes = (data.notes || "").trim();
+
+    const status   = bid.status || "submitted";
+    const subAt    = bid.submitted_at ? new Date(bid.submitted_at) : null;
+    const acceptAt = bid.accepted_at  ? new Date(bid.accepted_at)  : null;
+    const revCount = Number(bid.revision_count || 0);
+    const subStr   = subAt ? subAt.toLocaleString(undefined,{ month:"short", day:"numeric", year:"numeric", hour:"numeric", minute:"2-digit" }) : "—";
+
+    const pillCls = status === "accepted" ? "accepted" : (status === "cancelled" ? "cancelled" : "submitted");
+    const pillTxt = status.charAt(0).toUpperCase() + status.slice(1);
+
+    const totalBid = sum.total_bid || "—";
+    const timeline = sum.total_timeline || "—";
+    const startDate = sum.firm_start_date ? formatDate(sum.firm_start_date) : "—";
+
+    const rows = cats.map(c => {
+      const s = sec[c.key] || {};
+      const labour = s.labour || "—";
+      const material = s.material || "—";
+      const total = s.section_total || "—";
+      const tline = s.timeline || "—";
+      return `<tr>
+        <td class="cat">${esc(c.title)}</td>
+        <td class="meta">Labour: ${esc(labour)}<br>Material: ${esc(material)}<br>Timeline: ${esc(tline)}</td>
+        <td class="r">${esc(total)}</td>
+      </tr>`;
+    }).join("");
+
+    const editBtn = allowEdit
+      ? `<button class="brv-dash-edit-btn" id="brvDashEdit">Edit &amp; Resubmit</button>
+         <div class="hint">Drafts auto-save; you can come back any time until the owner accepts.</div>`
+      : `<div class="hint">This bid has been accepted. It's now read-only &mdash; contact the owner if changes are needed.</div>`;
+
+    return `
+      <div class="brv-project">
+        <div class="lbl">Project</div>
+        <div class="name">${esc(bid.property_name || "Property")}</div>
+        <div class="addr">${esc(bid.property_address || "")}${bid.property_sqft?` &middot; ${esc(String(bid.property_sqft))} sqft`:""}</div>
+      </div>
+      <div class="brv-dash">
+        <div class="brv-dash-head">
+          <div>
+            <div class="ttl">Your Submitted Bid</div>
+            <div class="sub">Submitted ${esc(subStr)}${acceptAt?` &middot; Accepted ${esc(acceptAt.toLocaleDateString())}`:""}${revCount?` &middot; Revision #${revCount}`:""}</div>
+          </div>
+          <span class="brv-pill ${pillCls}">${esc(pillTxt)}</span>
+        </div>
+        <div class="brv-dash-stats">
+          <div class="brv-dash-stat total"><div class="lbl">Total Bid (before HST)</div><div class="val">${esc(totalBid)}</div></div>
+          <div class="brv-dash-stat"><div class="lbl">Timeline</div><div class="val">${esc(timeline)}</div></div>
+          <div class="brv-dash-stat"><div class="lbl">Firm Start Date</div><div class="val">${esc(startDate)}</div></div>
+        </div>
+        <div class="brv-dash-cats">
+          <h4>Category Breakdown</h4>
+          <table>
+            <thead><tr><th>Category</th><th>Breakdown</th><th class="r">Total $</th></tr></thead>
+            <tbody>${rows || `<tr><td colspan="3" style="padding:14px;color:#888;">No categories submitted.</td></tr>`}</tbody>
+          </table>
+        </div>
+        ${notes ? `<div class="brv-dash-notes"><h4>Notes / Exclusions</h4><p>${esc(notes)}</p></div>` : ""}
+        <div class="brv-dash-actions">${editBtn}</div>
+      </div>
+    `;
+  }
+
+  /* Best-effort date formatter for the firm-start-date ISO string ("2026-06-15"). */
+  function formatDate(iso){
+    if(!iso) return "—";
+    // Accept either "YYYY-MM-DD" or a parseable date string
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso).trim());
+    if(m){
+      const d = new Date(Number(m[1]), Number(m[2])-1, Number(m[3]));
+      if(!isNaN(d.getTime())) return d.toLocaleDateString(undefined,{ month:"short", day:"numeric", year:"numeric" });
+    }
+    const d2 = new Date(iso);
+    if(!isNaN(d2.getTime())) return d2.toLocaleDateString(undefined,{ month:"short", day:"numeric", year:"numeric" });
+    return String(iso);
   }
   function renderCancelled(bid){
     shellEl().innerHTML = `${banner(`This bid request was cancelled by the owner. Please contact <b>Reno to Sold Inc.</b> if you have questions.`, "error")}`;
@@ -10959,6 +11500,44 @@ window.ET={ goHome:goHome, openNewProject:openNewProject, switchHome:switchHome,
       el.addEventListener("input", () => scheduleSave());
       el.addEventListener("blur",  () => scheduleSave(true));
     });
+    // Money fields (labour + material): live recompute on input, format on blur
+    root.querySelectorAll("input[data-fld='labour'], input[data-fld='material']").forEach(el => {
+      el.addEventListener("input", () => recomputeTotals());
+      el.addEventListener("blur",  () => {
+        const v = parseMoney(el.value);
+        el.value = v != null ? fmtMoney(v) : "";
+        recomputeTotals();
+      });
+      el.addEventListener("focus", () => {
+        // Strip formatting so they can type / edit raw numbers more easily
+        const v = parseMoney(el.value);
+        if(v != null) el.value = String(v);
+      });
+    });
+  }
+  /* Recompute every read-only $ field whenever labour or material changes.
+     Section total = labour + material per section. Category-total summary
+     row mirrors that section's total. Grand Total = sum of all sections. */
+  function recomputeTotals(){
+    const root = shellEl();
+    let grand = 0, anyGrand = false;
+    root.querySelectorAll(".brv-section[data-cat]").forEach(secEl => {
+      const cat = secEl.getAttribute("data-cat");
+      const labEl = secEl.querySelector("input[data-fld='labour']");
+      const matEl = secEl.querySelector("input[data-fld='material']");
+      const totEl = secEl.querySelector("input[data-fld='section_total']");
+      const l = parseMoney(labEl ? labEl.value : "");
+      const m = parseMoney(matEl ? matEl.value : "");
+      const has = (l != null) || (m != null);
+      const t = has ? ((l||0) + (m||0)) : null;
+      if(totEl) totEl.value = (t != null) ? fmtMoney(t) : "";
+      // Mirror into Bid Summary row for this category
+      const sumRow = root.querySelector(`input[data-sum="${cat}"]`);
+      if(sumRow) sumRow.value = (t != null) ? fmtMoney(t) : "";
+      if(has){ grand += (l||0) + (m||0); anyGrand = true; }
+    });
+    const grandEl = root.querySelector("input[data-sum='__total__']");
+    if(grandEl) grandEl.value = anyGrand ? fmtMoney(grand) : "";
   }
   function scheduleSave(immediate){
     clearTimeout(saveTimer);
@@ -10966,26 +11545,37 @@ window.ET={ goHome:goHome, openNewProject:openNewProject, switchHome:switchHome,
   }
   function collectFormData(){
     const root = shellEl();
+    // Recompute first so the read-only fields reflect the latest labour+material entries
+    recomputeTotals();
     const sections = {};
     root.querySelectorAll(".brv-section[data-cat]").forEach(secEl => {
       const cat = secEl.getAttribute("data-cat");
       const s = {};
       secEl.querySelectorAll("input[data-fld]").forEach(inp => {
-        s[inp.getAttribute("data-fld")] = inp.value.trim();
+        const fld = inp.getAttribute("data-fld");
+        const raw = inp.value.trim();
+        if(fld === "labour" || fld === "material" || fld === "section_total"){
+          // Normalise money fields to "$X,XXX.XX" form (or empty)
+          const v = parseMoney(raw);
+          s[fld] = (v != null) ? fmtMoney(v) : "";
+        } else {
+          s[fld] = raw;
+        }
       });
       sections[cat] = s;
     });
     const category_totals = {};
     root.querySelectorAll(".brv-summary-row input[data-sum]").forEach(inp => {
       const k = inp.getAttribute("data-sum");
-      if(k === "__total__")     return; // handled below
-      if(k === "__timeline__")  return;
-      if(k === "__startdate__") return;
-      category_totals[k] = inp.value.trim();
+      if(k === "__total__" || k === "__timeline__" || k === "__startdate__") return;
+      const v = parseMoney(inp.value);
+      category_totals[k] = (v != null) ? fmtMoney(v) : "";
     });
+    const totalRaw  = (root.querySelector("input[data-sum='__total__']")     || {}).value || "";
+    const totalNum  = parseMoney(totalRaw);
     const bid_summary = {
       category_totals,
-      total_bid:       (root.querySelector("input[data-sum='__total__']")     || {}).value || "",
+      total_bid:       totalNum != null ? fmtMoney(totalNum) : "",
       total_timeline:  (root.querySelector("input[data-sum='__timeline__']")  || {}).value || "",
       firm_start_date: (root.querySelector("input[data-sum='__startdate__']") || {}).value || ""
     };
@@ -11024,10 +11614,21 @@ window.ET={ goHome:goHome, openNewProject:openNewProject, switchHome:switchHome,
       btn.textContent = "Submitted ✓";
       // Re-fetch so we render the confirmation state with revision count etc.
       const fresh = await callApi({ action:"fetch", bid_token:token });
+      // Render the dashboard, prefixed with a thank-you banner specific
+      // to the action they just took (first submit vs revise).
+      const wasRevise = isRevision || (out && Number(out.revision_count||0) > 0);
+      const thanks = wasRevise
+        ? `<b>Revision submitted &mdash; thank you.</b><br>The owner has been notified of what changed. You can still revise again until they accept.${out.revision_count?` This was revision #${out.revision_count}.`:""}`
+        : `<b>Thank you &mdash; your bid was submitted successfully.</b><br>The owner has been notified by email. You can come back to this link any time to revise your bid until they accept it.`;
       shellEl().innerHTML = `
-        ${banner(`<b>Thank you &mdash; your bid was submitted successfully.</b><br>The owner has been notified by email. You can come back to this link to revise your bid until they accept it.${out.revision_count?` This was revision #${out.revision_count}.`:""}`)}
-        ${renderReadOnly({ ...fresh, scope_data: fresh.scope_data, submitted_data: data })}
+        ${banner(thanks, "ok")}
+        ${dashboardHtml(fresh, /*allowEdit*/ true)}
       `;
+      const editBtn = document.getElementById("brvDashEdit");
+      if(editBtn) editBtn.addEventListener("click", () => {
+        renderActive(fresh);
+        window.scrollTo({ top:0, behavior:"smooth" });
+      });
       window.scrollTo({ top:0, behavior:"smooth" });
     }catch(e){
       btn.disabled = false; btn.textContent = isRevision ? "Resubmit Bid" : "Submit Bid";
@@ -11041,6 +11642,7 @@ window.ET={ goHome:goHome, openNewProject:openNewProject, switchHome:switchHome,
       const bid = await callApi({ action:"fetch", bid_token:token });
       if(bid.status === "accepted")  return renderAccepted(bid);
       if(bid.status === "cancelled") return renderCancelled(bid);
+      if(bid.status === "submitted") return renderDashboard(bid);
       renderActive(bid);
     }catch(e){
       fatal("We couldn't load this bid: " + (e.message || "unknown error") + ". The link may be wrong or the bid was cancelled.");
