@@ -719,17 +719,15 @@
     box-shadow:none !important;
     background:#fff !important;
   }
-  /* During PDF export, force the 4-up bid row (labour / material / total
-     / timeline) to stay on a single horizontal line regardless of window
-     width. Without this override, narrow windows would wrap timeline to
-     its own row in the emailed PDF. */
+  /* During PDF export, shrink the per-cell minimum width so all 4 columns
+     (labour / material / total / timeline) fit on one row even when the
+     window is narrow. Wrapping IS still allowed as a safety net — never
+     force nowrap, that has caused html2canvas to clip the sheet. */
   body.contractor-pdf-export .contractor-sheet .bid-row{
-    flex-wrap:nowrap !important;
     gap:10px !important;
   }
   body.contractor-pdf-export .contractor-sheet .bid-cell{
-    min-width:0 !important;
-    flex:1 1 0 !important;
+    min-width:110px !important;
   }
   /* When any contractor-view modal is open, layer it above the contractor sheet. */
   body.show-contractor > .modal-bg#contractorsBookModal.show,
@@ -6090,46 +6088,41 @@ function printContractorBidViaIframe(){
   const sourceEl = document.getElementById("contractorView");
   printNodeViaIframe(sourceEl, "show-contractor", CONTRACTOR_PRINT_EXTRA_CSS);
 }
-/* Render the contractor bid sheet as a PDF blob, matching the Print/PDF output
-   as closely as possible. Strategy: temporarily make the live #contractorSheet
-   visible + apply pdf-export overrides + force a fixed wide layout via
-   windowWidth so the labour / material / total / timeline grid stays on one
-   row instead of wrapping. */
+/* Render the contractor bid sheet as a PDF blob. This is the conservative
+   path that has historically produced a valid PDF — we keep windowWidth
+   tied to the element's actual scrollWidth so html2canvas captures the
+   sheet at the correct scale. The visual layout of the 4-column bid row
+   is handled by CSS in body.contractor-pdf-export below, NOT by forcing
+   windowWidth / nowrap from JS (those produced empty or clipped PDFs).
+   ⚠️ Future edits: do not change the html2canvas windowWidth or add
+   layout-forcing hacks here. If you need to reshape the row, do it in
+   the body.contractor-pdf-export CSS block. */
 async function renderContractorBidPdfBlob(){
   const sheetEl = document.getElementById("contractorSheet");
   if(!sheetEl) throw new Error("Contractor sheet not found");
 
-  // Make the contractor view visible if it isn't already (the IIFE-rendered
-  // sheet lives inside `.contractor-view` which is display:none without
-  // `body.show-contractor`). Restore the original body class afterwards.
+  // The contractor sheet sits inside `.contractor-view` which is
+  // `display:none` unless `body.show-contractor` is set. Make sure both
+  // are on so html2canvas sees actual rendered content.
   const hadShow = document.body.classList.contains("show-contractor");
   if(!hadShow) document.body.classList.add("show-contractor");
   document.body.classList.add("contractor-pdf-export");
 
-  // Make sure the sheet is freshly rendered for the active bid + categories.
+  // Re-render so the sheet reflects the latest bid state + category toggles.
   try { renderContractorSheet(); } catch(_){}
-
-  // Letting layout settle one paint frame avoids html2canvas capturing
-  // mid-render state.
-  await new Promise(r => setTimeout(r, 60));
+  await new Promise(r => setTimeout(r, 80));
 
   const filenameAddr = sanitizeFilename(state.propAddress || state.propName || "bid");
   const filename = `ContractorBid-${filenameAddr}.pdf`;
 
-  // Use a fixed render width that matches the printable letter page area
-  // (8.5" - 0.45"*2 ≈ 7.6" * 96 ≈ 730px). On most laptop screens the
-  // browser window is already wider than this, so html2canvas sees the
-  // sheet at its natural Print/PDF layout — labour/material/total/timeline
-  // stays on one row.
-  const RENDER_WIDTH_PX = 900;
   try{
     const blob = await html2pdf().set({
-      margin:      [0.45, 0.45, 0.45, 0.45],
+      margin:      [0.4, 0.4, 0.4, 0.4],
       filename,
       image:       { type:'jpeg', quality:0.97 },
-      html2canvas: { scale:2, useCORS:true, backgroundColor:'#ffffff', windowWidth:RENDER_WIDTH_PX },
+      html2canvas: { scale:2, useCORS:true, backgroundColor:'#ffffff', windowWidth: sheetEl.scrollWidth },
       jsPDF:       { unit:'in', format:'letter', orientation:'portrait' },
-      pagebreak:   { mode:['css','legacy'], avoid:['.scope-section','.summary','.sig-area','.notes-block'] }
+      pagebreak:   { mode:['css','legacy'], avoid:['.scope-section','.summary','.sig-area'] }
     }).from(sheetEl).outputPdf('blob');
     return { blob, filename };
   } finally {
