@@ -7628,7 +7628,7 @@ function renderReceivedBidsList(){
     const when = b.submitted_at ? new Date(b.submitted_at).toLocaleString() : new Date(b.created_at).toLocaleString();
     const revLine = b.revision_count ? `<span class="meta">&nbsp;&middot; Rev #${b.revision_count}</span>` : "";
     return `
-      <div class="rb-card" data-id="${escapeHtml(b.bid_token)}" onclick="expandReceivedBid('${escapeHtml(b.bid_token)}')">
+      <div class="rb-card" data-id="${escapeHtml(b.bid_token)}" onclick="onReceivedBidCardClick(event, '${escapeHtml(b.bid_token)}')">
         <div class="rb-card-head">
           <div>
             <div class="co">${escapeHtml(co)}</div>
@@ -7691,6 +7691,26 @@ function renderReceivedBidsSnapshot(allBids){
       <div class="v small">${highest != null ? rbFmtMoney(highest) : "—"}</div>
     </div>
   `;
+}
+/* Smart click handler for the bid card. We want clicks on the card HEAD
+   (the company name / status pill area) to toggle expansion, but clicks
+   inside the already-expanded detail panel (revision history toggles,
+   action buttons, links) should NOT collapse the card. */
+function onReceivedBidCardClick(ev, token){
+  const t = ev.target;
+  // Ignore clicks that originated inside the expanded detail area, on form
+  // controls, links, buttons, or details/summary elements.
+  if(t.closest && (
+       t.closest(".rb-detail") ||
+       t.closest("a") ||
+       t.closest("button") ||
+       t.closest("details") ||
+       t.closest("summary") ||
+       t.closest("input") ||
+       t.closest("textarea") ||
+       t.closest("select")
+  )) return;
+  expandReceivedBid(token);
 }
 function expandReceivedBid(token){
   const card = document.querySelector(`.rb-card[data-id="${token}"]`);
