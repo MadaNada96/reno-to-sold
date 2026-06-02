@@ -4929,6 +4929,66 @@ function kitchenCounterTierLabel(t){
   return t === "custom" ? "Premium Quartz" : "Standard Quartz";
 }
 
+/* Build the breakdown-grid HTML for one kitchen instance (main or basement).
+   Pure function — used both for initial render and for live updates triggered
+   by oninput on the kitchen number fields. */
+function buildKitchenSummaryHtml(k){
+  const d = deriveKitchen(k);
+  if(d.baseLF <= 0){
+    return `<div class="footnote" style="margin-bottom:14px;color:var(--muted);">Enter run lengths to see your total LF.</div>`;
+  }
+  const lfPill = `<div style="display:inline-flex;align-items:center;gap:8px;padding:6px 12px;background:#19170f;border:1px solid var(--gold-deep);border-radius:8px;margin-bottom:10px;">
+    <span style="color:var(--muted);font-size:11px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;">Total cabinet length</span>
+    <b style="color:var(--gold-bright);font-variant-numeric:tabular-nums;">${d.baseLF} LF</b>
+  </div>`;
+  if(!k.counter){
+    return `<div>${lfPill}</div>`;
+  }
+  const cell = (label, val, opts) => {
+    opts = opts || {};
+    const accent = opts.total ? "background:#0f1414;border:2px solid var(--gold);box-shadow:0 0 0 1px rgba(212,175,106,.18) inset;" : "background:#19170f;border:1px solid var(--line);";
+    const valColor = opts.total ? "color:#ffe89e;font-size:16px;" : "color:var(--gold-bright);font-size:14px;";
+    const labelColor = opts.muted ? "color:var(--muted)" : "color:#a8853f";
+    return `<div style="${accent}border-radius:8px;padding:8px 10px;min-width:0;">
+      <div style="${labelColor};font-size:9.5px;letter-spacing:.10em;text-transform:uppercase;font-weight:700;margin-bottom:4px;line-height:1.25;">${label}</div>
+      <div style="${valColor}font-weight:800;font-variant-numeric:tabular-nums;line-height:1.1;">${val}</div>
+    </div>`;
+  };
+  const cells = [];
+  cells.push(cell("Base cabinet<br>countertop", d.baseCounterSqft + " sqft"));
+  cells.push(cell("Island top", (k.island ? d.islandCounterSqft : 0) + " sqft"));
+  cells.push(cell("Waterfall<br>ends", (k.island ? d.waterfallSqft : 0) + " sqft"));
+  if(d.counterExtra > 0) cells.push(cell("Counter<br>extras", d.counterExtra + " sqft"));
+  const bsSqftForCell = k.backsplash ? d.backsplashSqft : 0;
+  const bsLabel = d.isMatch ? "Backsplash<br>(match)" : "Backsplash<br>(tile)";
+  cells.push(cell(bsLabel, bsSqftForCell + " sqft", { muted: k.backsplash && !d.isMatch }));
+  cells.push(cell("Total Quartz", d.totalQuartzSqft + " sqft", { total:true }));
+  const grid = `<div style="display:grid;grid-template-columns:repeat(${cells.length},minmax(0,1fr));gap:8px;margin-bottom:14px;">
+    ${cells.join("")}
+  </div>`;
+  return `<div>${lfPill}</div>${grid}`;
+}
+/* Targeted live update — called from oninput on every number input inside
+   the kitchen UI. Rewrites ONLY the summary grid; the input that's currently
+   focused stays in the DOM and keeps its caret. */
+function updateKitchenSummary(slug){
+  const k = (slug === "basement") ? (state.kitchen && state.kitchen.basement) : state.kitchen;
+  if(!k) return;
+  const el = document.getElementById("kitchen-summary-" + slug);
+  if(el) el.innerHTML = buildKitchenSummaryHtml(k);
+  // Also refresh the "= X ft" hints that sit beside each inch input. Those
+  // are tiny labels and replacing them does not steal focus.
+  const ftHint = (lfInches) => {
+    const ft = inchesToFtUp(lfInches);
+    return ft > 0 ? `<span style="color:var(--gold-bright);font-weight:600;">= ${ft} ft</span>` : `<span style="color:var(--muted);">—</span>`;
+  };
+  const setHint = (id, val) => { const e = document.getElementById(id); if(e) e.innerHTML = ftHint(val); };
+  setHint("kitchen-runlen-ft-"+slug,   k.runLen);
+  setHint("kitchen-runwid-ft-"+slug,   k.runWid);
+  setHint("kitchen-runthird-ft-"+slug, k.runThird);
+  setHint("kitchen-island-ft-"+slug,   k.islandLength);
+}
+
 /* Render one kitchen instance (main or basement) using the given path prefix
    for inline event handlers. `slug` is "main" or "basement" — used to give the
    tier-radio group a unique `name` attribute so the two pickers don't collide.
@@ -4951,12 +5011,11 @@ function renderKitchenInstance(k, prefix, slug){
     const ft = inchesToFtUp(lfInches);
     return ft > 0 ? `<span style="color:var(--gold-bright);font-weight:600;">= ${ft} ft</span>` : `<span style="color:var(--muted);">—</span>`;
   };
-  // Standard handlers for number inputs: update state + totals live ONLY. No
-  // onblur DOM rebuild — that caused a double-click-to-focus bug because the
-  // blur fired before the next click could land, destroying the freshly-
-  // clicked input. Inline hint text stays stale until the user toggles a
-  // checkbox or radio (matches how the rest of the estimator behaves).
-  const numAttrs = (path) => `oninput="${path}=this.value;renderTotals()"`;
+  // Standard handlers for number inputs: update state + totals + the kitchen
+  // breakdown summary live. We do a targeted innerHTML swap on the summary
+  // div only — we do NOT rebuild the whole catBody, so the input that's
+  // currently focused stays in the DOM and keeps its caret.
+  const numAttrs = (path) => `oninput="${path}=this.value;updateKitchenSummary('${slug}');renderTotals()"`;
   // Smaller width for short numeric inputs (Run lengths, Additional sqft,
   // Island length / width). The full-width default looked oversized for
   // small 3-digit numbers.
@@ -4989,62 +5048,22 @@ function renderKitchenInstance(k, prefix, slug){
         <div>
           <label>Run #1 length (inches)</label>
           <input type="number" min="0" inputmode="numeric" style="${compactInputStyle}" value="${k.runLen||''}" placeholder="e.g. 120" ${numAttrs(prefix+".runLen")}>
-          <div style="font-size:11px;margin-top:4px;">${ftHint(k.runLen)}</div>
+          <div id="kitchen-runlen-ft-${slug}" style="font-size:11px;margin-top:4px;">${ftHint(k.runLen)}</div>
         </div>
         <div>
           <label>Run #2 length (inches)</label>
           <input type="number" min="0" inputmode="numeric" style="${compactInputStyle}" value="${k.runWid||''}" placeholder="e.g. 96" ${numAttrs(prefix+".runWid")}>
-          <div style="font-size:11px;margin-top:4px;">${ftHint(k.runWid)}</div>
+          <div id="kitchen-runwid-ft-${slug}" style="font-size:11px;margin-top:4px;">${ftHint(k.runWid)}</div>
         </div>
         ${layout === 'U' ? `
         <div>
           <label>Run #3 length (inches)</label>
           <input type="number" min="0" inputmode="numeric" style="${compactInputStyle}" value="${k.runThird||''}" placeholder="e.g. 72" ${numAttrs(prefix+".runThird")}>
-          <div style="font-size:11px;margin-top:4px;">${ftHint(k.runThird)}</div>
+          <div id="kitchen-runthird-ft-${slug}" style="font-size:11px;margin-top:4px;">${ftHint(k.runThird)}</div>
         </div>
         ` : ""}
       </div>
-      ${(() => {
-        if(d.baseLF <= 0){
-          return `<div class="footnote" style="margin-bottom:14px;color:var(--muted);">Enter run lengths to see your total LF.</div>`;
-        }
-        // Top line: total cabinet length
-        const lfPill = `<div style="display:inline-flex;align-items:center;gap:8px;padding:6px 12px;background:#19170f;border:1px solid var(--gold-deep);border-radius:8px;margin-bottom:10px;">
-          <span style="color:var(--muted);font-size:11px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;">Total cabinet length</span>
-          <b style="color:var(--gold-bright);font-variant-numeric:tabular-nums;">${d.baseLF} LF</b>
-        </div>`;
-        // If countertop is off (no quartz at all yet), just show the LF.
-        if(!k.counter){
-          return `<div style="margin-bottom:14px;">${lfPill}</div>`;
-        }
-        // Quartz component grid — each pill shows one piece of the calc
-        const cell = (label, val, opts) => {
-          opts = opts || {};
-          const accent = opts.total ? "background:#0f1414;border:2px solid var(--gold);box-shadow:0 0 0 1px rgba(212,175,106,.18) inset;" : "background:#19170f;border:1px solid var(--line);";
-          const valColor = opts.total ? "color:#ffe89e;font-size:16px;" : "color:var(--gold-bright);font-size:14px;";
-          const labelColor = opts.muted ? "color:var(--muted)" : "color:#a8853f";
-          return `<div style="${accent}border-radius:8px;padding:8px 10px;min-width:0;">
-            <div style="${labelColor};font-size:9.5px;letter-spacing:.10em;text-transform:uppercase;font-weight:700;margin-bottom:4px;line-height:1.25;">${label}</div>
-            <div style="${valColor}font-weight:800;font-variant-numeric:tabular-nums;line-height:1.1;">${val}</div>
-          </div>`;
-        };
-        const cells = [];
-        cells.push(cell("Base cabinet<br>countertop", d.baseCounterSqft + " sqft"));
-        cells.push(cell("Island top", (k.island ? d.islandCounterSqft : 0) + " sqft"));
-        cells.push(cell("Waterfall<br>ends", (k.island ? d.waterfallSqft : 0) + " sqft"));
-        if(d.counterExtra > 0) cells.push(cell("Counter<br>extras", d.counterExtra + " sqft"));
-        // Backsplash pill — label + included-in-total depends on material.
-        // When backsplash material is Tile, the pill shows "Backsplash (Tile)"
-        // with the tile sqft, but that sqft is NOT included in Total Quartz.
-        const bsSqftForCell = k.backsplash ? d.backsplashSqft : 0;
-        const bsLabel = d.isMatch ? "Backsplash<br>(match)" : "Backsplash<br>(tile)";
-        cells.push(cell(bsLabel, bsSqftForCell + " sqft", { muted: k.backsplash && !d.isMatch }));
-        cells.push(cell("Total Quartz", d.totalQuartzSqft + " sqft", { total:true }));
-        const grid = `<div style="display:grid;grid-template-columns:repeat(${cells.length},minmax(0,1fr));gap:8px;margin-bottom:14px;">
-          ${cells.join("")}
-        </div>`;
-        return `<div>${lfPill}</div>${grid}`;
-      })()}
+      <div id="kitchen-summary-${slug}">${buildKitchenSummaryHtml(k)}</div>
 
       <!-- Countertop -->
       <div class="addon">
@@ -5109,7 +5128,7 @@ function renderKitchenInstance(k, prefix, slug){
             <div>
               <label>Island length (inches)</label>
               <input type="number" min="0" inputmode="numeric" style="${compactInputStyle}" value="${k.islandLength||''}" placeholder="72" ${numAttrs(prefix+".islandLength")}>
-              <div style="font-size:11px;margin-top:4px;">${ftHint(k.islandLength)}</div>
+              <div id="kitchen-island-ft-${slug}" style="font-size:11px;margin-top:4px;">${ftHint(k.islandLength)}</div>
             </div>
             <div>
               <label>Island width</label>
