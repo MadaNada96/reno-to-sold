@@ -718,6 +718,14 @@
     max-width:none !important;
     box-shadow:none !important;
     background:#fff !important;
+    /* Zero the bottom padding so the rendered canvas height matches the
+       content height exactly. Without this, the sheet's 48px bottom
+       padding pushes the total height a few millimetres past 4 pages,
+       and html2pdf allocates a 5th blank page for the leftover. */
+    padding-bottom:0 !important;
+  }
+  body.contractor-pdf-export .contractor-sheet .sig-area{
+    margin-bottom:0 !important;
   }
   /* During PDF export, shrink the per-cell minimum width so all 4 columns
      (labour / material / total / timeline) fit on one row even when the
