@@ -368,6 +368,27 @@
   .contractors-form .cf-actions{ display:flex; justify-content:flex-end; gap:8px; margin-top:6px; }
 
   /* Received Bids modal */
+  .rb-scope{
+    background:var(--panel-2); border:1px solid var(--line);
+    border-radius:8px; padding:8px 10px; margin-bottom:12px;
+    display:flex; align-items:center; justify-content:space-between;
+    gap:10px; flex-wrap:wrap;
+  }
+  .rb-scope .rb-scope-info{
+    font-size:11px; color:var(--muted); flex:1; min-width:0;
+    line-height:1.4;
+  }
+  .rb-scope .rb-scope-info b{ color:var(--ink-strong); font-weight:700; }
+  .rb-scope-toggle{ display:flex; gap:4px; }
+  .rb-scope-toggle button{
+    padding:5px 11px; font-size:11px; font-weight:600;
+    background:transparent; color:var(--muted);
+    border:1px solid var(--line-strong); border-radius:6px;
+    cursor:pointer;
+  }
+  .rb-scope-toggle button.on{
+    background:var(--gold-deep); color:#0a0a0a; border-color:var(--gold);
+  }
   .rb-snapshot{
     background:linear-gradient(180deg,#1a1814,#0f0d09);
     border:1px solid var(--gold-deep); border-radius:9px;
@@ -3415,6 +3436,8 @@
       <button class="ghost" onclick="closeReceivedBidsModal()">Close</button>
     </h3>
     <div class="modal-body">
+      <!-- Scope toggle: bids for the currently open project, or all bids. -->
+      <div id="rbScope" class="rb-scope"></div>
       <!-- Dashboard snapshot above the list — totals and counts across visible bids. -->
       <div id="rbSnapshot" class="rb-snapshot"></div>
       <div class="rb-filter">
@@ -7622,6 +7645,29 @@ function setContractorEmailStatus(msg, kind){
    ============================================================ */
 let _receivedBidsTab = "all";
 let _receivedBidsCache = [];
+/* Scope toggle: "project" = bids matching the currently-open estimate's
+   property, "all" = every bid you've ever sent. Defaults to "project"
+   so opening Bids while inside a project doesn't surface bids that
+   belong to other addresses. */
+let _receivedBidsScope = "project";
+/* Build a normalised key for the currently-open estimate so we can match
+   bid records to it. Bids store property_address + property_name on the
+   row when the email is sent; this function returns the same shape so
+   we can compare. Returns "" if no property info is set. */
+function currentProjectKey(){
+  const addr = (state.propAddress || "").trim().toLowerCase().replace(/\s+/g," ");
+  if(addr) return "addr:" + addr;
+  const name = (state.propName || "").trim().toLowerCase().replace(/\s+/g," ");
+  if(name) return "name:" + name;
+  return "";
+}
+function bidProjectKey(b){
+  const addr = (b.property_address || "").trim().toLowerCase().replace(/\s+/g," ");
+  if(addr) return "addr:" + addr;
+  const name = (b.property_name || "").trim().toLowerCase().replace(/\s+/g," ");
+  if(name) return "name:" + name;
+  return "";
+}
 /* Local currency parser/formatter (owner side). Mirrors the bid response
    IIFE so legacy data ("1234") or already-formatted data ("$1,234.50") all
    display consistently as $X,XXX.XX. Returns "" for empty / non-numeric. */
@@ -7649,13 +7695,28 @@ function rbMoneyDisplay(s){
 function openReceivedBidsModal(){
   document.getElementById("receivedBidsModal").classList.add("show");
   _receivedBidsTab = "all";
+  // Default scope: if the open estimate has a property, restrict to that
+  // project. If not (brand-new estimate / no address yet) fall back to
+  // showing all bids since there's nothing to filter against.
+  _receivedBidsScope = currentProjectKey() ? "project" : "all";
   setReceivedBidsTab("all");
   loadReceivedBids();
   // Honor deep-link from the notification email (e.g. /?bids=1#TOKEN)
   setTimeout(() => {
     const hash = (location.hash || "").replace(/^#/, "");
-    if(hash) expandReceivedBid(hash);
+    if(hash){
+      // Deep-linked bids should be visible no matter the project, so
+      // switch to "all" scope before expanding.
+      _receivedBidsScope = "all";
+      renderReceivedBidsList();
+      expandReceivedBid(hash);
+    }
   }, 200);
+}
+/* Switch scope (project / all) and re-render. */
+function setReceivedBidsScope(scope){
+  _receivedBidsScope = scope;
+  renderReceivedBidsList();
 }
 function closeReceivedBidsModal(){
   document.getElementById("receivedBidsModal").classList.remove("show");
@@ -7687,12 +7748,18 @@ async function loadReceivedBids(){
 }
 function renderReceivedBidsList(){
   const filter = _receivedBidsTab;
-  const list = (_receivedBidsCache || []).filter(b => filter === "all" || b.status === filter);
+  const projKey = currentProjectKey();
+  // Apply the project filter first (if scope = project AND we have a key),
+  // then the status tab filter. The snapshot uses the project-scoped cache
+  // too so it reflects "this project" rather than your entire history.
+  const projectScoped = (_receivedBidsScope === "project" && projKey)
+    ? (_receivedBidsCache || []).filter(b => bidProjectKey(b) === projKey)
+    : (_receivedBidsCache || []);
+  const list = projectScoped.filter(b => filter === "all" || b.status === filter);
   const root = document.getElementById("rbList");
   const empty = document.getElementById("rbEmpty");
-  // Render the dashboard snapshot for whatever is in the current cache (all bids,
-  // ignoring tab filter — the snapshot answers "where do my bids stand overall?").
-  renderReceivedBidsSnapshot(_receivedBidsCache || []);
+  renderReceivedBidsScopeToggle(projKey, projectScoped.length, (_receivedBidsCache || []).length);
+  renderReceivedBidsSnapshot(projectScoped);
   if(!list.length){
     root.innerHTML = "";
     empty.style.display = "";
@@ -7729,6 +7796,34 @@ function renderReceivedBidsList(){
     `;
   }).join("");
 }
+/* Render the project / all toggle at the top of the bids modal. Shows the
+   currently-active project name + counts so the user always knows what
+   they're looking at. Hidden when no project is open (nothing to scope to). */
+function renderReceivedBidsScopeToggle(projKey, projectCount, totalCount){
+  const host = document.getElementById("rbScope");
+  if(!host) return;
+  if(!projKey){
+    // No project open — nothing meaningful to filter by. Hide the toggle
+    // entirely and show all bids.
+    host.style.display = "none";
+    return;
+  }
+  host.style.display = "";
+  const propLabel = (state.propName || "").trim() || (state.propAddress || "").trim() || "this project";
+  const scope = _receivedBidsScope || "project";
+  host.innerHTML = `
+    <div class="rb-scope-info">
+      Showing bids for <b>${escapeHtml(propLabel)}</b>
+      &middot; ${projectCount} bid${projectCount===1?"":"s"} on this project
+      ${totalCount > projectCount ? `&middot; <span style="color:var(--muted);">${totalCount - projectCount} more on other projects</span>` : ""}
+    </div>
+    <div class="rb-scope-toggle">
+      <button class="${scope==='project'?'on':''}" onclick="setReceivedBidsScope('project')">This project</button>
+      <button class="${scope==='all'?'on':''}"     onclick="setReceivedBidsScope('all')">All bids</button>
+    </div>
+  `;
+}
+
 /* Dashboard snapshot above the bids list — counts + financial totals across
    ALL bids (not just the currently filtered tab). Lives in #rbSnapshot. */
 function renderReceivedBidsSnapshot(allBids){
