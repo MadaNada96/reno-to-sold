@@ -1421,6 +1421,18 @@
   .es-cat-total.es-cat-disc .v{
     color:#a32a2a; font-weight:800;
   }
+  /* Post-discount per-category subtotal — the headline figure for that
+     scope. Slightly more prominent than the pre-discount line above it. */
+  .es-cat-total.es-cat-net{
+    margin-top:4px; padding-top:6px;
+    border-top:2px solid #d4af6a;
+  }
+  .es-cat-total.es-cat-net .lbl{
+    color:#0a0a0a;
+  }
+  .es-cat-total.es-cat-net .v{
+    font-size:15px; color:#0a0a0a;
+  }
   /* Sub-block inside a category — used for individual bathrooms
      and main vs basement kitchens. Cream background + gold accent. */
   .es-subblock{
@@ -4497,25 +4509,28 @@ function renderTotals(){
   const _discPct  = _discRate * 100;
   // Per-category totals
   Object.keys(CATEGORY_META).forEach(cat => {
+    const r = t.perCat[cat];
+    const catSub = r.labour + r.material;
+    // Allocated share of the overall discount that "belongs" to this category.
+    const catDisc = catSub * _discRate;
+    const hasDisc = state.enabled[cat] && catSub > 0 && t.discount > 0;
+    // The headline figure on the closed category card AND the Subtotal row
+    // inside the breakdown should be the POST-discount price — so the
+    // discount line above it actually changes the bottom number. Labour and
+    // material stay as the original pre-discount figures.
+    const catNet = catSub - (hasDisc ? catDisc : 0);
     const el = document.getElementById("cat-total-"+cat);
     if(el){
-      const r = t.perCat[cat];
-      el.textContent = state.enabled[cat] ? fmt(r.labour + r.material) : "—";
+      el.textContent = state.enabled[cat] ? fmt(catNet) : "—";
       el.style.color = state.enabled[cat] ? "" : "var(--muted)";
     }
     const bd = document.getElementById("cat-breakdown-"+cat);
     if(bd){
-      const r = t.perCat[cat];
-      const catSub = r.labour + r.material;
       bd.querySelector(".bd-l").textContent = fmt(r.labour);
       bd.querySelector(".bd-m").textContent = fmt(r.material);
-      bd.querySelector(".bd-t").textContent = fmt(catSub);
-      // Show the proportional discount row if there is any discount AND
-      // this category has a positive subtotal.
+      bd.querySelector(".bd-t").textContent = fmt(catNet);
       const discRow = bd.querySelector(".bd-discount-row");
       if(discRow){
-        const catDisc = catSub * _discRate;
-        const hasDisc = state.enabled[cat] && catSub > 0 && t.discount > 0;
         discRow.style.display = hasDisc ? "" : "none";
         if(hasDisc){
           discRow.querySelector(".bd-d").textContent = "-" + fmt(catDisc);
@@ -6896,13 +6911,16 @@ function renderClientEstimate(){
       </div>
     `;
     // Discount allocation: total discount across all categories is split
-    // proportionally to each category's labour+material subtotal. Shown
-    // as an italic line between bullets and the category total.
+    // proportionally to each category's labour+material subtotal. The
+    // discount line appears between the pre-discount "Labour & Material"
+    // row and a new post-discount "Subtotal" row. So the client sees
+    // every step: original total, savings, final price for that scope.
     const _esDiscRate = (totals.subtotal > 0) ? (totals.discount / totals.subtotal) : 0;
     const _esDiscPct  = _esDiscRate * 100;
     const _esDiscPctLabel = _esDiscPct.toFixed(_esDiscPct < 1 ? 2 : 1).replace(/\.0+$/,"");
+    const hasDiscount = totals.discount && totals.discount > 0;
     const renderDiscRow = (catSub) => {
-      if(!totals.discount || totals.discount <= 0 || catSub <= 0) return "";
+      if(!hasDiscount || catSub <= 0) return "";
       const catDisc = catSub * _esDiscRate;
       return `
         <div class="es-cat-total es-cat-disc">
@@ -6911,25 +6929,40 @@ function renderClientEstimate(){
         </div>
       `;
     };
+    const renderNetRow = (catSub, label) => {
+      if(!hasDiscount || catSub <= 0) return "";
+      const catDisc = catSub * _esDiscRate;
+      const net = catSub - catDisc;
+      return `
+        <div class="es-cat-total es-cat-net">
+          <span class="lbl">${escapeHtml(label || "Subtotal (after discount)")}</span>
+          <span class="v">${fmtCurrency(net)}</span>
+        </div>
+      `;
+    };
     sections.forEach(sec => {
       let body = "";
       if(sec.subblocks && sec.subblocks.length){
-        // Bathrooms / multi-instance kitchens — one sub-block per item
+        // Bathrooms / multi-instance kitchens — one sub-block per item.
+        // Each sub-block: bullets → Labour & Material → Discount → Subtotal.
         body += sec.subblocks.map(sb => `
           <div class="es-subblock">
             <div class="es-subblock-title">${escapeHtml(sb.title)}</div>
             ${renderBullets(sb.bullets)}
             ${renderTotalRow(`${sb.title} — Labour & Material`, sb.total)}
             ${renderDiscRow(sb.total)}
+            ${renderNetRow(sb.total, `${sb.title} — Subtotal`)}
           </div>
         `).join("");
-        // Category-level total under all sub-blocks
-        body += renderTotalRow(`${sec.title} — Combined Total`, sec.total);
+        // Category-level rollup under all sub-blocks: combined L&M, discount, net.
+        body += renderTotalRow(`${sec.title} — Combined Labour & Material`, sec.total);
         body += renderDiscRow(sec.total);
+        body += renderNetRow(sec.total, `${sec.title} — Combined Subtotal`);
       } else {
         body += renderBullets(sec.bullets || []);
         body += renderTotalRow("Total Labour & Material", sec.total);
         body += renderDiscRow(sec.total);
+        body += renderNetRow(sec.total, "Subtotal (after discount)");
       }
       html += `
         <div class="es-category-block">
