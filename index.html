@@ -4570,6 +4570,23 @@ function renderTotals(){
       if(bdL) bdL.textContent = fmt(r.labour);
       if(bdM) bdM.textContent = fmt(r.material);
       if(bdSi) bdSi.textContent = fmt(r.labour + r.material);  // kitchen: combined supplied & installed
+      // Kitchen-only: per-component breakdown rows (Cabinet runs, Counter, etc.)
+      if(cat === "kitchen"){
+        // Sum costs across main + basement kitchen instances. Each component
+        // row hides when its dollar total is 0.
+        const mainCosts = deriveKitchenCosts(state.kitchen);
+        const bk = state.kitchen && state.kitchen.basement;
+        const basCosts = (bk && bk.enabled) ? deriveKitchenCosts(bk) : null;
+        const sum = (key) => mainCosts[key] + (basCosts ? basCosts[key] : 0);
+        const setKR = (key) => {
+          const v = sum(key);
+          const rowEl = bd.querySelector('.bd-kc-row[data-kc="'+key+'"]');
+          if(rowEl) rowEl.style.display = v > 0 ? "" : "none";
+          const valEl = bd.querySelector(".bd-kc-"+key);
+          if(valEl) valEl.textContent = fmt(v);
+        };
+        ["base","counter","backsplash","island","waterfall","undercab"].forEach(setKR);
+      }
       bd.querySelector(".bd-t").textContent = fmt(catNet);
       const discRow = bd.querySelector(".bd-discount-row");
       if(discRow){
@@ -4635,13 +4652,19 @@ function tierToggle(cat, current, opts){
 }
 
 function breakdownRows(cat){
-  // Kitchen is presented to the client as "Supplied & Installed" — single
-  // combined row instead of Labour + Material. All other categories keep
-  // the L/M breakdown as before.
+  // Kitchen is presented to the client as a per-component breakdown — each
+  // section gets its own row with the section's combined supplied & installed
+  // dollar amount. Followed by the discount row + subtotal.
   if(cat === "kitchen"){
+    const kRow = (key, label) => `<div class="breakdown bd-kc-row" data-kc="${key}" style="display:none;"><span style="color:var(--ink);font-weight:500;">${label}</span><span class="bd-kc-${key}" style="font-variant-numeric:tabular-nums;">$0</span></div>`;
     return `
       <div id="cat-breakdown-${cat}">
-        <div class="breakdown"><span><span class="pill pill-l">Supplied &amp; Installed</span></span><span class="bd-si">$0</span></div>
+        ${kRow("base",       "Cabinet runs")}
+        ${kRow("counter",    "Countertops")}
+        ${kRow("backsplash", "Backsplash")}
+        ${kRow("island",     "Island")}
+        ${kRow("waterfall",  "Waterfall ends")}
+        ${kRow("undercab",   "Under-cabinet lighting")}
         <div class="breakdown disc bd-discount-row" style="display:none"><span><span class="pill pill-d">Discount</span> <span class="bd-d-note" style="margin-left:6px;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;"></span></span><span class="bd-d">-$0</span></div>
         <div class="breakdown" style="font-weight:600"><span>Subtotal</span><span class="bd-t">$0</span></div>
       </div>
@@ -5035,6 +5058,23 @@ function updateKitchenSummary(slug){
   setHint("kitchen-runwid-ft-"+slug,   k.runWid);
   setHint("kitchen-runthird-ft-"+slug, k.runThird);
   setHint("kitchen-island-ft-"+slug,   k.islandLength);
+  // Per-section cost pills — refresh the dollar amounts inline as the user
+  // types. Each pill's container holds a label + bold $ value; we replace the
+  // bold $ via innerHTML and toggle the container's display based on > 0.
+  const setSectionCost = (key, amount) => {
+    const wrap = document.getElementById("kitchen-cost-"+key+"-"+slug);
+    if(!wrap) return;
+    wrap.style.display = amount > 0 ? "block" : "none";
+    const b = wrap.querySelector("b");
+    if(b) b.textContent = fmt(amount);
+  };
+  const costs = deriveKitchenCosts(k);
+  setSectionCost("base",       costs.baseCabinetCost);
+  setSectionCost("counter",    costs.countertopCost);
+  setSectionCost("backsplash", costs.backsplashCost);
+  setSectionCost("island",     costs.islandCost);
+  setSectionCost("waterfall",  costs.waterfallCost);
+  setSectionCost("undercab",   costs.undercabCost);
 }
 
 /* Render one kitchen instance (main or basement) using the given path prefix
@@ -5068,6 +5108,16 @@ function renderKitchenInstance(k, prefix, slug){
   // Island length / width). The full-width default looked oversized for
   // small 3-digit numbers.
   const compactInputStyle = "max-width:140px;";
+  // Per-section "Section cost: $X" display. Each gets a unique ID so
+  // updateKitchenSummary can refresh it live without rebuilding the DOM.
+  const costs = deriveKitchenCosts(k);
+  const sectionCost = (id, amount, visible) => `
+    <div id="kitchen-cost-${id}-${slug}" style="margin-top:8px;display:${visible?'block':'none'};">
+      <div style="display:inline-flex;align-items:center;gap:8px;padding:5px 11px;background:#19170f;border:1px solid var(--gold-deep);border-radius:8px;">
+        <span style="color:var(--muted);font-size:10px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;">Section cost</span>
+        <b style="color:var(--gold-bright);font-variant-numeric:tabular-nums;font-size:13px;">${fmt(amount)}</b>
+      </div>
+    </div>`;
 
   return `
     <div class="kitchen-instance">
@@ -5112,6 +5162,7 @@ function renderKitchenInstance(k, prefix, slug){
         ` : ""}
       </div>
       <div id="kitchen-summary-${slug}">${buildKitchenSummaryHtml(k)}</div>
+      ${sectionCost("base", costs.baseCabinetCost, costs.baseCabinetCost > 0)}
 
       <!-- Countertop -->
       <div class="addon">
@@ -5135,6 +5186,7 @@ function renderKitchenInstance(k, prefix, slug){
           <div class="footnote" style="margin-top:8px;">
             <b style="color:var(--gold-bright)">Auto-calc:</b> ${d.baseLF || 0} LF &times; 2 ft (24″ base cabinet depth) = <b>${d.baseLF*2} sqft</b>${d.islandTopSqft > 0 ? ` + island top <b>${d.islandTopSqft} sqft</b>` : ""}${d.waterfallSqft > 0 ? ` + waterfall <b>${d.waterfallSqft} sqft</b>` : ""}${d.counterExtra > 0 ? ` + extra <b>${d.counterExtra} sqft</b>` : ""} = <b style="color:var(--gold-bright)">${d.counterSqft} sqft</b>
           </div>
+          ${sectionCost("counter", costs.countertopCost, costs.countertopCost > 0)}
         ` : ""}
       </div>
 
@@ -5162,6 +5214,7 @@ function renderKitchenInstance(k, prefix, slug){
             <b style="color:var(--gold-bright)">Auto-calc:</b> ${d.baseLF || 0} LF &times; 1.5 ft (18″ standard backsplash height) = <b>${d.baseLF*1.5} sqft</b>${d.backsplashExtra > 0 ? ` + extra <b>${d.backsplashExtra} sqft</b>` : ""} = <b style="color:var(--gold-bright)">${d.backsplashSqft} sqft</b>
             ${(k.backsplashMaterial==='match') ? `<br><span style="color:var(--muted);">Priced at the countertop rate (same slab).</span>` : ""}
           </div>
+          ${sectionCost("backsplash", costs.backsplashCost, costs.backsplashCost > 0)}
         ` : ""}
       </div>
 
@@ -5190,6 +5243,7 @@ function renderKitchenInstance(k, prefix, slug){
           ${d.islandLenFt > 0 ? `<div class="footnote" style="margin-top:8px;">
             <b style="color:var(--gold-bright)">Island top:</b> ${d.islandLenFt} ft &times; ${d.islandWidFt} ft = <b>${d.islandTopSqft} sqft</b> (auto-added to countertop)
           </div>` : ""}
+          ${sectionCost("island", costs.islandCost, costs.islandCost > 0)}
           <!-- Waterfall countertop — own checkbox toggle. When checked, the
                # of ends dropdown shows (default 1 end). Toggling off restores
                waterfall:"off". -->
@@ -5229,6 +5283,7 @@ function renderKitchenInstance(k, prefix, slug){
               ${d.waterfallSqft > 0 ? `<div class="footnote" style="margin-top:6px;">
                 <b style="color:var(--gold-bright)">Waterfall total:</b> <b>${d.waterfallSqft} sqft</b> &mdash; added to countertop sqft total.
               </div>` : ""}
+              ${sectionCost("waterfall", costs.waterfallCost, costs.waterfallCost > 0)}
             ` : ""}
           </div>
         ` : ""}
@@ -5240,6 +5295,7 @@ function renderKitchenInstance(k, prefix, slug){
           <input type="checkbox" ${k.undercabLighting?'checked':''} onchange="${prefix}.undercabLighting=this.checked;renderCatBodyOnly('kitchen');renderTotals()">
           <span class="addon-title">Under-cabinet lighting <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(along base run${d.baseLF>0?` — ${d.baseLF} LF`:""})</span></span>
         </label>
+        ${sectionCost("undercab", costs.undercabCost, costs.undercabCost > 0)}
       </div>
     </div>
   `;
@@ -6970,6 +7026,46 @@ function _applyKitchenEntry(L, M, qty, entry){
   }
   return [L + qty * (entry.labour || 0), M + qty * (entry.material || 0)];
 }
+/* Compute the per-section dollar amount for a kitchen instance, so the UI
+   can surface "Cabinet runs $X · Countertops $Y · Backsplash $Z · Island
+   $W · Waterfall $V · Under-cab $U" directly under each piece of the kitchen
+   card and in the bottom breakdown box. Waterfall is reported as a SEPARATE
+   line even though it gets priced at the countertop rate (folded into the
+   countertop sqft total at compute time). */
+function deriveKitchenCosts(k, priceSet){
+  const p = (priceSet || prices).kitchen || {};
+  const d = deriveKitchen(k);
+  const tier = k.tier || "standard";
+  const counterTier = k.counterTier || "standard";
+  const rateOf = (entry) => {
+    if(!entry) return 0;
+    if(typeof entry.rate === "number") return entry.rate;
+    return (entry.labour || 0) + (entry.material || 0);
+  };
+  const baseRate       = rateOf(p.base && p.base[tier]);
+  const counterRate    = rateOf(p.countertop && (p.countertop[counterTier] || p.countertop.standard));
+  const backsplashRate = (k.backsplashMaterial === "match")
+    ? counterRate
+    : rateOf(p.backsplash && (p.backsplash[counterTier] || p.backsplash.standard));
+  const islandRate     = rateOf(p.island && p.island[tier]);
+  const undercabRate   = rateOf(p.undercab);
+
+  // Countertop cost EXCLUDES the waterfall portion so it can be shown as its
+  // own line. Waterfall is priced at the countertop rate but reported separately.
+  const counterNonWaterfallSqft = k.counter
+    ? (d.baseCounterSqft + d.islandCounterSqft + d.counterExtra)
+    : 0;
+
+  const baseCabinetCost = (d.baseLF > 0)                       ? d.baseLF * baseRate              : 0;
+  const countertopCost  = (k.counter && counterNonWaterfallSqft > 0) ? counterNonWaterfallSqft * counterRate : 0;
+  const waterfallCost   = (k.island && k.counter && d.waterfallSqft > 0) ? d.waterfallSqft * counterRate : 0;
+  const backsplashCost  = (k.backsplash && d.backsplashSqft > 0) ? d.backsplashSqft * backsplashRate : 0;
+  const islandCost      = (k.island && d.islandLenFt > 0)       ? d.islandLenFt * islandRate       : 0;
+  const undercabCost    = (k.undercabLighting && d.baseLF > 0)  ? d.baseLF * undercabRate          : 0;
+  const total = baseCabinetCost + countertopCost + waterfallCost + backsplashCost + islandCost + undercabCost;
+  return { baseCabinetCost, countertopCost, waterfallCost, backsplashCost, islandCost, undercabCost, total };
+}
+
 function computeKitchenInstance(k, priceSet){
   const p = (priceSet || prices).kitchen || {};
   let L = 0, M = 0;
