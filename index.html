@@ -729,6 +729,22 @@
   body.contractor-pdf-export .contractor-sheet .bid-cell{
     min-width:110px !important;
   }
+  /* ---- PDF-export overrides ----
+     Scope sections are intentionally kept whole — they must NEVER split
+     across pages even if it leaves white space at the bottom of a page.
+     Only fix below: kill the orphan-footer-page bug. The footer tagline
+     used to land on a new blank page because of its 40px top margin —
+     pin it to the signatures with page-break-before:avoid + a smaller
+     top gap so it lands on whatever page the signatures are on. */
+  body.contractor-pdf-export .contractor-sheet .footer-line{
+    margin-top:14px !important;
+    page-break-before:avoid !important;
+    break-before:avoid !important;
+  }
+  body.contractor-pdf-export .contractor-sheet .sig-area{
+    page-break-after:avoid !important;
+    break-after:avoid !important;
+  }
   /* When any contractor-view modal is open, layer it above the contractor sheet. */
   body.show-contractor > .modal-bg#contractorsBookModal.show,
   body.show-contractor > .modal-bg#emailContractorBidModal.show,
@@ -6122,7 +6138,10 @@ async function renderContractorBidPdfBlob(){
       image:       { type:'jpeg', quality:0.97 },
       html2canvas: { scale:2, useCORS:true, backgroundColor:'#ffffff', windowWidth: sheetEl.scrollWidth },
       jsPDF:       { unit:'in', format:'letter', orientation:'portrait' },
-      pagebreak:   { mode:['css','legacy'], avoid:['.scope-section','.summary','.sig-area'] }
+      // Each scope-section must stay whole — never split a category
+      // mid-content even if it leaves white space at the bottom of a page.
+      // Same applies to summary + signatures.
+      pagebreak:   { mode:['css','legacy'], avoid:['.scope-section','.summary','.sig-area','.notes-block'] }
     }).from(sheetEl).outputPdf('blob');
     return { blob, filename };
   } finally {
