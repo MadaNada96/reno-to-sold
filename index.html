@@ -7661,23 +7661,34 @@ let _receivedBidsCache = [];
    so opening Bids while inside a project doesn't surface bids that
    belong to other addresses. */
 let _receivedBidsScope = "project";
-/* Build a normalised key for the currently-open estimate so we can match
-   bid records to it. Bids store property_address + property_name on the
-   row when the email is sent; this function returns the same shape so
-   we can compare. Returns "" if no property info is set. */
-function currentProjectKey(){
-  const addr = (state.propAddress || "").trim().toLowerCase().replace(/\s+/g," ");
-  if(addr) return "addr:" + addr;
-  const name = (state.propName || "").trim().toLowerCase().replace(/\s+/g," ");
-  if(name) return "name:" + name;
+/* Build a stable key for matching bids to the currently-open estimate.
+   We deliberately use ONLY the street-number-and-name portion (everything
+   before the first comma) so that fixing the postal code, city, or
+   province on the estimate later doesn't orphan the bids that were sent
+   when the address was slightly different. e.g. "3244 Bruzan Crescent"
+   matches whether the saved estimate says
+   "3244 Bruzan Crescent, Mississauga, ON, L5N 7L7" or
+   "3244 Bruzan Crescent, Mississauga, ON, L5N 7L8" (after a postal fix).
+   Returns "" if neither address nor name is set. */
+function projectKeyForAddr(addr, name){
+  const a = String(addr || "").trim();
+  if(a){
+    const street = a.split(",")[0]
+      .toLowerCase()
+      .replace(/[^\w\s]/g, " ")  // drop punctuation (apt #, dashes)
+      .replace(/\s+/g, " ")
+      .trim();
+    if(street) return "street:" + street;
+  }
+  const n = String(name || "").trim().toLowerCase().replace(/\s+/g, " ");
+  if(n) return "name:" + n;
   return "";
 }
+function currentProjectKey(){
+  return projectKeyForAddr(state.propAddress, state.propName);
+}
 function bidProjectKey(b){
-  const addr = (b.property_address || "").trim().toLowerCase().replace(/\s+/g," ");
-  if(addr) return "addr:" + addr;
-  const name = (b.property_name || "").trim().toLowerCase().replace(/\s+/g," ");
-  if(name) return "name:" + name;
-  return "";
+  return projectKeyForAddr(b.property_address, b.property_name);
 }
 /* Local currency parser/formatter (owner side). Mirrors the bid response
    IIFE so legacy data ("1234") or already-formatted data ("$1,234.50") all
