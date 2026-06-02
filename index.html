@@ -8389,9 +8389,23 @@ function renderContractorEmailPreview(){
   const rawAddr = (state.propAddress || "").trim();
   const previewLink = `${location.origin}${location.pathname}?bid=PREVIEW`;
   const noteVal = (document.getElementById("ecbBody") || {}).value || "";
-  const html = buildContractorEmailHtml({
+  let html = buildContractorEmailHtml({
     contactFirstName, rawAddr, bidLink: previewLink, personalNote: noteVal
   });
+  // Preview-only override: the actual email template uses table width="600"
+  // (the email convention) which overflows the narrow modal iframe and
+  // forces a horizontal scrollbar. Inject CSS to make the preview shrink
+  // to the iframe's width while still capping at 600px. This affects ONLY
+  // the preview iframe — the real email sent to contractors is unchanged.
+  const previewCss = `<style>
+    html,body{ width:auto !important; min-width:0 !important; overflow-x:hidden !important; }
+    table{ max-width:100% !important; }
+    table[width="600"], table[width="100%"]{ width:100% !important; }
+    img{ max-width:100% !important; height:auto !important; }
+    *{ box-sizing:border-box; }
+  </style>`;
+  // Inject right after <body...> to apply before any inline widths.
+  html = html.replace(/(<body[^>]*>)/i, `$1${previewCss}`);
   try{
     const idoc = iframe.contentDocument || (iframe.contentWindow && iframe.contentWindow.document);
     if(idoc){ idoc.open(); idoc.write(html); idoc.close(); }
