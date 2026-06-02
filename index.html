@@ -265,6 +265,8 @@
   .pill{display:inline-block;font-size:10px;padding:3px 9px;border-radius:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;}
   .pill-l{background:rgba(212,175,106,.18);color:var(--gold-bright);border:1px solid rgba(212,175,106,.35);}
   .pill-m{background:rgba(245,241,230,.08);color:var(--ink);border:1px solid rgba(245,241,230,.2);}
+  .pill-d{background:rgba(255,155,106,.16);color:#ffb88a;border:1px solid rgba(255,155,106,.4);}
+  .breakdown.disc .bd-d{color:#ffb88a;font-weight:600;}
 
   .total-card{position:sticky;top:0;z-index:10;background:#000;border:1px solid var(--gold-deep);border-radius:14px;padding:22px 26px;margin-bottom:18px;box-shadow:var(--gold-glow), var(--shadow);overflow:hidden;}
   .total-card::before{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:var(--gold-grad);}
@@ -1407,6 +1409,18 @@
     color:#a8853f;
     font-variant-numeric:tabular-nums;
   }
+  /* Per-category discount allocation row — slimmer than the total row,
+     red accent so it reads as a savings line at a glance. */
+  .es-cat-total.es-cat-disc{
+    margin-top:4px; padding-top:4px;
+    border-top:1px dashed #e6c4c4;
+  }
+  .es-cat-total.es-cat-disc .lbl{
+    color:#a32a2a;
+  }
+  .es-cat-total.es-cat-disc .v{
+    color:#a32a2a; font-weight:800;
+  }
   /* Sub-block inside a category — used for individual bathrooms
      and main vs basement kitchens. Cream background + gold accent. */
   .es-subblock{
@@ -2137,6 +2151,8 @@
     .cat-body{border-top:1px solid #000;background:#fff;color:#000;}
     .pill-l{background:#fce8c4;color:#000;border-color:#000;}
     .pill-m{background:#f5f5f5;color:#000;border-color:#000;}
+    .pill-d{background:#ffe0d0;color:#a32a2a;border-color:#a32a2a;}
+    .breakdown.disc .bd-d{color:#a32a2a !important;font-weight:700;}
     button{display:none;}
     input,select{border-color:#000;background:#fff;color:#000;}
     .ac-list{display:none !important;}
@@ -4475,6 +4491,10 @@ function renderTotals(){
     }
   }
 
+  // Overall discount rate (used to allocate a proportional share per category).
+  // discRate is 0..1; e.g. a 10% discount across the whole subtotal gives 0.10.
+  const _discRate = (t.subtotal > 0) ? (t.discount / t.subtotal) : 0;
+  const _discPct  = _discRate * 100;
   // Per-category totals
   Object.keys(CATEGORY_META).forEach(cat => {
     const el = document.getElementById("cat-total-"+cat);
@@ -4486,9 +4506,23 @@ function renderTotals(){
     const bd = document.getElementById("cat-breakdown-"+cat);
     if(bd){
       const r = t.perCat[cat];
+      const catSub = r.labour + r.material;
       bd.querySelector(".bd-l").textContent = fmt(r.labour);
       bd.querySelector(".bd-m").textContent = fmt(r.material);
-      bd.querySelector(".bd-t").textContent = fmt(r.labour + r.material);
+      bd.querySelector(".bd-t").textContent = fmt(catSub);
+      // Show the proportional discount row if there is any discount AND
+      // this category has a positive subtotal.
+      const discRow = bd.querySelector(".bd-discount-row");
+      if(discRow){
+        const catDisc = catSub * _discRate;
+        const hasDisc = state.enabled[cat] && catSub > 0 && t.discount > 0;
+        discRow.style.display = hasDisc ? "" : "none";
+        if(hasDisc){
+          discRow.querySelector(".bd-d").textContent = "-" + fmt(catDisc);
+          const note = discRow.querySelector(".bd-d-note");
+          if(note) note.textContent = "(" + _discPct.toFixed(_discPct < 1 ? 2 : 1).replace(/\.0+$/,"") + "% allocated share)";
+        }
+      }
     }
   });
 
@@ -4548,6 +4582,7 @@ function breakdownRows(cat){
     <div id="cat-breakdown-${cat}">
       <div class="breakdown"><span><span class="pill pill-l">Labour</span></span><span class="bd-l">$0</span></div>
       <div class="breakdown"><span><span class="pill pill-m">Material</span></span><span class="bd-m">$0</span></div>
+      <div class="breakdown disc bd-discount-row" style="display:none"><span><span class="pill pill-d">Discount</span> <span class="bd-d-note" style="margin-left:6px;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;"></span></span><span class="bd-d">-$0</span></div>
       <div class="breakdown" style="font-weight:600"><span>Subtotal</span><span class="bd-t">$0</span></div>
     </div>
   `;
@@ -6860,6 +6895,22 @@ function renderClientEstimate(){
         <span class="v">${fmtCurrency(total)}</span>
       </div>
     `;
+    // Discount allocation: total discount across all categories is split
+    // proportionally to each category's labour+material subtotal. Shown
+    // as an italic line between bullets and the category total.
+    const _esDiscRate = (totals.subtotal > 0) ? (totals.discount / totals.subtotal) : 0;
+    const _esDiscPct  = _esDiscRate * 100;
+    const _esDiscPctLabel = _esDiscPct.toFixed(_esDiscPct < 1 ? 2 : 1).replace(/\.0+$/,"");
+    const renderDiscRow = (catSub) => {
+      if(!totals.discount || totals.discount <= 0 || catSub <= 0) return "";
+      const catDisc = catSub * _esDiscRate;
+      return `
+        <div class="es-cat-total es-cat-disc">
+          <span class="lbl">Discount applied <span style="font-weight:500;text-transform:none;letter-spacing:0;font-size:11px;color:#a32a2a;">(${_esDiscPctLabel}% allocated share)</span></span>
+          <span class="v" style="color:#a32a2a;">−${fmtCurrency(catDisc)}</span>
+        </div>
+      `;
+    };
     sections.forEach(sec => {
       let body = "";
       if(sec.subblocks && sec.subblocks.length){
@@ -6869,13 +6920,16 @@ function renderClientEstimate(){
             <div class="es-subblock-title">${escapeHtml(sb.title)}</div>
             ${renderBullets(sb.bullets)}
             ${renderTotalRow(`${sb.title} — Labour & Material`, sb.total)}
+            ${renderDiscRow(sb.total)}
           </div>
         `).join("");
         // Category-level total under all sub-blocks
         body += renderTotalRow(`${sec.title} — Combined Total`, sec.total);
+        body += renderDiscRow(sec.total);
       } else {
         body += renderBullets(sec.bullets || []);
         body += renderTotalRow("Total Labour & Material", sec.total);
+        body += renderDiscRow(sec.total);
       }
       html += `
         <div class="es-category-block">
