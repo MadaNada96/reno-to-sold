@@ -729,22 +729,12 @@
   body.contractor-pdf-export .contractor-sheet .bid-cell{
     min-width:110px !important;
   }
-  /* ---- PDF-export overrides ----
-     Scope sections are intentionally kept whole — they must NEVER split
-     across pages even if it leaves white space at the bottom of a page.
-     Only fix below: kill the orphan-footer-page bug. The footer tagline
-     used to land on a new blank page because of its 40px top margin —
-     pin it to the signatures with page-break-before:avoid + a smaller
-     top gap so it lands on whatever page the signatures are on. */
-  body.contractor-pdf-export .contractor-sheet .footer-line{
-    margin-top:14px !important;
-    page-break-before:avoid !important;
-    break-before:avoid !important;
-  }
-  body.contractor-pdf-export .contractor-sheet .sig-area{
-    page-break-after:avoid !important;
-    break-after:avoid !important;
-  }
+  /* The contractor-sheet's footer tagline ("RENO TO SOLD · RENOVATE SMART
+     · SELL FOR MORE") was removed entirely from the sheet HTML because
+     html2pdf wouldn't honor the page-break-before:avoid hint and the line
+     kept landing on its own blank page at the end of the PDF. There is
+     no longer anything below the .sig-area, so scope-sections stay whole,
+     no orphan page, and no other layout changes needed during PDF export. */
   /* When any contractor-view modal is open, layer it above the contractor sheet. */
   body.show-contractor > .modal-bg#contractorsBookModal.show,
   body.show-contractor > .modal-bg#emailContractorBidModal.show,
@@ -5850,7 +5840,6 @@ function renderContractorSheet(){
         <div class="sig-label">Date</div>
       </div>
     </div>
-    <div class="footer-line">Reno to Sold &middot; Renovate Smart &middot; Sell For More</div>
   `;
 
   el.innerHTML = html;
