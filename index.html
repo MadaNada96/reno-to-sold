@@ -5033,21 +5033,17 @@ function renderKitchenInstance(k, prefix, slug){
         cells.push(cell("Island top", (k.island ? d.islandCounterSqft : 0) + " sqft"));
         cells.push(cell("Waterfall<br>ends", (k.island ? d.waterfallSqft : 0) + " sqft"));
         if(d.counterExtra > 0) cells.push(cell("Counter<br>extras", d.counterExtra + " sqft"));
-        cells.push(cell((k.backsplash && d.isMatch) ? "Backsplash<br>(match)" : "Backsplash<br>(quartz)", d.matchBacksplashSqft + " sqft"));
+        // Backsplash pill — label + included-in-total depends on material.
+        // When backsplash material is Tile, the pill shows "Backsplash (Tile)"
+        // with the tile sqft, but that sqft is NOT included in Total Quartz.
+        const bsSqftForCell = k.backsplash ? d.backsplashSqft : 0;
+        const bsLabel = d.isMatch ? "Backsplash<br>(match)" : "Backsplash<br>(tile)";
+        cells.push(cell(bsLabel, bsSqftForCell + " sqft", { muted: k.backsplash && !d.isMatch }));
         cells.push(cell("Total Quartz", d.totalQuartzSqft + " sqft", { total:true }));
-        const grid = `<div style="display:grid;grid-template-columns:repeat(${cells.length},minmax(0,1fr));gap:8px;margin-bottom:${d.tileBacksplashSqft?'8px':'14px'};">
+        const grid = `<div style="display:grid;grid-template-columns:repeat(${cells.length},minmax(0,1fr));gap:8px;margin-bottom:14px;">
           ${cells.join("")}
         </div>`;
-        // If backsplash is tile (not quartz), show it separately so it doesn't
-        // get rolled into the quartz total accidentally.
-        let tileLine = "";
-        if(d.tileBacksplashSqft > 0){
-          tileLine = `<div style="display:inline-flex;align-items:center;gap:8px;padding:6px 12px;background:#1a1814;border:1px solid var(--line);border-radius:8px;margin-bottom:14px;">
-            <span style="color:var(--muted);font-size:11px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;">Tile backsplash (separate)</span>
-            <b style="color:#e8c989;font-variant-numeric:tabular-nums;">${d.tileBacksplashSqft} sqft</b>
-          </div>`;
-        }
-        return `<div>${lfPill}</div>${grid}${tileLine}`;
+        return `<div>${lfPill}</div>${grid}`;
       })()}
 
       <!-- Countertop -->
