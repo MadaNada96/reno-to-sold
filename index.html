@@ -5005,23 +5005,49 @@ function renderKitchenInstance(k, prefix, slug){
         ` : ""}
       </div>
       ${(() => {
-        // Stacked summary — Total cabinet length on one line, slab sqft on its
-        // own line below, both as pill-styled badges so they're visually distinct.
         if(d.baseLF <= 0){
           return `<div class="footnote" style="margin-bottom:14px;color:var(--muted);">Enter run lengths to see your total LF.</div>`;
         }
-        const pill = (label, val) => `<div style="display:inline-flex;align-items:center;gap:8px;padding:6px 12px;background:#19170f;border:1px solid var(--gold-deep);border-radius:8px;margin:4px 0;"><span style="color:var(--muted);font-size:11px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;">${label}</span><b style="color:var(--gold-bright);font-variant-numeric:tabular-nums;">${val}</b></div>`;
-        let html = `<div style="margin-bottom:6px;">${pill("Total cabinet length", d.baseLF + " LF")}</div>`;
-        if(k.counter && k.backsplash && (k.backsplashMaterial === "match")){
-          const slabTotal = d.counterSqft + d.backsplashSqft;
-          html += `<div style="margin-bottom:14px;">${pill("Total slab sqft (countertop + backsplash)", slabTotal + " sqft")}</div>`;
-        } else if(k.counter){
-          html += `<div style="margin-bottom:${k.backsplash?'6px':'14px'};">${pill("Countertop sqft", d.counterSqft + " sqft")}</div>`;
-          if(k.backsplash) html += `<div style="margin-bottom:14px;">${pill("Tile backsplash sqft", d.backsplashSqft + " sqft")}</div>`;
-        } else {
-          html += `<div style="margin-bottom:14px;"></div>`;
+        // Top line: total cabinet length
+        const lfPill = `<div style="display:inline-flex;align-items:center;gap:8px;padding:6px 12px;background:#19170f;border:1px solid var(--gold-deep);border-radius:8px;margin-bottom:10px;">
+          <span style="color:var(--muted);font-size:11px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;">Total cabinet length</span>
+          <b style="color:var(--gold-bright);font-variant-numeric:tabular-nums;">${d.baseLF} LF</b>
+        </div>`;
+        // If countertop is off (no quartz at all yet), just show the LF.
+        if(!k.counter){
+          return `<div style="margin-bottom:14px;">${lfPill}</div>`;
         }
-        return html;
+        // Quartz component grid — each pill shows one piece of the calc
+        const cell = (label, val, opts) => {
+          opts = opts || {};
+          const accent = opts.total ? "background:#0f1414;border:2px solid var(--gold);box-shadow:0 0 0 1px rgba(212,175,106,.18) inset;" : "background:#19170f;border:1px solid var(--line);";
+          const valColor = opts.total ? "color:#ffe89e;font-size:16px;" : "color:var(--gold-bright);font-size:14px;";
+          const labelColor = opts.muted ? "color:var(--muted)" : "color:#a8853f";
+          return `<div style="${accent}border-radius:8px;padding:8px 10px;min-width:0;">
+            <div style="${labelColor};font-size:9.5px;letter-spacing:.10em;text-transform:uppercase;font-weight:700;margin-bottom:4px;line-height:1.25;">${label}</div>
+            <div style="${valColor}font-weight:800;font-variant-numeric:tabular-nums;line-height:1.1;">${val}</div>
+          </div>`;
+        };
+        const cells = [];
+        cells.push(cell("Base cabinet<br>countertop", d.baseCounterSqft + " sqft"));
+        cells.push(cell("Island top", (k.island ? d.islandCounterSqft : 0) + " sqft"));
+        cells.push(cell("Waterfall<br>ends", (k.island ? d.waterfallSqft : 0) + " sqft"));
+        if(d.counterExtra > 0) cells.push(cell("Counter<br>extras", d.counterExtra + " sqft"));
+        cells.push(cell((k.backsplash && d.isMatch) ? "Backsplash<br>(match)" : "Backsplash<br>(quartz)", d.matchBacksplashSqft + " sqft"));
+        cells.push(cell("Total Quartz", d.totalQuartzSqft + " sqft", { total:true }));
+        const grid = `<div style="display:grid;grid-template-columns:repeat(${cells.length},minmax(0,1fr));gap:8px;margin-bottom:${d.tileBacksplashSqft?'8px':'14px'};">
+          ${cells.join("")}
+        </div>`;
+        // If backsplash is tile (not quartz), show it separately so it doesn't
+        // get rolled into the quartz total accidentally.
+        let tileLine = "";
+        if(d.tileBacksplashSqft > 0){
+          tileLine = `<div style="display:inline-flex;align-items:center;gap:8px;padding:6px 12px;background:#1a1814;border:1px solid var(--line);border-radius:8px;margin-bottom:14px;">
+            <span style="color:var(--muted);font-size:11px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;">Tile backsplash (separate)</span>
+            <b style="color:#e8c989;font-variant-numeric:tabular-nums;">${d.tileBacksplashSqft} sqft</b>
+          </div>`;
+        }
+        return `<div>${lfPill}</div>${grid}${tileLine}`;
       })()}
 
       <!-- Countertop -->
@@ -6845,12 +6871,31 @@ function deriveKitchen(k){
   const backsplashExtra    = Math.max(0, num(k.backsplashExtraSqft));
   const backsplashSqft     = (k.backsplash ? backsplashAutoSqft + backsplashExtra : 0);
 
+  // Component breakdowns for the on-screen quartz summary. The user wants to
+  // see each piece of the counter+backsplash total clearly:
+  //   • Base cabinet countertop:  baseLF × 2 ft (counter only)
+  //   • Island top:               island length × width
+  //   • Waterfall ends:           sum of per-end sqft inputs
+  //   • Backsplash (quartz match): backsplashSqft when material === "match"
+  //   • Backsplash (tile):        backsplashSqft when material === "tile"
+  //   • Counter extras:           manual override under the Countertop section
+  // Total Quartz = base cabinet + island top + waterfall + match-backsplash + extras
+  const baseCounterSqft = k.counter ? baseLF * 2 : 0;
+  const islandCounterSqft = k.counter ? islandTopSqft : 0;
+  const isMatch = (k.backsplashMaterial === "match");
+  const matchBacksplashSqft = (k.backsplash && isMatch) ? backsplashSqft : 0;
+  const tileBacksplashSqft  = (k.backsplash && !isMatch) ? backsplashSqft : 0;
+  const totalQuartzSqft = baseCounterSqft + islandCounterSqft + waterfallSqft + matchBacksplashSqft + counterExtra;
+
   return {
     run1, run2, run3, baseLF,
     islandLenFt, islandWidFt, islandTopSqft,
     waterfallEnds, waterfallSqft,
     counterAutoSqft, counterExtra, counterSqft,
-    backsplashAutoSqft, backsplashExtra, backsplashSqft
+    backsplashAutoSqft, backsplashExtra, backsplashSqft,
+    // Component breakdowns
+    baseCounterSqft, islandCounterSqft, matchBacksplashSqft, tileBacksplashSqft,
+    isMatch, totalQuartzSqft
   };
 }
 function computeKitchenInstance(k, priceSet){
