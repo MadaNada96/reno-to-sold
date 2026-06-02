@@ -4919,6 +4919,15 @@ function kitchenBacksplashPerSqftLabel(){ return ""; }
 function kitchenIslandPerLFLabel(){ return ""; }
 function kitchenWaterfallPerSqftLabel(){ return ""; }
 function kitchenUndercabPerLFLabel(){ return ""; }
+/* Display labels for kitchen + countertop tiers. Data keys stay as
+   "standard"/"custom"; the labels here are what the user sees everywhere
+   (estimator UI, bullets, Print/PDF, contractor sheet, Internal Pricing). */
+function kitchenBaseTierLabel(t){
+  return t === "custom" ? "Custom" : "Semi-Custom";
+}
+function kitchenCounterTierLabel(t){
+  return t === "custom" ? "Premium Quartz" : "Standard Quartz";
+}
 
 /* Render one kitchen instance (main or basement) using the given path prefix
    for inline event handlers. `slug` is "main" or "basement" — used to give the
@@ -4952,7 +4961,7 @@ function renderKitchenInstance(k, prefix, slug){
         <div>
           <label style="margin-bottom:6px;">Tier</label>
           <div class="tier-row">
-            ${[{value:"standard",label:"Standard"},{value:"custom",label:"Custom"}].map(o =>
+            ${[{value:"standard",label:kitchenBaseTierLabel("standard")},{value:"custom",label:kitchenBaseTierLabel("custom")}].map(o =>
               `<label><input type="radio" name="${tierName}" value="${o.value}" ${(k.tier||'standard')===o.value?"checked":""} onchange="${prefix}.tier=this.value;renderCatBodyOnly('kitchen');renderTotals()"><span>${o.label}</span></label>`
             ).join("")}
           </div>
@@ -4988,7 +4997,24 @@ function renderKitchenInstance(k, prefix, slug){
         </div>
         ` : ""}
       </div>
-      ${d.baseLF > 0 ? `<div class="footnote" style="margin-bottom:14px;"><b style="color:var(--gold-bright)">Total cabinet length: ${d.baseLF} LF</b></div>` : `<div class="footnote" style="margin-bottom:14px;color:var(--muted);">Enter run lengths to see your total LF.</div>`}
+      ${(() => {
+        // Combined countertop + backsplash sqft summary — shown right under
+        // the cabinet LF so the user can see total material at a glance.
+        // When backsplash material = "match", the two sqft figures are summed
+        // (you're ordering one slab quantity); otherwise we show them side by side.
+        if(d.baseLF <= 0){
+          return `<div class="footnote" style="margin-bottom:14px;color:var(--muted);">Enter run lengths to see your total LF.</div>`;
+        }
+        const parts = [`<b style="color:var(--gold-bright)">Total cabinet length: ${d.baseLF} LF</b>`];
+        if(k.counter && k.backsplash && (k.backsplashMaterial === "match")){
+          const slabTotal = d.counterSqft + d.backsplashSqft;
+          parts.push(`<b style="color:var(--gold-bright)">Total slab sqft (countertop + backsplash): ${slabTotal} sqft</b>`);
+        } else if(k.counter){
+          parts.push(`<b style="color:var(--gold-bright)">Countertop sqft: ${d.counterSqft} sqft</b>`);
+          if(k.backsplash) parts.push(`<b style="color:var(--gold-bright)">Tile backsplash sqft: ${d.backsplashSqft} sqft</b>`);
+        }
+        return `<div class="footnote" style="margin-bottom:14px;">${parts.join(" &middot; ")}</div>`;
+      })()}
 
       <!-- Countertop -->
       <div class="addon">
@@ -5000,7 +5026,7 @@ function renderKitchenInstance(k, prefix, slug){
           <div style="margin-bottom:10px;">
             <label style="margin-bottom:6px;">Countertop tier</label>
             <div class="tier-row">
-              ${[{value:"standard",label:"Standard"},{value:"custom",label:"Custom"}].map(o =>
+              ${[{value:"standard",label:kitchenCounterTierLabel("standard")},{value:"custom",label:kitchenCounterTierLabel("custom")}].map(o =>
                 `<label><input type="radio" name="${counterTierName}" value="${o.value}" ${counterTier===o.value?"checked":""} onchange="${prefix}.counterTier=this.value;renderCatBodyOnly('kitchen');renderTotals()"><span>${o.label}</span></label>`
               ).join("")}
             </div>
@@ -5019,7 +5045,7 @@ function renderKitchenInstance(k, prefix, slug){
       <div class="addon">
         <label class="check-row" style="margin-bottom:${k.backsplash?'10px':'0'};">
           <input type="checkbox" ${k.backsplash?'checked':''} onchange="${prefix}.backsplash=this.checked;renderCatBodyOnly('kitchen');renderTotals()">
-          <span class="addon-title">Backsplash <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(auto-calculated sqft &middot; tier follows countertop &mdash; currently <b>${counterTier==='custom'?'Custom':'Standard'}</b>)</span></span>
+          <span class="addon-title">Backsplash <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(auto-calculated sqft &middot; tier follows countertop &mdash; currently <b>${kitchenCounterTierLabel(counterTier)}</b>)</span></span>
         </label>
         ${k.backsplash ? `
           <div class="grid grid-2">
@@ -5522,7 +5548,7 @@ function renderPricingEditor(){
     <div class="price-edit-row head"><div></div><div>Labour $/LF</div><div>Material $/LF</div></div>`;
   ["standard","custom"].forEach(t=>{
     html += `<div class="price-edit-row">
-      <div class="lbl">${cap(t)}</div>
+      <div class="lbl">${kitchenBaseTierLabel(t)}</div>
       <div>${priceInput("kitchen.base."+t+".labour", prices.kitchen.base[t].labour, 10)}</div>
       <div>${priceInput("kitchen.base."+t+".material", prices.kitchen.base[t].material, 10)}</div>
     </div>`;
@@ -5534,7 +5560,7 @@ function renderPricingEditor(){
     <div class="price-edit-row head"><div></div><div>Labour $/sqft</div><div>Material $/sqft</div></div>`;
   ["standard","custom"].forEach(t=>{
     html += `<div class="price-edit-row">
-      <div class="lbl">${cap(t)}</div>
+      <div class="lbl">${kitchenCounterTierLabel(t)}</div>
       <div>${priceInput("kitchen.countertop."+t+".labour", prices.kitchen.countertop[t].labour, 1)}</div>
       <div>${priceInput("kitchen.countertop."+t+".material", prices.kitchen.countertop[t].material, 1)}</div>
     </div>`;
@@ -5909,7 +5935,7 @@ function renderContractorSheet(){
       const d = deriveKitchen(k);
       const tierLbl = k.tier === "custom"
         ? "Custom &mdash; fully custom cabinets, premium fixtures &amp; finishes"
-        : "Standard &mdash; stock or semi-custom cabinets, builder-grade finishes";
+        : "Semi-Custom &mdash; stock or semi-custom cabinets, builder-grade finishes";
       if(hdrLabel) out.push({ hdr:true, html: hdrLabel });
       out.push({ sub: !!hdrLabel, html:`Tier: <b>${tierLbl}</b>` });
       out.push({ sub: !!hdrLabel, html:`Layout: <b>${k.layout === "U" ? "U-shape (3 runs)" : "L-shape (2 runs)"}</b>` });
@@ -5918,14 +5944,18 @@ function renderContractorSheet(){
       out.push({ sub: !!hdrLabel, html: `Cabinet runs: ${runs.join(" &middot; ")} &mdash; <b>total ${d.baseLF || '?'} LF</b>` });
       out.push({ sub: !!hdrLabel, html:`Cabinet depth assumption: <b>24″ lower / 12″ upper</b> (standard).` });
       out.push({ sub: !!hdrLabel, html:`Base scope includes: cabinets, sink, faucet, plumbing adjustments, install, all hardware.` });
-      const ctTier = k.counterTier === "custom" ? "Custom" : "Standard";
+      const ctTier = kitchenCounterTierLabel(k.counterTier);
       if(k.counter){
         const wfNote = d.waterfallSqft ? `, waterfall (${d.waterfallEnds} end${d.waterfallEnds>1?"s":""}, ${d.waterfallSqft} sqft) folded in` : "";
         out.push({ sub: !!hdrLabel, html:`Countertop: <b>${ctTier}</b> &mdash; ${d.counterSqft || '?'} sqft (auto-calculated from ${d.baseLF || '?'} LF &times; 2 ft cabinet depth${d.islandTopSqft ? ` + island top ${d.islandTopSqft} sqft` : ""}${d.waterfallSqft ? ` + waterfall ${d.waterfallSqft} sqft` : ""}${d.counterExtra ? ` + extra ${d.counterExtra} sqft` : ""})${wfNote}` });
       }
       if(k.backsplash){
-        const matLbl = (k.backsplashMaterial === "match") ? `<b>Same material as countertop</b> (${ctTier})` : `<b>Tile</b> (${ctTier} tier)`;
+        const matLbl = (k.backsplashMaterial === "match") ? `<b>Same material as countertop</b> (${ctTier})` : `<b>Tile</b> (countertop tier: ${ctTier})`;
         out.push({ sub: !!hdrLabel, html:`Backsplash: ${matLbl} &mdash; ${d.backsplashSqft || '?'} sqft (${d.baseLF || '?'} LF &times; 1.5 ft (18″ standard height)${d.backsplashExtra ? ` + ${d.backsplashExtra} sqft for taller areas` : ""})` });
+        if(k.backsplashMaterial === "match" && k.counter){
+          const combo = d.counterSqft + d.backsplashSqft;
+          out.push({ sub: !!hdrLabel, html:`<i>Total slab sqft (countertop + backsplash): <b>${combo}</b></i>` });
+        }
       }
       if(k.island){
         out.push({ sub: !!hdrLabel, html:`Island: <b>${d.islandLenFt || '?'} ft &times; ${d.islandWidFt || '?'} ft</b> (${k.tier === "custom" ? "custom" : "standard"} build)` });
@@ -6554,7 +6584,7 @@ function buildEstimateLineItems(){
     const rows = [];
     function pushKitchenRows(k, hdr){
       const d = deriveKitchen(k);
-      const tierLbl = (k.tier === "custom") ? "Custom — fully custom cabinets, premium fixtures & finishes" : "Standard — stock or semi-custom cabinets, builder-grade finishes";
+      const tierLbl = (k.tier === "custom") ? "Custom — fully custom cabinets, premium fixtures & finishes" : "Semi-Custom — stock or semi-custom cabinets, builder-grade finishes";
       const layoutLbl = k.layout === "U" ? "U-shape (3 runs)" : "L-shape (2 runs)";
       const prefix = hdr ? `${hdr} — ` : "";
       // Base cabinetry — qty = total LF
@@ -6569,7 +6599,7 @@ function buildEstimateLineItems(){
         });
       }
       const counterTier = k.counterTier || "standard";
-      const ctTierLbl   = counterTier === "custom" ? "Custom" : "Standard";
+      const ctTierLbl   = kitchenCounterTierLabel(counterTier);
       // Countertop — qty = auto-calculated sqft (cabinet runs × 24" + island top
       //   + waterfall end sqft + extras). Waterfall is folded in here.
       if(k.counter && d.counterSqft > 0 && p.countertop){
@@ -6936,19 +6966,20 @@ function buildEstimateSummary(){
     const kitchenBullets = (k) => {
       const b = [];
       const d = deriveKitchen(k);
-      const ctTier = k.counterTier === "custom" ? "Custom" : "Standard";
-      b.push(`Tier: <b>${k.tier === "custom" ? "Custom" : "Standard"}</b> · Layout: <b>${k.layout === "U" ? "U-shape" : "L-shape"}</b> · Total cabinet length: <b>${d.baseLF || '?'} LF</b>`);
+      const ctTier   = kitchenCounterTierLabel(k.counterTier);
+      const baseTier = kitchenBaseTierLabel(k.tier);
+      b.push(`Tier: <b>${baseTier}</b> · Layout: <b>${k.layout === "U" ? "U-shape" : "L-shape"}</b> · Total cabinet length: <b>${d.baseLF || '?'} LF</b>`);
       b.push("Cabinets, sink, faucet, plumbing adjustments &amp; all hardware (24″ lower / 12″ upper cabinet depth)");
       if(k.counter){
         const wfNote = d.waterfallSqft ? `, waterfall (${d.waterfallEnds} end${d.waterfallEnds>1?"s":""}, ${d.waterfallSqft} sqft) included` : "";
         b.push(`Countertop — ${ctTier}, ${d.counterSqft || '?'} sqft${wfNote}`);
       }
       if(k.backsplash){
-        const matLbl = (k.backsplashMaterial === "match") ? `same material as countertop (${ctTier})` : `Tile, ${ctTier} tier`;
+        const matLbl = (k.backsplashMaterial === "match") ? `same material as countertop (${ctTier})` : `Tile (countertop tier: ${ctTier})`;
         b.push(`Backsplash — ${matLbl}, ${d.backsplashSqft || '?'} sqft (18″ standard height${d.backsplashExtra ? ` + ${d.backsplashExtra} sqft for taller areas` : ""})`);
       }
       if(k.island){
-        b.push(`Island — ${d.islandLenFt || '?'}′ × ${d.islandWidFt || '?'}′ (${k.tier === "custom" ? "custom" : "standard"} build)`);
+        b.push(`Island — ${d.islandLenFt || '?'}′ × ${d.islandWidFt || '?'}′ (${k.tier === "custom" ? "custom" : "semi-custom"} build)`);
       }
       if(k.undercabLighting) b.push(`Under-cabinet LED lighting — ${d.baseLF || '?'} LF (strip + driver)`);
       return b;
@@ -8954,7 +8985,7 @@ function renderContractorPricingEditor(){
     <div class="price-edit-row head"><div></div><div>Labour $/LF</div><div>Material $/LF</div></div>`;
   ["standard","custom"].forEach(t=>{
     html += `<div class="price-edit-row">
-      <div class="lbl">${cap(t)}</div>
+      <div class="lbl">${kitchenBaseTierLabel(t)}</div>
       <div>${ctrPriceInput("kitchen.base."+t+".labour", cp.kitchen.base[t].labour, 10)}</div>
       <div>${ctrPriceInput("kitchen.base."+t+".material", cp.kitchen.base[t].material, 10)}</div>
     </div>`;
@@ -8964,7 +8995,7 @@ function renderContractorPricingEditor(){
     <div class="price-edit-row head"><div></div><div>Labour $/sqft</div><div>Material $/sqft</div></div>`;
   ["standard","custom"].forEach(t=>{
     html += `<div class="price-edit-row">
-      <div class="lbl">${cap(t)}</div>
+      <div class="lbl">${kitchenCounterTierLabel(t)}</div>
       <div>${ctrPriceInput("kitchen.countertop."+t+".labour", cp.kitchen.countertop[t].labour, 1)}</div>
       <div>${ctrPriceInput("kitchen.countertop."+t+".material", cp.kitchen.countertop[t].material, 1)}</div>
     </div>`;
@@ -9265,15 +9296,19 @@ function scopeItemsFor(cat){
       const out = [];
       const d = deriveKitchen(k);
       if(hdr) out.push({ hdr:true, html: hdr });
-      out.push({ sub: !!hdr, html:`Tier: <b>${k.tier==="custom"?"Custom":"Standard"}</b> &middot; Layout: <b>${k.layout==="U"?"U-shape":"L-shape"}</b>` });
+      out.push({ sub: !!hdr, html:`Tier: <b>${kitchenBaseTierLabel(k.tier)}</b> &middot; Layout: <b>${k.layout==="U"?"U-shape":"L-shape"}</b>` });
       out.push({ sub: !!hdr, html:`Base cabinetry: <b>${d.baseLF||'?'} LF</b>` });
-      const ct = k.counterTier==="custom"?"Custom":"Standard";
+      const ct = kitchenCounterTierLabel(k.counterTier);
       if(k.counter){
         out.push({ sub: !!hdr, html:`+ Countertop <b>${ct}</b> &mdash; <b>${d.counterSqft||'?'} sqft</b>${d.waterfallSqft?` (incl. waterfall ${d.waterfallSqft} sqft)`:""}` });
       }
       if(k.backsplash){
         const matLbl = (k.backsplashMaterial === "match") ? `<b>same as countertop</b> (${ct})` : `<b>Tile</b> (${ct})`;
         out.push({ sub: !!hdr, html:`+ Backsplash ${matLbl} &mdash; <b>${d.backsplashSqft||'?'} sqft</b>` });
+        if(k.backsplashMaterial === "match" && k.counter){
+          const combo = d.counterSqft + d.backsplashSqft;
+          out.push({ sub: !!hdr, html:`&nbsp;&nbsp;Total slab: <b>${combo} sqft</b>` });
+        }
       }
       if(k.island){
         out.push({ sub: !!hdr, html:`+ Island <b>${d.islandLenFt||'?'}′ × ${d.islandWidFt||'?'}′</b>` });
