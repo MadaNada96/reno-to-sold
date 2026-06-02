@@ -3758,10 +3758,10 @@ function defaultKitchenInstance(isBasement){
     counterTier:    "standard",            // standard | custom
     counterExtraSqft: "",                 // manual additional countertop sqft
     // Backsplash — material picker. Tier auto-follows the countertop tier.
-    //   "match" = same slab as countertop (charged at countertop $/sqft)
+    //   "match" = same slab as countertop (charged at countertop $/sqft) — default
     //   "tile"  = ceramic / porcelain tile (charged at backsplash $/sqft)
     backsplash:          false,
-    backsplashMaterial:  "tile",           // match | tile
+    backsplashMaterial:  "match",          // match | tile
     backsplashExtraSqft: "",              // sqft for sections taller than 18"
     // Island
     island:        false,
@@ -4951,9 +4951,16 @@ function renderKitchenInstance(k, prefix, slug){
     const ft = inchesToFtUp(lfInches);
     return ft > 0 ? `<span style="color:var(--gold-bright);font-weight:600;">= ${ft} ft</span>` : `<span style="color:var(--muted);">—</span>`;
   };
-  // Standard handlers for number inputs: update state + totals live, then
-  // re-render the catBody on blur to refresh the auto-calc hint text.
-  const numAttrs = (path) => `oninput="${path}=this.value;renderTotals()" onblur="renderCatBodyOnly('kitchen')"`;
+  // Standard handlers for number inputs: update state + totals live ONLY. No
+  // onblur DOM rebuild — that caused a double-click-to-focus bug because the
+  // blur fired before the next click could land, destroying the freshly-
+  // clicked input. Inline hint text stays stale until the user toggles a
+  // checkbox or radio (matches how the rest of the estimator behaves).
+  const numAttrs = (path) => `oninput="${path}=this.value;renderTotals()"`;
+  // Smaller width for short numeric inputs (Run lengths, Additional sqft,
+  // Island length / width). The full-width default looked oversized for
+  // small 3-digit numbers.
+  const compactInputStyle = "max-width:140px;";
 
   return `
     <div class="kitchen-instance">
@@ -4981,39 +4988,40 @@ function renderKitchenInstance(k, prefix, slug){
       <div class="grid grid-${layout==='U'?'3':'2'}" style="margin-bottom:10px;">
         <div>
           <label>Run #1 length (inches)</label>
-          <input type="number" min="0" inputmode="numeric" value="${k.runLen||''}" placeholder="e.g. 120" ${numAttrs(prefix+".runLen")}>
+          <input type="number" min="0" inputmode="numeric" style="${compactInputStyle}" value="${k.runLen||''}" placeholder="e.g. 120" ${numAttrs(prefix+".runLen")}>
           <div style="font-size:11px;margin-top:4px;">${ftHint(k.runLen)}</div>
         </div>
         <div>
           <label>Run #2 length (inches)</label>
-          <input type="number" min="0" inputmode="numeric" value="${k.runWid||''}" placeholder="e.g. 96" ${numAttrs(prefix+".runWid")}>
+          <input type="number" min="0" inputmode="numeric" style="${compactInputStyle}" value="${k.runWid||''}" placeholder="e.g. 96" ${numAttrs(prefix+".runWid")}>
           <div style="font-size:11px;margin-top:4px;">${ftHint(k.runWid)}</div>
         </div>
         ${layout === 'U' ? `
         <div>
           <label>Run #3 length (inches)</label>
-          <input type="number" min="0" inputmode="numeric" value="${k.runThird||''}" placeholder="e.g. 72" ${numAttrs(prefix+".runThird")}>
+          <input type="number" min="0" inputmode="numeric" style="${compactInputStyle}" value="${k.runThird||''}" placeholder="e.g. 72" ${numAttrs(prefix+".runThird")}>
           <div style="font-size:11px;margin-top:4px;">${ftHint(k.runThird)}</div>
         </div>
         ` : ""}
       </div>
       ${(() => {
-        // Combined countertop + backsplash sqft summary — shown right under
-        // the cabinet LF so the user can see total material at a glance.
-        // When backsplash material = "match", the two sqft figures are summed
-        // (you're ordering one slab quantity); otherwise we show them side by side.
+        // Stacked summary — Total cabinet length on one line, slab sqft on its
+        // own line below, both as pill-styled badges so they're visually distinct.
         if(d.baseLF <= 0){
           return `<div class="footnote" style="margin-bottom:14px;color:var(--muted);">Enter run lengths to see your total LF.</div>`;
         }
-        const parts = [`<b style="color:var(--gold-bright)">Total cabinet length: ${d.baseLF} LF</b>`];
+        const pill = (label, val) => `<div style="display:inline-flex;align-items:center;gap:8px;padding:6px 12px;background:#19170f;border:1px solid var(--gold-deep);border-radius:8px;margin:4px 0;"><span style="color:var(--muted);font-size:11px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;">${label}</span><b style="color:var(--gold-bright);font-variant-numeric:tabular-nums;">${val}</b></div>`;
+        let html = `<div style="margin-bottom:6px;">${pill("Total cabinet length", d.baseLF + " LF")}</div>`;
         if(k.counter && k.backsplash && (k.backsplashMaterial === "match")){
           const slabTotal = d.counterSqft + d.backsplashSqft;
-          parts.push(`<b style="color:var(--gold-bright)">Total slab sqft (countertop + backsplash): ${slabTotal} sqft</b>`);
+          html += `<div style="margin-bottom:14px;">${pill("Total slab sqft (countertop + backsplash)", slabTotal + " sqft")}</div>`;
         } else if(k.counter){
-          parts.push(`<b style="color:var(--gold-bright)">Countertop sqft: ${d.counterSqft} sqft</b>`);
-          if(k.backsplash) parts.push(`<b style="color:var(--gold-bright)">Tile backsplash sqft: ${d.backsplashSqft} sqft</b>`);
+          html += `<div style="margin-bottom:${k.backsplash?'6px':'14px'};">${pill("Countertop sqft", d.counterSqft + " sqft")}</div>`;
+          if(k.backsplash) html += `<div style="margin-bottom:14px;">${pill("Tile backsplash sqft", d.backsplashSqft + " sqft")}</div>`;
+        } else {
+          html += `<div style="margin-bottom:14px;"></div>`;
         }
-        return `<div class="footnote" style="margin-bottom:14px;">${parts.join(" &middot; ")}</div>`;
+        return html;
       })()}
 
       <!-- Countertop -->
@@ -5033,7 +5041,7 @@ function renderKitchenInstance(k, prefix, slug){
           </div>
           <div>
             <label>Additional sqft <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(optional — over-sized areas)</span></label>
-            <input type="number" min="0" inputmode="numeric" value="${k.counterExtraSqft||''}" placeholder="0" ${numAttrs(prefix+".counterExtraSqft")}>
+            <input type="number" min="0" inputmode="numeric" style="${compactInputStyle}" value="${k.counterExtraSqft||''}" placeholder="0" ${numAttrs(prefix+".counterExtraSqft")}>
           </div>
           <div class="footnote" style="margin-top:8px;">
             <b style="color:var(--gold-bright)">Auto-calc:</b> ${d.baseLF || 0} LF &times; 2 ft (24″ base cabinet depth) = <b>${d.baseLF*2} sqft</b>${d.islandTopSqft > 0 ? ` + island top <b>${d.islandTopSqft} sqft</b>` : ""}${d.waterfallSqft > 0 ? ` + waterfall <b>${d.waterfallSqft} sqft</b>` : ""}${d.counterExtra > 0 ? ` + extra <b>${d.counterExtra} sqft</b>` : ""} = <b style="color:var(--gold-bright)">${d.counterSqft} sqft</b>
@@ -5058,7 +5066,7 @@ function renderKitchenInstance(k, prefix, slug){
             </div>
             <div>
               <label>Additional sqft <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(taller than 18″ standard)</span></label>
-              <input type="number" min="0" inputmode="numeric" value="${k.backsplashExtraSqft||''}" placeholder="0" ${numAttrs(prefix+".backsplashExtraSqft")}>
+              <input type="number" min="0" inputmode="numeric" style="${compactInputStyle}" value="${k.backsplashExtraSqft||''}" placeholder="0" ${numAttrs(prefix+".backsplashExtraSqft")}>
             </div>
           </div>
           <div class="footnote" style="margin-top:8px;">
@@ -5078,12 +5086,12 @@ function renderKitchenInstance(k, prefix, slug){
           <div class="grid grid-2">
             <div>
               <label>Island length (inches)</label>
-              <input type="number" min="0" inputmode="numeric" value="${k.islandLength||''}" placeholder="72" ${numAttrs(prefix+".islandLength")}>
+              <input type="number" min="0" inputmode="numeric" style="${compactInputStyle}" value="${k.islandLength||''}" placeholder="72" ${numAttrs(prefix+".islandLength")}>
               <div style="font-size:11px;margin-top:4px;">${ftHint(k.islandLength)}</div>
             </div>
             <div>
               <label>Island width</label>
-              <select onchange="${prefix}.islandWidth=this.value;renderCatBodyOnly('kitchen');renderTotals()">
+              <select style="${compactInputStyle}" onchange="${prefix}.islandWidth=this.value;renderCatBodyOnly('kitchen');renderTotals()">
                 <option value="36" ${(k.islandWidth||'36')==='36'?'selected':''}>36″ (3 ft)</option>
                 <option value="48" ${k.islandWidth==='48'?'selected':''}>48″ (4 ft)</option>
                 <option value="72" ${k.islandWidth==='72'?'selected':''}>72″ (6 ft)</option>
@@ -5093,37 +5101,47 @@ function renderKitchenInstance(k, prefix, slug){
           ${d.islandLenFt > 0 ? `<div class="footnote" style="margin-top:8px;">
             <b style="color:var(--gold-bright)">Island top:</b> ${d.islandLenFt} ft &times; ${d.islandWidFt} ft = <b>${d.islandTopSqft} sqft</b> (auto-added to countertop)
           </div>` : ""}
-          <div style="margin-top:10px;">
-            <label>Waterfall countertop <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(uses the countertop rate &mdash; sqft folds into countertop total)</span></label>
-            <select onchange="${prefix}.waterfall=this.value;renderCatBodyOnly('kitchen');renderTotals()">
-              <option value="off"   ${(k.waterfall||'off')==='off'?'selected':''}>Off</option>
-              <option value="one"   ${k.waterfall==='one'?'selected':''}>1 end</option>
-              <option value="two"   ${k.waterfall==='two'?'selected':''}>2 ends</option>
-              <option value="three" ${k.waterfall==='three'?'selected':''}>3 ends</option>
-            </select>
+          <!-- Waterfall countertop — own checkbox toggle. When checked, the
+               # of ends dropdown shows (default 1 end). Toggling off restores
+               waterfall:"off". -->
+          <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line);">
+            <label class="check-row" style="margin-bottom:${(k.waterfall && k.waterfall !== 'off')?'10px':'0'};">
+              <input type="checkbox" ${(k.waterfall && k.waterfall !== "off") ? "checked" : ""} onchange="${prefix}.waterfall=this.checked?'one':'off';renderCatBodyOnly('kitchen');renderTotals()">
+              <span class="addon-title" style="text-transform:none;letter-spacing:.04em;font-size:13px;">Waterfall countertop <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;font-size:11px;">(uses the countertop rate &mdash; sqft folds into countertop total)</span></span>
+            </label>
+            ${(k.waterfall && k.waterfall !== "off") ? `
+              <div class="grid grid-2">
+                <div>
+                  <label># of ends</label>
+                  <select style="${compactInputStyle}" onchange="${prefix}.waterfall=this.value;renderCatBodyOnly('kitchen');renderTotals()">
+                    <option value="one"   ${k.waterfall==='one'?'selected':''}>1 end</option>
+                    <option value="two"   ${k.waterfall==='two'?'selected':''}>2 ends</option>
+                    <option value="three" ${k.waterfall==='three'?'selected':''}>3 ends</option>
+                  </select>
+                </div>
+              </div>
+              <div class="grid grid-${d.waterfallEnds === 1 ? '1' : d.waterfallEnds === 2 ? '2' : '3'}" style="margin-top:10px;">
+                ${d.waterfallEnds >= 1 ? `
+                <div>
+                  <label>End #1 sqft</label>
+                  <input type="number" min="0" inputmode="numeric" style="${compactInputStyle}" value="${k.waterfallEndSqft1||''}" placeholder="0" ${numAttrs(prefix+".waterfallEndSqft1")}>
+                </div>` : ""}
+                ${d.waterfallEnds >= 2 ? `
+                <div>
+                  <label>End #2 sqft</label>
+                  <input type="number" min="0" inputmode="numeric" style="${compactInputStyle}" value="${k.waterfallEndSqft2||''}" placeholder="0" ${numAttrs(prefix+".waterfallEndSqft2")}>
+                </div>` : ""}
+                ${d.waterfallEnds >= 3 ? `
+                <div>
+                  <label>End #3 sqft</label>
+                  <input type="number" min="0" inputmode="numeric" style="${compactInputStyle}" value="${k.waterfallEndSqft3||''}" placeholder="0" ${numAttrs(prefix+".waterfallEndSqft3")}>
+                </div>` : ""}
+              </div>
+              ${d.waterfallSqft > 0 ? `<div class="footnote" style="margin-top:6px;">
+                <b style="color:var(--gold-bright)">Waterfall total:</b> <b>${d.waterfallSqft} sqft</b> &mdash; added to countertop sqft total.
+              </div>` : ""}
+            ` : ""}
           </div>
-          ${d.waterfallEnds >= 1 ? `
-            <div class="grid grid-${d.waterfallEnds === 1 ? '1' : d.waterfallEnds === 2 ? '2' : '3'}" style="margin-top:10px;">
-              ${d.waterfallEnds >= 1 ? `
-              <div>
-                <label>End #1 sqft</label>
-                <input type="number" min="0" inputmode="numeric" value="${k.waterfallEndSqft1||''}" placeholder="0" ${numAttrs(prefix+".waterfallEndSqft1")}>
-              </div>` : ""}
-              ${d.waterfallEnds >= 2 ? `
-              <div>
-                <label>End #2 sqft</label>
-                <input type="number" min="0" inputmode="numeric" value="${k.waterfallEndSqft2||''}" placeholder="0" ${numAttrs(prefix+".waterfallEndSqft2")}>
-              </div>` : ""}
-              ${d.waterfallEnds >= 3 ? `
-              <div>
-                <label>End #3 sqft</label>
-                <input type="number" min="0" inputmode="numeric" value="${k.waterfallEndSqft3||''}" placeholder="0" ${numAttrs(prefix+".waterfallEndSqft3")}>
-              </div>` : ""}
-            </div>
-            ${d.waterfallSqft > 0 ? `<div class="footnote" style="margin-top:6px;">
-              <b style="color:var(--gold-bright)">Waterfall total:</b> <b>${d.waterfallSqft} sqft</b> &mdash; added to countertop sqft total.
-            </div>` : ""}
-          ` : ""}
         ` : ""}
       </div>
 
