@@ -4572,16 +4572,27 @@ function renderTotals(){
       if(bdSi) bdSi.textContent = fmt(r.labour + r.material);  // kitchen: combined supplied & installed
       // Kitchen-only: per-component breakdown rows (Cabinet runs, Counter, etc.)
       if(cat === "kitchen"){
-        // Sum costs across main + basement kitchen instances. Each component
-        // row hides when its dollar total is 0.
+        // Sum costs across main + basement kitchen instances. The short key
+        // (used in the HTML / CSS) maps to the full cost-object property name.
         const mainCosts = deriveKitchenCosts(state.kitchen);
         const bk = state.kitchen && state.kitchen.basement;
         const basCosts = (bk && bk.enabled) ? deriveKitchenCosts(bk) : null;
-        const sum = (key) => mainCosts[key] + (basCosts ? basCosts[key] : 0);
+        const keyMap = {
+          base:       "baseCabinetCost",
+          counter:    "countertopCost",
+          backsplash: "backsplashCost",
+          island:     "islandCost",
+          waterfall:  "waterfallCost",
+          undercab:   "undercabCost"
+        };
+        const sum = (key) => {
+          const p = keyMap[key];
+          return (mainCosts[p] || 0) + (basCosts ? (basCosts[p] || 0) : 0);
+        };
         const setKR = (key) => {
           const v = sum(key);
           const rowEl = bd.querySelector('.bd-kc-row[data-kc="'+key+'"]');
-          if(rowEl) rowEl.style.display = v > 0 ? "" : "none";
+          if(rowEl) rowEl.style.display = v > 0 ? "flex" : "none";
           const valEl = bd.querySelector(".bd-kc-"+key);
           if(valEl) valEl.textContent = fmt(v);
         };
