@@ -3408,8 +3408,18 @@
         <input type="text" id="ecbSubject" placeholder="Renovation bid request" autocomplete="off">
       </div>
       <div class="email-field">
-        <label for="ecbBody">Message</label>
-        <textarea id="ecbBody" rows="6" placeholder="Add a personal note..."></textarea>
+        <label for="ecbBody">Personal note <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;">(optional — inserted near the top of the email)</span></label>
+        <textarea id="ecbBody" rows="3" placeholder="e.g. Let me know if you have any questions or need to walk the site before quoting." oninput="renderContractorEmailPreview()"></textarea>
+        <div style="font-size:10.5px;color:var(--muted);margin-top:6px;line-height:1.5;">
+          The branded header, address link, bid sheet button, PDF attachment, and signature are added automatically. Live preview below shows exactly what the contractor receives.
+        </div>
+      </div>
+      <div class="email-field">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="toggleContractorEmailPreview()">
+          <span>Email preview</span>
+          <span id="ecbPreviewToggleHint" style="font-size:10.5px;font-weight:500;color:var(--gold-bright);text-transform:none;letter-spacing:.05em;">(click to hide)</span>
+        </label>
+        <iframe id="ecbPreviewFrame" style="width:100%;height:520px;border:1px solid var(--line-strong);border-radius:6px;background:#f5f1e6;"></iframe>
       </div>
       <label class="email-cc">
         <input type="checkbox" id="ecbCcSelf">
@@ -7529,12 +7539,9 @@ function openEmailContractorBidModal(){
   document.getElementById("ecbSubject").value = `Renovation Bid Request — ${addr}`;
   document.getElementById("ecbTo").value = "";
   document.getElementById("ecbPickAdd").value = "";
-  document.getElementById("ecbBody").value =
-    `Hi,\n\n`+
-    `Please find attached the scope of work for a renovation at ${addr}. ` +
-    `Have a look through the sections and fill in your labour, building material, and section totals where indicated.\n\n` +
-    `Let me know if you have any questions or need to walk the site before quoting.\n\n` +
-    `Thanks,\nMohamed Nada\nReno to Sold Inc.\n416-832-3779`;
+  // Personal note defaults to empty. The email's greeting, address, link,
+  // signature, and styling are all auto-generated from the branded template.
+  document.getElementById("ecbBody").value = "";
 
   // CC self — same pattern as the client email modal
   const ccLabel = document.getElementById("ecbCcSelfAddr");
@@ -7553,6 +7560,8 @@ function openEmailContractorBidModal(){
   if(btn){ btn.disabled = false; btn.textContent = "Generate PDF & Send"; }
 
   document.getElementById("emailContractorBidModal").classList.add("show");
+  // Render the live email preview now that the modal is mounted.
+  setTimeout(renderContractorEmailPreview, 0);
 }
 function closeEmailContractorBidModal(){
   document.getElementById("emailContractorBidModal").classList.remove("show");
@@ -7600,6 +7609,7 @@ function onContractorPickAdd(){
   if(_ecbPickedIds.length === 1) setBidContractor(v);
   renderEcbChips();
   populateContractorPicker();
+  renderContractorEmailPreview();
 }
 /* Render the chip list. Each chip shows the contractor's company name + a
    small email/contact line + an × to remove. */
@@ -7630,6 +7640,7 @@ function removeEcbPicked(id){
   }
   renderEcbChips();
   populateContractorPicker();
+  renderContractorEmailPreview();
 }
 function setContractorEmailStatus(msg, kind){
   const el = document.getElementById("ecbStatus");
@@ -8232,31 +8243,36 @@ async function sendContractorBidEmail(){
   }
 }
 
-/* Send one branded email envelope. The PDF is generated once by the caller
-   and reused across recipients. Each call sends to ONE contractor (or one
-   ad-hoc batch sharing a single link), with the bid link already minted. */
-async function sendContractorBidEnvelope({ recipients, contractor, bidLink, subject, body, ccSelf, pdfBase64, filename }){
-  try{
-    const contactName = (contractor && contractor.contact) || "";
-    const greeting = contactName ? `Hi ${contactName.split(/\s+/)[0]},` : "Hi,";
-    const rawAddr = (state.propAddress || "").trim();
-    const addrParts = rawAddr.split(",").map(s => s.trim()).filter(Boolean);
-    let addrLines;
-    if(addrParts.length >= 4){
-      addrLines = [addrParts[0]+",", addrParts.slice(1,3).join(", ")+",", addrParts[3]+"."];
-    } else if(addrParts.length === 3){
-      addrLines = [addrParts[0]+",", addrParts[1]+",", addrParts[2]+"."];
-    } else if(addrParts.length === 2){
-      addrLines = [addrParts[0]+",", addrParts[1]+"."];
-    } else if(addrParts.length === 1){
-      addrLines = [addrParts[0]+"."];
-    } else {
-      addrLines = ["—"];
-    }
-    const mapsUrl = "https://maps.google.com/?q=" + encodeURIComponent(rawAddr);
-    const addressBlock = addrLines.map(l => escapeHtml(l)).join("<br>");
+/* Split a full street address into 1-3 display lines for the email block. */
+function splitContractorEmailAddressLines(rawAddr){
+  const parts = rawAddr.split(",").map(s => s.trim()).filter(Boolean);
+  if(parts.length >= 4) return [parts[0]+",", parts.slice(1,3).join(", ")+",", parts[3]+"."];
+  if(parts.length === 3) return [parts[0]+",", parts[1]+",", parts[2]+"."];
+  if(parts.length === 2) return [parts[0]+",", parts[1]+"."];
+  if(parts.length === 1) return [parts[0]+"."];
+  return ["—"];
+}
+/* Convert a free-form personal note into safe inline HTML for the email
+   template. Each blank-line-separated chunk becomes its own <p>. Returns
+   "" when the note is empty so the template renders without an extra slot. */
+function personalNoteToHtml(note){
+  const trimmed = (note || "").trim();
+  if(!trimmed) return "";
+  const paragraphs = trimmed.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+  return paragraphs.map(p => `<p style="margin:0 0 14px;">${escapeHtml(p).replace(/\n/g,"<br>")}</p>`).join("");
+}
+/* Build the branded contractor email body. Single source of truth — used
+   by both the modal preview and the actual sendContractorBidEnvelope. The
+   personalNote is injected near the top of the email (before the PREFERRED
+   bid-link card). Pass an empty string to skip it entirely. */
+function buildContractorEmailHtml({ contactFirstName, rawAddr, bidLink, personalNote }){
+  const greeting = contactFirstName ? `Hi ${contactFirstName},` : "Hi,";
+  const addrLines = splitContractorEmailAddressLines(rawAddr || "");
+  const mapsUrl = "https://maps.google.com/?q=" + encodeURIComponent(rawAddr || "");
+  const addressBlock = addrLines.map(l => escapeHtml(l)).join("<br>");
+  const noteHtml = personalNoteToHtml(personalNote);
 
-    const bodyHtml = `<!DOCTYPE html>
+  return `<!DOCTYPE html>
 <html><body style="margin:0;padding:0;background:#f5f1e6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
 <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f5f1e6;padding:24px 12px;">
 <tr><td align="center">
@@ -8272,7 +8288,8 @@ async function sendContractorBidEnvelope({ recipients, contractor, bidLink, subj
         ${addressBlock}
       </a>
     </p>
-    <p style="margin:0 0 26px;">Have a look through the sections and fill in your labour, building material, firm start date and section totals where indicated.</p>
+    <p style="margin:0 0 ${noteHtml ? "20px" : "26px"};">Have a look through the sections and fill in your labour, building material, firm start date and section totals where indicated.</p>
+    ${noteHtml ? `<div style="margin:0 0 22px;padding:14px 18px;background:#fbf8ee;border-left:3px solid #d4af6a;border-radius:0 4px 4px 0;color:#1a1a1a;font-size:14px;line-height:1.6;">${noteHtml.replace(/<p style="margin:0 0 14px;">/g,'<p style="margin:0 0 10px;">').replace(/<p style="margin:0 0 10px;">([^<]+)<\/p>(?![\s\S]*<p)/, '<p style="margin:0;">$1</p>')}</div>` : ""}
     <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#fbf5e6;border-left:4px solid #d4af6a;border-radius:0 6px 6px 0;margin:0 0 18px;">
       <tr><td style="padding:18px 22px;">
         <p style="margin:0 0 4px;font-size:10.5px;letter-spacing:.20em;text-transform:uppercase;font-weight:800;color:#a8853f;">★ Preferred</p>
@@ -8309,16 +8326,37 @@ async function sendContractorBidEnvelope({ recipients, contractor, bidLink, subj
 </table>
 </td></tr></table>
 </body></html>`;
+}
+/* Plain-text alternative that mirrors the HTML body (Resend uses this for
+   clients that don't render HTML). Personal note appears in the same spot. */
+function buildContractorEmailPlain({ contactFirstName, rawAddr, bidLink, personalNote }){
+  const greeting = contactFirstName ? `Hi ${contactFirstName},` : "Hi,";
+  const noteBlock = (personalNote || "").trim() ? `${(personalNote || "").trim()}\n\n` : "";
+  return (
+    `${greeting}\n\n` +
+    `Please find attached the scope of work for a renovation at ${rawAddr || "the property"}.\n\n` +
+    `Have a look through the sections and fill in your labour, building material, firm start date and section totals where indicated.\n\n` +
+    noteBlock +
+    `PREFERRED — fill out your bid online:\n${bidLink}\n` +
+    `(Drafts auto-save as you type. You can come back to the link any time until I accept your bid.)\n\n` +
+    `ALTERNATIVE — the same bid sheet is attached as a PDF. Print it, fill it in, and reply to this email with the completed copy.\n\n` +
+    `Let me know if you have any questions.\n\n` +
+    `Thanks,\nMohamed Nada\nRENO TO SOLD INC.\n416-832-3779`
+  );
+}
 
-    const plainBody =
-      `${greeting}\n\n` +
-      `Please find attached the scope of work for a renovation at ${rawAddr}.\n\n` +
-      `Have a look through the sections and fill in your labour, building material, firm start date and section totals where indicated.\n\n` +
-      `PREFERRED — fill out your bid online:\n${bidLink}\n` +
-      `(Drafts auto-save as you type. You can come back to the link any time until I accept your bid.)\n\n` +
-      `ALTERNATIVE — the same bid sheet is attached as a PDF. Print it, fill it in, and reply to this email with the completed copy.\n\n` +
-      `Let me know if you have any questions.\n\n` +
-      `Thanks,\nMohamed Nada\nRENO TO SOLD INC.\n416-832-3779`;
+/* Send one branded email envelope. The PDF is generated once by the caller
+   and reused across recipients. Each call sends to ONE contractor (or one
+   ad-hoc batch sharing a single link), with the bid link already minted. */
+async function sendContractorBidEnvelope({ recipients, contractor, bidLink, subject, body, ccSelf, pdfBase64, filename }){
+  try{
+    const contactFirstName = ((contractor && contractor.contact) || "").split(/\s+/)[0] || "";
+    const rawAddr = (state.propAddress || "").trim();
+    // `body` is the editable personal note typed in the modal. The HTML
+    // and plain-text bodies are built from the same shared template so
+    // the modal preview and the real email are guaranteed to match.
+    const bodyHtml  = buildContractorEmailHtml({  contactFirstName, rawAddr, bidLink, personalNote: body });
+    const plainBody = buildContractorEmailPlain({ contactFirstName, rawAddr, bidLink, personalNote: body });
 
     const payload = {
       to: recipients,
@@ -8332,6 +8370,42 @@ async function sendContractorBidEnvelope({ recipients, contractor, bidLink, subj
   }catch(e){
     return { ok:false, err: (e && e.message) || String(e) };
   }
+}
+
+/* Live preview of the actual email. Renders into the iframe in the modal
+   using the SAME builder the sender uses, so what you see is what gets
+   sent. The bid link in the preview is a placeholder ('?bid=PREVIEW') —
+   the real token is generated at send time. */
+function renderContractorEmailPreview(){
+  const iframe = document.getElementById("ecbPreviewFrame");
+  if(!iframe) return;
+  // Pick a representative contractor for the greeting — the first one in
+  // the chip list (or empty if none).
+  let contactFirstName = "";
+  if(_ecbPickedIds && _ecbPickedIds.length){
+    const c = loadContractors().find(x => x.id === _ecbPickedIds[0]);
+    contactFirstName = ((c && c.contact) || "").split(/\s+/)[0] || "";
+  }
+  const rawAddr = (state.propAddress || "").trim();
+  const previewLink = `${location.origin}${location.pathname}?bid=PREVIEW`;
+  const noteVal = (document.getElementById("ecbBody") || {}).value || "";
+  const html = buildContractorEmailHtml({
+    contactFirstName, rawAddr, bidLink: previewLink, personalNote: noteVal
+  });
+  try{
+    const idoc = iframe.contentDocument || (iframe.contentWindow && iframe.contentWindow.document);
+    if(idoc){ idoc.open(); idoc.write(html); idoc.close(); }
+  }catch(_){}
+}
+/* Hide / show the preview iframe. State is in-memory only. */
+function toggleContractorEmailPreview(){
+  const f = document.getElementById("ecbPreviewFrame");
+  const hint = document.getElementById("ecbPreviewToggleHint");
+  if(!f) return;
+  const isHidden = f.style.display === "none";
+  f.style.display = isHidden ? "" : "none";
+  if(hint) hint.textContent = isHidden ? "(click to hide)" : "(click to show)";
+  if(isHidden) renderContractorEmailPreview();
 }
 
 /* ---------- Toast ---------- */
