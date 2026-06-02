@@ -3600,39 +3600,29 @@ const DEFAULT_PRICES = {
     premium:  { labour: 14.00, material: 8.00 }     // $/sqft porcelain large-format
   },
   kitchen: {
-    // BASE PRICING — $/LF of cabinet run.
-    // Total LF = sum of each layout run (Length + Width, plus a 3rd run for U-shape),
-    // each rounded UP to the next whole foot before summing. Includes cabinets, sink,
-    // faucet, plumbing adjustments, install, and all hardware. Standard = stock /
-    // semi-custom cabinets; Custom = fully custom cabinets, premium fixtures.
+    // Kitchen items are presented to the CLIENT as "supplied & installed" —
+    // a single rate per unit, NOT split by labour and material. The contractor
+    // cost pricing (contractorPrices.kitchen) still uses the legacy {labour,
+    // material} shape so the owner can see what contractors charge for L vs M
+    // when evaluating bids. computeKitchenInstance() detects this `rate`
+    // shape and treats it as a combined supplied+installed unit cost.
     base: {
-      standard: { labour: 480, material: 720 },   // ~$1,200/LF total
-      custom:   { labour: 800, material: 1200 }   // ~$2,000/LF total
+      standard: { rate: 1200 },   // Semi-Custom $/LF — cabinets, sink, faucet, plumbing, install, hardware
+      custom:   { rate: 2000 }    // Custom $/LF
     },
-    // COUNTERTOPS — $/sqft. Auto-calculated sqft = LF × 2 ft (24" base cabinet depth)
-    //   + island top sqft + waterfall end sqft + any manual extra sqft. Tier is
-    //   independent of the kitchen base tier (you can pair Standard cabinets with
-    //   Custom counters). Backsplash AND waterfall both auto-follow this tier.
     countertop: {
-      standard: { labour: 40, material: 45 },     // $85/sqft (e.g. laminate / entry quartz)
-      custom:   { labour: 60, material: 100 }     // $160/sqft (premium quartz / natural stone)
+      standard: { rate: 85 },     // Standard Quartz $/sqft
+      custom:   { rate: 160 }     // Premium Quartz $/sqft
     },
-    // BACKSPLASH — $/sqft. Used only when backsplash material = "tile". When
-    //   the backsplash material is "match" (same slab as the countertop), the
-    //   countertop rate is used instead. Tier auto-follows the countertop tier.
     backsplash: {
-      standard: { labour: 15, material: 10 },     // $25/sqft (subway / basic ceramic)
-      custom:   { labour: 20, material: 30 }      // $50/sqft (large-format / premium tile)
+      standard: { rate: 25 },     // Tile $/sqft (used only when backsplash material = "tile")
+      custom:   { rate: 50 }
     },
-    // ISLAND — $/LF of island length (rounded UP). Width comes from a fixed dropdown
-    //   (36" / 48" / 72"). Island top sqft (length × width) is rolled into the
-    //   countertop sqft above so it gets charged the chosen countertop rate.
     island: {
-      standard: { labour: 400, material: 600 },   // $1,000/LF
-      custom:   { labour: 700, material: 1100 }   // $1,800/LF
+      standard: { rate: 1000 },   // $/LF of island length
+      custom:   { rate: 1800 }
     },
-    // UNDER-CABINET lighting — $/LF of kitchen base LF. Own line item; not bundled.
-    undercab: { labour: 40, material: 40 }        // $80/LF
+    undercab: { rate: 80 }        // $/LF of kitchen base LF
   },
   bathroom: {
     // Single premium-grade tier. Base covers refresh of all fixtures in the chosen layout
@@ -3846,6 +3836,48 @@ function migrateFlatShowerPrice(p){
     if(p.potlights.premium  && !p.potlights.new){     p.potlights.new     = p.potlights.premium; }
     delete p.potlights.standard;
     delete p.potlights.premium;
+  }
+  // KITCHEN (client/owner prices only): legacy { labour, material } → { rate: L+M }.
+  // Kitchen is now presented to clients as "Supplied & Installed" with a single
+  // rate per unit. We migrate by summing the old labour and material into rate.
+  if(p && p.kitchen){
+    const convertEntry = (e) => {
+      if(e && typeof e.rate !== "number" && (typeof e.labour === "number" || typeof e.material === "number")){
+        const r = (e.labour || 0) + (e.material || 0);
+        delete e.labour; delete e.material;
+        e.rate = r;
+      }
+    };
+    // Drop legacy sub-groups that no longer exist (old size/tier matrices, waterfall).
+    delete p.kitchen.waterfall;
+    ["base","countertop","backsplash","island"].forEach(grp => {
+      if(p.kitchen[grp] && typeof p.kitchen[grp] === "object"){
+        Object.keys(p.kitchen[grp]).forEach(k => {
+          // Drop legacy size buckets (small/medium/large) — model is LF/sqft now.
+          if(k === "small" || k === "medium" || k === "large"){
+            delete p.kitchen[grp][k];
+          } else if(k === "premium"){
+            // Premium → custom (countertop tier was renamed).
+            if(!p.kitchen[grp].custom) p.kitchen[grp].custom = p.kitchen[grp][k];
+            delete p.kitchen[grp][k];
+          } else {
+            convertEntry(p.kitchen[grp][k]);
+          }
+        });
+      }
+    });
+    // Drop legacy backsplash sub-types (subway/quartz).
+    if(p.kitchen.backsplash){
+      delete p.kitchen.backsplash.subway;
+      delete p.kitchen.backsplash.quartz;
+    }
+    // counter → countertop rename (older shape used `counter`).
+    if(p.kitchen.counter && !p.kitchen.countertop){
+      p.kitchen.countertop = p.kitchen.counter;
+    }
+    delete p.kitchen.counter;
+    // Undercab: single entry, also migrate to rate.
+    convertEntry(p.kitchen.undercab);
   }
   return p;
 }
@@ -4532,8 +4564,12 @@ function renderTotals(){
     }
     const bd = document.getElementById("cat-breakdown-"+cat);
     if(bd){
-      bd.querySelector(".bd-l").textContent = fmt(r.labour);
-      bd.querySelector(".bd-m").textContent = fmt(r.material);
+      const bdL = bd.querySelector(".bd-l");
+      const bdM = bd.querySelector(".bd-m");
+      const bdSi = bd.querySelector(".bd-si");
+      if(bdL) bdL.textContent = fmt(r.labour);
+      if(bdM) bdM.textContent = fmt(r.material);
+      if(bdSi) bdSi.textContent = fmt(r.labour + r.material);  // kitchen: combined supplied & installed
       bd.querySelector(".bd-t").textContent = fmt(catNet);
       const discRow = bd.querySelector(".bd-discount-row");
       if(discRow){
@@ -4599,6 +4635,18 @@ function tierToggle(cat, current, opts){
 }
 
 function breakdownRows(cat){
+  // Kitchen is presented to the client as "Supplied & Installed" — single
+  // combined row instead of Labour + Material. All other categories keep
+  // the L/M breakdown as before.
+  if(cat === "kitchen"){
+    return `
+      <div id="cat-breakdown-${cat}">
+        <div class="breakdown"><span><span class="pill pill-l">Supplied &amp; Installed</span></span><span class="bd-si">$0</span></div>
+        <div class="breakdown disc bd-discount-row" style="display:none"><span><span class="pill pill-d">Discount</span> <span class="bd-d-note" style="margin-left:6px;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;"></span></span><span class="bd-d">-$0</span></div>
+        <div class="breakdown" style="font-weight:600"><span>Subtotal</span><span class="bd-t">$0</span></div>
+      </div>
+    `;
+  }
   return `
     <div id="cat-breakdown-${cat}">
       <div class="breakdown"><span><span class="pill pill-l">Labour</span></span><span class="bd-l">$0</span></div>
@@ -5602,58 +5650,51 @@ function renderPricingEditor(){
     </div>`;
   });
 
-  // Kitchen base — $/LF
-  html += `<div class="section-title">Kitchen base &mdash; per linear foot ($/LF)</div>
-    <div class="price-edit-row head"><div></div><div>Labour $/LF</div><div>Material $/LF</div></div>`;
+  // KITCHEN — owner client prices, presented as supplied & installed. Single
+  // rate per unit (not split into labour/material). The contractor cost view
+  // below is still split L/M so you can evaluate bids.
+  html += `<div class="section-title">Kitchen base &mdash; per linear foot ($/LF, supplied &amp; installed)</div>
+    <div class="price-edit-row head single"><div></div><div>$/LF</div></div>`;
   ["standard","custom"].forEach(t=>{
-    html += `<div class="price-edit-row">
+    html += `<div class="price-edit-row single">
       <div class="lbl">${kitchenBaseTierLabel(t)}</div>
-      <div>${priceInput("kitchen.base."+t+".labour", prices.kitchen.base[t].labour, 10)}</div>
-      <div>${priceInput("kitchen.base."+t+".material", prices.kitchen.base[t].material, 10)}</div>
+      <div>${priceInput("kitchen.base."+t+".rate", prices.kitchen.base[t].rate, 10)}</div>
     </div>`;
   });
 
-  // Kitchen countertops — $/sqft. Tier shared with backsplash + waterfall.
-  html += `<div class="section-title">Countertops &mdash; per sqft ($/sqft)</div>
-    <div class="footnote" style="margin-bottom:8px;">Waterfall countertop sqft is added to the countertop total at this rate.</div>
-    <div class="price-edit-row head"><div></div><div>Labour $/sqft</div><div>Material $/sqft</div></div>`;
+  html += `<div class="section-title">Countertops &mdash; per sqft ($/sqft, supplied &amp; installed)</div>
+    <div class="footnote" style="margin-bottom:8px;">Waterfall + island top sqft are folded into the countertop total at this rate.</div>
+    <div class="price-edit-row head single"><div></div><div>$/sqft</div></div>`;
   ["standard","custom"].forEach(t=>{
-    html += `<div class="price-edit-row">
+    html += `<div class="price-edit-row single">
       <div class="lbl">${kitchenCounterTierLabel(t)}</div>
-      <div>${priceInput("kitchen.countertop."+t+".labour", prices.kitchen.countertop[t].labour, 1)}</div>
-      <div>${priceInput("kitchen.countertop."+t+".material", prices.kitchen.countertop[t].material, 1)}</div>
+      <div>${priceInput("kitchen.countertop."+t+".rate", prices.kitchen.countertop[t].rate, 1)}</div>
     </div>`;
   });
 
-  // Kitchen backsplash — $/sqft. Tile rate. "Match countertop" routes through the countertop rate.
-  html += `<div class="section-title">Backsplash &mdash; per sqft ($/sqft) &middot; <span style="text-transform:none;letter-spacing:0;font-weight:500;font-size:11px;color:var(--muted);">tile rate only — "Same as countertop" uses the countertop rate above</span></div>
-    <div class="price-edit-row head"><div></div><div>Labour $/sqft</div><div>Material $/sqft</div></div>`;
+  html += `<div class="section-title">Backsplash &mdash; per sqft ($/sqft, supplied &amp; installed) &middot; <span style="text-transform:none;letter-spacing:0;font-weight:500;font-size:11px;color:var(--muted);">tile rate only — "Same as countertop" uses the countertop rate above</span></div>
+    <div class="price-edit-row head single"><div></div><div>$/sqft</div></div>`;
   ["standard","custom"].forEach(t=>{
-    html += `<div class="price-edit-row">
+    html += `<div class="price-edit-row single">
       <div class="lbl">${cap(t)}</div>
-      <div>${priceInput("kitchen.backsplash."+t+".labour", prices.kitchen.backsplash[t].labour, 1)}</div>
-      <div>${priceInput("kitchen.backsplash."+t+".material", prices.kitchen.backsplash[t].material, 1)}</div>
+      <div>${priceInput("kitchen.backsplash."+t+".rate", prices.kitchen.backsplash[t].rate, 1)}</div>
     </div>`;
   });
 
-  // Kitchen island — $/LF
-  html += `<div class="section-title">Island base &mdash; per linear foot ($/LF)</div>
-    <div class="price-edit-row head"><div></div><div>Labour $/LF</div><div>Material $/LF</div></div>`;
+  html += `<div class="section-title">Island base &mdash; per linear foot ($/LF, supplied &amp; installed)</div>
+    <div class="price-edit-row head single"><div></div><div>$/LF</div></div>`;
   ["standard","custom"].forEach(t=>{
-    html += `<div class="price-edit-row">
+    html += `<div class="price-edit-row single">
       <div class="lbl">${cap(t)}</div>
-      <div>${priceInput("kitchen.island."+t+".labour", prices.kitchen.island[t].labour, 10)}</div>
-      <div>${priceInput("kitchen.island."+t+".material", prices.kitchen.island[t].material, 10)}</div>
+      <div>${priceInput("kitchen.island."+t+".rate", prices.kitchen.island[t].rate, 10)}</div>
     </div>`;
   });
 
-  // Under-cab lighting — $/LF
-  html += `<div class="section-title">Under-cabinet lighting &mdash; per linear foot ($/LF)</div>
-    <div class="price-edit-row head"><div></div><div>Labour $/LF</div><div>Material $/LF</div></div>
-    <div class="price-edit-row">
+  html += `<div class="section-title">Under-cabinet lighting &mdash; per linear foot ($/LF, supplied &amp; installed)</div>
+    <div class="price-edit-row head single"><div></div><div>$/LF</div></div>
+    <div class="price-edit-row single">
       <div class="lbl">LED strip + driver + install</div>
-      <div>${priceInput("kitchen.undercab.labour", prices.kitchen.undercab.labour, 1)}</div>
-      <div>${priceInput("kitchen.undercab.material", prices.kitchen.undercab.material, 1)}</div>
+      <div>${priceInput("kitchen.undercab.rate", prices.kitchen.undercab.rate, 1)}</div>
     </div>`;
 
   // Bathroom base (single tier, refresh of existing fixtures — add-ons handle structural changes)
@@ -6646,69 +6687,71 @@ function buildEstimateLineItems(){
       const tierLbl = (k.tier === "custom") ? "Custom — fully custom cabinets, premium fixtures & finishes" : "Semi-Custom — stock or semi-custom cabinets, builder-grade finishes";
       const layoutLbl = k.layout === "U" ? "U-shape (3 runs)" : "L-shape (2 runs)";
       const prefix = hdr ? `${hdr} — ` : "";
-      // Base cabinetry — qty = total LF
+      // Compute one priced line. Handles both {rate} and {labour, material}
+      // shapes; for rate-based items, the full amount lands in "material" so
+      // the per-row total still ties out.
+      const pricedRow = (qty, entry) => {
+        if(!entry || qty <= 0) return { labour:0, material:0, total:0 };
+        if(typeof entry.rate === "number"){
+          const t = qty * entry.rate;
+          return { labour:0, material:t, total:t };
+        }
+        const lL = qty * (entry.labour || 0), lM = qty * (entry.material || 0);
+        return { labour:lL, material:lM, total: lL + lM };
+      };
+      // Base cabinetry
       if(d.baseLF > 0 && p.base && p.base[k.tier]){
-        const br = p.base[k.tier];
+        const r = pricedRow(d.baseLF, p.base[k.tier]);
         rows.push({
           desc: `${prefix}Kitchen base — ${layoutLbl}`,
           subdesc: `${tierLbl}. Cabinets, sink, faucet, plumbing adjustments, install, all hardware. Standard 24″ lower / 12″ upper cabinet depth.`,
           qty: d.baseLF, unit: "LF",
-          labour: d.baseLF * br.labour, material: d.baseLF * br.material,
-          total: d.baseLF * (br.labour + br.material)
+          ...r
         });
       }
       const counterTier = k.counterTier || "standard";
       const ctTierLbl   = kitchenCounterTierLabel(counterTier);
-      // Countertop — qty = auto-calculated sqft (cabinet runs × 24" + island top
-      //   + waterfall end sqft + extras). Waterfall is folded in here.
+      // Countertop
       if(k.counter && d.counterSqft > 0 && p.countertop){
         const ct = p.countertop[counterTier] || p.countertop.standard;
-        if(ct){
-          const wfDesc = d.waterfallSqft ? `, waterfall ${d.waterfallEnds} end${d.waterfallEnds>1?"s":""} (${d.waterfallSqft} sqft) folded in` : "";
-          rows.push({
-            desc: `${prefix}Countertop — ${ctTierLbl}`,
-            subdesc: `Supply & install. Auto-derived from cabinet runs (LF × 24″ depth)${d.islandTopSqft ? ` + island top` : ""}${d.waterfallSqft ? ` + waterfall ends` : ""}${d.counterExtra ? ` + extras` : ""}${wfDesc}.`,
-            qty: d.counterSqft, unit: "sqft",
-            labour: d.counterSqft * ct.labour, material: d.counterSqft * ct.material,
-            total: d.counterSqft * (ct.labour + ct.material)
-          });
-        }
+        const wfDesc = d.waterfallSqft ? `, waterfall ${d.waterfallEnds} end${d.waterfallEnds>1?"s":""} (${d.waterfallSqft} sqft) folded in` : "";
+        rows.push({
+          desc: `${prefix}Countertop — ${ctTierLbl}`,
+          subdesc: `Supply & install. Auto-derived from cabinet runs (LF × 24″ depth)${d.islandTopSqft ? ` + island top` : ""}${d.waterfallSqft ? ` + waterfall ends` : ""}${d.counterExtra ? ` + extras` : ""}${wfDesc}.`,
+          qty: d.counterSqft, unit: "sqft",
+          ...pricedRow(d.counterSqft, ct)
+        });
       }
-      // Backsplash — qty = auto-calculated sqft. Routes through countertop rate
-      //   when material = "match" (same slab), else through tile rate.
+      // Backsplash
       if(k.backsplash && d.backsplashSqft > 0){
         const isMatch = (k.backsplashMaterial === "match");
-        const rate = isMatch ? (p.countertop && p.countertop[counterTier]) : (p.backsplash && p.backsplash[counterTier]);
-        if(rate){
+        const entry = isMatch ? (p.countertop && (p.countertop[counterTier] || p.countertop.standard)) : (p.backsplash && (p.backsplash[counterTier] || p.backsplash.standard));
+        if(entry){
           const matLbl = isMatch ? `Same material as countertop (${ctTierLbl})` : `Tile — ${ctTierLbl}`;
           rows.push({
             desc: `${prefix}Backsplash — ${matLbl}`,
             subdesc: `Supply & install. ${d.baseLF} LF × 18″ standard height${d.backsplashExtra ? ` + ${d.backsplashExtra} sqft for taller areas` : ""}.`,
             qty: d.backsplashSqft, unit: "sqft",
-            labour: d.backsplashSqft * rate.labour, material: d.backsplashSqft * rate.material,
-            total: d.backsplashSqft * (rate.labour + rate.material)
+            ...pricedRow(d.backsplashSqft, entry)
           });
         }
       }
-      // Island base — qty = island length LF
+      // Island base
       if(k.island && d.islandLenFt > 0 && p.island && p.island[k.tier]){
-        const ir = p.island[k.tier];
         rows.push({
           desc: `${prefix}Island base — ${d.islandLenFt}′ × ${d.islandWidFt}′`,
           subdesc: `${k.tier === "custom" ? "Custom" : "Standard"} build — base + supports. Island top sqft + waterfall ends are rolled into the countertop line.`,
           qty: d.islandLenFt, unit: "LF",
-          labour: d.islandLenFt * ir.labour, material: d.islandLenFt * ir.material,
-          total: d.islandLenFt * (ir.labour + ir.material)
+          ...pricedRow(d.islandLenFt, p.island[k.tier])
         });
       }
-      // Undercab — qty = LF
+      // Undercab
       if(k.undercabLighting && d.baseLF > 0 && p.undercab){
         rows.push({
           desc: `${prefix}Under-cabinet lighting`,
           subdesc: "LED strip + driver + install, along base cabinet run.",
           qty: d.baseLF, unit: "LF",
-          labour: d.baseLF * p.undercab.labour, material: d.baseLF * p.undercab.material,
-          total: d.baseLF * (p.undercab.labour + p.undercab.material)
+          ...pricedRow(d.baseLF, p.undercab)
         });
       }
     }
@@ -6913,54 +6956,56 @@ function deriveKitchen(k){
     isMatch, totalQuartzSqft
   };
 }
+/* Apply one priced line item to the running L/M totals. Handles BOTH price
+   shapes seamlessly:
+   - { rate: X } — owner client kitchen prices (supplied & installed). The full
+     amount lands in the "material" bucket so it cleanly sums into the per-
+     category total. Client UI hides the L/M split for kitchen so this internal
+     convention is invisible.
+   - { labour, material } — everything else, including contractor cost. */
+function _applyKitchenEntry(L, M, qty, entry){
+  if(!entry || qty <= 0) return [L, M];
+  if(typeof entry.rate === "number"){
+    return [L, M + qty * entry.rate];
+  }
+  return [L + qty * (entry.labour || 0), M + qty * (entry.material || 0)];
+}
 function computeKitchenInstance(k, priceSet){
   const p = (priceSet || prices).kitchen || {};
   let L = 0, M = 0;
   const tier = k.tier || "standard";
   const d = deriveKitchen(k);
 
-  // Base cabinetry — $/LF × total LF
+  // Base cabinetry — qty × rate (single $/LF rate when client side; L+M when contractor cost)
   if(d.baseLF > 0 && p.base && p.base[tier]){
-    L += d.baseLF * p.base[tier].labour;
-    M += d.baseLF * p.base[tier].material;
+    [L, M] = _applyKitchenEntry(L, M, d.baseLF, p.base[tier]);
   }
 
-  // Countertop — $/sqft × auto-computed sqft (cabinet runs × 24" depth + island
-  //   top + waterfall end sqft + extra). Waterfall is folded in here and uses
-  //   the countertop rate (no separate waterfall pricing).
+  // Countertop — qty × rate ($/sqft × auto-computed sqft, includes island top +
+  //   waterfall + extras).
   const counterTier = k.counterTier || "standard";
   if(k.counter && d.counterSqft > 0 && p.countertop){
     const ct = p.countertop[counterTier] || p.countertop.standard;
-    if(ct){
-      L += d.counterSqft * ct.labour;
-      M += d.counterSqft * ct.material;
-    }
+    [L, M] = _applyKitchenEntry(L, M, d.counterSqft, ct);
   }
 
-  // Backsplash — material picker: "match" routes through the countertop rate
-  //   (literally the same slab), "tile" uses the tile-only rate. The tier
-  //   auto-follows the countertop tier in both cases.
+  // Backsplash — material picker: "match" → countertop rate (same slab), "tile" → tile rate.
   if(k.backsplash && d.backsplashSqft > 0){
     const mat = k.backsplashMaterial || "tile";
-    let rate = null;
-    if(mat === "match" && p.countertop && p.countertop[counterTier]) rate = p.countertop[counterTier];
-    else if(p.backsplash && p.backsplash[counterTier])               rate = p.backsplash[counterTier];
-    if(rate){
-      L += d.backsplashSqft * rate.labour;
-      M += d.backsplashSqft * rate.material;
-    }
+    let entry = null;
+    if(mat === "match" && p.countertop) entry = p.countertop[counterTier] || p.countertop.standard;
+    else if(p.backsplash)               entry = p.backsplash[counterTier] || p.backsplash.standard;
+    [L, M] = _applyKitchenEntry(L, M, d.backsplashSqft, entry);
   }
 
-  // Island base — $/LF (uses the same standard/custom tier as the kitchen base)
+  // Island base — qty × rate ($/LF)
   if(k.island && d.islandLenFt > 0 && p.island && p.island[tier]){
-    L += d.islandLenFt * p.island[tier].labour;
-    M += d.islandLenFt * p.island[tier].material;
+    [L, M] = _applyKitchenEntry(L, M, d.islandLenFt, p.island[tier]);
   }
 
-  // Under-cabinet LED lighting — $/LF along the base cabinet run
+  // Under-cabinet LED — qty × rate ($/LF along base run)
   if(k.undercabLighting && d.baseLF > 0 && p.undercab){
-    L += d.baseLF * p.undercab.labour;
-    M += d.baseLF * p.undercab.material;
+    [L, M] = _applyKitchenEntry(L, M, d.baseLF, p.undercab);
   }
 
   return { labour:L, material:M, derived:d };
@@ -7282,8 +7327,6 @@ function renderClientEstimate(){
         <div class="es-totals-title">Quote Summary</div>
         <div class="es-totals">
           <div class="es-totals-box">
-            <div class="row"><span>Labour subtotal</span><span class="v">${fmtCurrency(t.labour)}</span></div>
-            <div class="row"><span>Material subtotal</span><span class="v">${fmtCurrency(t.material)}</span></div>
             <div class="row"><span>Subtotal</span><span class="v">${fmtCurrency(t.subtotal)}</span></div>
             ${t.listingDisc ? (() => {
               const listingPct = num(prices.listingDiscount && prices.listingDiscount.percent);
@@ -8921,6 +8964,24 @@ function scalePrices(o, f){
 function defaultContractorPrices(){
   const base = JSON.parse(JSON.stringify(DEFAULT_PRICES));
   delete base.listingDiscount;
+  // Owner client kitchen prices use { rate: X } (supplied & installed). The
+  // contractor cost view stays as { labour, material } so the owner can
+  // evaluate contractor bids. Convert each kitchen rate to a 40/60 L/M split
+  // before scaling — labour ≈ 40% of cost on cabinetry-heavy kitchen lines.
+  const expandRate = (obj) => {
+    if(!obj || typeof obj !== "object") return;
+    Object.keys(obj).forEach(k => {
+      const v = obj[k];
+      if(v && typeof v === "object"){
+        if(typeof v.rate === "number"){
+          obj[k] = { labour: +(v.rate * 0.40).toFixed(2), material: +(v.rate * 0.60).toFixed(2) };
+        } else {
+          expandRate(v);
+        }
+      }
+    });
+  };
+  expandRate(base.kitchen);
   return scalePrices(base, 0.70);
 }
 function loadContractorPrices(){
