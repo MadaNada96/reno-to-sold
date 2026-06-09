@@ -6249,7 +6249,7 @@ function renderPricingEditor(){
    ============================================================ */
 const CONTRACTOR_CAT_LABELS = {
   painting:"Painting", flooring:"Flooring", tiling:"Tiling",
-  kitchen:"Kitchen", bathroom:"Bathrooms", potlights:"Pot Lights"
+  kitchen:"Kitchen", bathroom:"Bathrooms", potlights:"Lighting & Electrical"
 };
 let contractorBidCats = new Set();
 /* Currently-selected contractor for this bid. Drives the "Contractor"
@@ -6410,7 +6410,7 @@ function renderContractorSheet(){
     items.push({ html:`Painting area: <b>${s.scope==="custom" ? `Specific area &mdash; ${psqft||'?'} sqft` : `Entire property &mdash; ${psqft||'?'} sqft`}</b>` });
     if(s.ceiling){
       const cs = num(s.ceilingSqft) || psqft;
-      items.push({ html:`Ceiling: <b>${s.ceilingTier==="premium"?"Premium (textured / vaulted / 10ft+)":"Standard (flat 8&ndash;9ft)"}</b> &mdash; ${cs||'?'} sqft` });
+      items.push({ html:`Ceiling: <b>${s.ceilingTier==="vaulted"?"Vaulted / 10 ft+":"Flat 8&ndash;9 ft"}</b> &mdash; ${cs||'?'} sqft` });
     }
     if(s.trim){
       const trimLf = num(s.trimLinFt) || suggestedTrimLinFt();
@@ -6423,9 +6423,15 @@ function renderContractorSheet(){
         : "";
       items.push({ html:`Interior doors: <b>${s.doorCount||'?'} doors</b>${note} &mdash; both sides, hardware removed &amp; reinstalled.` });
     }
+    if(s.extDoors){
+      items.push({ html:`Exterior doors: <b>${s.extDoorCount||'?'} doors</b> &mdash; weather prep, primer, two coats exterior-grade paint, hardware removed &amp; reinstalled.` });
+    }
+    if(s.garageDoors){
+      items.push({ html:`Garage doors: <b>${s.garageDoorCount||'?'} doors</b> &mdash; sand, prime, two coats exterior-grade paint per panel.` });
+    }
     if(s.popcorn){
       const popSqft = num(s.popcornSqft) || num(s.ceilingSqft) || psqft;
-      items.push({ html:`Popcorn ceiling removal: <b>${(s.popcornTier||'standard')==='premium' ? 'Premium (textured / vaulted / 10ft+)' : 'Standard (flat 8&ndash;9ft)'}</b> &mdash; ${popSqft||'?'} sqft. Scrape, full skim-coat smooth, prime, two finish coats. <i style="color:#666;font-weight:400">Asbestos abatement (pre-1980 homes) is a separate scope, not included.</i>` });
+      items.push({ html:`Popcorn ceiling removal: <b>${(s.popcornTier||'standard')==='premium' ? 'Vaulted / 10 ft+' : 'Flat 8&ndash;9 ft'}</b> &mdash; ${popSqft||'?'} sqft. Scrape, full skim-coat smooth, prime, two finish coats. <i style="color:#666;font-weight:400">Asbestos abatement (pre-1980 homes) is a separate scope, not included.</i>` });
     }
     html += scopeSection("Painting", items);
   }
@@ -6554,15 +6560,38 @@ function renderContractorSheet(){
     html += scopeSection("Bathrooms", items);
   }
 
-  // -- Pot Lights --
+  // -- Lighting & Electrical -- (data key still "potlights")
   if(includeCat("potlights")){
     anyEnabled = true;
     const s = state.potlights;
-    const items = [
-      { html:`Scope: <b>${s.tier==="new"?"Install new — cut hole, run new wiring, install fixture + driver, drywall patch & paint touch-up":"Replace existing — swap fixture in existing pot, minor wiring tweak only, no drywall cutting"}</b>` },
-      { html:`Quantity: <b>${s.count||'?'} pot lights</b>` }
-    ];
-    html += scopeSection("Pot Lights", items);
+    const items = [];
+    const intC = num(s.intCount);
+    if(intC > 0){
+      const note = (s.intTier === "new")
+        ? "Install new &mdash; cut hole, run wiring, install fixture + driver, drywall patch &amp; paint touch-up"
+        : "Replace existing &mdash; swap fixture in existing pot, minor wiring tweak only, no drywall cutting";
+      items.push({ html:`Pot lights &mdash; <b>Interior</b>: <b>${intC} lights</b>. ${note}.` });
+    }
+    if(s.extEnabled){
+      const extC = num(s.extCount);
+      if(extC > 0){
+        const note = (s.extTier === "new") ? "Install new" : "Replace existing";
+        items.push({ html:`Pot lights &mdash; <b>Exterior</b>: <b>${extC} lights</b>. ${note}. Weather-resistant fixtures, GFCI / outdoor-rated wiring, sealing.` });
+      }
+    }
+    if(s.switchEnabled){
+      const c = num(s.switchCount);
+      if(c > 0) items.push({ html:`Modernize light switches: <b>${c} switches</b> &mdash; old toggle &rarr; decora rocker, supplied &amp; installed.` });
+    }
+    if(s.dimmerEnabled){
+      const c = num(s.dimmerCount);
+      if(c > 0) items.push({ html:`Dimmers: <b>${c} dimmers</b> &mdash; decora-style, supplied &amp; installed.` });
+    }
+    if(s.plugEnabled){
+      const c = num(s.plugCount);
+      if(c > 0) items.push({ html:`Modernize outlets / plugs: <b>${c} plugs</b> &mdash; decora-style outlet, supplied &amp; installed.` });
+    }
+    if(items.length) html += scopeSection("Lighting & Electrical", items);
   }
 
   if(!anyEnabled){
@@ -6572,7 +6601,7 @@ function renderContractorSheet(){
       : `<div class="empty-state">No categories are enabled in the estimate. Turn on the categories you want bid on from the estimator, then come back here.</div>`;
   } else {
     // Bid summary
-    const labels = {painting:"Painting", flooring:"Flooring", tiling:"Tiling", kitchen:"Kitchen", bathroom:"Bathrooms", potlights:"Pot Lights"};
+    const labels = {painting:"Painting", flooring:"Flooring", tiling:"Tiling", kitchen:"Kitchen", bathroom:"Bathrooms", potlights:"Lighting & Electrical"};
     let rows = "";
     Object.keys(labels).forEach(cat => {
       if(includeCat(cat)){
@@ -7606,13 +7635,13 @@ function buildEstimateSummary(){
     bullets.push(`Wall painting — ${coatsLbl}, ${scopeLbl}, premium prep & paint`);
     if(s.popcorn){
       const popSqft = num(s.popcornSqft) || num(s.ceilingSqft) || psqft;
-      const tierLbl = (s.popcornTier === "premium") ? "Premium" : "Standard";
-      bullets.push(`Popcorn ceiling removal — ${tierLbl} tier, ${popSqft||'?'} sqft (scrape, skim-coat, prime, repaint)`);
+      const tierLbl = (s.popcornTier === "premium") ? "Vaulted / 10 ft+" : "Flat 8–9 ft";
+      bullets.push(`Popcorn ceiling removal — ${tierLbl}, ${popSqft||'?'} sqft (scrape, skim-coat, prime, repaint)`);
     }
     if(s.ceiling){
       const cSqft = num(s.ceilingSqft) || psqft;
-      const tierLbl = (s.ceilingTier === "premium") ? "Premium" : "Standard";
-      bullets.push(`Ceiling painting — ${tierLbl} tier, ${cSqft||'?'} sqft`);
+      const tierLbl = (s.ceilingTier === "vaulted") ? "Vaulted / 10 ft+" : "Flat 8–9 ft";
+      bullets.push(`Ceiling painting — ${tierLbl}, ${cSqft||'?'} sqft`);
     }
     if(s.trim){
       const lf = num(s.trimLinFt) || suggestedTrimLinFt();
@@ -7620,6 +7649,12 @@ function buildEstimateSummary(){
     }
     if(s.doors){
       bullets.push(`Interior doors — ${num(s.doorCount)||'?'} doors painted (both sides)`);
+    }
+    if(s.extDoors){
+      bullets.push(`Exterior doors — ${num(s.extDoorCount)||'?'} doors painted (weather prep + two coats exterior-grade)`);
+    }
+    if(s.garageDoors){
+      bullets.push(`Garage doors — ${num(s.garageDoorCount)||'?'} doors painted (sand, prime, two coats exterior-grade)`);
     }
     const { labour, material } = computeCategory("painting");
     sections.push({ cat:"painting", title:"Painting", bullets, total: labour + material });
@@ -7727,14 +7762,39 @@ function buildEstimateSummary(){
     sections.push({ cat:"bathroom", title:"Bathrooms", subblocks, total: catTotal });
   }
 
-  // -- Pot Lights
+  // -- Lighting & Electrical (data key still "potlights")
   if(state.enabled.potlights){
     const s = state.potlights;
-    const tLbl = s.tier === "new" ? "Install new (cut hole, wire, fixture, drywall patch, paint touch-up)"
-                                  : "Replace existing (drop-in fixture swap, minor wiring tweak)";
-    const bullets = [`${num(s.count)||'?'} pot lights — ${tLbl}`];
+    const bullets = [];
+    const intC = num(s.intCount);
+    if(intC > 0){
+      const tLbl = (s.intTier === "new")
+        ? "Install new (cut hole, wire, fixture + driver, drywall patch & paint touch-up)"
+        : "Replace existing (drop-in fixture swap, minor wiring tweak only)";
+      bullets.push(`Pot lights — Interior, ${intC} lights · ${tLbl}`);
+    }
+    if(s.extEnabled){
+      const extC = num(s.extCount);
+      if(extC > 0){
+        const tLbl = (s.extTier === "new") ? "Install new" : "Replace existing";
+        bullets.push(`Pot lights — Exterior, ${extC} lights · ${tLbl} (weather-resistant fixtures, GFCI / outdoor-rated wiring)`);
+      }
+    }
+    if(s.switchEnabled){
+      const c = num(s.switchCount);
+      if(c > 0) bullets.push(`Modernize light switches — ${c} switches (old toggle → decora rocker, supplied & installed)`);
+    }
+    if(s.dimmerEnabled){
+      const c = num(s.dimmerCount);
+      if(c > 0) bullets.push(`Dimmers — ${c} dimmers (decora-style, supplied & installed)`);
+    }
+    if(s.plugEnabled){
+      const c = num(s.plugCount);
+      if(c > 0) bullets.push(`Modernize outlets / plugs — ${c} plugs (decora-style, supplied & installed)`);
+    }
+    if(bullets.length === 0) bullets.push("No items configured yet.");
     const { labour, material } = computeCategory("potlights");
-    sections.push({ cat:"potlights", title:"Pot Lights", bullets, total: labour + material });
+    sections.push({ cat:"potlights", title:"Lighting & Electrical", bullets, total: labour + material });
   }
 
   return sections;
