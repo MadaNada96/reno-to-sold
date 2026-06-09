@@ -255,6 +255,27 @@
   .cat-body.hidden{display:none;}
 
   .tier-row{display:flex;gap:0;background:#0a0a0e;border:1px solid var(--line-strong);padding:3px;border-radius:8px;width:fit-content;margin-bottom:16px;flex-wrap:wrap;}
+  /* Compact variant — for quick on/off toggles inline with other fields. */
+  .tier-row.compact{margin-bottom:0;}
+  .tier-row.compact label span{padding:5px 12px;font-size:12px;}
+  /* Coats explainer cards — small side-by-side callouts that sit directly
+     under the 1 Coat / 2 Coats toggle. Visually distinct, but kept low-key. */
+  .coats-explainer{
+    display:grid; grid-template-columns:1fr 1fr; gap:10px;
+    margin-bottom:14px;
+  }
+  .coats-explainer .cek{
+    background:#0d0d11; border:1px solid var(--line-strong);
+    border-left:3px solid var(--gold-deep);
+    border-radius:6px; padding:8px 11px;
+    font-size:12px; line-height:1.4;
+  }
+  .coats-explainer .cek b{
+    display:block; color:var(--gold-bright);
+    font-size:11px; letter-spacing:.10em; text-transform:uppercase;
+    font-weight:700; margin-bottom:3px;
+  }
+  @media (max-width:520px){ .coats-explainer{ grid-template-columns:1fr; } }
   .tier-row label{margin:0;cursor:pointer;padding:0;font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.12em;}
   .tier-row input{display:none;}
   .tier-row label span{display:block;padding:7px 18px;border-radius:6px;transition:all .15s;}
@@ -4815,6 +4836,17 @@ function renderCategories(){
   });
 }
 
+/* Generic pill-style toggle — same look as tierToggle but takes an arbitrary
+   onchange expression so it can drive any state field, not just tier.
+   `name` makes the radio group unique. `onChangeExpr` runs with `this.value`
+   pointing at the selected option. */
+function pillToggle(name, current, opts, onChangeExpr){
+  return `
+    <div class="tier-row compact">
+      ${opts.map(o => `<label><input type="radio" name="${name}" value="${o.value}" ${current===o.value?"checked":""} onchange="${onChangeExpr}"><span>${o.label}</span></label>`).join("")}
+    </div>
+  `;
+}
 function tierToggle(cat, current, opts){
   // opts = [{value, label}, {value, label}, ...]
   return `
@@ -4843,6 +4875,17 @@ function breakdownRows(cat){
       </div>
     `;
   }
+  // Lighting & Electrical (data key "potlights") is also supplied & installed —
+  // hide the L/M split and show one combined row.
+  if(cat === "potlights"){
+    return `
+      <div id="cat-breakdown-${cat}">
+        <div class="breakdown"><span><span class="pill pill-l">Supplied &amp; Installed</span></span><span class="bd-si">$0</span></div>
+        <div class="breakdown disc bd-discount-row" style="display:none"><span><span class="pill pill-d">Discount</span> <span class="bd-d-note" style="margin-left:6px;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;"></span></span><span class="bd-d">-$0</span></div>
+        <div class="breakdown" style="font-weight:600"><span>Subtotal</span><span class="bd-t">$0</span></div>
+      </div>
+    `;
+  }
   return `
     <div id="cat-breakdown-${cat}">
       <div class="breakdown"><span><span class="pill pill-l">Labour</span></span><span class="bd-l">$0</span></div>
@@ -4857,33 +4900,35 @@ function renderCatBody(cat){
   const s = state[cat];
   if(cat === "painting"){
     return `
-      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start;margin-bottom:14px;">
-        <div>
-          <label style="margin-bottom:6px;">Coats</label>
-          ${tierToggle("painting", s.coats, [{value:"one",label:"1 Coat"},{value:"two",label:"2 Coats"}])}
-        </div>
+      <div style="margin-bottom:8px;">
+        <label style="margin-bottom:6px;">Coats</label>
+        ${tierToggle("painting", s.coats, [{value:"one",label:"1 Coat"},{value:"two",label:"2 Coats"}])}
       </div>
-      <div class="grid grid-2" style="margin-bottom:12px;">
-        <div>
-          <label>Painting scope</label>
-          <select onchange="state.painting.scope=this.value;renderCatBodyOnly('painting');renderTotals()">
-            <option value="whole"  ${s.scope==='whole'?'selected':''}>Entire property (use property sqft)</option>
-            <option value="custom" ${s.scope==='custom'?'selected':''}>Specific area (enter sqft below)</option>
-          </select>
-        </div>
-        ${s.scope==='custom' ? `
-          <div>
-            <label>Painting sqft</label>
-            <input type="number" min="0" value="${s.sqft||''}" oninput="state.painting.sqft=this.value;renderTotals()">
-          </div>
-        ` : ''}
+      <!-- "When to use which" callout sits directly under the coats picker so
+           the user understands the choice at a glance. Two compact cards. -->
+      <div class="coats-explainer">
+        <div class="cek"><b>1 Coat</b>Use for <b style="color:var(--gold-bright);font-weight:700;">light&rarr;similar light</b> repaints (same colour family, only refreshing).</div>
+        <div class="cek"><b>2 Coats</b><b style="color:var(--gold-bright);font-weight:700;">Required</b> when going from a dark colour to a lighter one for proper coverage.</div>
       </div>
       <div class="footnote" style="margin-bottom:14px;">
-        Walls only — premium paint + full prep (patching, sanding, priming) included in both options.
-        <b style="color:var(--gold-bright)">1 coat</b> works for light-to-similar-light repaints.
-        <b style="color:var(--gold-bright)">2 coats</b> required when going from a dark colour to a lighter one.
-        Ceilings, trim &amp; doors are extras below.
+        Walls only &mdash; premium paint + full prep (patching, sanding, priming) included in both options. Ceilings, trim &amp; doors are extras below.
       </div>
+
+      <div style="margin-bottom:14px;">
+        <label style="margin-bottom:6px;">Painting scope</label>
+        ${pillToggle("painting-scope", s.scope, [
+          {value:"whole",  label:"Entire property"},
+          {value:"custom", label:"Specific area"}
+        ], "state.painting.scope=this.value;renderCatBodyOnly('painting');renderTotals()")}
+      </div>
+      ${s.scope==='custom' ? `
+        <div class="grid grid-2" style="margin-bottom:12px;">
+          <div>
+            <label>Painting sqft</label>
+            <input type="number" min="0" style="max-width:160px;" value="${s.sqft||''}" oninput="state.painting.sqft=this.value;renderTotals()">
+          </div>
+        </div>
+      ` : ''}
 
       <!-- Popcorn ceiling removal add-on (placed BEFORE ceiling paint so the
            workflow reads top-to-bottom: scrape texture → paint the new smooth surface) -->
@@ -4893,17 +4938,17 @@ function renderCatBody(cat){
           <span class="addon-title">Add popcorn ceiling removal</span>
         </label>
         ${s.popcorn ? `
+          <div style="margin-bottom:10px;">
+            <label style="margin-bottom:6px;">Popcorn ceiling tier</label>
+            ${pillToggle("popcorn-tier", s.popcornTier || "standard", [
+              {value:"standard", label:"Flat 8–9 ft"},
+              {value:"premium",  label:"Vaulted / 10 ft+"}
+            ], "state.painting.popcornTier=this.value;renderTotals()")}
+          </div>
           <div class="grid grid-2">
             <div>
-              <label>Popcorn ceiling tier</label>
-              <select onchange="state.painting.popcornTier=this.value;renderTotals()">
-                <option value="standard" ${(s.popcornTier||'standard')==='standard'?'selected':''}>Standard (8&ndash;9ft, flat)</option>
-                <option value="premium"  ${s.popcornTier==='premium' ?'selected':''}>Premium (textured / vaulted / 10ft+)</option>
-              </select>
-            </div>
-            <div>
               <label>Popcorn ceiling sqft <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(blank = use painting sqft)</span></label>
-              <input type="number" min="0" value="${s.popcornSqft||""}" placeholder="defaults to painting sqft" oninput="state.painting.popcornSqft=this.value;renderTotals()">
+              <input type="number" min="0" style="max-width:160px;" value="${s.popcornSqft||""}" placeholder="defaults to painting sqft" oninput="state.painting.popcornSqft=this.value;renderTotals()">
             </div>
           </div>
           <div class="footnote" style="margin-top:8px;">
@@ -4921,17 +4966,17 @@ function renderCatBody(cat){
           <span class="addon-title">Add ceiling painting</span>
         </label>
         ${s.ceiling ? `
+          <div style="margin-bottom:10px;">
+            <label style="margin-bottom:6px;">Ceiling height</label>
+            ${pillToggle("ceiling-tier", s.ceilingTier || "flat", [
+              {value:"flat",    label:"Flat 8–9 ft"},
+              {value:"vaulted", label:"Vaulted / 10 ft+"}
+            ], "state.painting.ceilingTier=this.value;renderTotals()")}
+          </div>
           <div class="grid grid-2">
             <div>
-              <label>Ceiling height</label>
-              <select onchange="state.painting.ceilingTier=this.value;renderTotals()">
-                <option value="flat"    ${(s.ceilingTier||'flat')==='flat'?'selected':''}>Flat 8&ndash;9 ft</option>
-                <option value="vaulted" ${s.ceilingTier==='vaulted'?'selected':''}>Vaulted / 10 ft+</option>
-              </select>
-            </div>
-            <div>
               <label>Ceiling sqft <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(blank = use painting sqft)</span></label>
-              <input type="number" min="0" value="${s.ceilingSqft||""}" placeholder="defaults to painting sqft" oninput="state.painting.ceilingSqft=this.value;renderTotals()">
+              <input type="number" min="0" style="max-width:160px;" value="${s.ceilingSqft||""}" placeholder="defaults to painting sqft" oninput="state.painting.ceilingSqft=this.value;renderTotals()">
             </div>
           </div>
         ` : ""}
@@ -5049,19 +5094,19 @@ function renderCatBody(cat){
           <span class="addon-title">Add secondary flooring material <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(e.g. vinyl in basement while main floors use hardwood)</span></span>
         </label>
         ${(s.secondary&&s.secondary.enabled) ? `
+          <div style="margin-bottom:10px;">
+            <label style="margin-bottom:6px;">Secondary material</label>
+            ${pillToggle("flooring-sec", s.secondary.type || "vinyl", [
+              {value:"vinyl",      label:"Vinyl"},
+              {value:"laminate",   label:"Laminate"},
+              {value:"engineered", label:"Eng. Hardwood"},
+              {value:"hardwood",   label:"Hardwood"}
+            ], "state.flooring.secondary.type=this.value;renderTotals()")}
+          </div>
           <div class="grid grid-2">
             <div>
-              <label>Secondary material</label>
-              <select onchange="state.flooring.secondary.type=this.value;renderTotals()">
-                <option value="vinyl"      ${(s.secondary.type||'vinyl')==='vinyl'      ?'selected':''}>Vinyl</option>
-                <option value="laminate"   ${s.secondary.type==='laminate'   ?'selected':''}>Waterproof Laminate</option>
-                <option value="engineered" ${s.secondary.type==='engineered' ?'selected':''}>Engineered Hardwood</option>
-                <option value="hardwood"   ${s.secondary.type==='hardwood'   ?'selected':''}>Solid Hardwood</option>
-              </select>
-            </div>
-            <div>
               <label>Sqft using this material <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(portion of total)</span></label>
-              <input type="number" min="0" value="${s.secondary.sqft||""}" oninput="state.flooring.secondary.sqft=this.value;renderTotals()">
+              <input type="number" min="0" style="max-width:160px;" value="${s.secondary.sqft||""}" oninput="state.flooring.secondary.sqft=this.value;renderTotals()">
             </div>
           </div>
           <div class="footnote" style="margin-top:8px;">
@@ -5481,14 +5526,14 @@ function renderKitchenInstance(k, prefix, slug){
           <span class="addon-title">Backsplash <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(auto-calculated sqft &middot; tier follows countertop &mdash; currently <b>${kitchenCounterTierLabel(counterTier)}</b>)</span></span>
         </label>
         ${k.backsplash ? `
+          <div style="margin-bottom:10px;">
+            <label style="margin-bottom:6px;">Backsplash material</label>
+            ${pillToggle("bs-mat-"+slug, k.backsplashMaterial || "match", [
+              {value:"match", label:"Same as countertop"},
+              {value:"tile",  label:"Tile"}
+            ], prefix+".backsplashMaterial=this.value;renderCatBodyOnly('kitchen');renderTotals()")}
+          </div>
           <div class="grid grid-2">
-            <div>
-              <label>Backsplash material</label>
-              <select onchange="${prefix}.backsplashMaterial=this.value;renderCatBodyOnly('kitchen');renderTotals()">
-                <option value="tile"  ${(k.backsplashMaterial||'tile')==='tile'?'selected':''}>Tile (ceramic / porcelain / subway)</option>
-                <option value="match" ${k.backsplashMaterial==='match'?'selected':''}>Same material as countertop</option>
-              </select>
-            </div>
             <div>
               <label>Additional sqft <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(taller than 18″ standard)</span></label>
               <input type="number" min="0" inputmode="numeric" style="${compactInputStyle}" value="${k.backsplashExtraSqft||''}" placeholder="0" ${numAttrs(prefix+".backsplashExtraSqft")}>
@@ -5509,19 +5554,21 @@ function renderKitchenInstance(k, prefix, slug){
           <span class="addon-title">Add an island <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(default 3&prime; &times; 6&prime;)</span></span>
         </label>
         ${k.island ? `
-          <div class="grid grid-2">
-            <div>
-              <label>Island length (inches)</label>
-              <input type="number" min="0" inputmode="numeric" style="${compactInputStyle}" value="${k.islandLength||''}" placeholder="72" ${numAttrs(prefix+".islandLength")}>
-              <div id="kitchen-island-ft-${slug}" style="font-size:11px;margin-top:4px;">${ftHint(k.islandLength)}</div>
-            </div>
-            <div>
-              <label>Island width</label>
-              <select style="${compactInputStyle}" onchange="${prefix}.islandWidth=this.value;renderCatBodyOnly('kitchen');renderTotals()">
-                <option value="36" ${(k.islandWidth||'36')==='36'?'selected':''}>36″ (3 ft)</option>
-                <option value="48" ${k.islandWidth==='48'?'selected':''}>48″ (4 ft)</option>
-                <option value="72" ${k.islandWidth==='72'?'selected':''}>72″ (6 ft)</option>
-              </select>
+          <div style="margin-bottom:10px;">
+            <div style="display:flex;flex-wrap:wrap;gap:18px;align-items:flex-start;">
+              <div>
+                <label>Island length (inches)</label>
+                <input type="number" min="0" inputmode="numeric" style="${compactInputStyle}" value="${k.islandLength||''}" placeholder="72" ${numAttrs(prefix+".islandLength")}>
+                <div id="kitchen-island-ft-${slug}" style="font-size:11px;margin-top:4px;">${ftHint(k.islandLength)}</div>
+              </div>
+              <div>
+                <label style="margin-bottom:6px;">Island width</label>
+                ${pillToggle("island-w-"+slug, k.islandWidth || "36", [
+                  {value:"36", label:'36″'},
+                  {value:"48", label:'48″'},
+                  {value:"72", label:'72″'}
+                ], prefix+".islandWidth=this.value;renderCatBodyOnly('kitchen');renderTotals()")}
+              </div>
             </div>
           </div>
           ${d.islandLenFt > 0 ? `<div class="footnote" style="margin-top:8px;">
@@ -5537,15 +5584,13 @@ function renderKitchenInstance(k, prefix, slug){
               <span class="addon-title" style="text-transform:none;letter-spacing:.04em;font-size:13px;">Waterfall countertop <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;font-size:11px;">(uses the countertop rate &mdash; sqft folds into countertop total)</span></span>
             </label>
             ${(k.waterfall && k.waterfall !== "off") ? `
-              <div class="grid grid-2">
-                <div>
-                  <label># of ends</label>
-                  <select style="${compactInputStyle}" onchange="${prefix}.waterfall=this.value;renderCatBodyOnly('kitchen');renderTotals()">
-                    <option value="one"   ${k.waterfall==='one'?'selected':''}>1 end</option>
-                    <option value="two"   ${k.waterfall==='two'?'selected':''}>2 ends</option>
-                    <option value="three" ${k.waterfall==='three'?'selected':''}>3 ends</option>
-                  </select>
-                </div>
+              <div style="margin-bottom:8px;">
+                <label style="margin-bottom:6px;"># of ends</label>
+                ${pillToggle("wf-ends-"+slug, k.waterfall, [
+                  {value:"one",   label:"1 end"},
+                  {value:"two",   label:"2 ends"},
+                  {value:"three", label:"3 ends"}
+                ], prefix+".waterfall=this.value;renderCatBodyOnly('kitchen');renderTotals()")}
               </div>
               <div class="grid grid-${d.waterfallEnds === 1 ? '1' : d.waterfallEnds === 2 ? '2' : '3'}" style="margin-top:10px;">
                 ${d.waterfallEnds >= 1 ? `
@@ -5654,16 +5699,14 @@ function renderBathrooms(){
     const showsWallTile = pieces !== "2";
     return `
     <div class="bath-row">
-      <div class="grid grid-2">
-        <div>
-          <label>Bathroom #${i+1} &mdash; pieces</label>
-          <select onchange="state.bathroom.rooms[${i}].pieces=this.value;applyTubTileAuto(${i});renderBathBody()">
-            <option value="2"  ${pieces==='2'?'selected':''}>2-piece (toilet, vanity)</option>
-            <option value="3"  ${pieces==='3'?'selected':''}>3-piece (toilet, vanity, tub)</option>
-            <option value="3s" ${pieces==='3s'?'selected':''}>3-piece (toilet, vanity, stand-up shower)</option>
-            <option value="4"  ${pieces==='4'?'selected':''}>4-piece (toilet, vanity, tub, stand-up shower)</option>
-          </select>
-        </div>
+      <div style="margin-bottom:10px;">
+        <label style="margin-bottom:6px;">Bathroom #${i+1} &mdash; pieces</label>
+        ${pillToggle("bath-pcs-"+i, pieces, [
+          {value:"2",  label:"2-pc"},
+          {value:"3",  label:"3-pc + tub"},
+          {value:"3s", label:"3-pc + shower"},
+          {value:"4",  label:"4-pc"}
+        ], "state.bathroom.rooms["+i+"].pieces=this.value;applyTubTileAuto("+i+");renderBathBody()")}
       </div>
       ${bathroomIncludesPanel(b, i)}
       <div class="grid ${showsWallTile ? 'grid-2' : ''}" style="margin-top:10px;">
@@ -5712,11 +5755,16 @@ function renderBathrooms(){
         </label>
         ${b.standUpShower ? `
           <div style="margin-left:25px;margin-top:-2px;">
-            <select onchange="state.bathroom.rooms[${i}].showerType=this.value;renderBathBody()">
-              <option value="refresh" ${(b.showerType||'convert')==='refresh'?'selected':''}>Refresh existing stand-up shower (reuse plumbing &amp; structure &mdash; re-tile, new fixtures &amp; glass)</option>
-              <option value="convert" ${(b.showerType||'convert')==='convert'?'selected':''}>Convert existing tub into stand-up shower (reuses tub plumbing)</option>
-              <option value="new"     ${b.showerType==='new'?'selected':''}>Add new stand-up shower (new framing &amp; plumbing rough-in)</option>
-            </select>
+            ${pillToggle("shw-type-"+i, b.showerType || "convert", [
+              {value:"refresh", label:"Refresh existing"},
+              {value:"convert", label:"Convert from tub"},
+              {value:"new",     label:"New build"}
+            ], "state.bathroom.rooms["+i+"].showerType=this.value;renderBathBody()")}
+            <div class="footnote" style="margin-top:6px;margin-bottom:8px;">
+              <b style="color:var(--gold-bright)">Refresh</b>: re-tile + new fixtures &amp; glass, reuse plumbing &amp; structure.
+              <b style="color:var(--gold-bright)">Convert</b>: reuse existing tub plumbing, build curb + waterproof + tile.
+              <b style="color:var(--gold-bright)">New build</b>: framing + plumbing rough-in from scratch.
+            </div>
             <div class="shower-size-row">
               <div class="ssr-title">Stand-up shower size <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;font-size:11px;">(used to auto-compute floor + wall tile sqft)</span></div>
               <div class="ssr-grid">
