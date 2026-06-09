@@ -258,6 +258,18 @@
   /* Compact variant — for quick on/off toggles inline with other fields. */
   .tier-row.compact{margin-bottom:0;}
   .tier-row.compact label span{padding:5px 12px;font-size:12px;}
+  /* Number inputs constrained to ~160px (Run lengths, Additional sqft, Island
+     length, Ceiling sqft, etc.) can have placeholder text longer than fits.
+     Shrink placeholder + value font so phrases like "defaults to painting sqft"
+     don't get cut off. */
+  input[type="number"][style*="max-width:160px"],
+  input[type="number"][style*="max-width:140px"]{
+    font-size:12.5px;
+  }
+  input[type="number"][style*="max-width:160px"]::placeholder,
+  input[type="number"][style*="max-width:140px"]::placeholder{
+    font-size:11px; letter-spacing:0;
+  }
   /* Coats explainer cards — small side-by-side callouts that sit directly
      under the 1 Coat / 2 Coats toggle. Visually distinct, but kept low-key. */
   .coats-explainer{
@@ -5098,9 +5110,9 @@ function renderCatBody(cat){
             <label style="margin-bottom:6px;">Secondary material</label>
             ${pillToggle("flooring-sec", s.secondary.type || "vinyl", [
               {value:"vinyl",      label:"Vinyl"},
-              {value:"laminate",   label:"Laminate"},
-              {value:"engineered", label:"Eng. Hardwood"},
-              {value:"hardwood",   label:"Hardwood"}
+              {value:"laminate",   label:"Waterproof Laminate"},
+              {value:"engineered", label:"Engineered Hardwood"},
+              {value:"hardwood",   label:"Solid Hardwood"}
             ], "state.flooring.secondary.type=this.value;renderTotals()")}
           </div>
           <div class="grid grid-2">
