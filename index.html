@@ -4960,7 +4960,7 @@ function renderCatBody(cat){
           <div class="grid grid-2">
             <div>
               <label>Popcorn ceiling sqft <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(blank = use painting sqft)</span></label>
-              <input type="number" min="0" style="max-width:160px;" value="${s.popcornSqft||""}" placeholder="defaults to painting sqft" oninput="state.painting.popcornSqft=this.value;renderTotals()">
+              <input type="number" min="0" style="max-width:160px;" value="${s.popcornSqft||""}" placeholder="" oninput="state.painting.popcornSqft=this.value;renderTotals()">
             </div>
           </div>
           <div class="footnote" style="margin-top:8px;">
@@ -4988,7 +4988,7 @@ function renderCatBody(cat){
           <div class="grid grid-2">
             <div>
               <label>Ceiling sqft <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(blank = use painting sqft)</span></label>
-              <input type="number" min="0" style="max-width:160px;" value="${s.ceilingSqft||""}" placeholder="defaults to painting sqft" oninput="state.painting.ceilingSqft=this.value;renderTotals()">
+              <input type="number" min="0" style="max-width:160px;" value="${s.ceilingSqft||""}" placeholder="" oninput="state.painting.ceilingSqft=this.value;renderTotals()">
             </div>
           </div>
         ` : ""}
