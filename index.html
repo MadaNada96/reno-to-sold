@@ -3570,17 +3570,22 @@ const DEFAULT_PRICES = {
       one: { labour: 2.25, material: 1.00 },        // 1 coat (light->similar light)
       two: { labour: 3.00, material: 1.25 }         // 2 coats (dark->lighter)
     },
+    // Ceiling tiers renamed flat/vaulted (was standard/premium). $/sqft.
     ceiling: {
-      standard: { labour: 0.90, material: 0.35 },   // $/sqft of ceiling (flat, 8-9ft)
-      premium:  { labour: 1.70, material: 0.55 }    // textured / vaulted
+      flat:    { labour: 0.90, material: 0.35 },    // $/sqft flat 8-9ft ceiling
+      vaulted: { labour: 1.70, material: 0.55 }     // textured / vaulted / 10ft+
     },
     // Baseboards & trim — paint refresh per linear foot
     trim: { labour: 2.55, material: 0.70 },         // $/lin ft
     // Doors — paint per interior door
     door: { labour: 80, material: 30 },             // $/door
+    // Exterior doors — painting per door. More involved than interior (weather
+    // prep, primer, full sand, two coats exterior-grade paint). GTA: ~$200/door.
+    extDoor:    { labour: 160, material: 50 },      // $/door
+    // Garage doors — sand/prime/paint per garage door panel. Single car door
+    // typical ~$300-450; double ~$500-700. Per-door rate, you pick the count.
+    garageDoor: { labour: 320, material: 80 },      // $/door
     // Popcorn ceiling removal — scrape, skim-coat smooth, prime, repaint
-    // Standard (8-9ft flat); Premium (textured / vaulted / 10ft+) is higher due
-    // to scaffolding, harder substrate, and longer reach.
     popcorn: {
       standard: { labour: 5.00, material: 1.50 },   // $/sqft — flat 8-9ft ceiling
       premium:  { labour: 6.75, material: 1.75 }    // $/sqft — textured / vaulted / 10ft+
@@ -3614,15 +3619,19 @@ const DEFAULT_PRICES = {
       standard: { rate: 85 },     // Standard Quartz $/sqft
       custom:   { rate: 160 }     // Premium Quartz $/sqft
     },
+    // Backsplash — single tile rate (used only when backsplash material = "tile").
+    // "Tile backsplash" is the trade-standard term; covers subway, ceramic, porcelain.
+    // GTA: ~$25/sqft supplied & installed including grout, basic edge trim.
     backsplash: {
-      standard: { rate: 25 },     // Tile $/sqft (used only when backsplash material = "tile")
-      custom:   { rate: 50 }
+      tile: { rate: 28 }
     },
     island: {
       standard: { rate: 1000 },   // $/LF of island length
       custom:   { rate: 1800 }
     },
-    undercab: { rate: 80 }        // $/LF of kitchen base LF
+    // Under-cabinet lighting — flat install (LED strip + driver + wiring tie-in).
+    // GTA typical: $500-800 supplied & installed for a typical kitchen run.
+    undercab: { rate: 650 }       // flat
   },
   bathroom: {
     // Single premium-grade tier. Base covers refresh of all fixtures in the chosen layout
@@ -3655,13 +3664,29 @@ const DEFAULT_PRICES = {
     }
   },
   potlights: {
-    // GTA 2026 going rates for residential pot light work
-    // "Replace existing" — swap fixture in an existing pot, minor wiring tweak,
-    //                     no drywall cutting/patching. ~$80–$100 each installed.
-    // "Install new"     — cut hole, run new wiring, install fixture + driver,
-    //                     drywall patch & paint touch-up around the cut. ~$200/light.
-    replace: { labour: 55,  material: 40 },         // ~$95/light (drop-in swap)
-    new:     { labour: 130, material: 70 }          // ~$200/light (cut & wire from scratch)
+    // LIGHTING & ELECTRICAL — every line is supplied & installed (single rate).
+    // The category data key stays "potlights" for backwards compatibility with
+    // saved estimates; the UI title is "Lighting & Electrical".
+    //
+    // Interior pot lights — replace existing (drop-in fixture swap, minor wiring
+    //   tweak, no drywall cutting) vs install new (cut hole, run wire, driver,
+    //   patch & paint touch-up).
+    interior: {
+      replace: { rate: 95 },        // ~$95/light
+      new:     { rate: 200 }        // ~$200/light
+    },
+    // Exterior pot lights — same pattern but more involved (weather-resistant
+    //   housing, GFCI tie-in, sealing). GTA: replace ~$165, new ~$330.
+    exterior: {
+      replace: { rate: 165 },
+      new:     { rate: 330 }
+    },
+    // Modernize old switches → decora-style toggles, supplied & installed per switch.
+    switch: { rate: 80 },           // $/switch
+    // Decora-style dimmers — slightly higher than switches due to part cost.
+    dimmer: { rate: 120 },          // $/dimmer
+    // Modernize old plugs → decora-style outlets, supplied & installed per plug.
+    plug:   { rate: 60 }            // $/plug
   },
   // Listing discount percent (applies to subtotal when toggle is on)
   listingDiscount: { percent: 10 }
@@ -3673,7 +3698,9 @@ const CATEGORY_META = {
   tiling:    { title:"Tiling",     sub:"Per sqft of space" },
   kitchen:   { title:"Kitchen",    sub:"Base + counters + island + lighting" },
   bathroom:  { title:"Bathrooms",  sub:"Pieces, tiling, shower" },
-  potlights: { title:"Pot Lights", sub:"Per light installed" }
+  // Internal data key stays "potlights" for backwards compatibility with
+  // saved estimates. The UI title is "Lighting & Electrical".
+  potlights: { title:"Lighting & Electrical", sub:"Pot lights, switches, dimmers, plugs" }
 };
 
 const FLOORING_LABELS = {
@@ -3707,10 +3734,15 @@ function freshState(){
       coats: "one",          // "one" | "two"
       scope: "whole",        // "whole" | "custom"
       sqft: "",              // when scope==="custom"
-      ceiling: false, ceilingTier: "standard", ceilingSqft: "",
+      // Ceiling — tiers renamed "flat" (8-9ft) and "vaulted" (10ft+).
+      ceiling: false, ceilingTier: "flat", ceilingSqft: "",
       trim: false, trimLinFt: "",
-      doors: false, doorCount: "", doorsAutoFromPdf: false,  // doorsAutoFromPdf adds the "confirm closet doors" note
-      popcorn: false, popcornTier: "standard", popcornSqft: "" // popcorn-ceiling removal (scrape, skim-coat, repaint)
+      doors: false, doorCount: "", doorsAutoFromPdf: false,
+      // Exterior doors — paint per door (front, back, side entry).
+      extDoors: false, extDoorCount: "",
+      // Garage doors — paint per door panel.
+      garageDoors: false, garageDoorCount: "",
+      popcorn: false, popcornTier: "standard", popcornSqft: ""
     },
     flooring:  {
       type: "vinyl",         // vinyl | laminate | engineered | hardwood
@@ -3727,7 +3759,17 @@ function freshState(){
     tiling:    { tier:"standard", sqft:"" },
     kitchen:   defaultKitchenInstance(false),
     bathroom:  { rooms:[ defaultBath() ] },
-    potlights: { tier:"new", count:"" },     // tier is "replace" | "new" — default to "Install new"
+    // Lighting & Electrical — interior + optional exterior pot lights plus
+    //   per-unit modernization add-ons. Data key stays "potlights" for
+    //   backwards compatibility; on save/load the old { tier, count } shape
+    //   migrates into intTier / intCount.
+    potlights: {
+      intTier: "new", intCount: "",
+      extEnabled: false, extTier: "new", extCount: "",
+      switchEnabled: false, switchCount: "",
+      dimmerEnabled: false, dimmerCount: "",
+      plugEnabled: false, plugCount: ""
+    },
     discount:  { enabled:false, listing:false, customEnabled:false, customType:"percent", customValue:"", customNote:"" }
   };
 }
@@ -3837,6 +3879,37 @@ function migrateFlatShowerPrice(p){
     delete p.potlights.standard;
     delete p.potlights.premium;
   }
+  // Painting ceiling tiers renamed standard→flat, premium→vaulted.
+  if(p && p.painting && p.painting.ceiling){
+    const c = p.painting.ceiling;
+    if(c.standard && !c.flat)    { c.flat    = c.standard; delete c.standard; }
+    if(c.premium  && !c.vaulted) { c.vaulted = c.premium;  delete c.premium;  }
+  }
+  // Lighting & Electrical (key still "potlights") schema rebuild.
+  //   Old: { replace:{L,M}, new:{L,M} }
+  //   New: { interior:{replace:{rate}, new:{rate}}, exterior:{...},
+  //          switch:{rate}, dimmer:{rate}, plug:{rate} }
+  if(p && p.potlights){
+    const pl = p.potlights;
+    const sumLM = (e) => e ? ((e.labour || 0) + (e.material || 0)) : 0;
+    if(!pl.interior){
+      pl.interior = {
+        replace: { rate: sumLM(pl.replace) || 95  },
+        new:     { rate: sumLM(pl.new)     || 200 }
+      };
+    }
+    if(!pl.exterior){
+      pl.exterior = {
+        replace: { rate: Math.round((pl.interior.replace.rate || 95)  * 1.75) },
+        new:     { rate: Math.round((pl.interior.new.rate     || 200) * 1.65) }
+      };
+    }
+    if(!pl.switch) pl.switch = { rate: 80  };
+    if(!pl.dimmer) pl.dimmer = { rate: 120 };
+    if(!pl.plug)   pl.plug   = { rate: 60  };
+    delete pl.replace;
+    delete pl.new;
+  }
   // KITCHEN (client/owner prices only): legacy { labour, material } → { rate: L+M }.
   // Kitchen is now presented to clients as "Supplied & Installed" with a single
   // rate per unit. We migrate by summing the old labour and material into rate.
@@ -3866,10 +3939,38 @@ function migrateFlatShowerPrice(p){
         });
       }
     });
-    // Drop legacy backsplash sub-types (subway/quartz).
+    // Backsplash — collapse the old {standard, custom} (or older subway/quartz)
+    // tiers into a single { tile: { rate } } entry. Take whichever tier had
+    // the closest rate to the new default if both exist.
     if(p.kitchen.backsplash){
-      delete p.kitchen.backsplash.subway;
-      delete p.kitchen.backsplash.quartz;
+      const bs = p.kitchen.backsplash;
+      delete bs.subway;
+      delete bs.quartz;
+      if(!bs.tile){
+        // Take "standard" (cheaper) if present, otherwise the lowest of what's there.
+        const std = bs.standard && (typeof bs.standard.rate === "number")
+          ? bs.standard.rate
+          : (bs.standard ? (bs.standard.labour || 0) + (bs.standard.material || 0) : 0);
+        bs.tile = { rate: std > 0 ? std : 28 };
+      }
+      delete bs.standard;
+      delete bs.custom;
+    }
+    // Under-cab lighting — changed from $/LF to a flat rate. Old shape used
+    //   { labour, material } per LF, or { rate } per LF after the prior migration.
+    //   Multiply by ~10 LF (typical kitchen) to get a sensible flat rate, capped sanely.
+    if(p.kitchen.undercab){
+      const u = p.kitchen.undercab;
+      if(typeof u.rate === "number"){
+        // If the rate is small (per-LF), promote to flat (×10). If it's already
+        // > 200, assume it's already flat-ish and leave it.
+        if(u.rate < 200) u.rate = Math.round(u.rate * 10);
+      } else {
+        const perLF = (u.labour || 0) + (u.material || 0);
+        u.rate = perLF > 0 ? Math.round(perLF * 10) : 650;
+        delete u.labour;
+        delete u.material;
+      }
     }
     // counter → countertop rename (older shape used `counter`).
     if(p.kitchen.counter && !p.kitchen.countertop){
@@ -4038,10 +4139,39 @@ function migrateOldEstimate(m){
       migrateKitchen(m.kitchen.basement, true);
     }
   }
-  // Potlights: tier renamed from standard|premium → replace|new
-  if(m.potlights && (m.potlights.tier === "standard" || m.potlights.tier === "premium")){
-    // standard → replace (cheaper, fixture-only); premium → new (more involved)
-    m.potlights.tier = (m.potlights.tier === "premium") ? "new" : "replace";
+  // Potlights / Lighting & Electrical schema migration.
+  // Old shape: { tier:"replace"|"new", count:"" } (with even older standard|premium)
+  // New shape: { intTier, intCount, extEnabled, extTier, extCount, switchEnabled,
+  //              switchCount, dimmerEnabled, dimmerCount, plugEnabled, plugCount }
+  if(m.potlights){
+    if(m.potlights.tier === "standard" || m.potlights.tier === "premium"){
+      m.potlights.tier = (m.potlights.tier === "premium") ? "new" : "replace";
+    }
+    if(typeof m.potlights.intTier === "undefined"){
+      m.potlights.intTier = m.potlights.tier || "new";
+      m.potlights.intCount = (typeof m.potlights.count !== "undefined") ? m.potlights.count : "";
+    }
+    if(typeof m.potlights.extEnabled    !== "boolean") m.potlights.extEnabled    = false;
+    if(!m.potlights.extTier)                            m.potlights.extTier      = "new";
+    if(typeof m.potlights.extCount      !== "string")  m.potlights.extCount      = "";
+    if(typeof m.potlights.switchEnabled !== "boolean") m.potlights.switchEnabled = false;
+    if(typeof m.potlights.switchCount   !== "string")  m.potlights.switchCount   = "";
+    if(typeof m.potlights.dimmerEnabled !== "boolean") m.potlights.dimmerEnabled = false;
+    if(typeof m.potlights.dimmerCount   !== "string")  m.potlights.dimmerCount   = "";
+    if(typeof m.potlights.plugEnabled   !== "boolean") m.potlights.plugEnabled   = false;
+    if(typeof m.potlights.plugCount     !== "string")  m.potlights.plugCount     = "";
+    delete m.potlights.tier;
+    delete m.potlights.count;
+  }
+  // Painting schema migration — ceiling tier renamed standard→flat, premium→vaulted.
+  //   Add new exterior door + garage door add-on defaults.
+  if(m.painting){
+    if(m.painting.ceilingTier === "standard") m.painting.ceilingTier = "flat";
+    if(m.painting.ceilingTier === "premium")  m.painting.ceilingTier = "vaulted";
+    if(typeof m.painting.extDoors        !== "boolean") m.painting.extDoors        = false;
+    if(typeof m.painting.extDoorCount    !== "string")  m.painting.extDoorCount    = "";
+    if(typeof m.painting.garageDoors     !== "boolean") m.painting.garageDoors     = false;
+    if(typeof m.painting.garageDoorCount !== "string")  m.painting.garageDoorCount = "";
   }
   // Discount schema migration
   if(m.discount){
@@ -4151,9 +4281,10 @@ function computeCategory(cat, priceSet){
     material += sqft * r.material;
     if(s.ceiling && p.ceiling){
       const cSqft = num(s.ceilingSqft) || sqft;
-      const cr = p.ceiling[s.ceilingTier || "standard"] || p.ceiling.standard;
-      labour += cSqft * cr.labour;
-      material += cSqft * cr.material;
+      // Tier renamed standard→flat, premium→vaulted. Fall back to flat.
+      const tier = s.ceilingTier || "flat";
+      const cr = p.ceiling[tier] || p.ceiling.flat || p.ceiling.standard;
+      if(cr){ labour += cSqft * cr.labour; material += cSqft * cr.material; }
     }
     if(s.trim && p.trim){
       const lf = num(s.trimLinFt) || suggestedTrimLinFt();
@@ -4164,6 +4295,18 @@ function computeCategory(cat, priceSet){
       const dc = num(s.doorCount);
       labour += dc * p.door.labour;
       material += dc * p.door.material;
+    }
+    // Exterior doors — paint per door (weather-prep, primer, two coats ext-grade)
+    if(s.extDoors && p.extDoor){
+      const c = num(s.extDoorCount);
+      labour += c * p.extDoor.labour;
+      material += c * p.extDoor.material;
+    }
+    // Garage doors — paint per door panel
+    if(s.garageDoors && p.garageDoor){
+      const c = num(s.garageDoorCount);
+      labour += c * p.garageDoor.labour;
+      material += c * p.garageDoor.material;
     }
     // Popcorn ceiling removal — scrape, skim-coat smooth, prime, repaint
     if(s.popcorn && p.popcorn){
@@ -4263,10 +4406,29 @@ function computeCategory(cat, priceSet){
     });
   }
   else if(cat === "potlights"){
-    const n = num(s.count);
-    const r = p[s.tier] || p.standard;
-    labour = n * r.labour;
-    material = n * r.material;
+    // Lighting & Electrical — each line item uses a single supplied & installed
+    // rate. The full amount lands in "material" to keep the per-category total
+    // ties out (matches the kitchen convention for rate-based items).
+    const rateOf = (entry) => entry && typeof entry.rate === "number" ? entry.rate : ((entry && entry.labour) || 0) + ((entry && entry.material) || 0);
+    const intC = num(s.intCount);
+    if(intC > 0 && p.interior){
+      const r = p.interior[s.intTier || "new"] || p.interior.new;
+      material += intC * rateOf(r);
+    }
+    if(s.extEnabled && p.exterior){
+      const extC = num(s.extCount);
+      const r = p.exterior[s.extTier || "new"] || p.exterior.new;
+      material += extC * rateOf(r);
+    }
+    if(s.switchEnabled && p.switch){
+      material += num(s.switchCount) * rateOf(p.switch);
+    }
+    if(s.dimmerEnabled && p.dimmer){
+      material += num(s.dimmerCount) * rateOf(p.dimmer);
+    }
+    if(s.plugEnabled && p.plug){
+      material += num(s.plugCount) * rateOf(p.plug);
+    }
   }
   return { labour, material };
 }
@@ -4761,10 +4923,10 @@ function renderCatBody(cat){
         ${s.ceiling ? `
           <div class="grid grid-2">
             <div>
-              <label>Ceiling tier</label>
+              <label>Ceiling height</label>
               <select onchange="state.painting.ceilingTier=this.value;renderTotals()">
-                <option value="standard" ${(s.ceilingTier||'standard')==='standard'?'selected':''}>Standard (8&ndash;9ft, flat)</option>
-                <option value="premium"  ${s.ceilingTier==='premium' ?'selected':''}>Premium (textured / vaulted / 10ft+)</option>
+                <option value="flat"    ${(s.ceilingTier||'flat')==='flat'?'selected':''}>Flat 8&ndash;9 ft</option>
+                <option value="vaulted" ${s.ceilingTier==='vaulted'?'selected':''}>Vaulted / 10 ft+</option>
               </select>
             </div>
             <div>
@@ -4792,11 +4954,11 @@ function renderCatBody(cat){
         ` : ""}
       </div>
 
-      <!-- Doors add-on (last) -->
-      <div class="addon last">
+      <!-- Doors add-on -->
+      <div class="addon">
         <label class="check-row" style="margin-bottom:${s.doors?'10px':'0'};">
           <input type="checkbox" ${s.doors?'checked':''} onchange="state.painting.doors=this.checked;renderCatBodyOnly('painting');renderTotals()">
-          <span class="addon-title">Add door painting</span>
+          <span class="addon-title">Add interior door painting</span>
         </label>
         ${s.doors ? `
           <div class="grid grid-2">
@@ -4807,6 +4969,40 @@ function renderCatBody(cat){
             </div>
           </div>
           <div class="footnote" style="margin-top:8px;">Both sides painted, hardware removed &amp; reinstalled.</div>
+        ` : ""}
+      </div>
+
+      <!-- Exterior doors add-on -->
+      <div class="addon">
+        <label class="check-row" style="margin-bottom:${s.extDoors?'10px':'0'};">
+          <input type="checkbox" ${s.extDoors?'checked':''} onchange="state.painting.extDoors=this.checked;renderCatBodyOnly('painting');renderTotals()">
+          <span class="addon-title">Add exterior door painting</span>
+        </label>
+        ${s.extDoors ? `
+          <div class="grid grid-2">
+            <div>
+              <label>Number of exterior doors</label>
+              <input type="number" min="0" value="${s.extDoorCount||""}" placeholder="e.g. 2" oninput="state.painting.extDoorCount=this.value;renderTotals()">
+            </div>
+          </div>
+          <div class="footnote" style="margin-top:8px;">Front, back, or side entry doors. Full weather prep, primer, two coats of exterior-grade paint, hardware removed &amp; reinstalled.</div>
+        ` : ""}
+      </div>
+
+      <!-- Garage doors add-on (last) -->
+      <div class="addon last">
+        <label class="check-row" style="margin-bottom:${s.garageDoors?'10px':'0'};">
+          <input type="checkbox" ${s.garageDoors?'checked':''} onchange="state.painting.garageDoors=this.checked;renderCatBodyOnly('painting');renderTotals()">
+          <span class="addon-title">Add garage door painting</span>
+        </label>
+        ${s.garageDoors ? `
+          <div class="grid grid-2">
+            <div>
+              <label>Number of garage doors</label>
+              <input type="number" min="0" value="${s.garageDoorCount||""}" placeholder="e.g. 1" oninput="state.painting.garageDoorCount=this.value;renderTotals()">
+            </div>
+          </div>
+          <div class="footnote" style="margin-top:8px;">Sand, prime, and two coats of exterior-grade paint per garage door panel.</div>
         ` : ""}
       </div>
 
@@ -4960,21 +5156,98 @@ function renderCatBody(cat){
     `;
   }
   if(cat === "potlights"){
+    // "Lighting & Electrical" — pot lights (interior + optional exterior) plus
+    // per-unit modernization add-ons (switches, dimmers, plugs). Every item
+    // is priced supplied & installed.
     return `
-      ${tierToggle("potlights", s.tier, [
-        {value:"replace", label:"Replace existing"},
-        {value:"new",     label:"Install new"}
-      ])}
-      <div class="grid grid-2">
-        <div>
-          <label>How many pot lights</label>
-          <input type="number" min="0" value="${s.count||""}" oninput="state.potlights.count=this.value;renderTotals()">
+      <!-- Interior pot lights — always shown -->
+      <div class="addon">
+        <div class="addon-title" style="margin-bottom:8px;">Pot lights &mdash; interior</div>
+        ${tierToggle("potlights", s.intTier, [
+          {value:"replace", label:"Replace existing"},
+          {value:"new",     label:"Install new"}
+        ])}
+        <div class="grid grid-2" style="margin-top:8px;">
+          <div>
+            <label>How many interior pot lights</label>
+            <input type="number" min="0" style="max-width:140px;" value="${s.intCount||""}" oninput="state.potlights.intCount=this.value;renderTotals()">
+          </div>
+        </div>
+        <div class="footnote" style="margin-top:8px;">
+          <b style="color:var(--gold-bright)">Replace existing</b>: drop-in fixture swap, minor wiring tweak only — no drywall cutting.
+          <b style="color:var(--gold-bright)">Install new</b>: cut new holes, run wiring + fixture + driver, drywall patch &amp; paint touch-up included.
         </div>
       </div>
-      <div class="footnote">
-        <b style="color:var(--gold-bright)">Replace existing</b>: swap the fixture in an existing pot, minor wiring tweak only — no drywall cutting.
-        <b style="color:var(--gold-bright)">Install new</b>: cut new holes, run new wiring + fixture + driver, drywall patch &amp; paint touch-up included.
+
+      <!-- Exterior pot lights -->
+      <div class="addon">
+        <label class="check-row" style="margin-bottom:${s.extEnabled?'10px':'0'};">
+          <input type="checkbox" ${s.extEnabled?'checked':''} onchange="state.potlights.extEnabled=this.checked;renderCatBodyOnly('potlights');renderTotals()">
+          <span class="addon-title">Add exterior pot lights</span>
+        </label>
+        ${s.extEnabled ? `
+          ${tierToggle("potlights_ext", s.extTier, [
+            {value:"replace", label:"Replace existing"},
+            {value:"new",     label:"Install new"}
+          ], "state.potlights.extTier")}
+          <div class="grid grid-2" style="margin-top:8px;">
+            <div>
+              <label>How many exterior pot lights</label>
+              <input type="number" min="0" style="max-width:140px;" value="${s.extCount||""}" oninput="state.potlights.extCount=this.value;renderTotals()">
+            </div>
+          </div>
+          <div class="footnote" style="margin-top:8px;">Weather-resistant fixtures, GFCI / outdoor-rated wiring, sealing. Higher per-light than interior.</div>
+        ` : ""}
       </div>
+
+      <!-- Switches -->
+      <div class="addon">
+        <label class="check-row" style="margin-bottom:${s.switchEnabled?'10px':'0'};">
+          <input type="checkbox" ${s.switchEnabled?'checked':''} onchange="state.potlights.switchEnabled=this.checked;renderCatBodyOnly('potlights');renderTotals()">
+          <span class="addon-title">Modernize light switches <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(old toggle &rarr; decora rocker)</span></span>
+        </label>
+        ${s.switchEnabled ? `
+          <div class="grid grid-2">
+            <div>
+              <label>How many switches</label>
+              <input type="number" min="0" style="max-width:140px;" value="${s.switchCount||""}" oninput="state.potlights.switchCount=this.value;renderTotals()">
+            </div>
+          </div>
+        ` : ""}
+      </div>
+
+      <!-- Dimmers -->
+      <div class="addon">
+        <label class="check-row" style="margin-bottom:${s.dimmerEnabled?'10px':'0'};">
+          <input type="checkbox" ${s.dimmerEnabled?'checked':''} onchange="state.potlights.dimmerEnabled=this.checked;renderCatBodyOnly('potlights');renderTotals()">
+          <span class="addon-title">Install dimmers <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(decora-style)</span></span>
+        </label>
+        ${s.dimmerEnabled ? `
+          <div class="grid grid-2">
+            <div>
+              <label>How many dimmers</label>
+              <input type="number" min="0" style="max-width:140px;" value="${s.dimmerCount||""}" oninput="state.potlights.dimmerCount=this.value;renderTotals()">
+            </div>
+          </div>
+        ` : ""}
+      </div>
+
+      <!-- Plugs -->
+      <div class="addon last">
+        <label class="check-row" style="margin-bottom:${s.plugEnabled?'10px':'0'};">
+          <input type="checkbox" ${s.plugEnabled?'checked':''} onchange="state.potlights.plugEnabled=this.checked;renderCatBodyOnly('potlights');renderTotals()">
+          <span class="addon-title">Modernize outlets / plugs <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">(old plug &rarr; decora-style outlet)</span></span>
+        </label>
+        ${s.plugEnabled ? `
+          <div class="grid grid-2">
+            <div>
+              <label>How many plugs</label>
+              <input type="number" min="0" style="max-width:140px;" value="${s.plugCount||""}" oninput="state.potlights.plugCount=this.value;renderTotals()">
+            </div>
+          </div>
+        ` : ""}
+      </div>
+
       <div style="margin-top:14px">${breakdownRows(cat)}</div>
     `;
   }
@@ -5553,6 +5826,8 @@ function setTier(cat, tier){
   if(cat === "painting"){ state.painting.coats = tier; renderTotals(); return; }
   if(cat === "flooring"){ state.flooring.type = tier; renderCatBodyOnly("flooring"); renderTotals(); return; }
   if(cat === "kitchen"){ state.kitchen.tier = tier; renderCatBodyOnly("kitchen"); renderTotals(); return; }
+  if(cat === "potlights"){    state.potlights.intTier = tier; renderTotals(); return; }
+  if(cat === "potlights_ext"){state.potlights.extTier = tier; renderTotals(); return; }
   state[cat].tier = tier;
   renderTotals();
 }
@@ -5636,14 +5911,15 @@ function renderPricingEditor(){
     </div>`;
   });
 
-  // Painting — ceiling
+  // Painting — ceiling (tier names renamed Flat/Vaulted)
   html += `<div class="section-title">Painting &mdash; ceiling add-on (per sqft of ceiling)</div>
     <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
-  ["standard","premium"].forEach(t=>{
+  [{key:"flat",label:"Flat 8–9 ft"},{key:"vaulted",label:"Vaulted / 10 ft+"}].forEach(t=>{
+    const row = prices.painting.ceiling[t.key] || { labour:0, material:0 };
     html += `<div class="price-edit-row">
-      <div class="lbl">${cap(t)}</div>
-      <div>${priceInput("painting.ceiling."+t+".labour", prices.painting.ceiling[t].labour)}</div>
-      <div>${priceInput("painting.ceiling."+t+".material", prices.painting.ceiling[t].material)}</div>
+      <div class="lbl">${t.label}</div>
+      <div>${priceInput("painting.ceiling."+t.key+".labour", row.labour)}</div>
+      <div>${priceInput("painting.ceiling."+t.key+".material", row.material)}</div>
     </div>`;
   });
 
@@ -5656,7 +5932,7 @@ function renderPricingEditor(){
       <div>${priceInput("painting.trim.material", prices.painting.trim.material)}</div>
     </div>`;
 
-  // Painting — doors
+  // Painting — interior doors
   html += `<div class="section-title">Painting &mdash; interior doors (per door)</div>
     <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>
     <div class="price-edit-row">
@@ -5664,6 +5940,27 @@ function renderPricingEditor(){
       <div>${priceInput("painting.door.labour", prices.painting.door.labour, 5)}</div>
       <div>${priceInput("painting.door.material", prices.painting.door.material, 5)}</div>
     </div>`;
+
+  // Painting — exterior doors (front, back, side entry)
+  if(prices.painting.extDoor){
+    html += `<div class="section-title">Painting &mdash; exterior doors (per door)</div>
+      <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>
+      <div class="price-edit-row">
+        <div class="lbl">Per door (weather prep + 2 coats)</div>
+        <div>${priceInput("painting.extDoor.labour", prices.painting.extDoor.labour, 10)}</div>
+        <div>${priceInput("painting.extDoor.material", prices.painting.extDoor.material, 10)}</div>
+      </div>`;
+  }
+  // Painting — garage doors
+  if(prices.painting.garageDoor){
+    html += `<div class="section-title">Painting &mdash; garage doors (per door panel)</div>
+      <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>
+      <div class="price-edit-row">
+        <div class="lbl">Per garage door panel</div>
+        <div>${priceInput("painting.garageDoor.labour", prices.painting.garageDoor.labour, 25)}</div>
+        <div>${priceInput("painting.garageDoor.material", prices.painting.garageDoor.material, 25)}</div>
+      </div>`;
+  }
 
   // Painting — popcorn ceiling removal (standard / premium tiers)
   html += `<div class="section-title">Painting &mdash; popcorn ceiling removal (per sqft)</div>
@@ -5739,14 +6036,15 @@ function renderPricingEditor(){
     </div>`;
   });
 
-  html += `<div class="section-title">Backsplash &mdash; per sqft ($/sqft, supplied &amp; installed) &middot; <span style="text-transform:none;letter-spacing:0;font-weight:500;font-size:11px;color:var(--muted);">tile rate only — "Same as countertop" uses the countertop rate above</span></div>
-    <div class="price-edit-row head single"><div></div><div>$/sqft</div></div>`;
-  ["standard","custom"].forEach(t=>{
-    html += `<div class="price-edit-row single">
-      <div class="lbl">${cap(t)}</div>
-      <div>${priceInput("kitchen.backsplash."+t+".rate", prices.kitchen.backsplash[t].rate, 1)}</div>
+  // Backsplash — single tile rate. ("Same as countertop" routes through the
+  // countertop rate above; only set this if you want a different tile-only rate.)
+  html += `<div class="section-title">Backsplash &mdash; tile rate, per sqft ($/sqft, supplied &amp; installed)</div>
+    <div class="footnote" style="margin-bottom:8px;">Used when the backsplash material is set to "Tile" on the estimate. "Same as countertop" uses the countertop rate above.</div>
+    <div class="price-edit-row head single"><div></div><div>$/sqft</div></div>
+    <div class="price-edit-row single">
+      <div class="lbl">Tile backsplash</div>
+      <div>${priceInput("kitchen.backsplash.tile.rate", (prices.kitchen.backsplash.tile || {rate:0}).rate, 1)}</div>
     </div>`;
-  });
 
   html += `<div class="section-title">Island base &mdash; per linear foot ($/LF, supplied &amp; installed)</div>
     <div class="price-edit-row head single"><div></div><div>$/LF</div></div>`;
@@ -5757,11 +6055,12 @@ function renderPricingEditor(){
     </div>`;
   });
 
-  html += `<div class="section-title">Under-cabinet lighting &mdash; per linear foot ($/LF, supplied &amp; installed)</div>
-    <div class="price-edit-row head single"><div></div><div>$/LF</div></div>
+  // Under-cab lighting — flat rate now (not per LF)
+  html += `<div class="section-title">Under-cabinet lighting &mdash; flat ($ supplied &amp; installed)</div>
+    <div class="price-edit-row head single"><div></div><div>$ flat</div></div>
     <div class="price-edit-row single">
-      <div class="lbl">LED strip + driver + install</div>
-      <div>${priceInput("kitchen.undercab.rate", prices.kitchen.undercab.rate, 1)}</div>
+      <div class="lbl">LED strip + driver + install (typical kitchen)</div>
+      <div>${priceInput("kitchen.undercab.rate", prices.kitchen.undercab.rate, 25)}</div>
     </div>`;
 
   // Bathroom base (single tier, refresh of existing fixtures — add-ons handle structural changes)
@@ -5833,16 +6132,40 @@ function renderPricingEditor(){
     </div>`;
 
   // Pot lights
-  html += `<div class="section-title">Pot lights (per fixture)</div>
-    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
+  // LIGHTING & ELECTRICAL (data key still "potlights"). All items priced
+  // supplied & installed (single rate per unit).
+  html += `<div class="section-title">Pot lights &mdash; interior (per fixture, supplied &amp; installed)</div>
+    <div class="price-edit-row head single"><div></div><div>$/light</div></div>`;
   [{k:"replace",l:"Replace existing"},{k:"new",l:"Install new"}].forEach(o=>{
-    const row = prices.potlights[o.k] || { labour:0, material:0 };
-    html += `<div class="price-edit-row">
+    const r = (prices.potlights.interior && prices.potlights.interior[o.k]) || { rate:0 };
+    html += `<div class="price-edit-row single">
       <div class="lbl">${o.l}</div>
-      <div>${priceInput("potlights."+o.k+".labour", row.labour, 5)}</div>
-      <div>${priceInput("potlights."+o.k+".material", row.material, 5)}</div>
+      <div>${priceInput("potlights.interior."+o.k+".rate", r.rate, 5)}</div>
     </div>`;
   });
+  html += `<div class="section-title">Pot lights &mdash; exterior (per fixture, supplied &amp; installed)</div>
+    <div class="price-edit-row head single"><div></div><div>$/light</div></div>`;
+  [{k:"replace",l:"Replace existing"},{k:"new",l:"Install new"}].forEach(o=>{
+    const r = (prices.potlights.exterior && prices.potlights.exterior[o.k]) || { rate:0 };
+    html += `<div class="price-edit-row single">
+      <div class="lbl">${o.l}</div>
+      <div>${priceInput("potlights.exterior."+o.k+".rate", r.rate, 10)}</div>
+    </div>`;
+  });
+  html += `<div class="section-title">Switches, dimmers, plugs (each, supplied &amp; installed)</div>
+    <div class="price-edit-row head single"><div></div><div>$/unit</div></div>
+    <div class="price-edit-row single">
+      <div class="lbl">Light switch (decora-style)</div>
+      <div>${priceInput("potlights.switch.rate", (prices.potlights.switch || {rate:0}).rate, 5)}</div>
+    </div>
+    <div class="price-edit-row single">
+      <div class="lbl">Dimmer (decora-style)</div>
+      <div>${priceInput("potlights.dimmer.rate", (prices.potlights.dimmer || {rate:0}).rate, 5)}</div>
+    </div>
+    <div class="price-edit-row single">
+      <div class="lbl">Outlet / plug (decora-style)</div>
+      <div>${priceInput("potlights.plug.rate", (prices.potlights.plug || {rate:0}).rate, 5)}</div>
+    </div>`;
 
   // Listing discount
   html += `<div class="section-title">Listing Discount (default %)</div>
@@ -6623,9 +6946,10 @@ function buildEstimateLineItems(){
     }
     if(s.ceiling && p.ceiling){
       const cSqft = num(s.ceilingSqft) || psqft;
-      const cr = p.ceiling[s.ceilingTier || "standard"] || p.ceiling.standard;
+      const tier = s.ceilingTier || "flat";
+      const cr = p.ceiling[tier] || p.ceiling.flat || p.ceiling.standard;
       if(cr && cSqft > 0){
-        const tierLbl = (s.ceilingTier === "premium") ? "Premium (textured / vaulted / 10ft+)" : "Standard (flat 8–9ft)";
+        const tierLbl = (tier === "vaulted") ? "Vaulted / 10 ft+" : "Flat 8–9 ft";
         addRow(rows, {
           desc: `Ceiling painting — ${tierLbl}`,
           subdesc: "Patch, prime, two finish coats",
@@ -6656,6 +6980,30 @@ function buildEstimateLineItems(){
           qty: dc, unit: "doors",
           labour: dc * p.door.labour,
           material: dc * p.door.material
+        });
+      }
+    }
+    if(s.extDoors && p.extDoor){
+      const c = num(s.extDoorCount);
+      if(c > 0){
+        addRow(rows, {
+          desc: "Exterior doors — paint both sides",
+          subdesc: "Weather prep, primer, two coats exterior-grade paint, hardware removed & reinstalled",
+          qty: c, unit: "doors",
+          labour: c * p.extDoor.labour,
+          material: c * p.extDoor.material
+        });
+      }
+    }
+    if(s.garageDoors && p.garageDoor){
+      const c = num(s.garageDoorCount);
+      if(c > 0){
+        addRow(rows, {
+          desc: "Garage doors — paint",
+          subdesc: "Sand, prime, two coats exterior-grade paint per door panel",
+          qty: c, unit: "doors",
+          labour: c * p.garageDoor.labour,
+          material: c * p.garageDoor.material
         });
       }
     }
@@ -6792,9 +7140,11 @@ function buildEstimateLineItems(){
       // Backsplash
       if(k.backsplash && d.backsplashSqft > 0){
         const isMatch = (k.backsplashMaterial === "match");
-        const entry = isMatch ? (p.countertop && (p.countertop[counterTier] || p.countertop.standard)) : (p.backsplash && (p.backsplash[counterTier] || p.backsplash.standard));
+        const entry = isMatch
+          ? (p.countertop && (p.countertop[counterTier] || p.countertop.standard))
+          : (p.backsplash && (p.backsplash.tile || p.backsplash.standard));
         if(entry){
-          const matLbl = isMatch ? `Same material as countertop (${ctTierLbl})` : `Tile — ${ctTierLbl}`;
+          const matLbl = isMatch ? `Same material as countertop (${ctTierLbl})` : `Tile`;
           rows.push({
             desc: `${prefix}Backsplash — ${matLbl}`,
             subdesc: `Supply & install. ${d.baseLF} LF × 18″ standard height${d.backsplashExtra ? ` + ${d.backsplashExtra} sqft for taller areas` : ""}.`,
@@ -6813,12 +7163,12 @@ function buildEstimateLineItems(){
         });
       }
       // Undercab
-      if(k.undercabLighting && d.baseLF > 0 && p.undercab){
+      if(k.undercabLighting && p.undercab){
         rows.push({
           desc: `${prefix}Under-cabinet lighting`,
-          subdesc: "LED strip + driver + install, along base cabinet run.",
-          qty: d.baseLF, unit: "LF",
-          ...pricedRow(d.baseLF, p.undercab)
+          subdesc: "LED strip + driver + install — flat install rate.",
+          qty: 1, unit: "ea",
+          ...pricedRow(1, p.undercab)
         });
       }
     }
@@ -6905,26 +7255,84 @@ function buildEstimateLineItems(){
     if(rows.length) groups.push({ cat:"bathroom", title:"Bathrooms", rows });
   }
 
-  // ---- Pot Lights
+  // ---- Lighting & Electrical (data key still "potlights")
   if(state.enabled.potlights){
     const s = state.potlights;
     const p = prices.potlights;
     const rows = [];
-    const n = num(s.count);
-    const r = p[s.tier] || p.replace;
-    if(r && n > 0){
-      const tLbl = (s.tier === "new")
-        ? "Install new — cut hole, run wiring, install fixture + driver, drywall patch & paint touch-up"
-        : "Replace existing — swap fixture in existing pot, minor wiring tweak only";
-      addRow(rows, {
-        desc: `Pot lights — ${(s.tier === "new") ? "Install new" : "Replace existing"}`,
-        subdesc: tLbl,
-        qty: n, unit: "lights",
-        labour: n * r.labour,
-        material: n * r.material
+    // Every line item is supplied & installed — full amount lands in material
+    // so per-row totals tie out with computeTotals (matches kitchen rate model).
+    const rateOf = (entry) => entry && typeof entry.rate === "number" ? entry.rate : ((entry && entry.labour) || 0) + ((entry && entry.material) || 0);
+    const pricedSI = (qty, entry) => {
+      const r = rateOf(entry);
+      const t = qty * r;
+      return { labour:0, material:t, total:t };
+    };
+    // Interior pot lights
+    const intC = num(s.intCount);
+    const intTier = s.intTier || "new";
+    if(intC > 0 && p.interior && p.interior[intTier]){
+      const tLbl = (intTier === "new") ? "Install new" : "Replace existing";
+      const sub = (intTier === "new")
+        ? "Cut hole, run wiring, install fixture + driver, drywall patch & paint touch-up."
+        : "Swap fixture in existing pot, minor wiring tweak only.";
+      rows.push({
+        desc: `Pot lights — Interior, ${tLbl}`,
+        subdesc: sub, qty: intC, unit: "lights",
+        ...pricedSI(intC, p.interior[intTier])
       });
     }
-    if(rows.length) groups.push({ cat:"potlights", title:"Pot Lights", rows });
+    // Exterior pot lights
+    if(s.extEnabled){
+      const extC = num(s.extCount);
+      const extTier = s.extTier || "new";
+      if(extC > 0 && p.exterior && p.exterior[extTier]){
+        const tLbl = (extTier === "new") ? "Install new" : "Replace existing";
+        rows.push({
+          desc: `Pot lights — Exterior, ${tLbl}`,
+          subdesc: "Weather-resistant fixtures, GFCI / outdoor-rated wiring, sealing.",
+          qty: extC, unit: "lights",
+          ...pricedSI(extC, p.exterior[extTier])
+        });
+      }
+    }
+    // Switches
+    if(s.switchEnabled){
+      const c = num(s.switchCount);
+      if(c > 0 && p.switch){
+        rows.push({
+          desc: "Modernize light switches",
+          subdesc: "Old toggle → decora rocker. Supplied & installed.",
+          qty: c, unit: "switches",
+          ...pricedSI(c, p.switch)
+        });
+      }
+    }
+    // Dimmers
+    if(s.dimmerEnabled){
+      const c = num(s.dimmerCount);
+      if(c > 0 && p.dimmer){
+        rows.push({
+          desc: "Dimmers",
+          subdesc: "Decora-style dimmer. Supplied & installed.",
+          qty: c, unit: "dimmers",
+          ...pricedSI(c, p.dimmer)
+        });
+      }
+    }
+    // Plugs
+    if(s.plugEnabled){
+      const c = num(s.plugCount);
+      if(c > 0 && p.plug){
+        rows.push({
+          desc: "Modernize outlets / plugs",
+          subdesc: "Old plug → decora-style outlet. Supplied & installed.",
+          qty: c, unit: "plugs",
+          ...pricedSI(c, p.plug)
+        });
+      }
+    }
+    if(rows.length) groups.push({ cat:"potlights", title:"Lighting & Electrical", rows });
   }
 
   return groups;
@@ -7057,7 +7465,7 @@ function deriveKitchenCosts(k, priceSet){
   const counterRate    = rateOf(p.countertop && (p.countertop[counterTier] || p.countertop.standard));
   const backsplashRate = (k.backsplashMaterial === "match")
     ? counterRate
-    : rateOf(p.backsplash && (p.backsplash[counterTier] || p.backsplash.standard));
+    : rateOf(p.backsplash && (p.backsplash.tile || p.backsplash.standard));
   const islandRate     = rateOf(p.island && p.island[tier]);
   const undercabRate   = rateOf(p.undercab);
 
@@ -7072,7 +7480,8 @@ function deriveKitchenCosts(k, priceSet){
   const waterfallCost   = (k.island && k.counter && d.waterfallSqft > 0) ? d.waterfallSqft * counterRate : 0;
   const backsplashCost  = (k.backsplash && d.backsplashSqft > 0) ? d.backsplashSqft * backsplashRate : 0;
   const islandCost      = (k.island && d.islandLenFt > 0)       ? d.islandLenFt * islandRate       : 0;
-  const undercabCost    = (k.undercabLighting && d.baseLF > 0)  ? d.baseLF * undercabRate          : 0;
+  // Under-cab is now flat (not per LF), so we charge it whenever it's toggled on.
+  const undercabCost    = k.undercabLighting                    ? undercabRate                     : 0;
   const total = baseCabinetCost + countertopCost + waterfallCost + backsplashCost + islandCost + undercabCost;
   return { baseCabinetCost, countertopCost, waterfallCost, backsplashCost, islandCost, undercabCost, total };
 }
@@ -7096,12 +7505,13 @@ function computeKitchenInstance(k, priceSet){
     [L, M] = _applyKitchenEntry(L, M, d.counterSqft, ct);
   }
 
-  // Backsplash — material picker: "match" → countertop rate (same slab), "tile" → tile rate.
+  // Backsplash — material picker: "match" → countertop rate (same slab),
+  //   "tile" → single tile rate (no tier).
   if(k.backsplash && d.backsplashSqft > 0){
-    const mat = k.backsplashMaterial || "tile";
+    const mat = k.backsplashMaterial || "match";
     let entry = null;
     if(mat === "match" && p.countertop) entry = p.countertop[counterTier] || p.countertop.standard;
-    else if(p.backsplash)               entry = p.backsplash[counterTier] || p.backsplash.standard;
+    else if(p.backsplash)               entry = p.backsplash.tile || p.backsplash.standard;
     [L, M] = _applyKitchenEntry(L, M, d.backsplashSqft, entry);
   }
 
@@ -7110,9 +7520,9 @@ function computeKitchenInstance(k, priceSet){
     [L, M] = _applyKitchenEntry(L, M, d.islandLenFt, p.island[tier]);
   }
 
-  // Under-cabinet LED — qty × rate ($/LF along base run)
-  if(k.undercabLighting && d.baseLF > 0 && p.undercab){
-    [L, M] = _applyKitchenEntry(L, M, d.baseLF, p.undercab);
+  // Under-cabinet LED — flat install rate (qty = 1), not LF-based anymore.
+  if(k.undercabLighting && p.undercab){
+    [L, M] = _applyKitchenEntry(L, M, 1, p.undercab);
   }
 
   return { labour:L, material:M, derived:d };
