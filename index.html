@@ -6491,7 +6491,7 @@ function renderContractorSheet(){
       const d = deriveKitchen(k);
       const tierLbl = k.tier === "custom"
         ? "Custom &mdash; fully custom cabinets, premium fixtures &amp; finishes"
-        : "Semi-Custom &mdash; pre-manufactured, standard-sized cabinets with builder-grade finishes";
+        : "Semi-Custom &mdash; pre-manufactured, standard-sized cabinets in stock door styles &amp; finishes";
       if(hdrLabel) out.push({ hdr:true, html: hdrLabel });
       out.push({ sub: !!hdrLabel, html:`Tier: <b>${tierLbl}</b>` });
       out.push({ sub: !!hdrLabel, html:`Layout: <b>${k.layout === "U" ? "U-shape (3 runs)" : "L-shape (2 runs)"}</b>` });
@@ -7188,7 +7188,7 @@ function buildEstimateLineItems(){
     const rows = [];
     function pushKitchenRows(k, hdr){
       const d = deriveKitchen(k);
-      const tierLbl = (k.tier === "custom") ? "Custom — fully custom cabinets, premium fixtures & finishes" : "Semi-Custom — pre-manufactured, standard-sized cabinets with builder-grade finishes";
+      const tierLbl = (k.tier === "custom") ? "Custom — fully custom cabinets, premium fixtures & finishes" : "Semi-Custom — pre-manufactured, standard-sized cabinets in stock door styles & finishes";
       const layoutLbl = k.layout === "U" ? "U-shape (3 runs)" : "L-shape (2 runs)";
       const prefix = hdr ? `${hdr} — ` : "";
       // Compute one priced line. Handles both {rate} and {labour, material}
