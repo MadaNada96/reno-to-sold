@@ -3654,9 +3654,10 @@ const DEFAULT_PRICES = {
     },
     // Backsplash — single tile rate (used only when backsplash material = "tile").
     // "Tile backsplash" is the trade-standard term; covers subway, ceramic, porcelain.
-    // GTA: ~$25/sqft supplied & installed including grout, basic edge trim.
+    // Split labour + material so tile cost is tracked separately from install.
+    // GTA: ~$28/sqft total ($11.20 labour install / $16.80 tile material).
     backsplash: {
-      tile: { rate: 28 }
+      tile: { labour: 11.20, material: 16.80 }
     },
     island: {
       standard: { rate: 1000 },   // $/LF of island length
@@ -3976,9 +3977,8 @@ function migrateFlatShowerPrice(p){
         });
       }
     });
-    // Backsplash — collapse the old {standard, custom} (or older subway/quartz)
-    // tiers into a single { tile: { rate } } entry. Take whichever tier had
-    // the closest rate to the new default if both exist.
+    // Backsplash — collapse old tiers into a single { tile: { labour, material } } entry.
+    // Tile is split L/M so tile material can be tracked separately from install labour.
     if(p.kitchen.backsplash){
       const bs = p.kitchen.backsplash;
       delete bs.subway;
@@ -3992,6 +3992,11 @@ function migrateFlatShowerPrice(p){
       }
       delete bs.standard;
       delete bs.custom;
+      // Convert {rate} → {labour, material} (40/60 split) if needed.
+      if(bs.tile && typeof bs.tile.rate === "number" && typeof bs.tile.labour !== "number"){
+        const r = bs.tile.rate;
+        bs.tile = { labour: +(r * 0.40).toFixed(2), material: +(r * 0.60).toFixed(2) };
+      }
     }
     // Under-cab lighting — changed from $/LF to a flat rate. Old shape used
     //   { labour, material } per LF, or { rate } per LF after the prior migration.
@@ -6112,15 +6117,20 @@ function renderPricingEditor(){
       <div>${priceInput("kitchen.waterfallEnd.rate", (prices.kitchen.waterfallEnd || {rate:0}).rate, 25)}</div>
     </div>`;
 
-  // Backsplash — single tile rate. ("Same as countertop" routes through the
-  // countertop rate above; only set this if you want a different tile-only rate.)
-  html += `<div class="section-title">Backsplash &mdash; tile rate, per sqft ($/sqft, supplied &amp; installed)</div>
-    <div class="footnote" style="margin-bottom:8px;">Used when the backsplash material is set to "Tile" on the estimate. "Same as countertop" uses the countertop rate above.</div>
-    <div class="price-edit-row head single"><div></div><div>$/sqft</div></div>
-    <div class="price-edit-row single">
-      <div class="lbl">Tile backsplash</div>
-      <div>${priceInput("kitchen.backsplash.tile.rate", (prices.kitchen.backsplash.tile || {rate:0}).rate, 1)}</div>
-    </div>`;
+  // Backsplash — tile only, split labour + material so the tile material can be
+  // tracked separately from install labour. ("Same as countertop" routes
+  // through the countertop rate above; only this tile row applies here.)
+  {
+    const tile = prices.kitchen.backsplash.tile || { labour:0, material:0 };
+    html += `<div class="section-title">Backsplash &mdash; tile rate, per sqft (labour + material)</div>
+      <div class="footnote" style="margin-bottom:8px;">Used when the backsplash material is set to "Tile" on the estimate. Tile is split labour + material so you can track tile cost separately from install. "Same as countertop" uses the countertop rate above.</div>
+      <div class="price-edit-row head"><div></div><div>Labour $/sqft</div><div>Material $/sqft</div></div>
+      <div class="price-edit-row">
+        <div class="lbl">Tile backsplash</div>
+        <div>${priceInput("kitchen.backsplash.tile.labour", tile.labour, 1)}</div>
+        <div>${priceInput("kitchen.backsplash.tile.material", tile.material, 1)}</div>
+      </div>`;
+  }
 
   html += `<div class="section-title">Island base &mdash; per linear foot ($/LF, supplied &amp; installed)</div>
     <div class="price-edit-row head single"><div></div><div>$/LF</div></div>`;
@@ -9637,14 +9647,10 @@ function scalePrices(o, f){
 function defaultContractorPrices(){
   const base = JSON.parse(JSON.stringify(DEFAULT_PRICES));
   delete base.listingDiscount;
-  // Kitchen + Lighting & Electrical are mostly "supplied & installed" — keep
-  // them as { rate: X } in the contractor view (single rate per unit).
-  // EXCEPTION: backsplash tile is split L/M on the contractor side so the
-  // owner can track tile material separately from install labour.
-  if(base.kitchen && base.kitchen.backsplash && base.kitchen.backsplash.tile && typeof base.kitchen.backsplash.tile.rate === "number"){
-    const r = base.kitchen.backsplash.tile.rate;
-    base.kitchen.backsplash.tile = { labour: +(r * 0.40).toFixed(2), material: +(r * 0.60).toFixed(2) };
-  }
+  // Kitchen + Lighting & Electrical use { rate: X } supplied & installed —
+  // EXCEPT backsplash tile which is already split L/M in DEFAULT_PRICES so
+  // the owner can track tile material separately from install labour. Both
+  // client + contractor sides use L/M for backsplash.
   return scalePrices(base, 0.70);
 }
 function loadContractorPrices(){
