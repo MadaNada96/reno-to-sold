@@ -9619,6 +9619,7 @@ function defaultContractorPrices(){
     });
   };
   expandRate(base.kitchen);
+  expandRate(base.potlights);
   return scalePrices(base, 0.70);
 }
 function loadContractorPrices(){
@@ -9631,6 +9632,24 @@ function loadContractorPrices(){
       deepMerge(fresh, saved);
     }
   }catch(e){}
+  // Defensive: if a saved entry came in as { rate: X } (post-migration shape),
+  // re-expand to { labour, material } 40/60 so the contractor editor + cost
+  // view always operate on uniform L/M fields.
+  const reExpand = (obj) => {
+    if(!obj || typeof obj !== "object") return;
+    Object.keys(obj).forEach(k => {
+      const v = obj[k];
+      if(v && typeof v === "object"){
+        if(typeof v.rate === "number" && typeof v.labour !== "number"){
+          obj[k] = { labour: +(v.rate * 0.40).toFixed(2), material: +(v.rate * 0.60).toFixed(2) };
+        } else {
+          reExpand(v);
+        }
+      }
+    });
+  };
+  reExpand(fresh.kitchen);
+  reExpand(fresh.potlights);
   contractorPrices = fresh;
   return contractorPrices;
 }
@@ -9683,14 +9702,15 @@ function renderContractorPricingEditor(){
       <div>${ctrPriceInput("painting.walls."+o.k+".material", cp.painting.walls[o.k].material)}</div>
     </div>`;
   });
-  // Ceiling
+  // Ceiling — flat / vaulted (was standard/premium)
   html += `<div class="section-title">Painting &mdash; ceiling add-on (per sqft of ceiling)</div>
     <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
-  ["standard","premium"].forEach(t=>{
+  [{k:"flat",l:"Flat 8&ndash;9 ft"},{k:"vaulted",l:"Vaulted / 10 ft+"}].forEach(o=>{
+    const row = (cp.painting.ceiling && cp.painting.ceiling[o.k]) || { labour:0, material:0 };
     html += `<div class="price-edit-row">
-      <div class="lbl">${cap(t)}</div>
-      <div>${ctrPriceInput("painting.ceiling."+t+".labour", cp.painting.ceiling[t].labour)}</div>
-      <div>${ctrPriceInput("painting.ceiling."+t+".material", cp.painting.ceiling[t].material)}</div>
+      <div class="lbl">${o.l}</div>
+      <div>${ctrPriceInput("painting.ceiling."+o.k+".labour", row.labour)}</div>
+      <div>${ctrPriceInput("painting.ceiling."+o.k+".material", row.material)}</div>
     </div>`;
   });
   // Trim
@@ -9709,6 +9729,28 @@ function renderContractorPricingEditor(){
       <div>${ctrPriceInput("painting.door.labour", cp.painting.door.labour, 5)}</div>
       <div>${ctrPriceInput("painting.door.material", cp.painting.door.material, 5)}</div>
     </div>`;
+  // Exterior doors
+  {
+    const extRow = cp.painting.extDoor || { labour:0, material:0 };
+    html += `<div class="section-title">Painting &mdash; exterior doors (per door)</div>
+      <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>
+      <div class="price-edit-row">
+        <div class="lbl">Per door (weather prep + 2 coats)</div>
+        <div>${ctrPriceInput("painting.extDoor.labour", extRow.labour, 10)}</div>
+        <div>${ctrPriceInput("painting.extDoor.material", extRow.material, 10)}</div>
+      </div>`;
+  }
+  // Garage doors
+  {
+    const gRow = cp.painting.garageDoor || { labour:0, material:0 };
+    html += `<div class="section-title">Painting &mdash; garage doors (per door)</div>
+      <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>
+      <div class="price-edit-row">
+        <div class="lbl">Per door (sand, prime, 2 coats per panel)</div>
+        <div>${ctrPriceInput("painting.garageDoor.labour", gRow.labour, 25)}</div>
+        <div>${ctrPriceInput("painting.garageDoor.material", gRow.material, 25)}</div>
+      </div>`;
+  }
   // Popcorn ceiling removal (standard / premium tiers)
   html += `<div class="section-title">Painting &mdash; popcorn ceiling removal (per sqft)</div>
     <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
@@ -9776,16 +9818,17 @@ function renderContractorPricingEditor(){
       <div>${ctrPriceInput("kitchen.countertop."+t+".material", cp.kitchen.countertop[t].material, 1)}</div>
     </div>`;
   });
-  // Kitchen backsplash — $/sqft (tile rate only)
-  html += `<div class="section-title">Backsplash &mdash; per sqft ($/sqft) &middot; <span style="text-transform:none;letter-spacing:0;font-weight:500;font-size:11px;color:var(--muted);">tile rate only</span></div>
-    <div class="price-edit-row head"><div></div><div>Labour $/sqft</div><div>Material $/sqft</div></div>`;
-  ["standard","custom"].forEach(t=>{
-    html += `<div class="price-edit-row">
-      <div class="lbl">${cap(t)}</div>
-      <div>${ctrPriceInput("kitchen.backsplash."+t+".labour", cp.kitchen.backsplash[t].labour, 1)}</div>
-      <div>${ctrPriceInput("kitchen.backsplash."+t+".material", cp.kitchen.backsplash[t].material, 1)}</div>
-    </div>`;
-  });
+  // Kitchen backsplash — $/sqft (single tile tier)
+  {
+    const tileRow = (cp.kitchen.backsplash && cp.kitchen.backsplash.tile) || { labour:0, material:0 };
+    html += `<div class="section-title">Backsplash &mdash; per sqft ($/sqft) &middot; <span style="text-transform:none;letter-spacing:0;font-weight:500;font-size:11px;color:var(--muted);">tile rate only</span></div>
+      <div class="price-edit-row head"><div></div><div>Labour $/sqft</div><div>Material $/sqft</div></div>
+      <div class="price-edit-row">
+        <div class="lbl">Tile (supplied &amp; installed)</div>
+        <div>${ctrPriceInput("kitchen.backsplash.tile.labour", tileRow.labour, 1)}</div>
+        <div>${ctrPriceInput("kitchen.backsplash.tile.material", tileRow.material, 1)}</div>
+      </div>`;
+  }
   // Kitchen island — $/LF
   html += `<div class="section-title">Island base &mdash; per linear foot ($/LF)</div>
     <div class="price-edit-row head"><div></div><div>Labour $/LF</div><div>Material $/LF</div></div>`;
@@ -9866,10 +9909,33 @@ function renderContractorPricingEditor(){
       <div>${ctrPriceInput("bathroom.standUpShower.new.labour", cp.bathroom.standUpShower.new.labour, 50)}</div>
       <div>${ctrPriceInput("bathroom.standUpShower.new.material", cp.bathroom.standUpShower.new.material, 50)}</div>
     </div>`;
-  // Pot lights
-  html += `<div class="section-title">Pot lights (per fixture)</div>
+  // Lighting & Electrical (data key still "potlights")
+  // Interior pot lights — replace / new
+  html += `<div class="section-title">Lighting &amp; Electrical &mdash; interior pot lights (per fixture)</div>
     <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
   [{k:"replace",l:"Replace existing"},{k:"new",l:"Install new"}].forEach(o=>{
+    const row = (cp.potlights.interior && cp.potlights.interior[o.k]) || { labour:0, material:0 };
+    html += `<div class="price-edit-row">
+      <div class="lbl">${o.l}</div>
+      <div>${ctrPriceInput("potlights.interior."+o.k+".labour", row.labour, 5)}</div>
+      <div>${ctrPriceInput("potlights.interior."+o.k+".material", row.material, 5)}</div>
+    </div>`;
+  });
+  // Exterior pot lights — replace / new
+  html += `<div class="section-title">Lighting &amp; Electrical &mdash; exterior pot lights (per fixture)</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
+  [{k:"replace",l:"Replace existing"},{k:"new",l:"Install new"}].forEach(o=>{
+    const row = (cp.potlights.exterior && cp.potlights.exterior[o.k]) || { labour:0, material:0 };
+    html += `<div class="price-edit-row">
+      <div class="lbl">${o.l}</div>
+      <div>${ctrPriceInput("potlights.exterior."+o.k+".labour", row.labour, 10)}</div>
+      <div>${ctrPriceInput("potlights.exterior."+o.k+".material", row.material, 10)}</div>
+    </div>`;
+  });
+  // Switches / dimmers / plugs — flat per-unit
+  html += `<div class="section-title">Lighting &amp; Electrical &mdash; switches / dimmers / plugs (per unit)</div>
+    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
+  [{k:"switch",l:"Modernize light switch"},{k:"dimmer",l:"Dimmer"},{k:"plug",l:"Modernize outlet / plug"}].forEach(o=>{
     const row = cp.potlights[o.k] || { labour:0, material:0 };
     html += `<div class="price-edit-row">
       <div class="lbl">${o.l}</div>
