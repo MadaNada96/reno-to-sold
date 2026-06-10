@@ -3664,7 +3664,11 @@ const DEFAULT_PRICES = {
     },
     // Under-cabinet lighting — flat install (LED strip + driver + wiring tie-in).
     // GTA typical: $500-800 supplied & installed for a typical kitchen run.
-    undercab: { rate: 650 }       // flat
+    undercab: { rate: 650 },      // flat
+    // Waterfall end charge — supplemental labour for each waterfall end on an
+    // island (miter / seam / support fab). Applied PER END on top of the
+    // countertop sqft (which already absorbs the waterfall sqft itself).
+    waterfallEnd: { rate: 250 }    // $/end
   },
   bathroom: {
     // Single premium-grade tier. Base covers refresh of all fixtures in the chosen layout
@@ -4012,6 +4016,9 @@ function migrateFlatShowerPrice(p){
     delete p.kitchen.counter;
     // Undercab: single entry, also migrate to rate.
     convertEntry(p.kitchen.undercab);
+    // Waterfall end labour charge — new field, default to $250/end if missing.
+    if(!p.kitchen.waterfallEnd) p.kitchen.waterfallEnd = { rate: 250 };
+    else convertEntry(p.kitchen.waterfallEnd);
   }
   return p;
 }
@@ -6087,7 +6094,7 @@ function renderPricingEditor(){
   });
 
   html += `<div class="section-title">Countertops &mdash; per sqft ($/sqft, supplied &amp; installed)</div>
-    <div class="footnote" style="margin-bottom:8px;">Waterfall + island top sqft are folded into the countertop total at this rate.</div>
+    <div class="footnote" style="margin-bottom:8px;">Waterfall + island top sqft are folded into the countertop total at this rate. Per-end labour for waterfalls is set below.</div>
     <div class="price-edit-row head single"><div></div><div>$/sqft</div></div>`;
   ["standard","custom"].forEach(t=>{
     html += `<div class="price-edit-row single">
@@ -6095,6 +6102,15 @@ function renderPricingEditor(){
       <div>${priceInput("kitchen.countertop."+t+".rate", prices.kitchen.countertop[t].rate, 1)}</div>
     </div>`;
   });
+
+  // Waterfall end labour — per-end add-on on top of countertop sqft rate
+  html += `<div class="section-title">Island waterfall ends &mdash; per end ($/end labour add-on)</div>
+    <div class="footnote" style="margin-bottom:8px;">Extra labour for each waterfall end (mitered seam, support fab). Multiplied by the number of waterfall ends selected on the estimate.</div>
+    <div class="price-edit-row head single"><div></div><div>$/end</div></div>
+    <div class="price-edit-row single">
+      <div class="lbl">Waterfall end labour</div>
+      <div>${priceInput("kitchen.waterfallEnd.rate", (prices.kitchen.waterfallEnd || {rate:0}).rate, 25)}</div>
+    </div>`;
 
   // Backsplash — single tile rate. ("Same as countertop" routes through the
   // countertop rate above; only set this if you want a different tile-only rate.)
@@ -7260,6 +7276,15 @@ function buildEstimateLineItems(){
           ...pricedRow(1, p.undercab)
         });
       }
+      // Waterfall ends labour add-on — per-end labour charge on top of countertop sqft.
+      if(k.island && d.waterfallEnds > 0 && p.waterfallEnd){
+        rows.push({
+          desc: `${prefix}Waterfall end labour — ${d.waterfallEnds} end${d.waterfallEnds>1?"s":""}`,
+          subdesc: "Per-end labour add-on (mitered seam, support fab). Stacks on top of countertop sqft.",
+          qty: d.waterfallEnds, unit: "ends",
+          ...pricedRow(d.waterfallEnds, p.waterfallEnd)
+        });
+      }
     }
     const hasBasementKitchen = !!(s.basement && s.basement.enabled);
     if(hasBasementKitchen){
@@ -7564,15 +7589,19 @@ function deriveKitchenCosts(k, priceSet){
     ? (d.baseCounterSqft + d.islandCounterSqft + d.counterExtra)
     : 0;
 
+  const waterfallEndRate = rateOf(p.waterfallEnd);
   const baseCabinetCost = (d.baseLF > 0)                       ? d.baseLF * baseRate              : 0;
   const countertopCost  = (k.counter && counterNonWaterfallSqft > 0) ? counterNonWaterfallSqft * counterRate : 0;
-  const waterfallCost   = (k.island && k.counter && d.waterfallSqft > 0) ? d.waterfallSqft * counterRate : 0;
+  // Waterfall cost = sqft × counter rate + per-end labour charge.
+  const waterfallSlabCost = (k.island && k.counter && d.waterfallSqft > 0) ? d.waterfallSqft * counterRate : 0;
+  const waterfallEndCost  = (k.island && d.waterfallEnds > 0)               ? d.waterfallEnds * waterfallEndRate : 0;
+  const waterfallCost     = waterfallSlabCost + waterfallEndCost;
   const backsplashCost  = (k.backsplash && d.backsplashSqft > 0) ? d.backsplashSqft * backsplashRate : 0;
   const islandCost      = (k.island && d.islandLenFt > 0)       ? d.islandLenFt * islandRate       : 0;
   // Under-cab is now flat (not per LF), so we charge it whenever it's toggled on.
   const undercabCost    = k.undercabLighting                    ? undercabRate                     : 0;
   const total = baseCabinetCost + countertopCost + waterfallCost + backsplashCost + islandCost + undercabCost;
-  return { baseCabinetCost, countertopCost, waterfallCost, backsplashCost, islandCost, undercabCost, total };
+  return { baseCabinetCost, countertopCost, waterfallCost, waterfallSlabCost, waterfallEndCost, backsplashCost, islandCost, undercabCost, total };
 }
 
 function computeKitchenInstance(k, priceSet){
@@ -7612,6 +7641,13 @@ function computeKitchenInstance(k, priceSet){
   // Under-cabinet LED — flat install rate (qty = 1), not LF-based anymore.
   if(k.undercabLighting && p.undercab){
     [L, M] = _applyKitchenEntry(L, M, 1, p.undercab);
+  }
+
+  // Waterfall end labour charge — per waterfall end on the island (mitered
+  // seams, support fab). Stacks on top of the countertop sqft rate (which
+  // already covers the waterfall slab area itself).
+  if(k.island && d.waterfallEnds > 0 && p.waterfallEnd){
+    [L, M] = _applyKitchenEntry(L, M, d.waterfallEnds, p.waterfallEnd);
   }
 
   return { labour:L, material:M, derived:d };
@@ -9601,25 +9637,10 @@ function scalePrices(o, f){
 function defaultContractorPrices(){
   const base = JSON.parse(JSON.stringify(DEFAULT_PRICES));
   delete base.listingDiscount;
-  // Owner client kitchen prices use { rate: X } (supplied & installed). The
-  // contractor cost view stays as { labour, material } so the owner can
-  // evaluate contractor bids. Convert each kitchen rate to a 40/60 L/M split
-  // before scaling — labour ≈ 40% of cost on cabinetry-heavy kitchen lines.
-  const expandRate = (obj) => {
-    if(!obj || typeof obj !== "object") return;
-    Object.keys(obj).forEach(k => {
-      const v = obj[k];
-      if(v && typeof v === "object"){
-        if(typeof v.rate === "number"){
-          obj[k] = { labour: +(v.rate * 0.40).toFixed(2), material: +(v.rate * 0.60).toFixed(2) };
-        } else {
-          expandRate(v);
-        }
-      }
-    });
-  };
-  expandRate(base.kitchen);
-  expandRate(base.potlights);
+  // Kitchen + Lighting & Electrical are "supplied & installed" — keep them as
+  // { rate: X } in the contractor view too (single rate per unit, scaled to
+  // contractor cost). The contractor cost computation routes these through
+  // rateOf() so totals tie out cleanly.
   return scalePrices(base, 0.70);
 }
 function loadContractorPrices(){
@@ -9632,24 +9653,30 @@ function loadContractorPrices(){
       deepMerge(fresh, saved);
     }
   }catch(e){}
-  // Defensive: if a saved entry came in as { rate: X } (post-migration shape),
-  // re-expand to { labour, material } 40/60 so the contractor editor + cost
-  // view always operate on uniform L/M fields.
-  const reExpand = (obj) => {
+  // Defensive: kitchen + lighting & electrical are now "supplied & installed"
+  // single-rate. If a saved entry came in as { labour, material } from an
+  // older build, collapse it back to { rate: L+M } so the editor + cost view
+  // operate on uniform { rate } fields.
+  const collapseToRate = (obj) => {
     if(!obj || typeof obj !== "object") return;
     Object.keys(obj).forEach(k => {
       const v = obj[k];
       if(v && typeof v === "object"){
-        if(typeof v.rate === "number" && typeof v.labour !== "number"){
-          obj[k] = { labour: +(v.rate * 0.40).toFixed(2), material: +(v.rate * 0.60).toFixed(2) };
+        const hasLM = typeof v.labour === "number" || typeof v.material === "number";
+        const hasRate = typeof v.rate === "number";
+        if(hasLM && !hasRate){
+          obj[k] = { rate: +((v.labour || 0) + (v.material || 0)).toFixed(2) };
+        } else if(hasLM && hasRate){
+          // both present (deepMerge collision) — rate wins, drop L/M.
+          obj[k] = { rate: v.rate };
         } else {
-          reExpand(v);
+          collapseToRate(v);
         }
       }
     });
   };
-  reExpand(fresh.kitchen);
-  reExpand(fresh.potlights);
+  collapseToRate(fresh.kitchen);
+  collapseToRate(fresh.potlights);
   contractorPrices = fresh;
   return contractorPrices;
 }
@@ -9798,55 +9825,70 @@ function renderContractorPricingEditor(){
       <div>${ctrPriceInput("tiling."+t+".material", cp.tiling[t].material)}</div>
     </div>`;
   });
+  // ----------------- KITCHEN — supplied & installed (single rate) -----------------
   // Kitchen base — $/LF
-  html += `<div class="section-title">Kitchen base &mdash; per linear foot ($/LF)</div>
-    <div class="price-edit-row head"><div></div><div>Labour $/LF</div><div>Material $/LF</div></div>`;
+  html += `<div class="section-title">Kitchen base &mdash; per linear foot ($/LF, supplied &amp; installed)</div>
+    <div class="price-edit-row head single"><div></div><div>$/LF</div></div>`;
   ["standard","custom"].forEach(t=>{
-    html += `<div class="price-edit-row">
+    const row = (cp.kitchen.base && cp.kitchen.base[t]) || { rate:0 };
+    html += `<div class="price-edit-row single">
       <div class="lbl">${kitchenBaseTierLabel(t)}</div>
-      <div>${ctrPriceInput("kitchen.base."+t+".labour", cp.kitchen.base[t].labour, 10)}</div>
-      <div>${ctrPriceInput("kitchen.base."+t+".material", cp.kitchen.base[t].material, 10)}</div>
+      <div>${ctrPriceInput("kitchen.base."+t+".rate", row.rate, 10)}</div>
     </div>`;
   });
-  // Kitchen countertop — $/sqft. Tier shared with backsplash + waterfall.
-  html += `<div class="section-title">Countertops &mdash; per sqft ($/sqft)</div>
-    <div class="price-edit-row head"><div></div><div>Labour $/sqft</div><div>Material $/sqft</div></div>`;
+  // Kitchen countertop — $/sqft (single rate)
+  html += `<div class="section-title">Countertops &mdash; per sqft ($/sqft, supplied &amp; installed)</div>
+    <div class="footnote" style="margin-bottom:8px;">Waterfall sqft + island-top sqft are folded into the countertop sqft at this rate. Extra per-end labour is set below.</div>
+    <div class="price-edit-row head single"><div></div><div>$/sqft</div></div>`;
   ["standard","custom"].forEach(t=>{
-    html += `<div class="price-edit-row">
+    const row = (cp.kitchen.countertop && cp.kitchen.countertop[t]) || { rate:0 };
+    html += `<div class="price-edit-row single">
       <div class="lbl">${kitchenCounterTierLabel(t)}</div>
-      <div>${ctrPriceInput("kitchen.countertop."+t+".labour", cp.kitchen.countertop[t].labour, 1)}</div>
-      <div>${ctrPriceInput("kitchen.countertop."+t+".material", cp.kitchen.countertop[t].material, 1)}</div>
+      <div>${ctrPriceInput("kitchen.countertop."+t+".rate", row.rate, 1)}</div>
     </div>`;
   });
-  // Kitchen backsplash — $/sqft (single tile tier)
+  // Waterfall end labour add-on — per-end charge applied on top of countertop sqft
   {
-    const tileRow = (cp.kitchen.backsplash && cp.kitchen.backsplash.tile) || { labour:0, material:0 };
-    html += `<div class="section-title">Backsplash &mdash; per sqft ($/sqft) &middot; <span style="text-transform:none;letter-spacing:0;font-weight:500;font-size:11px;color:var(--muted);">tile rate only</span></div>
-      <div class="price-edit-row head"><div></div><div>Labour $/sqft</div><div>Material $/sqft</div></div>
-      <div class="price-edit-row">
-        <div class="lbl">Tile (supplied &amp; installed)</div>
-        <div>${ctrPriceInput("kitchen.backsplash.tile.labour", tileRow.labour, 1)}</div>
-        <div>${ctrPriceInput("kitchen.backsplash.tile.material", tileRow.material, 1)}</div>
+    const wfRow = cp.kitchen.waterfallEnd || { rate:0 };
+    html += `<div class="section-title">Island waterfall ends &mdash; per end ($/end labour add-on)</div>
+      <div class="footnote" style="margin-bottom:8px;">Extra labour for each waterfall end on the island (mitered seam, support fab). Multiplied by the number of waterfall ends selected on the estimate. Stacks on top of the per-sqft countertop rate above.</div>
+      <div class="price-edit-row head single"><div></div><div>$/end</div></div>
+      <div class="price-edit-row single">
+        <div class="lbl">Waterfall end labour</div>
+        <div>${ctrPriceInput("kitchen.waterfallEnd.rate", wfRow.rate, 25)}</div>
       </div>`;
   }
-  // Kitchen island — $/LF
-  html += `<div class="section-title">Island base &mdash; per linear foot ($/LF)</div>
-    <div class="price-edit-row head"><div></div><div>Labour $/LF</div><div>Material $/LF</div></div>`;
+  // Kitchen backsplash — single tile rate, supplied & installed
+  {
+    const tileRow = (cp.kitchen.backsplash && cp.kitchen.backsplash.tile) || { rate:0 };
+    html += `<div class="section-title">Backsplash &mdash; tile rate, per sqft ($/sqft, supplied &amp; installed)</div>
+      <div class="footnote" style="margin-bottom:8px;">"Same as countertop" routes through the countertop rate above. Set this only for the tile rate.</div>
+      <div class="price-edit-row head single"><div></div><div>$/sqft</div></div>
+      <div class="price-edit-row single">
+        <div class="lbl">Tile backsplash</div>
+        <div>${ctrPriceInput("kitchen.backsplash.tile.rate", tileRow.rate, 1)}</div>
+      </div>`;
+  }
+  // Kitchen island — $/LF (single rate)
+  html += `<div class="section-title">Island base &mdash; per linear foot ($/LF, supplied &amp; installed)</div>
+    <div class="price-edit-row head single"><div></div><div>$/LF</div></div>`;
   ["standard","custom"].forEach(t=>{
-    html += `<div class="price-edit-row">
+    const row = (cp.kitchen.island && cp.kitchen.island[t]) || { rate:0 };
+    html += `<div class="price-edit-row single">
       <div class="lbl">${cap(t)}</div>
-      <div>${ctrPriceInput("kitchen.island."+t+".labour", cp.kitchen.island[t].labour, 10)}</div>
-      <div>${ctrPriceInput("kitchen.island."+t+".material", cp.kitchen.island[t].material, 10)}</div>
+      <div>${ctrPriceInput("kitchen.island."+t+".rate", row.rate, 10)}</div>
     </div>`;
   });
-  // Under-cab — $/LF
-  html += `<div class="section-title">Under-cabinet lighting &mdash; per linear foot ($/LF)</div>
-    <div class="price-edit-row head"><div></div><div>Labour $/LF</div><div>Material $/LF</div></div>
-    <div class="price-edit-row">
-      <div class="lbl">LED strip + driver + install</div>
-      <div>${ctrPriceInput("kitchen.undercab.labour", cp.kitchen.undercab.labour, 1)}</div>
-      <div>${ctrPriceInput("kitchen.undercab.material", cp.kitchen.undercab.material, 1)}</div>
-    </div>`;
+  // Under-cab — flat rate (single rate, supplied & installed)
+  {
+    const ucRow = cp.kitchen.undercab || { rate:0 };
+    html += `<div class="section-title">Under-cabinet lighting &mdash; flat ($ supplied &amp; installed)</div>
+      <div class="price-edit-row head single"><div></div><div>$ flat</div></div>
+      <div class="price-edit-row single">
+        <div class="lbl">LED strip + driver + install (typical kitchen)</div>
+        <div>${ctrPriceInput("kitchen.undercab.rate", ucRow.rate, 25)}</div>
+      </div>`;
+  }
   // Bathroom base (single tier)
   html += `<div class="section-title">Bathroom base &mdash; per bathroom (excludes tile sqft &amp; add-ons)</div>
     <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
@@ -9909,38 +9951,35 @@ function renderContractorPricingEditor(){
       <div>${ctrPriceInput("bathroom.standUpShower.new.labour", cp.bathroom.standUpShower.new.labour, 50)}</div>
       <div>${ctrPriceInput("bathroom.standUpShower.new.material", cp.bathroom.standUpShower.new.material, 50)}</div>
     </div>`;
-  // Lighting & Electrical (data key still "potlights")
+  // Lighting & Electrical (data key still "potlights") — all priced supplied & installed
   // Interior pot lights — replace / new
-  html += `<div class="section-title">Lighting &amp; Electrical &mdash; interior pot lights (per fixture)</div>
-    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
+  html += `<div class="section-title">Lighting &amp; Electrical &mdash; interior pot lights (per fixture, supplied &amp; installed)</div>
+    <div class="price-edit-row head single"><div></div><div>$/fixture</div></div>`;
   [{k:"replace",l:"Replace existing"},{k:"new",l:"Install new"}].forEach(o=>{
-    const row = (cp.potlights.interior && cp.potlights.interior[o.k]) || { labour:0, material:0 };
-    html += `<div class="price-edit-row">
+    const row = (cp.potlights.interior && cp.potlights.interior[o.k]) || { rate:0 };
+    html += `<div class="price-edit-row single">
       <div class="lbl">${o.l}</div>
-      <div>${ctrPriceInput("potlights.interior."+o.k+".labour", row.labour, 5)}</div>
-      <div>${ctrPriceInput("potlights.interior."+o.k+".material", row.material, 5)}</div>
+      <div>${ctrPriceInput("potlights.interior."+o.k+".rate", row.rate, 5)}</div>
     </div>`;
   });
   // Exterior pot lights — replace / new
-  html += `<div class="section-title">Lighting &amp; Electrical &mdash; exterior pot lights (per fixture)</div>
-    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
+  html += `<div class="section-title">Lighting &amp; Electrical &mdash; exterior pot lights (per fixture, supplied &amp; installed)</div>
+    <div class="price-edit-row head single"><div></div><div>$/fixture</div></div>`;
   [{k:"replace",l:"Replace existing"},{k:"new",l:"Install new"}].forEach(o=>{
-    const row = (cp.potlights.exterior && cp.potlights.exterior[o.k]) || { labour:0, material:0 };
-    html += `<div class="price-edit-row">
+    const row = (cp.potlights.exterior && cp.potlights.exterior[o.k]) || { rate:0 };
+    html += `<div class="price-edit-row single">
       <div class="lbl">${o.l}</div>
-      <div>${ctrPriceInput("potlights.exterior."+o.k+".labour", row.labour, 10)}</div>
-      <div>${ctrPriceInput("potlights.exterior."+o.k+".material", row.material, 10)}</div>
+      <div>${ctrPriceInput("potlights.exterior."+o.k+".rate", row.rate, 10)}</div>
     </div>`;
   });
-  // Switches / dimmers / plugs — flat per-unit
-  html += `<div class="section-title">Lighting &amp; Electrical &mdash; switches / dimmers / plugs (per unit)</div>
-    <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
+  // Switches / dimmers / plugs — flat per-unit supplied & installed
+  html += `<div class="section-title">Lighting &amp; Electrical &mdash; switches / dimmers / plugs (per unit, supplied &amp; installed)</div>
+    <div class="price-edit-row head single"><div></div><div>$/unit</div></div>`;
   [{k:"switch",l:"Modernize light switch"},{k:"dimmer",l:"Dimmer"},{k:"plug",l:"Modernize outlet / plug"}].forEach(o=>{
-    const row = cp.potlights[o.k] || { labour:0, material:0 };
-    html += `<div class="price-edit-row">
+    const row = cp.potlights[o.k] || { rate:0 };
+    html += `<div class="price-edit-row single">
       <div class="lbl">${o.l}</div>
-      <div>${ctrPriceInput("potlights."+o.k+".labour", row.labour, 5)}</div>
-      <div>${ctrPriceInput("potlights."+o.k+".material", row.material, 5)}</div>
+      <div>${ctrPriceInput("potlights."+o.k+".rate", row.rate, 5)}</div>
     </div>`;
   });
 
