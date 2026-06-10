@@ -9637,10 +9637,14 @@ function scalePrices(o, f){
 function defaultContractorPrices(){
   const base = JSON.parse(JSON.stringify(DEFAULT_PRICES));
   delete base.listingDiscount;
-  // Kitchen + Lighting & Electrical are "supplied & installed" — keep them as
-  // { rate: X } in the contractor view too (single rate per unit, scaled to
-  // contractor cost). The contractor cost computation routes these through
-  // rateOf() so totals tie out cleanly.
+  // Kitchen + Lighting & Electrical are mostly "supplied & installed" — keep
+  // them as { rate: X } in the contractor view (single rate per unit).
+  // EXCEPTION: backsplash tile is split L/M on the contractor side so the
+  // owner can track tile material separately from install labour.
+  if(base.kitchen && base.kitchen.backsplash && base.kitchen.backsplash.tile && typeof base.kitchen.backsplash.tile.rate === "number"){
+    const r = base.kitchen.backsplash.tile.rate;
+    base.kitchen.backsplash.tile = { labour: +(r * 0.40).toFixed(2), material: +(r * 0.60).toFixed(2) };
+  }
   return scalePrices(base, 0.70);
 }
 function loadContractorPrices(){
@@ -9675,7 +9679,22 @@ function loadContractorPrices(){
       }
     });
   };
-  collapseToRate(fresh.kitchen);
+  // Kitchen — collapse everything to rate EXCEPT backsplash (kept as L/M
+  // on the contractor side per owner spec — tracks tile material separately).
+  if(fresh.kitchen){
+    const ks = fresh.kitchen;
+    const savedBacksplash = ks.backsplash;
+    delete ks.backsplash;
+    collapseToRate(ks);
+    if(savedBacksplash) ks.backsplash = savedBacksplash;
+    // Ensure backsplash.tile is in { labour, material } shape for contractor.
+    if(ks.backsplash && ks.backsplash.tile){
+      const t = ks.backsplash.tile;
+      if(typeof t.rate === "number" && typeof t.labour !== "number"){
+        ks.backsplash.tile = { labour: +(t.rate * 0.40).toFixed(2), material: +(t.rate * 0.60).toFixed(2) };
+      }
+    }
+  }
   collapseToRate(fresh.potlights);
   contractorPrices = fresh;
   return contractorPrices;
@@ -9858,15 +9877,17 @@ function renderContractorPricingEditor(){
         <div>${ctrPriceInput("kitchen.waterfallEnd.rate", wfRow.rate, 25)}</div>
       </div>`;
   }
-  // Kitchen backsplash — single tile rate, supplied & installed
+  // Kitchen backsplash — tile only, split L/M on the contractor side so the
+  // owner can track tile material vs install labour separately.
   {
-    const tileRow = (cp.kitchen.backsplash && cp.kitchen.backsplash.tile) || { rate:0 };
-    html += `<div class="section-title">Backsplash &mdash; tile rate, per sqft ($/sqft, supplied &amp; installed)</div>
-      <div class="footnote" style="margin-bottom:8px;">"Same as countertop" routes through the countertop rate above. Set this only for the tile rate.</div>
-      <div class="price-edit-row head single"><div></div><div>$/sqft</div></div>
-      <div class="price-edit-row single">
+    const tileRow = (cp.kitchen.backsplash && cp.kitchen.backsplash.tile) || { labour:0, material:0 };
+    html += `<div class="section-title">Backsplash &mdash; tile rate, per sqft (labour + material)</div>
+      <div class="footnote" style="margin-bottom:8px;">Tile backsplash is split labour + material so you can track tile cost separately. "Same as countertop" routes through the countertop rate above — only this tile row applies here.</div>
+      <div class="price-edit-row head"><div></div><div>Labour $/sqft</div><div>Material $/sqft</div></div>
+      <div class="price-edit-row">
         <div class="lbl">Tile backsplash</div>
-        <div>${ctrPriceInput("kitchen.backsplash.tile.rate", tileRow.rate, 1)}</div>
+        <div>${ctrPriceInput("kitchen.backsplash.tile.labour", tileRow.labour, 1)}</div>
+        <div>${ctrPriceInput("kitchen.backsplash.tile.material", tileRow.material, 1)}</div>
       </div>`;
   }
   // Kitchen island — $/LF (single rate)
