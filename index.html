@@ -768,21 +768,10 @@
     background:#fff !important;
     position:static !important;
     overflow:visible !important;
-    width:760px !important;
-    max-width:760px !important;
-    margin:0 auto !important;
-  }
-  body.contractor-pdf-export{
-    overflow-x:hidden !important;
   }
   body.contractor-pdf-export .contractor-sheet{
-    margin:0 auto !important;
-    /* Pin width to 760px so the captured canvas matches the letter-page
-       usable area (8.5in − 0.8in margins ≈ 7.7in). Without this the sheet
-       stretches to viewport width and the right edge gets clipped in the
-       generated PDF. */
-    width:760px !important;
-    max-width:760px !important;
+    margin:0 !important;
+    max-width:none !important;
     box-shadow:none !important;
     background:#fff !important;
     /* Zero the bottom padding so the rendered canvas height matches the
@@ -1286,35 +1275,17 @@
   }
   .estimate-toolbar .et-actions{ display:flex; gap:8px; flex-wrap:wrap; }
 
-  /* While the PDF is being rasterized (sendEstimateEmail adds body.pdf-export),
-     strip the on-screen "card" treatment so the PDF doesn't carry a fat top
-     margin or a drop-shadow. The 0.45in @page margin set in jsPDF supplies
-     the actual page margins.
-
-     CRITICAL: pin width to 760px during export. Letter at 96dpi is 816px;
-     with 0.45in × 2 margins (~86px) the usable area is 730px. We render at
-     760px and let html2pdf scale to fit so the right edge (ESTIMATE badge,
-     dollar amounts) is never clipped. Without this pin the sheet would
-     stretch to the browser viewport width and overflow the page. */
+  /* body.pdf-export is no longer used for live-DOM PDF capture — the email
+     PDF now renders inside a hidden 760px-wide iframe to guarantee a
+     letter-page-friendly layout regardless of the user's browser viewport.
+     Keeping a thin stub here in case anything still references the class. */
   body.pdf-export .estimate-sheet{
-    margin:0 auto !important;
+    margin:0 !important;
     padding:0 !important;
     box-shadow:none !important;
-    width:760px !important;
-    max-width:760px !important;
     background:#fff !important;
   }
-  body.pdf-export .estimate-view{
-    background:#fff !important;
-    width:760px !important;
-    max-width:760px !important;
-    margin:0 auto !important;
-  }
-  body.pdf-export{
-    /* Keep the body the same width as the sheet so html2canvas measures the
-       window correctly and doesn't capture extra empty space on the right. */
-    overflow-x:hidden !important;
-  }
+  body.pdf-export .estimate-view{ background:#fff !important; }
 
   /* The printed sheet itself */
   .estimate-sheet{
@@ -6958,39 +6929,38 @@ async function renderContractorBidPdfBlob(){
   const sheetEl = document.getElementById("contractorSheet");
   if(!sheetEl) throw new Error("Contractor sheet not found");
 
-  // The contractor sheet sits inside `.contractor-view` which is
-  // `display:none` unless `body.show-contractor` is set. Make sure both
-  // are on so html2canvas sees actual rendered content.
+  // Make sure the contractor view is rendered so we get the latest state.
   const hadShow = document.body.classList.contains("show-contractor");
   if(!hadShow) document.body.classList.add("show-contractor");
-  document.body.classList.add("contractor-pdf-export");
-
-  // Re-render so the sheet reflects the latest bid state + category toggles.
   try { renderContractorSheet(); } catch(_){}
   await new Promise(r => setTimeout(r, 80));
 
   const filenameAddr = sanitizeFilename(state.propAddress || state.propName || "bid");
   const filename = `ContractorBid-${filenameAddr}.pdf`;
 
-  try{
-    const blob = await html2pdf().set({
-      margin:      [0.4, 0.4, 0.4, 0.4],
-      filename,
-      image:       { type:'jpeg', quality:0.97 },
-      // windowWidth 760 matches the contractor-sheet width pinned by
-      // body.contractor-pdf-export CSS. Captured canvas is exactly that
-      // wide so html2pdf scales it cleanly to fit letter (8.5in − 0.8in
-      // margins = 7.7in usable) without clipping the right edge.
-      html2canvas: { scale:2, useCORS:true, backgroundColor:'#ffffff', windowWidth: 760, width: 760 },
-      jsPDF:       { unit:'in', format:'letter', orientation:'portrait' },
-      // Each scope-section must stay whole — never split a category
-      // mid-content even if it leaves white space at the bottom of a page.
-      // Same applies to summary + signatures.
-      pagebreak:   { mode:['css','legacy'], avoid:['.scope-section','.summary','.sig-area','.notes-block'] }
-    }).from(sheetEl).outputPdf('blob');
+  try {
+    // Use the iframe-isolated helper so the captured canvas is exactly
+    // 760px wide — no viewport stretching, no right-edge clipping.
+    const blob = await pdfFromNodeViaIframe({
+      sourceEl: sheetEl,
+      bodyClasses: "show-contractor contractor-pdf-export",
+      extraCss: `
+        .contractor-view { display:block !important; position:static !important; background:#fff !important; overflow:visible !important; width:760px !important; max-width:760px !important; margin:0 !important; padding:0 !important; }
+        .contractor-toolbar, .contractor-cat-bar { display:none !important; }
+        .contractor-sheet { margin:0 !important; padding:0 !important; max-width:760px !important; width:760px !important; box-shadow:none !important; background:#fff !important; }
+        .contractor-sheet .bid-row { gap:10px !important; }
+        .contractor-sheet .bid-cell { min-width:110px !important; }
+        .scope-title, .summary-title { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
+      `,
+      pdfOptions: {
+        margin:    [0.4, 0.4, 0.4, 0.4],
+        filename,
+        image:     { type:'jpeg', quality:0.97 },
+        pagebreak: { mode:['css','legacy'], avoid:['.scope-section','.summary','.sig-area','.notes-block'] }
+      }
+    });
     return { blob, filename };
   } finally {
-    document.body.classList.remove("contractor-pdf-export");
     if(!hadShow) document.body.classList.remove("show-contractor");
   }
 }
@@ -8310,6 +8280,148 @@ function isValidEmail(e){
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 }
 
+/* -----------------------------------------------------------------
+   pdfFromNodeViaIframe — generate a PDF blob from a source DOM node
+   by rendering it inside a hidden, isolated iframe at a fixed width.
+   This bypasses every quirk of the live DOM (viewport-stretching CSS,
+   show-estimate overlays, position:fixed parents, browser viewport
+   width) that was clipping the right edge of the captured canvas.
+
+   The iframe is created at exactly the PDF page's usable pixel width
+   (default 760px ≈ letter portrait minus 0.45in margins at 96dpi),
+   the cloned node is dropped in along with the page's stylesheets,
+   then html2pdf is invoked on the iframe document. The captured
+   canvas matches the iframe body width exactly, so html2pdf scales
+   it cleanly to fit the page — nothing on the right gets clipped.
+
+   Returns: Promise<Blob>
+   ----------------------------------------------------------------- */
+async function pdfFromNodeViaIframe({ sourceEl, bodyClasses, extraCss, pdfOptions, frameWidth }){
+  if(!sourceEl) throw new Error("pdfFromNodeViaIframe: sourceEl is required");
+  const FW = frameWidth || 760;
+
+  // 1. Clone the source node + preserve user-typed input values.
+  const clone = sourceEl.cloneNode(true);
+  const liveInputs = sourceEl.querySelectorAll("input, textarea, select");
+  const cloneInputs = clone.querySelectorAll("input, textarea, select");
+  liveInputs.forEach((live, i) => {
+    const c = cloneInputs[i];
+    if(!c) return;
+    if(c.tagName === "SELECT"){
+      Array.from(c.options).forEach(opt => {
+        if(opt.value === live.value) opt.setAttribute("selected", "selected");
+        else opt.removeAttribute("selected");
+      });
+    } else if(live.type === "checkbox" || live.type === "radio"){
+      if(live.checked) c.setAttribute("checked", "checked");
+      else c.removeAttribute("checked");
+    } else {
+      c.setAttribute("value", live.value || "");
+    }
+  });
+
+  // 2. Copy all live stylesheets into the iframe so the layout matches.
+  const styleNodes = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+    .map(n => n.outerHTML).join("\n");
+
+  // 3. Build the iframe document. CRITICAL: pin body width to FW so the
+  //    captured canvas is exactly that wide and html2pdf can scale it
+  //    cleanly to the letter page.
+  const doc = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title></title>
+${styleNodes}
+<style>
+  html, body {
+    background:#fff !important;
+    margin:0 !important; padding:0 !important;
+    width:${FW}px !important;
+    overflow:hidden !important;
+  }
+  body {
+    font-family:'Montserrat',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:#0a0a0a;
+  }
+  /* Force the cloned root element to fill the frame width with no card chrome */
+  body > * {
+    width:${FW}px !important;
+    max-width:${FW}px !important;
+    margin:0 !important;
+    padding:0 !important;
+    box-shadow:none !important;
+    background:#fff !important;
+  }
+  ${extraCss || ""}
+</style>
+</head>
+<body class="${bodyClasses || ""}">
+${clone.outerHTML}
+</body>
+</html>`;
+
+  // 4. Create a hidden iframe sized to FW so the rendered canvas matches.
+  let iframe = document.getElementById("__pdfFrame");
+  if(iframe) iframe.remove();
+  iframe = document.createElement("iframe");
+  iframe.id = "__pdfFrame";
+  iframe.setAttribute("aria-hidden", "true");
+  // Position it off-screen but at a real, full size — html2canvas needs a
+  // measurable layout. Using `right:-9999px` plus `width:FW + 40px` keeps
+  // the iframe out of the visible area without zero-sizing it.
+  iframe.style.cssText = `position:fixed;left:-99999px;top:0;width:${FW + 40}px;height:1200px;border:0;opacity:0;pointer-events:none;background:#fff;`;
+  document.body.appendChild(iframe);
+
+  const win = iframe.contentWindow;
+  const idoc = win.document;
+  idoc.open(); idoc.write(doc); idoc.close();
+
+  // 5. Wait for fonts + images, then call html2pdf on the iframe's body.
+  await new Promise((resolve) => {
+    const ready = () => {
+      // Give the iframe a beat to paint after fonts resolve.
+      setTimeout(resolve, 120);
+    };
+    if(idoc.fonts && idoc.fonts.ready && typeof idoc.fonts.ready.then === "function"){
+      idoc.fonts.ready.then(ready).catch(ready);
+    } else {
+      setTimeout(ready, 350);
+    }
+  });
+
+  // 6. Resize the iframe height to the rendered body height so the capture
+  //    includes the full document.
+  const fullH = Math.max(idoc.body.scrollHeight, idoc.documentElement.scrollHeight, 600);
+  iframe.style.height = (fullH + 40) + "px";
+
+  // 7. Capture the body. windowWidth pinned to FW so html2canvas mirrors
+  //    our iframe layout. The element is the iframe's body itself.
+  const targetEl = idoc.body.firstElementChild || idoc.body;
+  const baseOpts = pdfOptions || {};
+  const blob = await html2pdf().set({
+    margin:      baseOpts.margin || [0.45, 0.45, 0.45, 0.45],
+    filename:    baseOpts.filename || "document.pdf",
+    image:       baseOpts.image || { type:'jpeg', quality:0.97 },
+    html2canvas: Object.assign({
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      windowWidth: FW,
+      width: FW,
+      // Tell html2canvas to use the iframe's window for rendering.
+      // (Required — otherwise it reads from the parent document.)
+      foreignObjectRendering: false
+    }, baseOpts.html2canvas || {}),
+    jsPDF:       Object.assign({ unit:'in', format:'letter', orientation:'portrait' }, baseOpts.jsPDF || {}),
+    pagebreak:   baseOpts.pagebreak || { mode:['css','legacy'] }
+  }).from(targetEl).outputPdf('blob');
+
+  // 8. Clean up the iframe.
+  try { iframe.remove(); } catch(_){}
+  return blob;
+}
+
 async function sendEstimateEmail(){
   const toRaw    = document.getElementById("emailTo").value;
   const subject  = (document.getElementById("emailSubject").value || "").trim();
@@ -8343,46 +8455,51 @@ async function sendEstimateEmail(){
   const btn = document.getElementById("emailSendBtn");
   if(btn){ btn.disabled = true; btn.textContent = "Working..."; }
 
-  let exportClassApplied = false;
   try{
     // ---- 1. Generate PDF from the estimate sheet ----
     setEmailStatus("Generating PDF...", "working");
     const sheetEl = document.getElementById("estimateSheet");
     if(!sheetEl) throw new Error("Estimate sheet not found");
 
-    // Apply the PDF-export overrides (strips the on-screen card padding/shadow)
-    // and ensure the estimate-view overlay is on-screen so html2canvas can
-    // actually measure + paint the layout.
-    document.body.classList.add("pdf-export", "show-estimate");
-    exportClassApplied = true;
-
     const addr = sanitizeFilename(state.propAddress || state.propName || "estimate");
     const filename = `Estimate-${addr}.pdf`;
 
-    const blob = await html2pdf().set({
-      margin: [0.45, 0.45, 0.45, 0.45],
-      filename,
-      image:        { type: 'jpeg', quality: 0.98 },
-      // windowWidth 760 matches the .estimate-sheet width pinned by
-      // body.pdf-export CSS (above). This guarantees the captured canvas is
-      // exactly the width of the sheet so html2pdf can scale it cleanly to
-      // fit the letter page (8.5in − 0.9in margins = 7.6in usable).
-      html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: 760, width: 760 },
-      jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' },
-      // Force a fresh page BEFORE the summary-page block AND the disclaimer-page
-      // block, and forbid breaks INSIDE any structural element. CSS rules are
-      // also respected via mode:['css','legacy'].
-      pagebreak: {
-        mode:   ['css', 'legacy'],
-        before: ['.es-summary-page', '.es-disclaimer-page'],
-        avoid:  [
-          '.es-category-block', '.es-subblock',
-          '.es-totals-wrap', '.es-savings-card', '.es-payments-wrap',
-          '.es-summary-page',
-          '.es-disclaimer-page', '.es-disclaimer', '.es-signatures', '.es-sig'
-        ]
+    // Use the iframe-isolated helper so the captured canvas is exactly the
+    // 760px-wide letter-page-friendly width — no viewport stretching, no
+    // right-edge clipping.
+    const blob = await pdfFromNodeViaIframe({
+      sourceEl: sheetEl,
+      bodyClasses: "show-estimate pdf-export",
+      extraCss: `
+        /* Inside the iframe, force the estimate-view to behave like a normal
+           block element (NOT position:fixed) so the sheet flows naturally. */
+        .estimate-view { display:block !important; position:static !important; background:#fff !important; overflow:visible !important; width:760px !important; max-width:760px !important; margin:0 !important; padding:0 !important; }
+        .estimate-toolbar { display:none !important; }
+        .estimate-sheet { margin:0 !important; padding:0 !important; max-width:760px !important; width:760px !important; box-shadow:none !important; background:#fff !important; }
+        /* Kill print-only color overrides (we're not in @media print) and
+           force the gold/black theme to render in the rasterized canvas. */
+        .es-category-head, .es-cat-total .v, .es-savings-card, .es-payments-table tr.pm-total td {
+          -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important;
+        }
+        /* No glow on dollar amounts in PDF (becomes a muddy halo). */
+        .es-savings-card .es-sav-amount { text-shadow:none !important; }
+      `,
+      pdfOptions: {
+        margin: [0.45, 0.45, 0.45, 0.45],
+        filename,
+        image:  { type: 'jpeg', quality: 0.98 },
+        pagebreak: {
+          mode:   ['css', 'legacy'],
+          before: ['.es-summary-page', '.es-disclaimer-page'],
+          avoid:  [
+            '.es-category-block', '.es-subblock',
+            '.es-totals-wrap', '.es-savings-card', '.es-payments-wrap',
+            '.es-summary-page',
+            '.es-disclaimer-page', '.es-disclaimer', '.es-signatures', '.es-sig'
+          ]
+        }
       }
-    }).from(sheetEl).outputPdf('blob');
+    });
 
     const pdfBase64 = await blobToBase64(blob);
     const sizeKB = Math.round(blob.size / 1024);
@@ -8416,11 +8533,8 @@ async function sendEstimateEmail(){
     setEmailStatus("Failed: " + (e && e.message ? e.message : String(e)), "error");
     if(btn){ btn.disabled = false; btn.textContent = "Generate PDF & Send"; }
   }finally{
-    // Always strip the PDF-export classes, even if the render or send failed,
-    // otherwise the on-screen estimator stays stuck in the export view.
-    if(exportClassApplied){
-      document.body.classList.remove("pdf-export", "show-estimate");
-    }
+    // No body-class cleanup needed — the iframe helper renders into an
+    // isolated document and leaves the live DOM alone.
   }
 }
 
