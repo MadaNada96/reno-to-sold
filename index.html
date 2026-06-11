@@ -3978,7 +3978,14 @@ function migrateFlatShowerPrice(p){
     };
     // Drop legacy sub-groups that no longer exist (old size/tier matrices, waterfall).
     delete p.kitchen.waterfall;
-    ["base","countertop","backsplash","island"].forEach(grp => {
+    // BACKSPASH IS EXCLUDED FROM THIS LOOP. Backsplash tile is the one kitchen
+    // sub-group that uses { labour, material } on purpose (so the owner can
+    // track tile material separately from install labour). If we included
+    // backsplash here, convertEntry would collapse the user's saved L/M into
+    // { rate }, then the backsplash-specific block below would split it back
+    // into a 40/60 default — wiping the saved values on every page load.
+    // Only base / countertop / island get rate-collapsed.
+    ["base","countertop","island"].forEach(grp => {
       if(p.kitchen[grp] && typeof p.kitchen[grp] === "object"){
         Object.keys(p.kitchen[grp]).forEach(k => {
           // Drop legacy size buckets (small/medium/large) — model is LF/sqft now.
@@ -3994,25 +4001,37 @@ function migrateFlatShowerPrice(p){
         });
       }
     });
-    // Backsplash — collapse old tiers into a single { tile: { labour, material } } entry.
-    // Tile is split L/M so tile material can be tracked separately from install labour.
+    // Backsplash — kept as { tile: { labour, material } } on purpose. Migrate
+    // older shapes (subway/quartz/standard/custom) into a single `tile` entry
+    // WITHOUT touching it if the user already has labour/material saved.
     if(p.kitchen.backsplash){
       const bs = p.kitchen.backsplash;
       delete bs.subway;
       delete bs.quartz;
       if(!bs.tile){
-        // Take "standard" (cheaper) if present, otherwise the lowest of what's there.
-        const std = bs.standard && (typeof bs.standard.rate === "number")
-          ? bs.standard.rate
-          : (bs.standard ? (bs.standard.labour || 0) + (bs.standard.material || 0) : 0);
-        bs.tile = { rate: std > 0 ? std : 28 };
+        // Promote legacy "standard" tier into tile if it exists; otherwise default.
+        if(bs.standard){
+          if(typeof bs.standard.labour === "number" || typeof bs.standard.material === "number"){
+            bs.tile = { labour: bs.standard.labour || 0, material: bs.standard.material || 0 };
+          } else if(typeof bs.standard.rate === "number"){
+            const r = bs.standard.rate;
+            bs.tile = { labour: +(r * 0.40).toFixed(2), material: +(r * 0.60).toFixed(2) };
+          } else {
+            bs.tile = { labour: 11.20, material: 16.80 };
+          }
+        } else {
+          bs.tile = { labour: 11.20, material: 16.80 };
+        }
       }
       delete bs.standard;
       delete bs.custom;
-      // Convert {rate} → {labour, material} (40/60 split) if needed.
+      // If a previous migration left tile as { rate }, split to L/M. If tile
+      // already has labour/material, LEAVE IT ALONE — that's the user's data.
       if(bs.tile && typeof bs.tile.rate === "number" && typeof bs.tile.labour !== "number"){
         const r = bs.tile.rate;
-        bs.tile = { labour: +(r * 0.40).toFixed(2), material: +(r * 0.60).toFixed(2) };
+        delete bs.tile.rate;
+        bs.tile.labour   = +(r * 0.40).toFixed(2);
+        bs.tile.material = +(r * 0.60).toFixed(2);
       }
     }
     // Under-cab lighting — changed from $/LF to a flat rate. Old shape used
