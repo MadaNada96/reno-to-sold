@@ -768,10 +768,21 @@
     background:#fff !important;
     position:static !important;
     overflow:visible !important;
+    width:760px !important;
+    max-width:760px !important;
+    margin:0 auto !important;
+  }
+  body.contractor-pdf-export{
+    overflow-x:hidden !important;
   }
   body.contractor-pdf-export .contractor-sheet{
-    margin:0 !important;
-    max-width:none !important;
+    margin:0 auto !important;
+    /* Pin width to 760px so the captured canvas matches the letter-page
+       usable area (8.5in − 0.8in margins ≈ 7.7in). Without this the sheet
+       stretches to viewport width and the right edge gets clipped in the
+       generated PDF. */
+    width:760px !important;
+    max-width:760px !important;
     box-shadow:none !important;
     background:#fff !important;
     /* Zero the bottom padding so the rendered canvas height matches the
@@ -1278,16 +1289,31 @@
   /* While the PDF is being rasterized (sendEstimateEmail adds body.pdf-export),
      strip the on-screen "card" treatment so the PDF doesn't carry a fat top
      margin or a drop-shadow. The 0.45in @page margin set in jsPDF supplies
-     the actual page margins. */
+     the actual page margins.
+
+     CRITICAL: pin width to 760px during export. Letter at 96dpi is 816px;
+     with 0.45in × 2 margins (~86px) the usable area is 730px. We render at
+     760px and let html2pdf scale to fit so the right edge (ESTIMATE badge,
+     dollar amounts) is never clipped. Without this pin the sheet would
+     stretch to the browser viewport width and overflow the page. */
   body.pdf-export .estimate-sheet{
-    margin:0 !important;
+    margin:0 auto !important;
     padding:0 !important;
     box-shadow:none !important;
-    max-width:none !important;
+    width:760px !important;
+    max-width:760px !important;
     background:#fff !important;
   }
   body.pdf-export .estimate-view{
     background:#fff !important;
+    width:760px !important;
+    max-width:760px !important;
+    margin:0 auto !important;
+  }
+  body.pdf-export{
+    /* Keep the body the same width as the sheet so html2canvas measures the
+       window correctly and doesn't capture extra empty space on the right. */
+    overflow-x:hidden !important;
   }
 
   /* The printed sheet itself */
@@ -6951,7 +6977,11 @@ async function renderContractorBidPdfBlob(){
       margin:      [0.4, 0.4, 0.4, 0.4],
       filename,
       image:       { type:'jpeg', quality:0.97 },
-      html2canvas: { scale:2, useCORS:true, backgroundColor:'#ffffff', windowWidth: sheetEl.scrollWidth },
+      // windowWidth 760 matches the contractor-sheet width pinned by
+      // body.contractor-pdf-export CSS. Captured canvas is exactly that
+      // wide so html2pdf scales it cleanly to fit letter (8.5in − 0.8in
+      // margins = 7.7in usable) without clipping the right edge.
+      html2canvas: { scale:2, useCORS:true, backgroundColor:'#ffffff', windowWidth: 760, width: 760 },
       jsPDF:       { unit:'in', format:'letter', orientation:'portrait' },
       // Each scope-section must stay whole — never split a category
       // mid-content even if it leaves white space at the bottom of a page.
@@ -8333,7 +8363,11 @@ async function sendEstimateEmail(){
       margin: [0.45, 0.45, 0.45, 0.45],
       filename,
       image:        { type: 'jpeg', quality: 0.98 },
-      html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: sheetEl.scrollWidth },
+      // windowWidth 760 matches the .estimate-sheet width pinned by
+      // body.pdf-export CSS (above). This guarantees the captured canvas is
+      // exactly the width of the sheet so html2pdf can scale it cleanly to
+      // fit the letter page (8.5in − 0.9in margins = 7.6in usable).
+      html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: 760, width: 760 },
       jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' },
       // Force a fresh page BEFORE the summary-page block AND the disclaimer-page
       // block, and forbid breaks INSIDE any structural element. CSS rules are
