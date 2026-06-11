@@ -4035,8 +4035,15 @@ function loadPrices(){
   }catch(e){}
   return fresh;
 }
+// Keys used to track WHEN local price edits happened, so the cloud sync can
+// do a real last-write-wins comparison instead of always letting cloud win.
+const PRICES_TS_KEY            = "reno_prices_updated_at_v1";
+const CONTRACTOR_PRICES_TS_KEY = "reno_contractor_prices_updated_at_v1";
+
 function savePrices(){
   localStorage.setItem("reno_prices_v2", JSON.stringify(prices));
+  // Stamp the local edit so bootstrapCloudSync can tell who's newer.
+  localStorage.setItem(PRICES_TS_KEY, new Date().toISOString());
   if(currentUser && supa){ cloudPushPrices("client"); }
 }
 function resetPricing(){
@@ -9855,6 +9862,8 @@ function loadContractorPrices(){
 }
 function saveContractorPrices(){
   localStorage.setItem("reno_contractor_prices_v1", JSON.stringify(contractorPrices));
+  // Stamp the local edit so bootstrapCloudSync can tell who's newer.
+  localStorage.setItem(CONTRACTOR_PRICES_TS_KEY, new Date().toISOString());
   if(currentUser && supa){ cloudPushPrices("contractor"); }
 }
 function resetContractorPricing(){
@@ -10718,23 +10727,55 @@ async function bootstrapCloudSync(showMigratePrompt){
   if(!currentUser || !supa) return;
 
   // ---- Pricing sync ----
-  // If cloud has prices, those win (canonical). If cloud is empty, push local up.
+  // Last-write-wins by timestamp. The local PRICES_TS_KEY records when the
+  // user last edited prices on this device; the cloud row carries its own
+  // updated_at. Whichever side is newer wins. This prevents stale cloud
+  // rows from overwriting fresh local edits — the bug the user hit where
+  // "Tile backsplash L/M keeps defaulting to a price I didn't set".
   const settings = await cloudFetchSettings();
-  if(settings && settings.client_prices){
+  const cloudTs = settings && settings.updated_at ? Date.parse(settings.updated_at) : 0;
+  const localPricesTs    = Date.parse(localStorage.getItem(PRICES_TS_KEY)            || "") || 0;
+  const localContractorTs = Date.parse(localStorage.getItem(CONTRACTOR_PRICES_TS_KEY) || "") || 0;
+
+  if(settings && settings.client_prices && cloudTs > localPricesTs){
+    // Cloud is newer — pull cloud into local.
     const fresh = JSON.parse(JSON.stringify(DEFAULT_PRICES));
     deepMerge(fresh, migrateFlatShowerPrice(settings.client_prices));
     prices = fresh;
     localStorage.setItem("reno_prices_v2", JSON.stringify(prices));
-  } else {
+    localStorage.setItem(PRICES_TS_KEY, settings.updated_at);
+  } else if(localPricesTs > 0){
+    // Local has edits the cloud doesn't reflect — push local up.
     await cloudPushPrices("client");
+  } else if(!settings || !settings.client_prices){
+    // Neither side has anything saved — push the in-memory defaults so the
+    // cloud row exists for future syncs.
+    await cloudPushPrices("client");
+  } else {
+    // Cloud has data, local has never edited — accept cloud as starting point.
+    const fresh = JSON.parse(JSON.stringify(DEFAULT_PRICES));
+    deepMerge(fresh, migrateFlatShowerPrice(settings.client_prices));
+    prices = fresh;
+    localStorage.setItem("reno_prices_v2", JSON.stringify(prices));
+    if(settings.updated_at) localStorage.setItem(PRICES_TS_KEY, settings.updated_at);
   }
-  if(settings && settings.contractor_prices){
+
+  if(settings && settings.contractor_prices && cloudTs > localContractorTs){
     const freshC = defaultContractorPrices();
     deepMerge(freshC, migrateFlatShowerPrice(settings.contractor_prices));
     contractorPrices = freshC;
     localStorage.setItem("reno_contractor_prices_v1", JSON.stringify(contractorPrices));
-  } else if(contractorPrices){
+    localStorage.setItem(CONTRACTOR_PRICES_TS_KEY, settings.updated_at);
+  } else if(localContractorTs > 0 && contractorPrices){
     await cloudPushPrices("contractor");
+  } else if((!settings || !settings.contractor_prices) && contractorPrices){
+    await cloudPushPrices("contractor");
+  } else if(settings && settings.contractor_prices){
+    const freshC = defaultContractorPrices();
+    deepMerge(freshC, migrateFlatShowerPrice(settings.contractor_prices));
+    contractorPrices = freshC;
+    localStorage.setItem("reno_contractor_prices_v1", JSON.stringify(contractorPrices));
+    if(settings.updated_at) localStorage.setItem(CONTRACTOR_PRICES_TS_KEY, settings.updated_at);
   }
   // If the pricing editor or contractor editor is open, refresh them
   if(document.getElementById("settingsModal").classList.contains("show")) renderPricingEditor();
