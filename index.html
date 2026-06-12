@@ -19,8 +19,14 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>if(window.pdfjsLib){pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';}</script>
-<!-- html2pdf.js — used to rasterize the Estimate sheet into a PDF blob client-side
-     so it can be base64-encoded and POSTed to the email-estimate Supabase function. -->
+<!-- PDF generation stack ─ html2canvas + jsPDF directly, plus html2pdf for
+     the legacy callers. We load html2canvas and jsPDF as SEPARATE standalone
+     bundles because the html2pdf.bundle wraps them inside its own webpack
+     scope and does NOT expose them as window.html2canvas / window.jspdf.
+     The new pdfFromElement helper drives them directly to guarantee correct
+     edge-to-edge rendering on every PDF the system generates. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
 <!-- ============================================================
@@ -8486,17 +8492,25 @@ async function pdfFromElement({
 }){
   if(!sourceEl) throw new Error("pdfFromElement: sourceEl is required");
 
-  // ── Resolve libs (html2pdf.bundle exposes them globally) ────────
+  // ── Resolve libs ────────────────────────────────────────────────
+  // We load html2canvas + jsPDF as separate CDN scripts (see <head>) so
+  // they're always available as globals. We also fall back to the
+  // html2pdf bundle's internal references if for some reason the
+  // standalone scripts didn't load.
   const html2canvasFn =
+    (typeof window !== "undefined" && typeof window.html2canvas === "function" && window.html2canvas) ||
     (typeof html2canvas === "function" && html2canvas) ||
-    (window.html2canvas) ||
     null;
   const jsPDFCtor =
-    (window.jspdf && window.jspdf.jsPDF) ||
+    (window.jspdf && (window.jspdf.jsPDF || window.jspdf.default)) ||
     window.jsPDF ||
     null;
-  if(!html2canvasFn) throw new Error("html2canvas not available — html2pdf bundle didn't load");
-  if(!jsPDFCtor)     throw new Error("jsPDF not available — html2pdf bundle didn't load");
+  if(!html2canvasFn){
+    throw new Error("html2canvas not loaded. Refresh the page; if the problem persists, your network may be blocking cdnjs.cloudflare.com.");
+  }
+  if(!jsPDFCtor){
+    throw new Error("jsPDF not loaded. Refresh the page; if the problem persists, your network may be blocking cdnjs.cloudflare.com.");
+  }
 
   // ── Page geometry ───────────────────────────────────────────────
   const M       = (typeof marginInches === "number") ? marginInches : 0.45;
