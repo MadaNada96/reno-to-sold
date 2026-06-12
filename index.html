@@ -8410,29 +8410,133 @@ function isValidEmail(e){
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 }
 
-/* -----------------------------------------------------------------
-   pdfFromNodeViaIframe — generate a PDF blob from a source DOM node
-   by rendering it inside a hidden, isolated iframe at a fixed width.
-   This bypasses every quirk of the live DOM (viewport-stretching CSS,
-   show-estimate overlays, position:fixed parents, browser viewport
-   width) that was clipping the right edge of the captured canvas.
+/* =================================================================
+   GENERATE-PDF-FROM-ELEMENT — bulletproof PDF builder.
+   =================================================================
 
-   The iframe is created at exactly the PDF page's usable pixel width
-   (default 760px ≈ letter portrait minus 0.45in margins at 96dpi),
-   the cloned node is dropped in along with the page's stylesheets,
-   then html2pdf is invoked on the iframe document. The captured
-   canvas matches the iframe body width exactly, so html2pdf scales
-   it cleanly to fit the page — nothing on the right gets clipped.
+   ## Why this exists
 
-   Returns: Promise<Blob>
-   ----------------------------------------------------------------- */
-async function pdfFromNodeViaIframe({ sourceEl, bodyClasses, extraCss, pdfOptions, frameWidth }){
-  if(!sourceEl) throw new Error("pdfFromNodeViaIframe: sourceEl is required");
-  const FW = frameWidth || 760;
+   Every prior attempt at fixing the "right side cut off" / "left side
+   cut off" PDF bug failed because we were going through the html2pdf
+   wrapper. html2pdf does its own DOM clone into an "overlay container"
+   in the PARENT document for measurement — so any CSS overrides applied
+   to a wrapper iframe vanish at capture time, and the live document's
+   estimate-sheet rules (position:fixed parent, max-width:840px, etc.)
+   take over with unpredictable clipping.
 
-  // 1. Clone the source node + preserve user-typed input values.
+   This helper SKIPS html2pdf entirely and drives html2canvas + jsPDF
+   directly. The source element is cloned into a wrapper div that is
+   mounted in the live DOM (NOT an iframe) at a precise pixel width
+   matching the PDF's usable area. We control every styling override
+   inline + via a scoped <style>, so what html2canvas sees is exactly
+   what we want it to capture. Page placement and pagination are then
+   driven by hand through jsPDF.addImage with manual canvas slicing.
+
+   ## Coordinate model
+
+   • Letter portrait = 8.5 × 11 in
+   • Margins: marginInches on every side (default 0.45in)
+   • Usable area: (8.5 − 2×margin) × (11 − 2×margin)
+   • Render width in CSS px: usable_width_in × 96 dpi
+       letter @ 0.45in margins → 7.6in × 96 ≈ 730px
+       letter @ 0.40in margins → 7.7in × 96 ≈ 739px
+
+   The wrapper is pinned to that exact px width. Content reflows to fit.
+   When we capture with html2canvas (scale:2), the canvas is 2× the
+   wrapper width. jsPDF then places that canvas at width = usable_width_in
+   so the canvas-to-PDF scale factor is consistent and nothing clips.
+
+   ## Pagination
+
+   If the rendered canvas height exceeds one page, we slice the canvas
+   by hand into per-page sub-canvases and add each as its own image.
+   This avoids html2pdf's css-pagebreak heuristics which were unreliable.
+
+   Soft page-break-avoid: callers can pass `avoidBreakSelectors`. Before
+   pagination we walk those elements and, if any straddles a page edge,
+   push the cut point UP to the start of that element (creating a small
+   trailing white-space rather than splitting the block).
+
+   ## Public API
+
+   const blob = await pdfFromElement({
+     sourceEl,                    // DOM node to render (required)
+     filename,                    // default: 'document.pdf'
+     marginInches,                // default: 0.45
+     pageFormat,                  // 'letter' | 'a4' — default 'letter'
+     orientation,                 // 'portrait' | 'landscape'
+     bodyClasses,                 // string of class names applied to wrapper
+     extraCss,                    // extra CSS scoped to the wrapper
+     avoidBreakSelectors,         // ['.es-summary-page', '.scope-section', ...]
+     beforePageSelectors          // ['.es-disclaimer-page'] — forces page break before
+   });
+
+   Returns Promise<Blob>.
+   ================================================================= */
+async function pdfFromElement({
+  sourceEl,
+  filename,
+  marginInches,
+  pageFormat,
+  orientation,
+  bodyClasses,
+  extraCss,
+  avoidBreakSelectors,
+  beforePageSelectors
+}){
+  if(!sourceEl) throw new Error("pdfFromElement: sourceEl is required");
+
+  // ── Resolve libs (html2pdf.bundle exposes them globally) ────────
+  const html2canvasFn =
+    (typeof html2canvas === "function" && html2canvas) ||
+    (window.html2canvas) ||
+    null;
+  const jsPDFCtor =
+    (window.jspdf && window.jspdf.jsPDF) ||
+    window.jsPDF ||
+    null;
+  if(!html2canvasFn) throw new Error("html2canvas not available — html2pdf bundle didn't load");
+  if(!jsPDFCtor)     throw new Error("jsPDF not available — html2pdf bundle didn't load");
+
+  // ── Page geometry ───────────────────────────────────────────────
+  const M       = (typeof marginInches === "number") ? marginInches : 0.45;
+  const FORMAT  = pageFormat || "letter";
+  const ORIENT  = orientation || "portrait";
+  const isLetter = FORMAT === "letter";
+  const W_IN = ORIENT === "landscape" ? (isLetter ? 11    : 11.69) : (isLetter ? 8.5  : 8.27);
+  const H_IN = ORIENT === "landscape" ? (isLetter ? 8.5   : 8.27)  : (isLetter ? 11   : 11.69);
+  const INNER_W_IN = W_IN - M * 2;
+  const INNER_H_IN = H_IN - M * 2;
+
+  // Convert usable inches → CSS px at 96dpi for the wrapper width.
+  const DPI = 96;
+  const RENDER_W = Math.round(INNER_W_IN * DPI);  // e.g. 730 for letter portrait @ 0.45in
+
+  // ── Build wrapper + clone source into it ────────────────────────
+  const wrapper = document.createElement("div");
+  wrapper.setAttribute("aria-hidden", "true");
+  wrapper.className = "__pdf_wrapper " + (bodyClasses || "");
+  // Keep the wrapper in the normal document flow so html2canvas can
+  // measure it, but render it BELOW everything and with opacity 0 so
+  // the user never sees it. Using position:absolute with z-index:-9999
+  // (instead of an iframe or off-screen translate) avoids html2canvas
+  // tripping on negative coordinates or cross-document boundaries.
+  wrapper.style.cssText = `
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: ${RENDER_W}px;
+    z-index: -9999;
+    opacity: 0;
+    pointer-events: none;
+    background: #fff;
+    color: #0a0a0a;
+    font-family: 'Montserrat',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  `;
+
+  // Clone the source preserving live input values.
   const clone = sourceEl.cloneNode(true);
-  const liveInputs = sourceEl.querySelectorAll("input, textarea, select");
+  const liveInputs  = sourceEl.querySelectorAll("input, textarea, select");
   const cloneInputs = clone.querySelectorAll("input, textarea, select");
   liveInputs.forEach((live, i) => {
     const c = cloneInputs[i];
@@ -8450,106 +8554,236 @@ async function pdfFromNodeViaIframe({ sourceEl, bodyClasses, extraCss, pdfOption
     }
   });
 
-  // 2. Copy all live stylesheets into the iframe so the layout matches.
-  const styleNodes = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
-    .map(n => n.outerHTML).join("\n");
-
-  // 3. Build the iframe document. CRITICAL: pin body width to FW so the
-  //    captured canvas is exactly that wide and html2pdf can scale it
-  //    cleanly to the letter page.
-  const doc = `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title></title>
-${styleNodes}
-<style>
-  html, body {
-    background:#fff !important;
-    margin:0 !important; padding:0 !important;
-    width:${FW}px !important;
-    overflow:hidden !important;
-  }
-  body {
-    font-family:'Montserrat',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-    color:#0a0a0a;
-  }
-  /* Force the cloned root element to fill the frame width with no card chrome */
-  body > * {
-    width:${FW}px !important;
-    max-width:${FW}px !important;
-    margin:0 !important;
-    padding:0 !important;
-    box-shadow:none !important;
-    background:#fff !important;
-  }
-  ${extraCss || ""}
-</style>
-</head>
-<body class="${bodyClasses || ""}">
-${clone.outerHTML}
-</body>
-</html>`;
-
-  // 4. Create a hidden iframe sized to FW so the rendered canvas matches.
-  let iframe = document.getElementById("__pdfFrame");
-  if(iframe) iframe.remove();
-  iframe = document.createElement("iframe");
-  iframe.id = "__pdfFrame";
-  iframe.setAttribute("aria-hidden", "true");
-  // Position it off-screen but at a real, full size — html2canvas needs a
-  // measurable layout. Using `right:-9999px` plus `width:FW + 40px` keeps
-  // the iframe out of the visible area without zero-sizing it.
-  iframe.style.cssText = `position:fixed;left:-99999px;top:0;width:${FW + 40}px;height:1200px;border:0;opacity:0;pointer-events:none;background:#fff;`;
-  document.body.appendChild(iframe);
-
-  const win = iframe.contentWindow;
-  const idoc = win.document;
-  idoc.open(); idoc.write(doc); idoc.close();
-
-  // 5. Wait for fonts + images, then call html2pdf on the iframe's body.
-  await new Promise((resolve) => {
-    const ready = () => {
-      // Give the iframe a beat to paint after fonts resolve.
-      setTimeout(resolve, 120);
-    };
-    if(idoc.fonts && idoc.fonts.ready && typeof idoc.fonts.ready.then === "function"){
-      idoc.fonts.ready.then(ready).catch(ready);
-    } else {
-      setTimeout(ready, 350);
+  // Add scoped CSS to neutralize position:fixed parents and force the
+  // sheet to render at exactly the wrapper width. The selectors are
+  // generic — they cover both the estimate-sheet and contractor-sheet
+  // overlays without needing per-call branches.
+  const styleEl = document.createElement("style");
+  styleEl.textContent = `
+    .__pdf_wrapper, .__pdf_wrapper * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
     }
-  });
+    .__pdf_wrapper .estimate-view,
+    .__pdf_wrapper .contractor-view {
+      position: static !important;
+      display: block !important;
+      background: #fff !important;
+      overflow: visible !important;
+      width: ${RENDER_W}px !important;
+      max-width: ${RENDER_W}px !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      inset: auto !important;
+    }
+    .__pdf_wrapper .estimate-sheet,
+    .__pdf_wrapper .contractor-sheet {
+      position: static !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      width: ${RENDER_W}px !important;
+      max-width: ${RENDER_W}px !important;
+      box-shadow: none !important;
+      background: #fff !important;
+    }
+    .__pdf_wrapper .estimate-toolbar,
+    .__pdf_wrapper .contractor-toolbar,
+    .__pdf_wrapper .contractor-cat-bar {
+      display: none !important;
+    }
+    /* PDF renderers turn text-shadow glows into muddy halos. */
+    .__pdf_wrapper .es-savings-card .es-sav-amount {
+      text-shadow: none !important;
+    }
+    /* Lock money displays. Some renderers re-insert narrow-no-break-space
+       as thousands separators which renders as a "1 2,345" gap. */
+    .__pdf_wrapper .es-cat-total .v,
+    .__pdf_wrapper .es-totals-box .row .v,
+    .__pdf_wrapper .es-totals-box .row.grand .v,
+    .__pdf_wrapper .es-payments-table .pm-amount,
+    .__pdf_wrapper .es-payments-table tr.pm-total .pm-amount,
+    .__pdf_wrapper .es-payments-table .pm-pct,
+    .__pdf_wrapper .es-savings-card .es-sav-amount {
+      letter-spacing: normal !important;
+      word-spacing: normal !important;
+      font-variant-numeric: normal !important;
+      font-feature-settings: normal !important;
+      font-kerning: normal !important;
+    }
+    ${extraCss || ""}
+  `;
+  wrapper.appendChild(styleEl);
+  wrapper.appendChild(clone);
+  document.body.appendChild(wrapper);
 
-  // 6. Resize the iframe height to the rendered body height so the capture
-  //    includes the full document.
-  const fullH = Math.max(idoc.body.scrollHeight, idoc.documentElement.scrollHeight, 600);
-  iframe.style.height = (fullH + 40) + "px";
+  let pdfBlob;
+  try {
+    // ── Wait for layout + webfonts + images to paint ──────────────
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    if(document.fonts && document.fonts.ready && typeof document.fonts.ready.then === "function"){
+      try { await document.fonts.ready; } catch(_){}
+    }
+    // Wait for any <img> with src to load.
+    const imgs = Array.from(wrapper.querySelectorAll("img"));
+    await Promise.all(imgs.map(img => new Promise(resolve => {
+      if(img.complete && img.naturalWidth > 0) return resolve();
+      const done = () => resolve();
+      img.addEventListener("load", done, { once: true });
+      img.addEventListener("error", done, { once: true });
+      setTimeout(done, 1500); // hard cap
+    })));
+    // Give layout one more rAF after fonts/imgs settle.
+    await new Promise(r => requestAnimationFrame(() => setTimeout(r, 60)));
 
-  // 7. Capture the body. windowWidth pinned to FW so html2canvas mirrors
-  //    our iframe layout. The element is the iframe's body itself.
-  const targetEl = idoc.body.firstElementChild || idoc.body;
-  const baseOpts = pdfOptions || {};
-  const blob = await html2pdf().set({
-    margin:      baseOpts.margin || [0.45, 0.45, 0.45, 0.45],
-    filename:    baseOpts.filename || "document.pdf",
-    image:       baseOpts.image || { type:'jpeg', quality:0.97 },
-    html2canvas: Object.assign({
+    // ── Capture wrapper → canvas ──────────────────────────────────
+    // Use the WRAPPER as the capture target, not the clone. The clone
+    // could have unexpected ancestor styles; the wrapper is fully
+    // styled by us so its bounding box is deterministic.
+    const fullCanvas = await html2canvasFn(wrapper, {
       scale: 2,
       useCORS: true,
-      backgroundColor: '#ffffff',
-      windowWidth: FW,
-      width: FW,
-      // Tell html2canvas to use the iframe's window for rendering.
-      // (Required — otherwise it reads from the parent document.)
-      foreignObjectRendering: false
-    }, baseOpts.html2canvas || {}),
-    jsPDF:       Object.assign({ unit:'in', format:'letter', orientation:'portrait' }, baseOpts.jsPDF || {}),
-    pagebreak:   baseOpts.pagebreak || { mode:['css','legacy'] }
-  }).from(targetEl).outputPdf('blob');
+      backgroundColor: "#ffffff",
+      width: RENDER_W,
+      windowWidth: RENDER_W,
+      // scroll offset must be explicit; default behavior reads window.scrollY.
+      scrollX: 0,
+      scrollY: -window.scrollY,
+      // Tell html2canvas not to chase async images itself (we already waited).
+      imageTimeout: 0,
+      // The wrapper has opacity:0 but its descendants are at default opacity.
+      // We force-restore opacity on the capture so the canvas is fully opaque.
+      onclone: (clonedDoc) => {
+        const w = clonedDoc.querySelector(".__pdf_wrapper");
+        if(w){
+          w.style.opacity = "1";
+          w.style.zIndex  = "auto";
+          w.style.position = "static";
+        }
+      }
+    });
 
-  // 8. Clean up the iframe.
-  try { iframe.remove(); } catch(_){}
-  return blob;
+    // ── Build the PDF, page by page ───────────────────────────────
+    const pdf = new jsPDFCtor({ unit: "in", format: FORMAT, orientation: ORIENT });
+
+    const cW = fullCanvas.width;
+    const cH = fullCanvas.height;
+    // Canvas-px ↔ PDF-in conversion: the canvas's full width maps to INNER_W_IN.
+    const pxPerIn = cW / INNER_W_IN;
+    const pageHeightCanvasPx = Math.floor(INNER_H_IN * pxPerIn);
+
+    // Compute "before-page" forced break Y-positions in canvas coords.
+    // We look up the offsetTop of any matching descendant of the wrapper,
+    // scale by the canvas-scale ratio.
+    const liveScale = cW / RENDER_W; // accounting for html2canvas scale option
+    const beforeYs = [];
+    (beforePageSelectors || []).forEach(sel => {
+      Array.from(wrapper.querySelectorAll(sel)).forEach(el => {
+        const top = el.getBoundingClientRect().top - wrapper.getBoundingClientRect().top;
+        const yCanvas = Math.round(top * liveScale);
+        if(yCanvas > 0 && yCanvas < cH) beforeYs.push(yCanvas);
+      });
+    });
+    beforeYs.sort((a, b) => a - b);
+
+    // Soft "avoid-break" — collect element Y-ranges; if a candidate page
+    // cut Y lands inside one of those ranges, pull the cut up to the
+    // top of that range.
+    const avoidRanges = [];
+    (avoidBreakSelectors || []).forEach(sel => {
+      Array.from(wrapper.querySelectorAll(sel)).forEach(el => {
+        const r = el.getBoundingClientRect();
+        const wRect = wrapper.getBoundingClientRect();
+        const t = Math.round((r.top    - wRect.top) * liveScale);
+        const b = Math.round((r.bottom - wRect.top) * liveScale);
+        if(b > t) avoidRanges.push([t, b]);
+      });
+    });
+
+    const adjustCut = (rawCut) => {
+      // If a forced before-page break falls just below the current page top,
+      // use it directly (so the block at that selector begins a new page).
+      // Otherwise, walk avoidRanges and if the cut lands inside one, pull
+      // up to the start of that range (but only if it's not so close to
+      // the page top that it would yield an empty page).
+      let cut = rawCut;
+      for(const y of beforeYs){
+        if(y > rawCut - pageHeightCanvasPx && y <= rawCut){
+          // Use the smaller cut so this section starts on a new page.
+          cut = Math.min(cut, y);
+        }
+      }
+      for(const [t, b] of avoidRanges){
+        if(rawCut > t && rawCut < b){
+          // The rawCut lies inside an avoid block. Pull cut up to t.
+          // Don't allow cut <= rawCut - pageHeightCanvasPx + 1 (would empty page).
+          if(t > rawCut - pageHeightCanvasPx + 40){
+            cut = Math.min(cut, t);
+          }
+        }
+      }
+      return cut;
+    };
+
+    let y = 0;
+    let pageIndex = 0;
+    while(y < cH){
+      const rawCut = Math.min(y + pageHeightCanvasPx, cH);
+      const cut = (rawCut >= cH) ? cH : adjustCut(rawCut);
+      const sliceH = cut - y;
+
+      // Build a slice canvas for this page.
+      const slice = document.createElement("canvas");
+      slice.width  = cW;
+      slice.height = sliceH;
+      const ctx = slice.getContext("2d");
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, slice.width, slice.height);
+      ctx.drawImage(fullCanvas, 0, -y);
+
+      if(pageIndex > 0) pdf.addPage();
+      const sliceHIn = (sliceH / pxPerIn);
+      pdf.addImage(
+        slice.toDataURL("image/jpeg", 0.95), "JPEG",
+        M, M,
+        INNER_W_IN, sliceHIn
+      );
+
+      y = cut;
+      pageIndex++;
+      // Hard safety stop in case of bad math.
+      if(pageIndex > 40) break;
+    }
+
+    pdfBlob = pdf.output("blob");
+  } finally {
+    try { wrapper.remove(); } catch(_){}
+  }
+  // Tag the blob with filename (filename is on the caller side; we just
+  // return the blob, the caller chooses what to do with it).
+  return pdfBlob;
+}
+
+/* Back-compat shim — legacy callers used pdfFromNodeViaIframe(). Route
+   them into the new pdfFromElement helper so old call sites keep working
+   without modification. */
+async function pdfFromNodeViaIframe({ sourceEl, bodyClasses, extraCss, pdfOptions }){
+  const opts = pdfOptions || {};
+  const m = Array.isArray(opts.margin) ? opts.margin[0] : (typeof opts.margin === "number" ? opts.margin : 0.45);
+  const fmt = (opts.jsPDF && opts.jsPDF.format) || "letter";
+  const orn = (opts.jsPDF && opts.jsPDF.orientation) || "portrait";
+  const pb  = opts.pagebreak || {};
+  return await pdfFromElement({
+    sourceEl,
+    filename:            opts.filename,
+    marginInches:        m,
+    pageFormat:          fmt,
+    orientation:         orn,
+    bodyClasses:         bodyClasses,
+    extraCss:            extraCss,
+    avoidBreakSelectors: pb.avoid  || [],
+    beforePageSelectors: pb.before || []
+  });
 }
 
 async function sendEstimateEmail(){
