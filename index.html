@@ -10792,7 +10792,7 @@ const CONTRACTOR_BUMPS = [
   { flag: "reno_contractor_1pct_bump_2026_jun_v3", factor: 1.01, label: "+1%" }
 ];
 
-/* ── ONE-TIME STALE-FIELD CLEANUP ─────────────────────────────────────
+/* ── STALE-FIELD CLEANUP ──────────────────────────────────────────────
    Older saved contractorPrices have entries that carry BOTH `rate` AND
    `labour`/`material` fields because of repeated schema migrations
    (kitchen + lighting & electrical were L/M originally, then converted
@@ -10800,19 +10800,23 @@ const CONTRACTOR_BUMPS = [
    are correct, but the editor and any future code that reads L/M sees
    stale numbers that don't match the rate.
 
-   This pass walks contractorPrices once and removes any orphan labour /
-   material on entries that ALSO have rate. Flag prevents re-running.
+   This pass walks contractorPrices and removes any orphan labour /
+   material on entries that ALSO have rate. Runs on EVERY load (no
+   flag-gating) because it's idempotent — re-running on already-clean
+   data is a no-op (the hasRate-and-LM check fails). The reason we don't
+   gate it: the previous flag-gated version was vulnerable to a race
+   condition where cleanup ran successfully, pushed to cloud, then a
+   subsequent cloud-sync pulled un-cleaned data from elsewhere; flag was
+   set → cleanup blocked forever → stale data persisted.
+
    Backsplash tile is intentionally exempt because it's the ONE kitchen
    item that's still tracked as L/M by design. */
 function cleanupStaleContractorFields(){
-  const FLAG = "reno_contractor_stale_lm_cleanup_2026_jun_v1";
   if(!contractorPrices) return;
-  if(localStorage.getItem(FLAG)) return;
 
   let cleaned = 0;
   const sweep = (o, parentKey) => {
     if(!o || typeof o !== "object") return;
-    // Skip the backsplash.tile entry — that's L/M on purpose.
     Object.keys(o).forEach(k => {
       const v = o[k];
       if(!v || typeof v !== "object" || Array.isArray(v)) return;
@@ -10839,8 +10843,6 @@ function cleanupStaleContractorFields(){
       try { cloudPushPrices("contractor"); } catch(_){}
     }
   }
-  // Always set the flag so this never re-runs.
-  try { localStorage.setItem(FLAG, new Date().toISOString()); } catch(_){}
 }
 
 function applyContractorBumpIfNeeded(){
@@ -10923,6 +10925,23 @@ function exportPricingSnapshot(){
     appliedAt: localStorage.getItem(b.flag) || null
   }));
 
+  // Live audit: count any entries that STILL have both rate and L/M fields,
+  // so we can see at a glance whether the stale-field cleanup is doing its job.
+  let staleCount = 0;
+  const auditStale = (o) => {
+    if(!o || typeof o !== "object") return;
+    Object.keys(o).forEach(k => {
+      const v = o[k];
+      if(!v || typeof v !== "object" || Array.isArray(v)) return;
+      if(k === "backsplash") return;
+      const hasRate = typeof v.rate === "number";
+      const hasLM = typeof v.labour === "number" || typeof v.material === "number";
+      if(hasRate && hasLM) staleCount++;
+      auditStale(v);
+    });
+  };
+  auditStale(contractorPrices);
+
   const snapshot = {
     exportedAt: stamp,
     exportedBy: (currentUser && currentUser.email) ? currentUser.email : null,
@@ -10930,6 +10949,8 @@ function exportPricingSnapshot(){
     schemaVersion: 1,
     notes: "Snapshot of unit pricing. Client prices are what the estimator charges; contractor prices are what RTS pays subs.",
     bumpHistory: bumpHistory,
+    staleContractorFieldsRemaining: staleCount,
+    cleanupFlagSetAt: localStorage.getItem("reno_contractor_stale_lm_cleanup_2026_jun_v1") || null,
     listingDiscountPercent: (prices.listingDiscount && prices.listingDiscount.percent) || 0,
     clientPrices: prices,
     contractorPrices: contractorPrices
