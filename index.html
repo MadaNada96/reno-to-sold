@@ -10762,6 +10762,9 @@ function loadContractorPrices(){
   contractorPrices = fresh;
   // Apply the one-time +5% bump (idempotent — only runs if flag isn't set).
   applyContractorBumpIfNeeded();
+  // Also strip any orphan labour/material fields that still sit alongside
+  // `rate` in the saved data (left over from earlier schema migrations).
+  cleanupStaleContractorFields();
   return contractorPrices;
 }
 
@@ -10788,6 +10791,57 @@ const CONTRACTOR_BUMPS = [
   { flag: "reno_contractor_5pct_bump_2026_jun_v2", factor: 1.05, label: "+5%" },
   { flag: "reno_contractor_1pct_bump_2026_jun_v3", factor: 1.01, label: "+1%" }
 ];
+
+/* ── ONE-TIME STALE-FIELD CLEANUP ─────────────────────────────────────
+   Older saved contractorPrices have entries that carry BOTH `rate` AND
+   `labour`/`material` fields because of repeated schema migrations
+   (kitchen + lighting & electrical were L/M originally, then converted
+   to single-rate). The compute path uses `rate` when present, so totals
+   are correct, but the editor and any future code that reads L/M sees
+   stale numbers that don't match the rate.
+
+   This pass walks contractorPrices once and removes any orphan labour /
+   material on entries that ALSO have rate. Flag prevents re-running.
+   Backsplash tile is intentionally exempt because it's the ONE kitchen
+   item that's still tracked as L/M by design. */
+function cleanupStaleContractorFields(){
+  const FLAG = "reno_contractor_stale_lm_cleanup_2026_jun_v1";
+  if(!contractorPrices) return;
+  if(localStorage.getItem(FLAG)) return;
+
+  let cleaned = 0;
+  const sweep = (o, parentKey) => {
+    if(!o || typeof o !== "object") return;
+    // Skip the backsplash.tile entry — that's L/M on purpose.
+    Object.keys(o).forEach(k => {
+      const v = o[k];
+      if(!v || typeof v !== "object" || Array.isArray(v)) return;
+      // Don't descend into backsplash subtree (preserve L/M).
+      if(k === "backsplash") return;
+      const hasRate = typeof v.rate === "number";
+      const hasL    = typeof v.labour   === "number";
+      const hasM    = typeof v.material === "number";
+      if(hasRate && (hasL || hasM)){
+        delete v.labour; delete v.material;
+        cleaned++;
+      }
+      sweep(v, k);
+    });
+  };
+  sweep(contractorPrices, null);
+
+  if(cleaned > 0){
+    try {
+      localStorage.setItem("reno_contractor_prices_v1", JSON.stringify(contractorPrices));
+      localStorage.setItem(CONTRACTOR_PRICES_TS_KEY, new Date().toISOString());
+    } catch(_){}
+    if(currentUser && supa){
+      try { cloudPushPrices("contractor"); } catch(_){}
+    }
+  }
+  // Always set the flag so this never re-runs.
+  try { localStorage.setItem(FLAG, new Date().toISOString()); } catch(_){}
+}
 
 function applyContractorBumpIfNeeded(){
   if(!contractorPrices) return;
@@ -11838,11 +11892,14 @@ async function bootstrapCloudSync(showMigratePrompt){
     // Cloud may be holding un-bumped data; apply the +5% migration if not yet
     // applied on this browser. Idempotent — re-running is safe.
     applyContractorBumpIfNeeded();
+    cleanupStaleContractorFields();
   } else if(localContractorTs > 0 && contractorPrices){
     applyContractorBumpIfNeeded();
+    cleanupStaleContractorFields();
     await cloudPushPrices("contractor");
   } else if((!settings || !settings.contractor_prices) && contractorPrices){
     applyContractorBumpIfNeeded();
+    cleanupStaleContractorFields();
     await cloudPushPrices("contractor");
   } else if(settings && settings.contractor_prices){
     const freshC = defaultContractorPrices();
@@ -11851,6 +11908,7 @@ async function bootstrapCloudSync(showMigratePrompt){
     localStorage.setItem("reno_contractor_prices_v1", JSON.stringify(contractorPrices));
     if(settings.updated_at) localStorage.setItem(CONTRACTOR_PRICES_TS_KEY, settings.updated_at);
     applyContractorBumpIfNeeded();
+    cleanupStaleContractorFields();
   }
   // If the pricing editor or contractor editor is open, refresh them
   if(document.getElementById("settingsModal").classList.contains("show")) renderPricingEditor();
