@@ -3851,6 +3851,13 @@ function defaultKitchenInstance(isBasement){
     island:        false,
     islandLength: "72",                    // INCHES — default 6 ft
     islandWidth:  "36",                    // INCHES — 36 | 48 | 72 dropdown
+    // Island countertop overhang (seating side) — extra countertop projection
+    //   beyond the island base. Adds (islandLenFt × overhangFt) to the
+    //   countertop sqft total at the countertop $/sqft rate (no separate fee).
+    //   Toggled by `islandOverhangEnabled`; size defaults to 1 ft on enable.
+    //   The size value persists so unchecking/rechecking remembers the choice.
+    islandOverhangEnabled: false,
+    islandOverhang: "1",                  // "1" | "2" | "3" (feet)
     // Waterfall countertop — added to the countertop sqft total at the chosen
     //   countertop tier (no separate waterfall pricing).
     waterfall:       "off",               // off | one | two | three
@@ -4223,6 +4230,22 @@ function migrateOldEstimate(m){
         if(key === "basement") return;
         if(typeof k[key] === "undefined") k[key] = def[key];
       });
+      // Island overhang migration: the first version of this feature shipped
+      // with `islandOverhang = "0"` meaning "no overhang". The new model uses
+      // a separate boolean `islandOverhangEnabled` so the user can toggle the
+      // option off without losing the size selection. Convert legacy data:
+      //   "0" → disabled, default size "1"
+      //   "1"/"2"/"3" → enabled at that size
+      if(typeof k.islandOverhangEnabled !== "boolean"){
+        const legacy = String(k.islandOverhang || "0");
+        if(legacy === "0"){
+          k.islandOverhangEnabled = false;
+          k.islandOverhang = "1";  // default size when later enabled
+        } else {
+          k.islandOverhangEnabled = true;
+          k.islandOverhang = legacy;
+        }
+      }
       // Preserve enabled state for basement-kitchen sub-objects
       if(isBasement && typeof k.enabled !== "boolean") k.enabled = false;
     };
@@ -5468,6 +5491,9 @@ function buildKitchenSummaryHtml(k){
   const cells = [];
   cells.push(cell("Base cabinet<br>countertop", d.baseCounterSqft + " sqft"));
   cells.push(cell("Island top", (k.island ? d.islandCounterSqft : 0) + " sqft"));
+  if(k.island && d.overhangCounterSqft > 0){
+    cells.push(cell("Island<br>overhang", d.overhangCounterSqft + " sqft"));
+  }
   cells.push(cell("Waterfall<br>ends", (k.island ? d.waterfallSqft : 0) + " sqft"));
   if(d.counterExtra > 0) cells.push(cell("Counter<br>extras", d.counterExtra + " sqft"));
   const bsSqftForCell = k.backsplash ? d.backsplashSqft : 0;
@@ -5623,7 +5649,7 @@ function renderKitchenInstance(k, prefix, slug){
             <input type="number" min="0" inputmode="numeric" style="${compactInputStyle}" value="${k.counterExtraSqft||''}" placeholder="0" ${numAttrs(prefix+".counterExtraSqft")}>
           </div>
           <div class="footnote" style="margin-top:8px;">
-            <b style="color:var(--gold-bright)">Auto-calc:</b> ${d.baseLF || 0} LF &times; 2 ft (24″ base cabinet depth) = <b>${d.baseLF*2} sqft</b>${d.islandTopSqft > 0 ? ` + island top <b>${d.islandTopSqft} sqft</b>` : ""}${d.waterfallSqft > 0 ? ` + waterfall <b>${d.waterfallSqft} sqft</b>` : ""}${d.counterExtra > 0 ? ` + extra <b>${d.counterExtra} sqft</b>` : ""} = <b style="color:var(--gold-bright)">${d.counterSqft} sqft</b>
+            <b style="color:var(--gold-bright)">Auto-calc:</b> ${d.baseLF || 0} LF &times; 2 ft (24″ base cabinet depth) = <b>${d.baseLF*2} sqft</b>${d.islandTopSqft > 0 ? ` + island top <b>${d.islandTopSqft} sqft</b>` : ""}${d.islandOverhangSqft > 0 ? ` + overhang <b>${d.islandOverhangSqft} sqft</b>` : ""}${d.waterfallSqft > 0 ? ` + waterfall <b>${d.waterfallSqft} sqft</b>` : ""}${d.counterExtra > 0 ? ` + extra <b>${d.counterExtra} sqft</b>` : ""} = <b style="color:var(--gold-bright)">${d.counterSqft} sqft</b>
           </div>
           <!-- Quartz sqft breakdown — moved here from above so it only appears
                when the countertop is enabled, and sits underneath the
@@ -5689,6 +5715,28 @@ function renderKitchenInstance(k, prefix, slug){
             <b style="color:var(--gold-bright)">Island top:</b> ${d.islandLenFt} ft &times; ${d.islandWidFt} ft = <b>${d.islandTopSqft} sqft</b> (auto-added to countertop)
           </div>` : ""}
           ${sectionCost("island", costs.islandCost, costs.islandCost > 0)}
+          <!-- Countertop overhang — checkbox + reveal pill toggle for 1/2/3 ft.
+               When unchecked the overhang sqft is removed from the countertop
+               total, and the size selection is preserved for a future re-check. -->
+          <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line);">
+            <label class="check-row" style="margin-bottom:${k.islandOverhangEnabled?'10px':'0'};">
+              <input type="checkbox" ${k.islandOverhangEnabled ? "checked" : ""} onchange="${prefix}.islandOverhangEnabled=this.checked;renderCatBodyOnly('kitchen');renderTotals()">
+              <span class="addon-title" style="text-transform:none;letter-spacing:.04em;font-size:13px;">Add countertop overhang <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;font-size:11px;">(seating side &mdash; uses the countertop rate, sqft folds into countertop total)</span></span>
+            </label>
+            ${k.islandOverhangEnabled ? `
+              <div style="margin-bottom:8px;">
+                <label style="margin-bottom:6px;">Overhang size</label>
+                ${pillToggle("island-o-"+slug, String(k.islandOverhang || "1"), [
+                  {value:"1", label:"1 ft"},
+                  {value:"2", label:"2 ft"},
+                  {value:"3", label:"3 ft"}
+                ], prefix+".islandOverhang=this.value;renderCatBodyOnly('kitchen');renderTotals()")}
+                ${d.islandOverhangSqft > 0 ? `<div class="footnote" style="margin-top:6px;">
+                  <b style="color:var(--gold-bright)">Adds:</b> ${d.islandLenFt} ft &times; ${d.islandOverhangFt} ft = <b>${d.islandOverhangSqft} sqft</b> to countertop total.
+                </div>` : ""}
+              </div>
+            ` : ""}
+          </div>
           <!-- Waterfall countertop — own checkbox toggle. When checked, the
                # of ends dropdown shows (default 1 end). Toggling off restores
                waterfall:"off". -->
@@ -6640,7 +6688,7 @@ function renderContractorSheet(){
       const ctTier = kitchenCounterTierLabel(k.counterTier);
       if(k.counter){
         const wfNote = d.waterfallSqft ? `, waterfall (${d.waterfallEnds} end${d.waterfallEnds>1?"s":""}, ${d.waterfallSqft} sqft) folded in` : "";
-        out.push({ sub: !!hdrLabel, html:`Countertop: <b>${ctTier}</b> &mdash; ${d.counterSqft || '?'} sqft (auto-calculated from ${d.baseLF || '?'} LF &times; 2 ft cabinet depth${d.islandTopSqft ? ` + island top ${d.islandTopSqft} sqft` : ""}${d.waterfallSqft ? ` + waterfall ${d.waterfallSqft} sqft` : ""}${d.counterExtra ? ` + extra ${d.counterExtra} sqft` : ""})${wfNote}` });
+        out.push({ sub: !!hdrLabel, html:`Countertop: <b>${ctTier}</b> &mdash; ${d.counterSqft || '?'} sqft (auto-calculated from ${d.baseLF || '?'} LF &times; 2 ft cabinet depth${d.islandTopSqft ? ` + island top ${d.islandTopSqft} sqft` : ""}${d.islandOverhangSqft ? ` + ${d.islandOverhangFt} ft overhang ${d.islandOverhangSqft} sqft` : ""}${d.waterfallSqft ? ` + waterfall ${d.waterfallSqft} sqft` : ""}${d.counterExtra ? ` + extra ${d.counterExtra} sqft` : ""})${wfNote}` });
       }
       if(k.backsplash){
         const matLbl = (k.backsplashMaterial === "match") ? `<b>Same material as countertop</b> (${ctTier})` : `<b>Tile</b> (countertop tier: ${ctTier})`;
@@ -6651,7 +6699,8 @@ function renderContractorSheet(){
         }
       }
       if(k.island){
-        out.push({ sub: !!hdrLabel, html:`Island: <b>${d.islandLenFt || '?'} ft &times; ${d.islandWidFt || '?'} ft</b> (${k.tier === "custom" ? "custom" : "standard"} build)` });
+        const ovBidNote = d.islandOverhangFt ? ` with <b>${d.islandOverhangFt} ft countertop overhang</b> (seating side, ${d.islandOverhangSqft} sqft added to countertop)` : "";
+        out.push({ sub: !!hdrLabel, html:`Island: <b>${d.islandLenFt || '?'} ft &times; ${d.islandWidFt || '?'} ft</b> (${k.tier === "custom" ? "custom" : "standard"} build)${ovBidNote}` });
       }
       if(k.undercabLighting) out.push({ sub: !!hdrLabel, html:`Under-cabinet lighting: <b>${d.baseLF || '?'} LF</b> (LED strip + driver).` });
       return out;
@@ -7381,7 +7430,7 @@ function buildEstimateLineItems(){
         const wfDesc = d.waterfallSqft ? `, waterfall ${d.waterfallEnds} end${d.waterfallEnds>1?"s":""} (${d.waterfallSqft} sqft) folded in` : "";
         rows.push({
           desc: `${prefix}Countertop — ${ctTierLbl}`,
-          subdesc: `Supply & install. Auto-derived from cabinet runs (LF × 24″ depth)${d.islandTopSqft ? ` + island top` : ""}${d.waterfallSqft ? ` + waterfall ends` : ""}${d.counterExtra ? ` + extras` : ""}${wfDesc}.`,
+          subdesc: `Supply & install. Auto-derived from cabinet runs (LF × 24″ depth)${d.islandTopSqft ? ` + island top` : ""}${d.islandOverhangSqft ? ` + ${d.islandOverhangFt}′ overhang` : ""}${d.waterfallSqft ? ` + waterfall ends` : ""}${d.counterExtra ? ` + extras` : ""}${wfDesc}.`,
           qty: d.counterSqft, unit: "sqft",
           ...pricedRow(d.counterSqft, ct)
         });
@@ -7639,6 +7688,16 @@ function deriveKitchen(k){
   const islandWidFt = inchesToFtUp(k.islandWidth);
   const islandTopSqft = (k.island && islandLenFt > 0 && islandWidFt > 0)
     ? islandLenFt * islandWidFt : 0;
+  // Countertop overhang on the island seating side. The overhang is a
+  // horizontal extension of the countertop past the cabinet base — it adds
+  // (islandLenFt × overhangFt) of countertop sqft at the same $/sqft rate.
+  // Doesn't change the island base size or the waterfall ends.
+  // Gated by `islandOverhangEnabled` so the user can toggle it on/off without
+  // losing the size selection. When disabled, contributes 0 sqft.
+  const overhangActive  = !!(k.island && k.islandOverhangEnabled);
+  const islandOverhangFt = overhangActive ? (num(k.islandOverhang) || 0) : 0;
+  const islandOverhangSqft = (overhangActive && islandLenFt > 0 && islandOverhangFt > 0)
+    ? islandLenFt * islandOverhangFt : 0;
 
   // Waterfall end count + per-end sqft. The user enters each end's sqft
   // manually, and all of it gets rolled into the countertop sqft total
@@ -7652,8 +7711,8 @@ function deriveKitchen(k){
   if(k.island && waterfallEnds >= 3) waterfallSqft += Math.max(0, num(k.waterfallEndSqft3));
 
   // Countertop sqft = base LF × 2 ft (24" cabinet depth) + island top
-  //                   + waterfall end sqft (rolled in) + manual extra
-  const counterAutoSqft = baseLF * 2 + islandTopSqft + waterfallSqft;
+  //                   + island overhang + waterfall end sqft + manual extra
+  const counterAutoSqft = baseLF * 2 + islandTopSqft + islandOverhangSqft + waterfallSqft;
   const counterExtra    = Math.max(0, num(k.counterExtraSqft));
   const counterSqft     = (k.counter ? counterAutoSqft + counterExtra : 0);
 
@@ -7673,19 +7732,21 @@ function deriveKitchen(k){
   // Total Quartz = base cabinet + island top + waterfall + match-backsplash + extras
   const baseCounterSqft = k.counter ? baseLF * 2 : 0;
   const islandCounterSqft = k.counter ? islandTopSqft : 0;
+  const overhangCounterSqft = k.counter ? islandOverhangSqft : 0;
   const isMatch = (k.backsplashMaterial === "match");
   const matchBacksplashSqft = (k.backsplash && isMatch) ? backsplashSqft : 0;
   const tileBacksplashSqft  = (k.backsplash && !isMatch) ? backsplashSqft : 0;
-  const totalQuartzSqft = baseCounterSqft + islandCounterSqft + waterfallSqft + matchBacksplashSqft + counterExtra;
+  const totalQuartzSqft = baseCounterSqft + islandCounterSqft + overhangCounterSqft + waterfallSqft + matchBacksplashSqft + counterExtra;
 
   return {
     run1, run2, run3, baseLF,
     islandLenFt, islandWidFt, islandTopSqft,
+    islandOverhangFt, islandOverhangSqft,
     waterfallEnds, waterfallSqft,
     counterAutoSqft, counterExtra, counterSqft,
     backsplashAutoSqft, backsplashExtra, backsplashSqft,
     // Component breakdowns
-    baseCounterSqft, islandCounterSqft, matchBacksplashSqft, tileBacksplashSqft,
+    baseCounterSqft, islandCounterSqft, overhangCounterSqft, matchBacksplashSqft, tileBacksplashSqft,
     isMatch, totalQuartzSqft
   };
 }
@@ -7891,15 +7952,17 @@ function buildEstimateSummary(){
       b.push(`Tier: <b>${baseTier}</b> · Layout: <b>${k.layout === "U" ? "U-shape" : "L-shape"}</b> · Total cabinet length: <b>${d.baseLF || '?'} LF</b>`);
       b.push("Cabinets, sink, faucet, plumbing adjustments &amp; all hardware (24″ lower / 12″ upper cabinet depth)");
       if(k.counter){
+        const ovNote = d.islandOverhangSqft ? `, ${d.islandOverhangFt} ft countertop overhang (${d.islandOverhangSqft} sqft)` : "";
         const wfNote = d.waterfallSqft ? `, waterfall (${d.waterfallEnds} end${d.waterfallEnds>1?"s":""}, ${d.waterfallSqft} sqft) included` : "";
-        b.push(`Countertop — ${ctTier}, ${d.counterSqft || '?'} sqft${wfNote}`);
+        b.push(`Countertop — ${ctTier}, ${d.counterSqft || '?'} sqft${ovNote}${wfNote}`);
       }
       if(k.backsplash){
         const matLbl = (k.backsplashMaterial === "match") ? `same material as countertop (${ctTier})` : `Tile (countertop tier: ${ctTier})`;
         b.push(`Backsplash — ${matLbl}, ${d.backsplashSqft || '?'} sqft (18″ standard height${d.backsplashExtra ? ` + ${d.backsplashExtra} sqft for taller areas` : ""})`);
       }
       if(k.island){
-        b.push(`Island — ${d.islandLenFt || '?'}′ × ${d.islandWidFt || '?'}′ (${k.tier === "custom" ? "custom" : "semi-custom"} build)`);
+        const ovBullet = d.islandOverhangFt ? `, ${d.islandOverhangFt} ft countertop overhang` : "";
+        b.push(`Island — ${d.islandLenFt || '?'}′ × ${d.islandWidFt || '?'}′ (${k.tier === "custom" ? "custom" : "semi-custom"} build)${ovBullet}`);
       }
       if(k.undercabLighting) b.push(`Under-cabinet LED lighting — ${d.baseLF || '?'} LF (strip + driver)`);
       return b;
