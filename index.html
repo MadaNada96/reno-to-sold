@@ -3740,6 +3740,42 @@ const DEFAULT_PRICES = {
     // Modernize old plugs → decora-style outlets, supplied & installed per plug.
     plug:   { rate: 60 }            // $/plug
   },
+  // ── WALL REMOVAL ─────────────────────────────────────────────────
+  // Per-LF supplied & installed pricing. Each line below is a SINGLE rate.
+  // The base rate already includes demo, disposal, drywall edge finish at
+  // remaining walls, ceiling drywall patch + skim, prime + 2 coats paint,
+  // and baseboard re-trim along the seam. Add-ons stack on top.
+  //
+  // Asbestos: the pre-test is a flat charge. If asbestos is detected, an
+  // abatement scope is required by Ontario regulation — typical GTA range
+  // is $10–$20/sqft of affected drywall, plus a $700–$1,400 minimum setup
+  // charge for containment + decontamination. Abatement itself is NOT
+  // included in this estimate (separate certified scope).
+  wallRemoval: {
+    base: {
+      nonLoadBearing: { rate: 230 },   // $/LF — demo + finish remediation
+      loadBearing:    { rate: 545 }    // $/LF — adds engineer-grade install,
+                                       //         temp support, LVL beam supply
+                                       //         & install, electrical re-route
+    },
+    heightAdder:        { rate: 25 },  // $/LF per extra foot over 8 ft
+    electricalReroute:  { rate: 115 }, // $/LF when electrical inside wall
+    plumbingReroute:    { rate: 195 }, // $/LF when plumbing inside wall
+    ductworkReroute:    { rate: 195 }, // $/LF when HVAC duct inside wall
+    flooringTransition: { rate: 75 },  // $/LF along the floor seam
+    beamSteelUpgrade:   { rate: 275 }, // $/LF differential over default LVL
+                                       //   (only when load-bearing + steel)
+    // One-time flat charges (load-bearing only by default)
+    structuralEngineer: { rate: 2500 },// stamped drawings + review
+    buildingPermit:     { rate: 1500 },// City of Toronto permit
+    // Asbestos pre-test (recommended for pre-1980 homes)
+    asbestosTest:       { rate: 375 }, // flat — test + lab report
+    // Asbestos abatement estimate (only used when "detected" toggle is on).
+    // Per-sqft removal + flat decontamination setup. Charged on the same LF
+    // basis as the wall (LF × 8 ft assumed height = sqft of drywall).
+    asbestosAbatementPerSqft: { rate: 15 },  // $/sqft of affected drywall
+    asbestosSetupMinimum:     { rate: 1100 } // flat setup / containment min
+  },
   // Listing discount percent (applies to subtotal when toggle is on)
   listingDiscount: { percent: 10 }
 };
@@ -3752,7 +3788,8 @@ const CATEGORY_META = {
   bathroom:  { title:"Bathrooms",  sub:"Pieces, tiling, shower" },
   // Internal data key stays "potlights" for backwards compatibility with
   // saved estimates. The UI title is "Lighting & Electrical".
-  potlights: { title:"Lighting & Electrical", sub:"Pot lights, switches, dimmers, plugs" }
+  potlights:   { title:"Lighting & Electrical", sub:"Pot lights, switches, dimmers, plugs" },
+  wallRemoval: { title:"Wall Removal",          sub:"Per linear foot, load-bearing or not" }
 };
 
 const FLOORING_LABELS = {
@@ -3781,7 +3818,7 @@ function freshState(){
     // Legacy sellerName/sellerPhone/sellerEmail are migrated into sellers[0]
     // on load (see migrateOldEstimate).
     sellers: [ { name:"", phone:"", email:"" } ],
-    enabled: { painting:false, flooring:false, tiling:false, kitchen:false, bathroom:false, potlights:false },
+    enabled: { painting:false, flooring:false, tiling:false, kitchen:false, bathroom:false, potlights:false, wallRemoval:false },
     painting:  {
       coats: "one",          // "one" | "two"
       scope: "whole",        // "whole" | "custom"
@@ -3824,6 +3861,27 @@ function freshState(){
       switchEnabled: false, switchCount: "",
       dimmerEnabled: false, dimmerCount: "",
       plugEnabled: false, plugCount: ""
+    },
+    // WALL REMOVAL — per-LF S&I pricing with stackable add-ons. Designed to
+    // match Kitchen + L&E patterns (single-rate, supplied & installed).
+    wallRemoval: {
+      loadBearing: false,            // false = non-LB; true = load-bearing
+      linearFt: "",                  // ft
+      wallHeight: "8",               // "8" | "9" | "10"  (used as integer ft)
+      // Add-ons (per-LF, checkbox-gated)
+      electricalInWall: false,
+      plumbingInWall:   false,
+      ductworkInWall:   false,
+      flooringTransition: false,
+      // Beam type — only relevant when loadBearing is on
+      beamType: "lvl",               // "lvl" | "steel"
+      // Flat charges — default-on when loadBearing is enabled (set on enable).
+      includePermit:       true,
+      includeEngineer:     true,
+      // Asbestos test — checkbox; opens disclaimer about abatement if checked.
+      // If `asbestosDetected` is set, abatement cost is added.
+      includeAsbestosTest: false,
+      asbestosDetected:    false
     },
     discount:  { enabled:false, listing:false, customEnabled:false, customType:"percent", customValue:"", customNote:"" }
   };
@@ -4298,6 +4356,33 @@ function migrateOldEstimate(m){
     if(typeof m.painting.garageDoors     !== "boolean") m.painting.garageDoors     = false;
     if(typeof m.painting.garageDoorCount !== "string")  m.painting.garageDoorCount = "";
   }
+  // WALL REMOVAL — new category, backfill defaults for any saved estimate.
+  if(!m.wallRemoval || typeof m.wallRemoval !== "object"){
+    m.wallRemoval = {
+      loadBearing:false, linearFt:"", wallHeight:"8",
+      electricalInWall:false, plumbingInWall:false, ductworkInWall:false,
+      flooringTransition:false, beamType:"lvl",
+      includePermit:true, includeEngineer:true,
+      includeAsbestosTest:false, asbestosDetected:false
+    };
+  } else {
+    const wr = m.wallRemoval;
+    if(typeof wr.loadBearing        !== "boolean") wr.loadBearing        = false;
+    if(typeof wr.linearFt           !== "string")  wr.linearFt           = "";
+    if(typeof wr.wallHeight         !== "string")  wr.wallHeight         = "8";
+    if(typeof wr.electricalInWall   !== "boolean") wr.electricalInWall   = false;
+    if(typeof wr.plumbingInWall     !== "boolean") wr.plumbingInWall     = false;
+    if(typeof wr.ductworkInWall     !== "boolean") wr.ductworkInWall     = false;
+    if(typeof wr.flooringTransition !== "boolean") wr.flooringTransition = false;
+    if(typeof wr.beamType           !== "string")  wr.beamType           = "lvl";
+    if(typeof wr.includePermit      !== "boolean") wr.includePermit      = true;
+    if(typeof wr.includeEngineer    !== "boolean") wr.includeEngineer    = true;
+    if(typeof wr.includeAsbestosTest!== "boolean") wr.includeAsbestosTest= false;
+    if(typeof wr.asbestosDetected   !== "boolean") wr.asbestosDetected   = false;
+  }
+  // Top-level enabled toggle for wall removal.
+  if(!m.enabled || typeof m.enabled !== "object") m.enabled = {};
+  if(typeof m.enabled.wallRemoval !== "boolean") m.enabled.wallRemoval = false;
   // Discount schema migration
   if(m.discount){
     if(m.discount.type && !m.discount.customType) m.discount.customType = m.discount.type;
@@ -4565,7 +4650,102 @@ function computeCategory(cat, priceSet){
       material += num(s.plugCount) * rateOf(p.plug);
     }
   }
+  else if(cat === "wallRemoval"){
+    // Wall removal — single $ rolls into material to mirror the rate-based
+    // convention used by kitchen + L&E. The deriveWallRemoval helper does
+    // the full math + line itemization in one place so the section, the
+    // print/PDF, and the contractor bid all see the same numbers.
+    const wr = deriveWallRemoval(s, p);
+    material += wr.total;
+  }
   return { labour, material };
+}
+
+/* deriveWallRemoval — single source of truth for the wall-removal math.
+   Returns: { lines: [{label, qty, unit, rate, amount, note?}], total }
+   `p` is prices.wallRemoval; `s` is state.wallRemoval. */
+function deriveWallRemoval(s, p){
+  s = s || {}; p = p || {};
+  const rateOf = (e) => e && typeof e.rate === "number" ? e.rate : ((e && e.labour) || 0) + ((e && e.material) || 0);
+  const lf = Math.max(0, num(s.linearFt));
+  const lines = [];
+  if(lf <= 0) return { lines, total: 0 };
+
+  // 1. Base rate per linear foot (load-bearing or not).
+  const baseKey  = s.loadBearing ? "loadBearing" : "nonLoadBearing";
+  const baseRate = rateOf(p.base && p.base[baseKey]);
+  if(baseRate > 0){
+    lines.push({
+      label: s.loadBearing ? "Load-bearing wall removal (base)" : "Non-load-bearing wall removal (base)",
+      qty: lf, unit: "LF", rate: baseRate, amount: lf * baseRate
+    });
+  }
+  // 2. Wall height adder — per LF for each extra foot above 8.
+  const heightFt = Math.max(8, parseInt(s.wallHeight || "8", 10) || 8);
+  const extraFt  = heightFt - 8;
+  if(extraFt > 0){
+    const r = rateOf(p.heightAdder);
+    if(r > 0){
+      lines.push({
+        label: "Wall height adder (" + extraFt + " ft above 8 ft)",
+        qty: lf * extraFt, unit: "LF·ft", rate: r, amount: lf * extraFt * r
+      });
+    }
+  }
+  // 3. Stackable per-LF reroutes.
+  if(s.electricalInWall){
+    const r = rateOf(p.electricalReroute);
+    if(r > 0) lines.push({ label:"Electrical re-route (wires + outlets + ESA inspection)", qty: lf, unit:"LF", rate: r, amount: lf * r });
+  }
+  if(s.plumbingInWall){
+    const r = rateOf(p.plumbingReroute);
+    if(r > 0) lines.push({ label:"Plumbing re-route (lines + vents)", qty: lf, unit:"LF", rate: r, amount: lf * r });
+  }
+  if(s.ductworkInWall){
+    const r = rateOf(p.ductworkReroute);
+    if(r > 0) lines.push({ label:"HVAC ductwork re-route (relocate ducts, add return if needed)", qty: lf, unit:"LF", rate: r, amount: lf * r });
+  }
+  // 4. Steel beam upgrade — only if load-bearing AND steel chosen.
+  if(s.loadBearing && (s.beamType === "steel")){
+    const r = rateOf(p.beamSteelUpgrade);
+    if(r > 0) lines.push({ label:"Steel beam upgrade (over default LVL)", qty: lf, unit:"LF", rate: r, amount: lf * r });
+  }
+  // 5. Flooring transition along the seam.
+  if(s.flooringTransition){
+    const r = rateOf(p.flooringTransition);
+    if(r > 0) lines.push({ label:"Flooring transition / blend along wall seam", qty: lf, unit:"LF", rate: r, amount: lf * r });
+  }
+  // 6. Flat charges — engineer + permit (load-bearing only).
+  if(s.loadBearing && s.includeEngineer){
+    const r = rateOf(p.structuralEngineer);
+    if(r > 0) lines.push({ label:"Structural engineer drawings + review", qty: 1, unit:"flat", rate: r, amount: r });
+  }
+  if(s.loadBearing && s.includePermit){
+    const r = rateOf(p.buildingPermit);
+    if(r > 0) lines.push({ label:"City of Toronto building permit", qty: 1, unit:"flat", rate: r, amount: r });
+  }
+  // 7. Asbestos pre-test (any wall, optional).
+  if(s.includeAsbestosTest){
+    const r = rateOf(p.asbestosTest);
+    if(r > 0) lines.push({ label:"Asbestos pre-test (lab analysis + report)", qty: 1, unit:"flat", rate: r, amount: r });
+  }
+  // 8. Asbestos abatement — only if user confirmed it WAS detected.
+  //    Charged as: (LF × 8 ft of drywall) × per-sqft rate + flat setup minimum.
+  if(s.includeAsbestosTest && s.asbestosDetected){
+    const perSqft = rateOf(p.asbestosAbatementPerSqft);
+    const setupMin = rateOf(p.asbestosSetupMinimum);
+    const sqft = lf * 8;  // assume 8-ft height for affected drywall area
+    if(perSqft > 0){
+      lines.push({ label:"Asbestos abatement — affected drywall (" + sqft + " sqft × $" + perSqft + "/sqft)",
+                   qty: sqft, unit:"sqft", rate: perSqft, amount: sqft * perSqft });
+    }
+    if(setupMin > 0){
+      lines.push({ label:"Asbestos abatement — containment + decontamination setup (flat minimum)",
+                   qty: 1, unit:"flat", rate: setupMin, amount: setupMin });
+    }
+  }
+  const total = lines.reduce((a, l) => a + (l.amount || 0), 0);
+  return { lines, total };
 }
 
 function computeTotals(){
@@ -5433,6 +5613,110 @@ function renderCatBody(cat){
       </div>
 
       <div style="margin-top:14px">${breakdownRows(cat)}</div>
+    `;
+  }
+  if(cat === "wallRemoval"){
+    // WALL REMOVAL — per-LF S&I pricing with stackable add-ons. Auto-checks
+    // engineer + permit when load-bearing is toggled on (user can uncheck).
+    const wr = state.wallRemoval;
+    const totalCost = (deriveWallRemoval(wr, prices.wallRemoval) || {}).total || 0;
+    const showLvlWarn = wr.loadBearing && wr.beamType === "lvl" && num(wr.linearFt) >= 16;
+    return `
+      <!-- What's included (educational footer at the top so client sees scope) -->
+      <div class="footnote" style="margin-bottom:14px;background:rgba(212,175,106,.08);border:1px solid rgba(212,175,106,.30);border-radius:8px;padding:10px 12px;line-height:1.55;">
+        <b style="color:var(--gold-bright)">What's included with every wall removal:</b> demo + disposal, drywall edge finish at the corners where the removed wall met the remaining walls, baseboard re-trim along the seam, ceiling drywall patch + skim + prime + 2 coats paint along the line. Any outlets, switches, vent ducts, or plumbing routed through the wall are re-routed to remaining walls or through ceiling/floor cavities. ESA inspection is required whenever electrical is touched.
+        <br><br>
+        <b style="color:var(--gold-bright)">For load-bearing walls:</b> structural engineer drawings + City of Toronto permit + temporary support during demo + beam supply &amp; install (LVL or steel) are all included.
+        <br><br>
+        <b style="color:var(--danger);">Pre-1980 homes:</b> asbestos test strongly recommended before scope is finalized — abatement (if detected) is a separate cost detailed below.
+      </div>
+
+      <!-- Wall type pill -->
+      <div class="addon">
+        <div style="margin-bottom:10px;">
+          <label style="margin-bottom:6px;">Wall type</label>
+          ${pillToggle("wr-type", wr.loadBearing ? "lb" : "nlb", [
+            {value:"nlb", label:"Non-load-bearing"},
+            {value:"lb",  label:"Load-bearing"}
+          ], "var v=this.value;state.wallRemoval.loadBearing=(v==='lb');if(v==='lb'){state.wallRemoval.includePermit=true;state.wallRemoval.includeEngineer=true;}renderCatBodyOnly('wallRemoval');renderTotals()")}
+        </div>
+        <div class="grid grid-2">
+          <div>
+            <label>Wall length (linear feet)</label>
+            <input type="number" min="0" inputmode="numeric" value="${wr.linearFt||''}" placeholder="e.g. 12" oninput="state.wallRemoval.linearFt=this.value;renderCatBodyOnly('wallRemoval');renderTotals()">
+          </div>
+          <div>
+            <label style="margin-bottom:6px;">Wall height</label>
+            ${pillToggle("wr-height", String(wr.wallHeight || "8"), [
+              {value:"8",  label:"8 ft"},
+              {value:"9",  label:"9 ft"},
+              {value:"10", label:"10 ft+"}
+            ], "state.wallRemoval.wallHeight=this.value;renderCatBodyOnly('wallRemoval');renderTotals()")}
+          </div>
+        </div>
+      </div>
+
+      <!-- Beam choice (only when load-bearing) -->
+      ${wr.loadBearing ? `
+        <div class="addon">
+          <div style="margin-bottom:10px;">
+            <label style="margin-bottom:6px;">Beam material</label>
+            ${pillToggle("wr-beam", wr.beamType || "lvl", [
+              {value:"lvl",   label:"LVL (default)"},
+              {value:"steel", label:"Steel"}
+            ], "state.wallRemoval.beamType=this.value;renderCatBodyOnly('wallRemoval');renderTotals()")}
+          </div>
+          ${showLvlWarn ? `
+            <div class="footnote" style="margin-top:6px;background:rgba(220,60,60,.10);border:1px solid rgba(220,60,60,.35);border-radius:6px;padding:8px 10px;color:#ffcccc;">
+              <b style="color:var(--danger)">Heads up:</b> LVL beams typically max out around 16–20 ft of unsupported span for residential loads. For wall openings <b>16 ft and longer</b>, a steel beam is often required — your structural engineer will confirm. Pricing here assumes LVL; switch to <b>Steel</b> if your engineer specifies it.
+            </div>
+          ` : `
+            <div class="footnote" style="margin-top:6px;">LVL is the default for residential spans up to ~16 ft. For longer or heavier loads, the structural engineer may specify steel — switch above if so.</div>
+          `}
+        </div>
+      ` : ""}
+
+      <!-- Add-on checkboxes (stackable per-LF reroutes) -->
+      <div class="addon">
+        <div class="addon-title" style="margin-bottom:8px;">Add-ons (stack on top of the base rate)</div>
+        <label class="check-row" style="margin-bottom:6px;"><input type="checkbox" ${wr.electricalInWall?'checked':''} onchange="state.wallRemoval.electricalInWall=this.checked;renderCatBodyOnly('wallRemoval');renderTotals()"><span>Electrical inside this wall &mdash; <i style="color:var(--muted);font-weight:400;">re-route outlets/switches, ESA inspection</i></span></label>
+        <label class="check-row" style="margin-bottom:6px;"><input type="checkbox" ${wr.plumbingInWall?'checked':''} onchange="state.wallRemoval.plumbingInWall=this.checked;renderCatBodyOnly('wallRemoval');renderTotals()"><span>Plumbing inside this wall &mdash; <i style="color:var(--muted);font-weight:400;">re-route lines + vents through ceiling/floor</i></span></label>
+        <label class="check-row" style="margin-bottom:6px;"><input type="checkbox" ${wr.ductworkInWall?'checked':''} onchange="state.wallRemoval.ductworkInWall=this.checked;renderCatBodyOnly('wallRemoval');renderTotals()"><span>HVAC ductwork inside this wall &mdash; <i style="color:var(--muted);font-weight:400;">re-route via basement/attic, add return if needed</i></span></label>
+        <label class="check-row" style="margin-bottom:0;"><input type="checkbox" ${wr.flooringTransition?'checked':''} onchange="state.wallRemoval.flooringTransition=this.checked;renderCatBodyOnly('wallRemoval');renderTotals()"><span>Flooring transition / blend along seam &mdash; <i style="color:var(--muted);font-weight:400;">where the wall used to meet the floor</i></span></label>
+      </div>
+
+      <!-- Engineer + Permit (load-bearing only, default on) -->
+      ${wr.loadBearing ? `
+        <div class="addon">
+          <div class="addon-title" style="margin-bottom:8px;">Permits &amp; engineering (load-bearing)</div>
+          <label class="check-row" style="margin-bottom:6px;"><input type="checkbox" ${wr.includeEngineer?'checked':''} onchange="state.wallRemoval.includeEngineer=this.checked;renderCatBodyOnly('wallRemoval');renderTotals()"><span>Structural engineer drawings + review &mdash; <i style="color:var(--muted);font-weight:400;">required by City of Toronto for any structural modification</i></span></label>
+          <label class="check-row" style="margin-bottom:0;"><input type="checkbox" ${wr.includePermit?'checked':''} onchange="state.wallRemoval.includePermit=this.checked;renderCatBodyOnly('wallRemoval');renderTotals()"><span>City of Toronto building permit &mdash; <i style="color:var(--muted);font-weight:400;">required for load-bearing wall removal</i></span></label>
+          <div class="footnote" style="margin-top:6px;color:var(--muted);">Both are default-on for load-bearing scopes but can be unchecked in unusual cases.</div>
+        </div>
+      ` : ""}
+
+      <!-- Asbestos test -->
+      <div class="addon">
+        <div class="addon-title" style="margin-bottom:8px;">Hazardous materials</div>
+        <label class="check-row" style="margin-bottom:0;"><input type="checkbox" ${wr.includeAsbestosTest?'checked':''} onchange="state.wallRemoval.includeAsbestosTest=this.checked;if(!this.checked){state.wallRemoval.asbestosDetected=false;}renderCatBodyOnly('wallRemoval');renderTotals()"><span>Asbestos pre-test &mdash; <i style="color:var(--muted);font-weight:400;">recommended for any pre-1980 home before demo starts</i></span></label>
+        ${wr.includeAsbestosTest ? `
+          <div class="footnote" style="margin-top:10px;background:rgba(220,60,60,.10);border:1px solid rgba(220,60,60,.35);border-radius:6px;padding:10px 12px;color:#ffcccc;line-height:1.55;">
+            <b style="color:var(--danger)">If asbestos is detected:</b> additional cost will apply to safely demo + dispose under Ontario regulation. GTA rates (2026):
+            <br>• Affected drywall removal: ~$15/sqft (8-ft wall × your linear feet)
+            <br>• Containment + decontamination setup (flat minimum): ~$1,100
+            <br>Check the box below ONLY after lab confirms detection — abatement is performed by a certified contractor and ESA-cleared before re-occupancy.
+          </div>
+          <label class="check-row" style="margin-top:10px;margin-bottom:0;"><input type="checkbox" ${wr.asbestosDetected?'checked':''} onchange="state.wallRemoval.asbestosDetected=this.checked;renderCatBodyOnly('wallRemoval');renderTotals()"><span><b style="color:var(--danger)">Asbestos was detected</b> &mdash; include abatement cost</span></label>
+        ` : ""}
+      </div>
+
+      <!-- Live total preview -->
+      ${num(wr.linearFt) > 0 && totalCost > 0 ? `
+        <div class="info-readout" style="margin-top:12px;padding:10px 12px;border-radius:8px;border:1px solid var(--gold);background:#0f1414;">
+          <span style="font-size:9.5px;letter-spacing:.20em;text-transform:uppercase;color:var(--muted);">Wall Removal &mdash; estimated total</span>
+          <div style="font-size:18px;font-weight:800;color:var(--gold-bright);font-variant-numeric:tabular-nums;margin-top:4px;">$${fmt(totalCost)}</div>
+        </div>
+      ` : ""}
     `;
   }
   return "";
@@ -6435,6 +6719,39 @@ function renderPricingEditor(){
       <div>${priceInput("potlights.plug.rate", (prices.potlights.plug || {rate:0}).rate, 5)}</div>
     </div>`;
 
+  // WALL REMOVAL — single-rate supplied & installed (like Kitchen + L&E)
+  if(prices.wallRemoval){
+    const wp = prices.wallRemoval;
+    html += `<div class="section-title">Wall Removal &mdash; base rate per linear foot ($/LF, supplied &amp; installed)</div>
+      <div class="price-edit-row head single"><div></div><div>$/LF</div></div>
+      <div class="price-edit-row single">
+        <div class="lbl">Non-load-bearing</div>
+        <div>${priceInput("wallRemoval.base.nonLoadBearing.rate", (wp.base && wp.base.nonLoadBearing || {rate:0}).rate, 5)}</div>
+      </div>
+      <div class="price-edit-row single">
+        <div class="lbl">Load-bearing (incl. LVL beam, temp support, electrical re-route, finish)</div>
+        <div>${priceInput("wallRemoval.base.loadBearing.rate", (wp.base && wp.base.loadBearing || {rate:0}).rate, 5)}</div>
+      </div>`;
+    html += `<div class="section-title">Wall Removal &mdash; per-LF add-ons</div>
+      <div class="price-edit-row head single"><div></div><div>$/LF</div></div>
+      <div class="price-edit-row single"><div class="lbl">Wall height adder (per LF per extra ft over 8 ft)</div><div>${priceInput("wallRemoval.heightAdder.rate", (wp.heightAdder||{rate:0}).rate, 1)}</div></div>
+      <div class="price-edit-row single"><div class="lbl">Electrical re-route</div><div>${priceInput("wallRemoval.electricalReroute.rate", (wp.electricalReroute||{rate:0}).rate, 5)}</div></div>
+      <div class="price-edit-row single"><div class="lbl">Plumbing re-route</div><div>${priceInput("wallRemoval.plumbingReroute.rate", (wp.plumbingReroute||{rate:0}).rate, 5)}</div></div>
+      <div class="price-edit-row single"><div class="lbl">HVAC ductwork re-route</div><div>${priceInput("wallRemoval.ductworkReroute.rate", (wp.ductworkReroute||{rate:0}).rate, 5)}</div></div>
+      <div class="price-edit-row single"><div class="lbl">Flooring seam transition</div><div>${priceInput("wallRemoval.flooringTransition.rate", (wp.flooringTransition||{rate:0}).rate, 5)}</div></div>
+      <div class="price-edit-row single"><div class="lbl">Steel beam upgrade (over LVL)</div><div>${priceInput("wallRemoval.beamSteelUpgrade.rate", (wp.beamSteelUpgrade||{rate:0}).rate, 5)}</div></div>`;
+    html += `<div class="section-title">Wall Removal &mdash; flat charges</div>
+      <div class="price-edit-row head single"><div></div><div>$ flat</div></div>
+      <div class="price-edit-row single"><div class="lbl">Structural engineer (drawings + review)</div><div>${priceInput("wallRemoval.structuralEngineer.rate", (wp.structuralEngineer||{rate:0}).rate, 25)}</div></div>
+      <div class="price-edit-row single"><div class="lbl">City of Toronto building permit</div><div>${priceInput("wallRemoval.buildingPermit.rate", (wp.buildingPermit||{rate:0}).rate, 25)}</div></div>
+      <div class="price-edit-row single"><div class="lbl">Asbestos pre-test (lab + report)</div><div>${priceInput("wallRemoval.asbestosTest.rate", (wp.asbestosTest||{rate:0}).rate, 5)}</div></div>`;
+    html += `<div class="section-title">Wall Removal &mdash; asbestos abatement (only used if test confirms detection)</div>
+      <div class="footnote" style="margin-bottom:8px;">If asbestos is detected, the abatement cost is calculated as <b>(linear feet × 8 ft of drywall) × per-sqft rate</b>, plus a flat setup minimum. Adjust both based on certified-contractor quotes in your area.</div>
+      <div class="price-edit-row head single"><div></div><div>$ rate</div></div>
+      <div class="price-edit-row single"><div class="lbl">Affected drywall removal ($/sqft)</div><div>${priceInput("wallRemoval.asbestosAbatementPerSqft.rate", (wp.asbestosAbatementPerSqft||{rate:0}).rate, 1)}</div></div>
+      <div class="price-edit-row single"><div class="lbl">Containment + decontamination setup (flat minimum)</div><div>${priceInput("wallRemoval.asbestosSetupMinimum.rate", (wp.asbestosSetupMinimum||{rate:0}).rate, 25)}</div></div>`;
+  }
+
   // Listing discount
   html += `<div class="section-title">Listing Discount (default %)</div>
     <div class="price-edit-row single head"><div></div><div>Percent %</div></div>
@@ -6457,7 +6774,8 @@ function renderPricingEditor(){
    ============================================================ */
 const CONTRACTOR_CAT_LABELS = {
   painting:"Painting", flooring:"Flooring", tiling:"Tiling",
-  kitchen:"Kitchen", bathroom:"Bathrooms", potlights:"Lighting & Electrical"
+  kitchen:"Kitchen", bathroom:"Bathrooms", potlights:"Lighting & Electrical",
+  wallRemoval:"Wall Removal"
 };
 let contractorBidCats = new Set();
 /* Currently-selected contractor for this bid. Drives the "Contractor"
@@ -6808,6 +7126,37 @@ function renderContractorSheet(){
     if(items.length) html += scopeSection("Lighting & Electrical", items);
   }
 
+  // -- Wall Removal --
+  if(includeCat("wallRemoval")){
+    anyEnabled = true;
+    const wr = state.wallRemoval;
+    const lf = num(wr.linearFt);
+    const items = [];
+    if(lf > 0){
+      const wallType = wr.loadBearing ? "Load-bearing" : "Non-load-bearing";
+      const ht = wr.wallHeight || "8";
+      items.push({ html:`Wall type: <b>${wallType}</b> &mdash; ${lf} linear ft &times; ${ht} ft tall.` });
+      if(wr.loadBearing){
+        const beam = (wr.beamType === "steel") ? "Steel beam" : "LVL beam";
+        items.push({ html:`Beam material: <b>${beam}</b> &mdash; supply &amp; install, temporary support during demo, all hardware.` });
+        if(wr.includeEngineer) items.push({ html:`Structural engineer drawings + review (City of Toronto requirement for any structural modification).` });
+        if(wr.includePermit)   items.push({ html:`City of Toronto building permit (required for load-bearing wall removal).` });
+      }
+      if(wr.electricalInWall) items.push({ html:`Electrical inside the wall: <b>re-route outlets/switches</b> to remaining walls + ESA inspection (per LF).` });
+      if(wr.plumbingInWall)   items.push({ html:`Plumbing inside the wall: <b>re-route lines &amp; vents</b> through ceiling/floor cavities (per LF).` });
+      if(wr.ductworkInWall)   items.push({ html:`HVAC ductwork inside the wall: <b>re-route via basement/attic</b>, add cold-air return where needed (per LF).` });
+      if(wr.flooringTransition) items.push({ html:`Flooring transition / blend along the wall seam (per LF).` });
+      if(wr.includeAsbestosTest){
+        items.push({ html:`Asbestos pre-test &mdash; lab analysis + report (recommended for pre-1980 homes).` });
+        if(wr.asbestosDetected){
+          items.push({ html:`<b style="color:#a32a2a">Asbestos abatement included:</b> affected drywall removal (${lf*8} sqft) + containment &amp; decontamination setup. <b>Certified contractor required &mdash; ESA air-clearance test before re-occupancy.</b>` });
+        }
+      }
+      items.push({ html:`<i>Included by default:</i> demo + disposal, drywall edge finish at adjoining walls, baseboard re-trim along the seam, ceiling drywall patch + skim + prime + 2 coats paint along the line.` });
+    }
+    if(items.length) html += scopeSection("Wall Removal", items);
+  }
+
   if(!anyEnabled){
     const hasAnyEnabled = Object.keys(CONTRACTOR_CAT_LABELS).some(c => !!state.enabled[c]);
     html += hasAnyEnabled
@@ -6815,7 +7164,7 @@ function renderContractorSheet(){
       : `<div class="empty-state">No categories are enabled in the estimate. Turn on the categories you want bid on from the estimator, then come back here.</div>`;
   } else {
     // Bid summary
-    const labels = {painting:"Painting", flooring:"Flooring", tiling:"Tiling", kitchen:"Kitchen", bathroom:"Bathrooms", potlights:"Lighting & Electrical"};
+    const labels = {painting:"Painting", flooring:"Flooring", tiling:"Tiling", kitchen:"Kitchen", bathroom:"Bathrooms", potlights:"Lighting & Electrical", wallRemoval:"Wall Removal"};
     let rows = "";
     Object.keys(labels).forEach(cat => {
       if(includeCat(cat)){
@@ -7670,6 +8019,22 @@ function buildEstimateLineItems(){
     if(rows.length) groups.push({ cat:"potlights", title:"Lighting & Electrical", rows });
   }
 
+  // ---- Wall Removal
+  if(state.enabled.wallRemoval){
+    const wr = state.wallRemoval;
+    const p  = prices.wallRemoval;
+    const der = deriveWallRemoval(wr, p);
+    const rows = der.lines.map(ln => ({
+      desc:    ln.label,
+      subdesc: "",
+      qty:     ln.qty,
+      unit:    ln.unit,
+      labour:  0,
+      material: ln.amount
+    }));
+    if(rows.length) groups.push({ cat:"wallRemoval", title:"Wall Removal", rows });
+  }
+
   return groups;
 }
 
@@ -8072,6 +8437,39 @@ function buildEstimateSummary(){
     if(bullets.length === 0) bullets.push("No items configured yet.");
     const { labour, material } = computeCategory("potlights");
     sections.push({ cat:"potlights", title:"Lighting & Electrical", bullets, total: labour + material });
+  }
+
+  // -- Wall Removal
+  if(state.enabled.wallRemoval){
+    const wr = state.wallRemoval;
+    const lf = num(wr.linearFt);
+    const bullets = [];
+    if(lf > 0){
+      const wallType = wr.loadBearing ? "Load-bearing" : "Non-load-bearing";
+      const heightFt = wr.wallHeight || "8";
+      bullets.push(`${wallType} wall removal — ${lf} linear ft · ${heightFt} ft tall`);
+      if(wr.loadBearing){
+        const beam = (wr.beamType === "steel") ? "Steel beam" : "LVL beam";
+        bullets.push(`Beam material: ${beam} (supply &amp; install, temporary support during demo)`);
+        if(wr.includeEngineer) bullets.push("Structural engineer drawings + review (City of Toronto requirement)");
+        if(wr.includePermit)   bullets.push("City of Toronto building permit");
+      }
+      if(wr.electricalInWall) bullets.push("Electrical inside the wall — re-route outlets/switches + ESA inspection");
+      if(wr.plumbingInWall)   bullets.push("Plumbing inside the wall — re-route lines &amp; vents");
+      if(wr.ductworkInWall)   bullets.push("HVAC ductwork inside the wall — re-route + add return if needed");
+      if(wr.flooringTransition) bullets.push("Flooring transition / blend along the wall seam");
+      if(wr.includeAsbestosTest){
+        bullets.push("Asbestos pre-test (lab analysis + report)");
+        if(wr.asbestosDetected){
+          bullets.push(`<b>Asbestos abatement included</b> — affected drywall removal (${lf*8} sqft) + containment &amp; decontamination setup. Performed by a certified contractor and ESA-cleared.`);
+        }
+      }
+      bullets.push("<i>Includes: demo, disposal, drywall edge finish at adjoining walls, baseboard re-trim along seam, ceiling drywall patch + skim + prime + 2 coats paint along the line.</i>");
+    } else {
+      bullets.push("No items configured yet.");
+    }
+    const { labour, material } = computeCategory("wallRemoval");
+    sections.push({ cat:"wallRemoval", title:"Wall Removal", bullets, total: labour + material });
   }
 
   return sections;
@@ -10299,7 +10697,16 @@ function defaultContractorPrices(){
   // EXCEPT backsplash tile which is already split L/M in DEFAULT_PRICES so
   // the owner can track tile material separately from install labour. Both
   // client + contractor sides use L/M for backsplash.
-  return scalePrices(base, 0.70);
+  // Wall Removal contractor rate is 50% of client (not the global 70%),
+  // because demo work historically has more margin built into the client rate.
+  // Pull wallRemoval out of the global 70% scale and apply 50% separately.
+  const wrOriginal = JSON.parse(JSON.stringify(DEFAULT_PRICES.wallRemoval || {}));
+  delete base.wallRemoval;
+  const scaled = scalePrices(base, 0.70);
+  if(wrOriginal && Object.keys(wrOriginal).length){
+    scaled.wallRemoval = scalePrices(wrOriginal, 0.50);
+  }
+  return scaled;
 }
 function loadContractorPrices(){
   if(contractorPrices) return contractorPrices;
@@ -10673,6 +11080,33 @@ function renderContractorPricingEditor(){
       <div>${ctrPriceInput("potlights."+o.k+".rate", row.rate, 5)}</div>
     </div>`;
   });
+
+  // WALL REMOVAL contractor rates — defaulted to 50% of client (not 70%).
+  if(cp.wallRemoval){
+    const wp = cp.wallRemoval;
+    html += `<div class="section-title">Wall Removal &mdash; base rate per linear foot (contractor cost)</div>
+      <div class="footnote" style="margin-bottom:8px;color:var(--muted);">Defaults are 50% of the client rate (rather than the 70% used elsewhere). Adjust to match the actual subs you use.</div>
+      <div class="price-edit-row head single"><div></div><div>$/LF</div></div>
+      <div class="price-edit-row single"><div class="lbl">Non-load-bearing</div><div>${ctrPriceInput("wallRemoval.base.nonLoadBearing.rate", (wp.base && wp.base.nonLoadBearing || {rate:0}).rate, 5)}</div></div>
+      <div class="price-edit-row single"><div class="lbl">Load-bearing</div><div>${ctrPriceInput("wallRemoval.base.loadBearing.rate", (wp.base && wp.base.loadBearing || {rate:0}).rate, 5)}</div></div>`;
+    html += `<div class="section-title">Wall Removal &mdash; per-LF add-ons (contractor cost)</div>
+      <div class="price-edit-row head single"><div></div><div>$/LF</div></div>
+      <div class="price-edit-row single"><div class="lbl">Wall height adder (per LF per extra ft over 8 ft)</div><div>${ctrPriceInput("wallRemoval.heightAdder.rate", (wp.heightAdder||{rate:0}).rate, 1)}</div></div>
+      <div class="price-edit-row single"><div class="lbl">Electrical re-route</div><div>${ctrPriceInput("wallRemoval.electricalReroute.rate", (wp.electricalReroute||{rate:0}).rate, 5)}</div></div>
+      <div class="price-edit-row single"><div class="lbl">Plumbing re-route</div><div>${ctrPriceInput("wallRemoval.plumbingReroute.rate", (wp.plumbingReroute||{rate:0}).rate, 5)}</div></div>
+      <div class="price-edit-row single"><div class="lbl">HVAC ductwork re-route</div><div>${ctrPriceInput("wallRemoval.ductworkReroute.rate", (wp.ductworkReroute||{rate:0}).rate, 5)}</div></div>
+      <div class="price-edit-row single"><div class="lbl">Flooring seam transition</div><div>${ctrPriceInput("wallRemoval.flooringTransition.rate", (wp.flooringTransition||{rate:0}).rate, 5)}</div></div>
+      <div class="price-edit-row single"><div class="lbl">Steel beam upgrade (over LVL)</div><div>${ctrPriceInput("wallRemoval.beamSteelUpgrade.rate", (wp.beamSteelUpgrade||{rate:0}).rate, 5)}</div></div>`;
+    html += `<div class="section-title">Wall Removal &mdash; flat charges (contractor cost)</div>
+      <div class="price-edit-row head single"><div></div><div>$ flat</div></div>
+      <div class="price-edit-row single"><div class="lbl">Structural engineer</div><div>${ctrPriceInput("wallRemoval.structuralEngineer.rate", (wp.structuralEngineer||{rate:0}).rate, 25)}</div></div>
+      <div class="price-edit-row single"><div class="lbl">Building permit</div><div>${ctrPriceInput("wallRemoval.buildingPermit.rate", (wp.buildingPermit||{rate:0}).rate, 25)}</div></div>
+      <div class="price-edit-row single"><div class="lbl">Asbestos pre-test</div><div>${ctrPriceInput("wallRemoval.asbestosTest.rate", (wp.asbestosTest||{rate:0}).rate, 5)}</div></div>`;
+    html += `<div class="section-title">Wall Removal &mdash; asbestos abatement (contractor cost)</div>
+      <div class="price-edit-row head single"><div></div><div>$ rate</div></div>
+      <div class="price-edit-row single"><div class="lbl">Affected drywall removal ($/sqft)</div><div>${ctrPriceInput("wallRemoval.asbestosAbatementPerSqft.rate", (wp.asbestosAbatementPerSqft||{rate:0}).rate, 1)}</div></div>
+      <div class="price-edit-row single"><div class="lbl">Containment + decontamination setup (flat min)</div><div>${ctrPriceInput("wallRemoval.asbestosSetupMinimum.rate", (wp.asbestosSetupMinimum||{rate:0}).rate, 25)}</div></div>`;
+  }
 
   e.innerHTML = html;
 }
