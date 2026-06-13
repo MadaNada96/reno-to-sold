@@ -7788,10 +7788,11 @@ function deriveKitchenCosts(k, priceSet){
   const islandRate     = rateOf(p.island && p.island[tier]);
   const undercabRate   = rateOf(p.undercab);
 
-  // Countertop cost EXCLUDES the waterfall portion so it can be shown as its
-  // own line. Waterfall is priced at the countertop rate but reported separately.
+  // Countertop section cost — includes all sqft that should appear in the
+  // Countertop section total: base cabinet top + island top + island
+  // overhang + manual extras. EXCLUDES waterfall (own line below).
   const counterNonWaterfallSqft = k.counter
-    ? (d.baseCounterSqft + d.islandCounterSqft + d.counterExtra)
+    ? (d.baseCounterSqft + d.islandCounterSqft + d.overhangCounterSqft + d.counterExtra)
     : 0;
 
   const waterfallEndRate = rateOf(p.waterfallEnd);
