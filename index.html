@@ -10757,6 +10757,37 @@ function loadContractorPrices(){
     }
   }
   collapseToRate(fresh.potlights);
+
+  // ── ONE-TIME +5% BUMP ─────────────────────────────────────────────
+  // Owner requested every contractor rate be raised by 5% to deliberately
+  // take 5% off net profit margin. Runs once per browser; the flag below
+  // prevents it from ever stacking on a subsequent load. Walks the merged
+  // contractor prices and multiplies every rate / labour / material field
+  // by 1.05. The `percent` field in listingDiscount is intentionally NOT
+  // touched (it's not a price). After bumping we persist back to local
+  // storage AND stamp the timestamp key so bootstrapCloudSync treats local
+  // as newer and pushes the bump up to the cloud.
+  const BUMP_FLAG = "reno_contractor_5pct_bump_2026_jun_v1";
+  if(!localStorage.getItem(BUMP_FLAG)){
+    const bumpRates = (o) => {
+      if(!o || typeof o !== "object") return;
+      Object.keys(o).forEach(k => {
+        const v = o[k];
+        if(v && typeof v === "object" && !Array.isArray(v)){
+          bumpRates(v);
+        } else if(typeof v === "number" && (k === "rate" || k === "labour" || k === "material")){
+          o[k] = +(v * 1.05).toFixed(2);
+        }
+      });
+    };
+    bumpRates(fresh);
+    try {
+      localStorage.setItem("reno_contractor_prices_v1", JSON.stringify(fresh));
+      localStorage.setItem(CONTRACTOR_PRICES_TS_KEY, new Date().toISOString());
+      localStorage.setItem(BUMP_FLAG, new Date().toISOString());
+    } catch(_){}
+  }
+
   contractorPrices = fresh;
   return contractorPrices;
 }
