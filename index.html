@@ -10764,47 +10764,56 @@ function loadContractorPrices(){
   return contractorPrices;
 }
 
-/* ── ONE-TIME +5% BUMP TO ALL CONTRACTOR RATES ────────────────────────
-   Owner requested every contractor rate be raised by 5% to deliberately
-   take 5% off net profit margin. Runs once per browser regardless of how
-   contractorPrices got loaded (loadContractorPrices OR cloud sync). The
-   flag below prevents it from ever stacking on a subsequent load.
+/* ── ONE-TIME CONTRACTOR-RATE BUMPS ────────────────────────────────────
+   List of one-time bumps applied to all contractor rates. Each entry has a
+   { flag, factor } pair. The flag is a localStorage key that prevents the
+   bump from ever stacking on subsequent loads. To add a new bump, append
+   a new entry — that's the only change required.
 
-   Walks contractorPrices recursively and multiplies every rate / labour
-   / material field by 1.05. The `percent` field in listingDiscount is
-   intentionally NOT touched (it's not a price).
+   Walks contractorPrices recursively and multiplies every rate / labour /
+   material field by the factor. The `percent` field (listing discount) is
+   intentionally NOT touched.
 
-   After bumping we persist back to localStorage, stamp the timestamp key
-   so bootstrapCloudSync sees local as newer than the un-bumped cloud row,
-   and push to cloud immediately if signed in. */
+   After each bump we persist to localStorage, stamp the timestamp key so
+   bootstrapCloudSync sees local as newer than any un-bumped cloud row, and
+   push to cloud immediately if signed in. Idempotent — safe to call from
+   loadContractorPrices AND every branch of bootstrapCloudSync.
+
+   HISTORY
+     v2 (Jun 2026)  +5%   owner-requested margin reduction
+     v3 (Jun 2026)  +1%   additional follow-up bump (1% on top of v2)
+   ──────────────────────────────────────────────────────────────────────── */
+const CONTRACTOR_BUMPS = [
+  { flag: "reno_contractor_5pct_bump_2026_jun_v2", factor: 1.05, label: "+5%" },
+  { flag: "reno_contractor_1pct_bump_2026_jun_v3", factor: 1.01, label: "+1%" }
+];
+
 function applyContractorBumpIfNeeded(){
-  // Flag version v2 — first attempt's flag (v1) might be set but the bump
-  // could have been overwritten by the cloud sync race condition. Bumping
-  // the version forces a single retry on each browser that hasn't done v2.
-  // (Anyone whose v1 bump actually persisted will pick up a SECOND 5% — that's
-  // an acceptable trade-off for users who report "it didn't change". The
-  // owner explicitly asked for the bump to apply.)
-  const BUMP_FLAG = "reno_contractor_5pct_bump_2026_jun_v2";
   if(!contractorPrices) return;
-  if(localStorage.getItem(BUMP_FLAG)) return;
-
-  const bumpRates = (o) => {
+  const bumpRates = (o, factor) => {
     if(!o || typeof o !== "object") return;
     Object.keys(o).forEach(k => {
       const v = o[k];
       if(v && typeof v === "object" && !Array.isArray(v)){
-        bumpRates(v);
+        bumpRates(v, factor);
       } else if(typeof v === "number" && (k === "rate" || k === "labour" || k === "material")){
-        o[k] = +(v * 1.05).toFixed(2);
+        o[k] = +(v * factor).toFixed(2);
       }
     });
   };
-  bumpRates(contractorPrices);
+
+  let anyApplied = false;
+  for(const bump of CONTRACTOR_BUMPS){
+    if(localStorage.getItem(bump.flag)) continue;
+    bumpRates(contractorPrices, bump.factor);
+    try { localStorage.setItem(bump.flag, new Date().toISOString()); } catch(_){}
+    anyApplied = true;
+  }
+  if(!anyApplied) return;
 
   try {
     localStorage.setItem("reno_contractor_prices_v1", JSON.stringify(contractorPrices));
     localStorage.setItem(CONTRACTOR_PRICES_TS_KEY, new Date().toISOString());
-    localStorage.setItem(BUMP_FLAG, new Date().toISOString());
   } catch(_){}
   // If signed in, push the bumped data up so the cloud is also updated.
   if(currentUser && supa){
