@@ -3348,11 +3348,14 @@
 <div class="modal-bg" id="pinModal" onclick="if(event.target===this)closePinModal()">
   <div class="modal" style="max-width:420px;">
     <h3>
-      <span>Enter Internal Code</span>
+      <!-- .pin-title is updated by openPinModal(context) to reflect what's
+           being unlocked. Default text is "Internal Mode". -->
+      <span class="pin-title">Internal Mode</span>
       <button class="ghost" onclick="closePinModal()">Close</button>
     </h3>
     <div class="modal-body">
-      <p class="footnote" style="margin-top:0;font-size:12px;line-height:1.6;">Enter your code to access Internal Mode.</p>
+      <!-- .pin-sub is the subtitle line under the title — also context-aware. -->
+      <p class="footnote pin-sub" style="margin-top:0;font-size:12px;line-height:1.6;">Enter your code to open the internal cost analysis.</p>
       <form onsubmit="event.preventDefault();submitPin();">
         <input type="password" id="pinInput" class="pin-modal-input" inputmode="numeric" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="20" placeholder="Code">
       </form>
@@ -4099,6 +4102,8 @@ function savePrices(){
   if(currentUser && supa){ cloudPushPrices("client"); }
 }
 function resetPricing(){
+  // Same gate as setPrice — bail if the editor isn't unlocked.
+  if(!internalUnlocked) return;
   if(!confirm("Reset all unit prices to GTA defaults?")) return;
   prices = JSON.parse(JSON.stringify(DEFAULT_PRICES));
   savePrices();
@@ -6080,8 +6085,25 @@ function renderSavedList(){
 }
 function escapeHtml(s){ return (s||"").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 
-/* ---------- Pricing editor ---------- */
+/* ---------- Pricing editor ----------
+   The Pricing editor is gated behind the same access code as Internal Mode
+   (INTERNAL_ACCESS_HASH in site-gate-config.js). This stops anyone who has
+   the site-access code from being able to change unit prices — only people
+   who also know the admin access code can edit pricing. Both gated areas
+   share the same session unlock state (internalUnlocked) so once you've
+   entered the code, you have access to both for the rest of the session.
+
+   openSettings()           — public entry point. Prompts for PIN if locked.
+   _openSettingsUnlocked()  — internal; opens the editor without checking.
+                              Called only after a successful PIN entry. */
 function openSettings(){
+  if(!internalUnlocked){
+    openPinModal("pricing");
+    return;
+  }
+  _openSettingsUnlocked();
+}
+function _openSettingsUnlocked(){
   renderPricingEditor();
   document.getElementById("settingsModal").classList.add("show");
 }
@@ -6091,6 +6113,12 @@ function priceInput(path, val, step){
   return `<input type="number" step="${step||0.01}" value="${val}" onchange="setPrice('${path}', this.value)">`;
 }
 function setPrice(path, val){
+  // Defense-in-depth: the editor modal is already gated behind the PIN, but
+  // if someone tries to call setPrice() from the browser console without
+  // entering the code, bail. Anyone determined enough can also flip
+  // internalUnlocked = true from the console — this is not a security
+  // control, just an accidental-edit guard.
+  if(!internalUnlocked) return;
   const v = parseFloat(val);
   if(!isFinite(v) || v<0) return;
   const parts = path.split(".");
@@ -10166,11 +10194,33 @@ function onLockClick(){
   else { openPinModal(); }
 }
 
-function openPinModal(){
+// Tracks WHICH gated area triggered the PIN modal so the success path knows
+// what to open after the user enters the correct code. "internal" = Internal
+// Mode view; "pricing" = estimator Pricing editor. Both share the same
+// INTERNAL_ACCESS_HASH and the same internalUnlocked session state — they're
+// just different entry points.
+let pinModalContext = "internal";
+
+function openPinModal(context){
+  pinModalContext = context || "internal";
   document.getElementById("pinInput").value = "";
   document.getElementById("pinInput").placeholder = "Enter code";
   const msg = document.getElementById("pinMsg");
   msg.style.display = "none"; msg.className = "pin-msg"; msg.textContent = "";
+  // Update the modal title/subtitle to reflect the context, so the user
+  // knows which feature they're unlocking.
+  const titleEl = document.querySelector("#pinModal .pin-title");
+  const subEl   = document.querySelector("#pinModal .pin-sub");
+  if(titleEl){
+    titleEl.textContent = (pinModalContext === "pricing")
+      ? "Edit Pricing"
+      : "Internal Mode";
+  }
+  if(subEl){
+    subEl.textContent = (pinModalContext === "pricing")
+      ? "Enter your code to edit estimator unit prices."
+      : "Enter your code to open the internal cost analysis.";
+  }
   document.getElementById("pinModal").classList.add("show");
   setTimeout(() => document.getElementById("pinInput").focus(), 80);
 }
@@ -10183,7 +10233,7 @@ async function submitPin(){
   const required = (window.INTERNAL_ACCESS_HASH || "").trim();
   if(!required){
     msg.style.display = ""; msg.className = "pin-msg";
-    msg.textContent = "Internal Mode is not configured. Set INTERNAL_ACCESS_HASH in site-gate-config.js.";
+    msg.textContent = "Access code is not configured. Set INTERNAL_ACCESS_HASH in site-gate-config.js.";
     return;
   }
   if(!code){
@@ -10201,7 +10251,12 @@ async function submitPin(){
     msg.style.display = "none";
     closePinModal();
     updateLockUI();
-    openInternal();
+    // Dispatch to the right open function based on what triggered the modal.
+    if(pinModalContext === "pricing"){
+      _openSettingsUnlocked();
+    } else {
+      openInternal();
+    }
   } else {
     msg.style.display = ""; msg.className = "pin-msg"; msg.textContent = "Incorrect code.";
     inp.value = ""; inp.focus();
