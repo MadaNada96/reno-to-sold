@@ -10820,8 +10820,27 @@ function cleanupStaleContractorFields(){
     Object.keys(o).forEach(k => {
       const v = o[k];
       if(!v || typeof v !== "object" || Array.isArray(v)) return;
-      // Don't descend into backsplash subtree (preserve L/M).
-      if(k === "backsplash") return;
+
+      // Special handling for the backsplash subtree. The schema for
+      // backsplash is L/M ONLY (no rate). Strip any orphan `rate` we find
+      // and keep labour/material. After handling, do NOT recurse further.
+      if(k === "backsplash"){
+        Object.keys(v).forEach(tileKey => {
+          const tileEntry = v[tileKey];
+          if(!tileEntry || typeof tileEntry !== "object") return;
+          const tHasRate = typeof tileEntry.rate === "number";
+          const tHasLM   = typeof tileEntry.labour === "number" || typeof tileEntry.material === "number";
+          if(tHasRate && tHasLM){
+            // L/M is the source of truth for backsplash — strip the orphan rate.
+            delete tileEntry.rate;
+            cleaned++;
+          }
+        });
+        return;
+      }
+
+      // Everything else: rate is the source of truth. If both rate and L/M
+      // are present, strip the orphan labour/material.
       const hasRate = typeof v.rate === "number";
       const hasL    = typeof v.labour   === "number";
       const hasM    = typeof v.material === "number";
@@ -10926,21 +10945,32 @@ function exportPricingSnapshot(){
   }));
 
   // Live audit: count any entries that STILL have both rate and L/M fields,
-  // so we can see at a glance whether the stale-field cleanup is doing its job.
+  // so we can see at a glance whether the stale-field cleanup is doing its
+  // job. Treats backsplash the same way the cleanup does: backsplash should
+  // be L/M only, so an orphan `rate` alongside L/M counts as stale too.
   let staleCount = 0;
-  const auditStale = (o) => {
+  const auditStale = (o, parentKey) => {
     if(!o || typeof o !== "object") return;
     Object.keys(o).forEach(k => {
       const v = o[k];
       if(!v || typeof v !== "object" || Array.isArray(v)) return;
-      if(k === "backsplash") return;
+      if(k === "backsplash"){
+        Object.keys(v).forEach(tileKey => {
+          const t = v[tileKey];
+          if(!t || typeof t !== "object") return;
+          if(typeof t.rate === "number" && (typeof t.labour === "number" || typeof t.material === "number")){
+            staleCount++;
+          }
+        });
+        return;
+      }
       const hasRate = typeof v.rate === "number";
       const hasLM = typeof v.labour === "number" || typeof v.material === "number";
       if(hasRate && hasLM) staleCount++;
-      auditStale(v);
+      auditStale(v, k);
     });
   };
-  auditStale(contractorPrices);
+  auditStale(contractorPrices, null);
 
   const snapshot = {
     exportedAt: stamp,
