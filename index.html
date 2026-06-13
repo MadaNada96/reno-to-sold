@@ -3319,7 +3319,6 @@
     </div>
     <div class="iv-actions">
       <button onclick="openContractorPricing()">Contractor Rates</button>
-      <button onclick="exportPricingSnapshot()" title="Export both client + contractor pricing as JSON (download + clipboard)">Export Snapshot</button>
       <button onclick="closeInternal()">&larr; Back to Estimator</button>
       <button class="primary" onclick="window.print()">Print Internal</button>
     </div>
@@ -3333,6 +3332,11 @@
     <h3>
       <span>Edit Contractor Rates</span>
       <span class="small-stack">
+        <!-- Export Snapshot lives here (not on the Internal Mode toolbar) so
+             it's discreet — only an admin who's already inside the contractor
+             rates editor will see it. Dumps both client + contractor pricing
+             as JSON for archival, audit, or margin analysis. -->
+        <button class="ghost" onclick="exportPricingSnapshot()" title="Download client + contractor pricing as a JSON snapshot (also copied to clipboard)">Export Snapshot</button>
         <button class="ghost" onclick="resetContractorPricing()">Reset to 70% of client</button>
         <button class="primary" onclick="closeContractorPricing()">Done</button>
       </span>
