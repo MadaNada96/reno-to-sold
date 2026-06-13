@@ -5601,7 +5601,6 @@ function renderKitchenInstance(k, prefix, slug){
         </div>
         ` : ""}
       </div>
-      <div id="kitchen-summary-${slug}">${buildKitchenSummaryHtml(k)}</div>
       ${sectionCost("base", costs.baseCabinetCost, costs.baseCabinetCost > 0)}
 
       <!-- Countertop -->
@@ -5626,6 +5625,10 @@ function renderKitchenInstance(k, prefix, slug){
           <div class="footnote" style="margin-top:8px;">
             <b style="color:var(--gold-bright)">Auto-calc:</b> ${d.baseLF || 0} LF &times; 2 ft (24″ base cabinet depth) = <b>${d.baseLF*2} sqft</b>${d.islandTopSqft > 0 ? ` + island top <b>${d.islandTopSqft} sqft</b>` : ""}${d.waterfallSqft > 0 ? ` + waterfall <b>${d.waterfallSqft} sqft</b>` : ""}${d.counterExtra > 0 ? ` + extra <b>${d.counterExtra} sqft</b>` : ""} = <b style="color:var(--gold-bright)">${d.counterSqft} sqft</b>
           </div>
+          <!-- Quartz sqft breakdown — moved here from above so it only appears
+               when the countertop is enabled, and sits underneath the
+               countertop inputs where it makes contextual sense. -->
+          <div id="kitchen-summary-${slug}" style="margin-top:12px;">${buildKitchenSummaryHtml(k)}</div>
           ${sectionCost("counter", costs.countertopCost, costs.countertopCost > 0)}
         ` : ""}
       </div>
