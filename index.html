@@ -545,6 +545,19 @@
   .price-edit-row.head{font-weight:700;font-size:10px;color:var(--gold-bright);text-transform:uppercase;letter-spacing:.15em;border-bottom:1px solid var(--gold-deep);padding-bottom:8px;margin-bottom:6px;}
   .price-edit-row .lbl{font-size:13px;color:var(--ink);}
   .price-edit-row input{padding:7px 10px;font-size:13px;}
+  /* Hide the browser's built-in up/down spinner arrows on number inputs
+     inside the pricing editors. Pure text-style number entry only. The
+     onchange handler still fires on blur, so click-out-of-field autosave
+     keeps working. */
+  .price-edit-row input[type="number"]::-webkit-inner-spin-button,
+  .price-edit-row input[type="number"]::-webkit-outer-spin-button{
+    -webkit-appearance:none;
+    margin:0;
+  }
+  .price-edit-row input[type="number"]{
+    -moz-appearance:textfield;     /* Firefox */
+    appearance:textfield;          /* Standard / future-proofing */
+  }
   .price-edit-row.single{grid-template-columns:1fr 110px;}
   .section-title{font-weight:700;font-size:11px;margin-top:18px;margin-bottom:8px;color:var(--gold-bright);text-transform:uppercase;letter-spacing:.18em;border-top:1px solid var(--line);padding-top:14px;}
   .section-title:first-child{margin-top:0;border-top:none;padding-top:0;}
