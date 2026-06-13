@@ -10790,10 +10790,13 @@ function loadContractorPrices(){
    HISTORY
      v2 (Jun 2026)  +5%   owner-requested margin reduction
      v3 (Jun 2026)  +1%   additional follow-up bump (1% on top of v2)
+     v4 (Jun 2026)  +1%   bring weighted net-after-discount margin from
+                          ~21.3% down to ~20.5% (target was 20.3%)
    ──────────────────────────────────────────────────────────────────────── */
 const CONTRACTOR_BUMPS = [
-  { flag: "reno_contractor_5pct_bump_2026_jun_v2", factor: 1.05, label: "+5%" },
-  { flag: "reno_contractor_1pct_bump_2026_jun_v3", factor: 1.01, label: "+1%" }
+  { flag: "reno_contractor_5pct_bump_2026_jun_v2",   factor: 1.05, label: "+5%" },
+  { flag: "reno_contractor_1pct_bump_2026_jun_v3",   factor: 1.01, label: "+1%" },
+  { flag: "reno_contractor_1pct_bump_2026_jun_v4",   factor: 1.01, label: "+1%" }
 ];
 
 /* ── STALE-FIELD CLEANUP ──────────────────────────────────────────────
