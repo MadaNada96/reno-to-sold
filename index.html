@@ -3319,6 +3319,7 @@
     </div>
     <div class="iv-actions">
       <button onclick="openContractorPricing()">Contractor Rates</button>
+      <button onclick="exportPricingSnapshot()" title="Export both client + contractor pricing as JSON (download + clipboard)">Export Snapshot</button>
       <button onclick="closeInternal()">&larr; Back to Estimator</button>
       <button class="primary" onclick="window.print()">Print Internal</button>
     </div>
@@ -10843,6 +10844,73 @@ function setContractorPrice(path, val){
   saveContractorPrices();
   renderInternalSheet();
 }
+/* ── EXPORT PRICING SNAPSHOT ─────────────────────────────────────────
+   Dumps the current client + contractor pricing trees, the listing
+   discount, the active bump-flag history, and a small "where this came
+   from" metadata block into a single JSON file. Triggered from Internal
+   Mode → Export Snapshot. Downloads the file AND copies the JSON to the
+   clipboard so the user can either share the file or paste the JSON.
+
+   The snapshot is the ground-truth state of pricing at the moment of
+   export — it's what's actually being used to render the estimator,
+   regardless of what's in the cloud. Useful for margin analysis, dispute
+   verification, archiving rate changes over time. */
+function exportPricingSnapshot(){
+  // Make sure both are loaded.
+  if(!contractorPrices) loadContractorPrices();
+  const now = new Date();
+  const stamp = now.toISOString();
+
+  // List of all bump flags + their state.
+  const bumpHistory = (typeof CONTRACTOR_BUMPS !== "undefined" ? CONTRACTOR_BUMPS : []).map(b => ({
+    flag: b.flag,
+    factor: b.factor,
+    label: b.label,
+    appliedAt: localStorage.getItem(b.flag) || null
+  }));
+
+  const snapshot = {
+    exportedAt: stamp,
+    exportedBy: (currentUser && currentUser.email) ? currentUser.email : null,
+    app: "Reno to Sold",
+    schemaVersion: 1,
+    notes: "Snapshot of unit pricing. Client prices are what the estimator charges; contractor prices are what RTS pays subs.",
+    bumpHistory: bumpHistory,
+    listingDiscountPercent: (prices.listingDiscount && prices.listingDiscount.percent) || 0,
+    clientPrices: prices,
+    contractorPrices: contractorPrices
+  };
+
+  const json = JSON.stringify(snapshot, null, 2);
+
+  // 1. Download as a file
+  try {
+    const blob = new Blob([json], { type: "application/json" });
+    const url  = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const dateTag = now.toISOString().slice(0, 19).replace(/[:T]/g, "-");
+    a.download = "RTS-pricing-snapshot-" + dateTag + ".json";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch(e){
+    console.error("Snapshot download failed:", e);
+  }
+
+  // 2. Also copy to clipboard for quick paste.
+  let clipMsg = "";
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(json).then(
+      () => { try { flash && flash("Pricing snapshot downloaded + copied to clipboard"); } catch(_){} },
+      () => { try { flash && flash("Pricing snapshot downloaded (clipboard blocked — file only)"); } catch(_){} }
+    );
+  } else {
+    try { flash && flash("Pricing snapshot downloaded"); } catch(_){}
+  }
+}
+
 function openContractorPricing(){
   loadContractorPrices();
   renderContractorPricingEditor();
