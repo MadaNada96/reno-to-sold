@@ -1840,6 +1840,12 @@
   }
   #bidResponseView .brv-section .brv-bid-grid{
     display:grid; grid-template-columns:repeat(4,1fr); gap:10px;
+    /* Align inputs at the bottom of each grid cell. Some labels are taller
+       than others (e.g. "Section total $" has an inline "auto" / "sum of
+       items" pill that wraps to a second line) and stretch alignment would
+       leave inputs visually misaligned across the row. align-items:end
+       pulls every input to the same baseline regardless of label height. */
+    align-items:end;
   }
   @media (max-width:640px){
     #bidResponseView .brv-section .brv-bid-grid{ grid-template-columns:repeat(2,1fr); }
@@ -10689,19 +10695,30 @@ function renderReceivedBidDetail(bid){
   const cats = (bid.scope_data && bid.scope_data.categories) || [];
   const tableRows = cats.length ? cats.map(c => {
     const s = sec[c.key] || {};
-    // Miscellaneous: surface per-item labour + material + total (matches
+    // Miscellaneous: surface per-item supplied & installed total (matches
     // the contractor's bid response form structure).
     if(c.key === "miscellaneous"){
       const catItems = Array.isArray(c.items) ? c.items : [];
       const subItems = Array.isArray(s.items) ? s.items : [];
       const findSub = (id) => subItems.find(x => x && x.id === id) || {};
+      // Resolve per-item amount across schema versions.
+      const itemAmt = (sub) => {
+        if(sub.si_total) return sub.si_total;
+        if(sub.item_total) return sub.item_total;
+        if(sub.labour || sub.material){
+          const l = rbParseMoney(sub.labour) || 0;
+          const m = rbParseMoney(sub.material) || 0;
+          return rbMoneyDisplay(l + m);
+        }
+        return "—";
+      };
       const itemsHtml = catItems.length === 0
         ? `<i style="color:var(--muted);">No items.</i>`
         : catItems.map((it, i) => {
             const sub = findSub(it.id);
             return `<div style="padding:4px 0;${i>0?'border-top:1px solid var(--line);':''}">
               <div style="font-weight:600;">${escapeHtml(it.name)} <span style="font-weight:400;color:var(--muted);">(${escapeHtml(it.qty||"")} ${escapeHtml(it.unit||"ea")})</span></div>
-              <div style="font-size:11.5px;color:var(--muted);">L: ${escapeHtml(rbMoneyDisplay(sub.labour))} · M: ${escapeHtml(rbMoneyDisplay(sub.material))} · <b style="color:var(--ink);">Total: ${escapeHtml(rbMoneyDisplay(sub.item_total))}</b></div>
+              <div style="font-size:11.5px;color:var(--muted);">Supplied &amp; installed: <b style="color:var(--ink);">${escapeHtml(itemAmt(sub))}</b></div>
             </div>`;
           }).join("");
       return `<tr>
@@ -10811,6 +10828,16 @@ function renderRevisionSnapshot(snap, cats){
       const catItems = Array.isArray(c.items) ? c.items : [];
       const subItems = Array.isArray(s.items) ? s.items : [];
       const findSub = (id) => subItems.find(x => x && x.id === id) || {};
+      const itemAmt = (sub) => {
+        if(sub.si_total) return sub.si_total;
+        if(sub.item_total) return sub.item_total;
+        if(sub.labour || sub.material){
+          const l = rbParseMoney(sub.labour) || 0;
+          const m = rbParseMoney(sub.material) || 0;
+          return rbMoneyDisplay(l + m);
+        }
+        return "—";
+      };
       const itemsHtml = (catItems.length === 0 && subItems.length === 0)
         ? `<i style="color:var(--muted);">No items.</i>`
         : (catItems.length ? catItems : subItems).map((it, i) => {
@@ -10820,7 +10847,7 @@ function renderRevisionSnapshot(snap, cats){
             const unit = catItems.length ? (it.unit||"ea") : "";
             return `<div style="padding:3px 0;${i>0?'border-top:1px solid var(--line);':''}">
               <div style="font-weight:600;">${escapeHtml(name)}${qty?` <span style="font-weight:400;color:var(--muted);">(${escapeHtml(qty)} ${escapeHtml(unit)})</span>`:""}</div>
-              <div style="font-size:11px;color:var(--muted);">L: ${escapeHtml(rbMoneyDisplay(sub.labour))} · M: ${escapeHtml(rbMoneyDisplay(sub.material))} · <b style="color:var(--ink);">${escapeHtml(rbMoneyDisplay(sub.item_total))}</b></div>
+              <div style="font-size:11px;color:var(--muted);">S&amp;I: <b style="color:var(--ink);">${escapeHtml(itemAmt(sub))}</b></div>
             </div>`;
           }).join("");
       return `<tr>
@@ -14897,15 +14924,27 @@ window.ET={ goHome:goHome, openNewProject:openNewProject, switchHome:switchHome,
         const items = Array.isArray(c.items) ? c.items : [];
         const submittedItems = Array.isArray(s.items) ? s.items : [];
         const findSub = (id) => submittedItems.find(x => x && x.id === id) || {};
+        // Helper — resolves the per-item supplied & installed price across
+        // schema versions:
+        //   - new: { si_total: "$X.XX" }
+        //   - prior: { labour, material, item_total }
+        // Returns a money value (number) or null.
+        const itemSi = (sub) => {
+          const direct = parseMoney(sub.si_total);
+          if(direct != null) return direct;
+          const oldTotal = parseMoney(sub.item_total);
+          if(oldTotal != null) return oldTotal;
+          const l = parseMoney(sub.labour), m = parseMoney(sub.material);
+          if(l != null || m != null) return (l||0) + (m||0);
+          return null;
+        };
         let runningSecTot = 0, anyEntry = false;
         const itemsHtml = items.length === 0
           ? `<div style="padding:14px;background:#fff7e6;border-radius:8px;color:#7a5a14;">The owner hasn't added any Miscellaneous items yet. There's nothing for you to price in this section.</div>`
           : items.map((it, i) => {
               const sub = findSub(it.id);
-              const lab = parseMoney(sub.labour);
-              const mat = parseMoney(sub.material);
-              const itemTot = (lab != null || mat != null) ? ((lab||0) + (mat||0)) : null;
-              if(itemTot != null){ runningSecTot += itemTot; anyEntry = true; }
+              const si = itemSi(sub);
+              if(si != null){ runningSecTot += si; anyEntry = true; }
               const qtyDisp = it.qty || "—";
               const unitDisp = it.unit || "ea";
               const descBlock = it.description ? `<div style="font-size:12.5px;color:#555;margin-top:2px;">${esc(it.description)}</div>` : "";
@@ -14921,12 +14960,8 @@ window.ET={ goHome:goHome, openNewProject:openNewProject, switchHome:switchHome,
                     </div>
                   </div>
                   <div class="brv-bid-grid" style="margin-top:6px;">
-                    <div class="brv-field"><label>Your labour $</label>
-                      <input type="text" inputmode="decimal" data-fld="labour" value="${escAttr(sub.labour ? fmtMoney(sub.labour) : "")}"></div>
-                    <div class="brv-field"><label>Material $</label>
-                      <input type="text" inputmode="decimal" data-fld="material" value="${escAttr(sub.material ? fmtMoney(sub.material) : "")}"></div>
-                    <div class="brv-field"><label>Item total $ <span class="brv-auto">auto</span></label>
-                      <input type="text" data-fld="item_total" readonly value="${escAttr(itemTot != null ? fmtMoney(itemTot) : "")}"></div>
+                    <div class="brv-field" style="grid-column:1 / -1;"><label>Your supplied &amp; installed price $</label>
+                      <input type="text" inputmode="decimal" data-fld="si_total" value="${escAttr(si != null ? fmtMoney(si) : "")}"></div>
                   </div>
                 </div>
               `;
@@ -14937,7 +14972,7 @@ window.ET={ goHome:goHome, openNewProject:openNewProject, switchHome:switchHome,
             <div class="brv-sec-body">
               <div class="brv-scope-readout">${c.scope_html || ""}</div>
               ${itemsHtml}
-              <div class="brv-bid-grid" style="margin-top:10px;border-top:1px dashed #e9d989;padding-top:10px;">
+              <div class="brv-bid-grid" style="margin-top:10px;border-top:1px dashed #e9d989;padding-top:10px;align-items:end;">
                 <div class="brv-field"><label>Section total $ <span class="brv-auto">sum of items</span></label>
                   <input type="text" data-fld="section_total" readonly value="${escAttr(anyEntry ? fmtMoney(runningSecTot) : "")}"></div>
                 <div class="brv-field"><label>Timeline</label>
@@ -15073,18 +15108,25 @@ window.ET={ goHome:goHome, openNewProject:openNewProject, switchHome:switchHome,
         const catItems = Array.isArray(c.items) ? c.items : [];
         const subItems = Array.isArray(s.items) ? s.items : [];
         const findSub = (id) => subItems.find(x => x && x.id === id) || {};
+        // Resolve the per-item amount across schema versions (new si_total
+        // first, then legacy item_total, then summed labour+material).
+        const itemAmt = (sub) => {
+          if(sub.si_total) return sub.si_total;
+          if(sub.item_total) return sub.item_total;
+          if(sub.labour || sub.material){
+            return fmtMoney((parseMoney(sub.labour)||0) + (parseMoney(sub.material)||0));
+          }
+          return "—";
+        };
         const total = s.section_total || "—";
         const tline = s.timeline || "—";
         const itemRows = catItems.length === 0
           ? `<i style="color:#777;">No Miscellaneous items.</i>`
           : catItems.map((it, i) => {
               const sub = findSub(it.id);
-              const lab = sub.labour || "—";
-              const mat = sub.material || "—";
-              const itTot = sub.item_total || "—";
               return `<div style="padding:6px 0;${i>0?'border-top:1px solid #f0e6c4;':''}">
                 <div style="font-weight:600;color:#0a0a0a;">${esc(it.name)} <span style="font-weight:400;color:#777;">(${esc(it.qty||"")} ${esc(it.unit||"ea")})</span></div>
-                <div style="font-size:12px;color:#555;">Labour: ${esc(lab)} · Material: ${esc(mat)} · <b style="color:#0a0a0a;">Item total: ${esc(itTot)}</b></div>
+                <div style="font-size:12px;color:#555;">Supplied &amp; installed: <b style="color:#0a0a0a;">${esc(itemAmt(sub))}</b></div>
               </div>`;
             }).join("");
         return `<tr>
@@ -15169,13 +15211,21 @@ window.ET={ goHome:goHome, openNewProject:openNewProject, switchHome:switchHome,
         const catItems = Array.isArray(c.items) ? c.items : [];
         const subItems = Array.isArray(s.items) ? s.items : [];
         const findSub = (id) => subItems.find(x => x && x.id === id) || {};
+        const itemAmt = (sub) => {
+          if(sub.si_total) return sub.si_total;
+          if(sub.item_total) return sub.item_total;
+          if(sub.labour || sub.material){
+            return fmtMoney((parseMoney(sub.labour)||0) + (parseMoney(sub.material)||0));
+          }
+          return "—";
+        };
         const itemRows = catItems.length === 0
           ? `<i style="color:#777;">No items.</i>`
           : catItems.map((it, i) => {
               const sub = findSub(it.id);
               return `<div style="padding:4px 0;${i>0?'border-top:1px solid #f0e6c4;':''}">
                 <div style="font-weight:600;">${esc(it.name)} <span style="font-weight:400;color:#777;">(${esc(it.qty||"")} ${esc(it.unit||"ea")})</span></div>
-                <div style="font-size:11.5px;color:#555;">Labour: ${esc(sub.labour||"—")} · Material: ${esc(sub.material||"—")} · <b>Total: ${esc(sub.item_total||"—")}</b></div>
+                <div style="font-size:11.5px;color:#555;">Supplied &amp; installed: <b>${esc(itemAmt(sub))}</b></div>
               </div>`;
             }).join("");
         return `<tr>
@@ -15218,10 +15268,11 @@ window.ET={ goHome:goHome, openNewProject:openNewProject, switchHome:switchHome,
   }
 
   function defaultBidNote(isPainting){
-    if(isPainting){
-      return `<b>Paint material</b> = paint and prep supplies (paint for walls / baseboards / doors / trims, primer, patch, sanding supplies, fasteners). <b class="excl">Does NOT</b> include other trades' finishing materials (tile, flooring, vanities, fixtures) &mdash; those are supplied separately.`;
-    }
-    return `<b>Building material</b> = construction supplies you bring to do the work (drywall, lumber, mud, primer, fasteners, grout, adhesives, paint for walls / baseboards / doors / trims, etc.). <b class="excl">Does NOT</b> include finishing materials &mdash; tile, flooring, vanities, fixtures, faucets &mdash; those are supplied separately.`;
+    // Single unified note across every section. The owner wants a clean,
+    // all-inclusive instruction — no labour/material split, no carve-outs
+    // for "owner-supplied" materials. The contractor's price must cover
+    // everything in the scope of work above.
+    return `<b>Your price must account for and include EVERYTHING in the scope of work above &mdash; ALL labour AND ALL materials</b> needed to deliver each item (supplies, fixtures, finishes, fasteners, consumables, disposal). Nothing is supplied separately. If anything in the scope is unclear, ask before quoting.`;
   }
 
   /* ----- Input handlers + auto-save ----- */
@@ -15232,8 +15283,10 @@ window.ET={ goHome:goHome, openNewProject:openNewProject, switchHome:switchHome,
       el.addEventListener("input", () => scheduleSave());
       el.addEventListener("blur",  () => scheduleSave(true));
     });
-    // Money fields (labour + material): live recompute on input, format on blur
-    root.querySelectorAll("input[data-fld='labour'], input[data-fld='material']").forEach(el => {
+    // Money fields (labour + material + Misc si_total): live recompute on
+    // input, format on blur. si_total is the per-item Supplied & Installed
+    // price inside Misc — same money-input behaviour as the standard fields.
+    root.querySelectorAll("input[data-fld='labour'], input[data-fld='material'], input[data-fld='si_total']").forEach(el => {
       el.addEventListener("input", () => recomputeTotals());
       el.addEventListener("blur",  () => {
         const v = parseMoney(el.value);
@@ -15261,16 +15314,12 @@ window.ET={ goHome:goHome, openNewProject:openNewProject, switchHome:switchHome,
       const sectionTotEl = secEl.querySelector("input[data-fld='section_total']");
       let sectionTot = 0, anySection = false;
       if(mode === "per-item"){
+        // Each Misc item card now has a single Supplied & Installed input.
+        // Section total = sum of all si_total values across items.
         secEl.querySelectorAll(".brv-misc-item").forEach(itEl => {
-          const labEl = itEl.querySelector("input[data-fld='labour']");
-          const matEl = itEl.querySelector("input[data-fld='material']");
-          const itemTotEl = itEl.querySelector("input[data-fld='item_total']");
-          const l = parseMoney(labEl ? labEl.value : "");
-          const m = parseMoney(matEl ? matEl.value : "");
-          const has = (l != null) || (m != null);
-          const t = has ? ((l||0) + (m||0)) : null;
-          if(itemTotEl) itemTotEl.value = (t != null) ? fmtMoney(t) : "";
-          if(has){ sectionTot += (l||0) + (m||0); anySection = true; }
+          const siEl = itEl.querySelector("input[data-fld='si_total']");
+          const v = parseMoney(siEl ? siEl.value : "");
+          if(v != null){ sectionTot += v; anySection = true; }
         });
       } else {
         const labEl = secEl.querySelector(":scope > .brv-sec-body > .brv-bid-grid input[data-fld='labour']")
