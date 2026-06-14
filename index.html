@@ -5945,7 +5945,6 @@ function renderMiscellaneous(){
   const m = state.miscellaneous || (state.miscellaneous = { items: [] });
   const items = Array.isArray(m.items) ? m.items : (m.items = []);
   const internal = (typeof internalUnlocked !== "undefined") && !!internalUnlocked;
-  const grandClient = items.reduce((a,it) => a + (num(it.qty) * num(it.clientRate)), 0);
   return `
     <div class="footnote" style="margin-bottom:14px;background:rgba(212,175,106,.08);border:1px solid rgba(212,175,106,.30);border-radius:8px;padding:10px 12px;line-height:1.55;">
       <b style="color:var(--gold-bright)">Use this for anything that doesn't fit a category:</b> permits, surveys, change orders, demo allowances, dumpster fees, custom one-off items. Each line is its own price &mdash; <b>qty × $/unit</b>.
@@ -5956,9 +5955,31 @@ function renderMiscellaneous(){
     </div>
     <div id="misc-items">${items.map((it,i) => renderMiscItem(it,i,internal)).join("")}</div>
     <button class="add-btn no-print" onclick="addMiscItem()">+ Add item</button>
-    <div class="breakdown" style="font-weight:700;margin-top:14px;border-top:1px solid var(--line);padding-top:10px;"><span>Miscellaneous total</span><span style="font-variant-numeric:tabular-nums;">${fmt(grandClient)}</span></div>
-    <div style="margin-top:8px">${breakdownRows("miscellaneous")}</div>
+    <!--
+      Custom Misc breakdown — one line per item + the discount + subtotal rows.
+      Replaces the generic breakdownRows() output (which would just show one
+      "Supplied & Installed" row equal to the total — redundant when we can
+      itemize). The discount + subtotal rows use the standard .bd-d /
+      .bd-discount-row / .bd-t hooks so the main renderTotals() update path
+      drives them automatically. Per-item rows are kept in sync by
+      updateMiscItemTotal() (live qty/rate edits) and by full re-render
+      whenever items are added or removed.
+    -->
+    <div id="cat-breakdown-miscellaneous" style="margin-top:14px;border-top:1px solid var(--line);padding-top:10px;">
+      <div id="misc-summary-rows">${items.map((it,i) => renderMiscSummaryRow(it,i)).join("") || `<div class="breakdown" style="color:var(--muted);font-style:italic;"><span>No items added yet.</span><span></span></div>`}</div>
+      <div class="breakdown disc bd-discount-row" style="display:none"><span><span class="pill pill-d">Discount</span> <span class="bd-d-note" style="margin-left:6px;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;"></span></span><span class="bd-d">-$0</span></div>
+      <div class="breakdown" style="font-weight:700;border-top:1px solid var(--line);padding-top:8px;margin-top:4px;"><span>Subtotal</span><span class="bd-t">$0</span></div>
+    </div>
   `;
+}
+
+/* One row in the Misc category-card breakdown — shows the item name (or a
+   placeholder if the user hasn't named it yet) on the left and its qty ×
+   rate total on the right. Stays in sync via updateMiscItemTotal. */
+function renderMiscSummaryRow(it, i){
+  const lineTotal = num(it.qty) * num(it.clientRate);
+  const name = (it.name || "").trim() || ("Item #" + (i+1));
+  return `<div class="breakdown misc-summary-row" data-misc-idx="${i}"><span style="color:var(--ink);">${escapeHtml(name)}</span><span style="font-variant-numeric:tabular-nums;color:var(--ink);">${fmt(lineTotal)}</span></div>`;
 }
 function renderMiscItem(it, i, internal){
   const lineTotal = num(it.qty) * num(it.clientRate);
@@ -6014,15 +6035,22 @@ function updateMiscItemTotal(i){
   const it = state.miscellaneous.items[i];
   if(!it) return;
   const t = num(it.qty) * num(it.clientRate);
+  // 1. Refresh the per-item "Line total" pill on the item card
   const el = document.getElementById("misc-line-total-"+i);
   if(el) el.textContent = fmt(t);
-  // Update the grand total + the category breakdown subtotal
-  const sum = state.miscellaneous.items.reduce((a,it2) => a + (num(it2.qty) * num(it2.clientRate)), 0);
-  const grand = document.querySelector("#misc-items").parentNode.querySelector(".breakdown[style*='font-weight:700']");
-  if(grand){
-    const spans = grand.querySelectorAll("span");
-    if(spans.length === 2) spans[1].textContent = fmt(sum);
+  // 2. Refresh this item's row in the category-card summary breakdown
+  const sumRow = document.querySelector('.misc-summary-row[data-misc-idx="' + i + '"]');
+  if(sumRow){
+    const spans = sumRow.querySelectorAll("span");
+    if(spans.length === 2){
+      const name = (it.name || "").trim() || ("Item #" + (i+1));
+      spans[0].textContent = name;
+      spans[1].textContent = fmt(t);
+    }
   }
+  // 3. Trigger global totals refresh — drives the .bd-d / .bd-t rows in our
+  //    custom breakdown plus the category card header total and any other
+  //    cross-category totals (savings card, quote summary, etc.)
   renderTotals();
 }
 function addMiscItem(){
