@@ -628,6 +628,11 @@
     position:relative;
     color:var(--ink);
     line-height:1.5;
+    /* When the "New" column uses CSS columns: keep each list item whole
+       so a line never wraps across columns mid-text. */
+    break-inside:avoid;
+    -webkit-column-break-inside:avoid;
+    page-break-inside:avoid;
   }
   .included-col.new li::before{
     content:"+";
@@ -6197,6 +6202,14 @@ function bathroomIncludesPanel(b, i){
   newItems.push("Floor tiles");
   if(hasShower)               newItems.push("Shower wall tiles");
   if(hasShower)               newItems.push("Shower fixtures");
+  // Glass walls + door — included on every stand-up shower scope
+  // (refresh re-tile + new glass; convert from tub gets new glass;
+  // new build of course gets new glass).
+  if(hasShower)               newItems.push("Shower glass walls &amp; door");
+  // New stand-up shower plumbing rough-in — only for "new build" scope.
+  if(b.standUpShower && (b.showerType || "convert") === "new"){
+    newItems.push("New stand-up shower plumbing rough-in");
+  }
   // Tub wall tiles only when there's a DROP-IN tub against the wall.
   // Freestanding tubs don't have a surround so no wall tile is included.
   if(layoutHasTub && !b.newTub && !b.freestandingTub && !convertingTubToShower) newItems.push("Tub wall tiles");
@@ -6206,9 +6219,14 @@ function bathroomIncludesPanel(b, i){
                   : (b.freestandingTubSize === "small") ? "Small / Compact"
                   : "Standard / Mid-Size";
     newItems.push("Freestanding tub (" + sizeLbl + ") &mdash; <i>no tub-surround wall tile</i>");
+    newItems.push("Freestanding tub plumbing rough-in (floor-mount)");
+    newItems.push("Freestanding tub faucet (floor-mount)");
   }
   newItems.push("Toilet");
   newItems.push("Vanity");
+  // Double vanity rough-in — separate line so contractor knows extra
+  // plumbing is in scope (second drain + second supply lines).
+  if(b.doubleVanity) newItems.push("New double vanity plumbing rough-in");
   newItems.push("Faucet");
   newItems.push("Mirror");
   newItems.push("Light fixture");
@@ -6222,13 +6240,18 @@ function bathroomIncludesPanel(b, i){
   const newHtml = newItems.map(t => `<li>${t}</li>`).join("");
   const existingHtml = existingItems.map(t => `<li>${t}</li>`).join("");
 
+  // Inline 2-column CSS for the "New" items list so a longer list (e.g. when
+  // double-vanity rough-in, freestanding tub rough-in + faucet, shower
+  // rough-in, shower glass, etc. are all checked) flows side-by-side instead
+  // of forcing a long vertical scroll. column-count is well-supported across
+  // modern browsers and falls back gracefully on older ones.
   return `
     <div class="included-box" style="margin-top:14px;margin-bottom:0;">
       <div class="included-title">Bathroom #${i+1} refresh includes</div>
       <div class="included-grid">
         <div class="included-col new">
           <div class="included-head">New</div>
-          <ul>${newHtml}</ul>
+          <ul style="column-count:2;column-gap:18px;margin:0;padding-left:18px;">${newHtml}</ul>
         </div>
         <div class="included-col existing">
           <div class="included-head">Existing (re-used)</div>
@@ -6313,7 +6336,7 @@ function renderBathrooms(){
               {value:"small",    label:"Small / Compact"},
               {value:"standard", label:"Standard / Mid-Size"},
               {value:"large",    label:"Large / Two-Person"}
-            ], "state.bathroom.rooms["+i+"].freestandingTubSize=this.value;renderTotals()")}
+            ], "state.bathroom.rooms["+i+"].freestandingTubSize=this.value;renderBathBody()")}
             <div class="footnote" style="margin-top:6px;margin-bottom:8px;">
               <b style="color:var(--gold-bright)">Small / Compact</b>: 45&ndash;54&Prime; &times; 25&ndash;30&Prime; &times; 14&ndash;17&Prime; &mdash; ideal for small bathrooms, en-suites, or tiny homes.<br>
               <b style="color:var(--gold-bright)">Standard / Mid-Size</b>: 55&ndash;65&Prime; &times; 27&ndash;32&Prime; &times; 15&ndash;20&Prime; &mdash; the most common size, comfortable for a single average-height adult.<br>
@@ -8602,16 +8625,22 @@ function buildEstimateSummary(){
         const sizeLbl = size === "small"    ? "Small / Compact (45–54″ × 25–30″ × 14–17″)"
                       : size === "large"    ? "Large / Two-Person (66–72″ × 32–36+″ × 18–22″)"
                       :                       "Standard / Mid-Size (55–65″ × 27–32″ × 15–20″)";
-        bullets.push(`Freestanding tub — <b>${sizeLbl}</b> — supplied &amp; installed (floor-mount, no wall surround)`);
+        bullets.push(`Freestanding tub — <b>${sizeLbl}</b> — supplied &amp; installed (no tub-surround wall tile)`);
+        bullets.push("Freestanding tub plumbing rough-in (floor-mount) &amp; drain rough-in");
+        bullets.push("Freestanding tub faucet (floor-mount)");
       }
-      if(b.doubleVanity)  bullets.push("Double vanity upgrade (plumbed for two sinks)");
+      if(b.doubleVanity){
+        bullets.push("Double vanity upgrade (plumbed for two sinks)");
+        bullets.push("New double vanity plumbing rough-in");
+      }
       if(b.standUpShower){
         const st = b.showerType || "convert";
         const stLbl = st === "new" ? "new build, new plumbing rough-in"
                     : st === "refresh" ? "refresh existing, reuse plumbing"
                     : "convert from tub, reuse tub plumbing";
         const sw = (num(b.showerWidth)||4), sd = (num(b.showerDepth)||3), sh = (num(b.showerHeight)||8);
-        bullets.push(`Stand-up shower (${stLbl}) — ${sw}′ × ${sd}′ × ${sh}′ high, new tile/fixtures/glass`);
+        bullets.push(`Stand-up shower (${stLbl}) — ${sw}′ × ${sd}′ × ${sh}′ high, new tile, fixtures, glass walls &amp; door`);
+        if(st === "new") bullets.push("New stand-up shower plumbing rough-in");
       }
 
       const { labour, material } = computeBathroomRoom(b);
