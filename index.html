@@ -6232,9 +6232,13 @@ function bathroomIncludesPanel(b, i){
   newItems.push("Light fixture");
   newItems.push("Bathroom accessories");
 
-  // "Existing" column — only show items that actually carry over
+  // "Existing" column — only show items that actually carry over.
+  // The generic "plumbing rough-in" line refers specifically to the toilet,
+  // since the toilet is the one fixture we always re-use the existing
+  // rough-in for (tub, vanity, shower rough-ins may be new and are listed
+  // separately in the "New" column).
   const existingItems = [];
-  existingItems.push("Plumbing rough-in");
+  existingItems.push("Toilet plumbing rough-in");
   if(tubReused) existingItems.push("Tub (re-used)");
 
   const newHtml = newItems.map(t => `<li>${t}</li>`).join("");
@@ -7244,7 +7248,7 @@ function renderContractorSheet(){
   if(includeCat("bathroom")){
     anyEnabled = true;
     const items = [];
-    items.push({ sub:false, html:`<i>Refresh scope per bathroom: new floor tiles, tub wall tiles, shower fixtures, toilet, vanity, faucet, mirror, light fixture, accessories. Existing plumbing &amp; tub re-used (unless &ldquo;new tub&rdquo; is checked below).</i>` });
+    items.push({ sub:false, html:`<i>Refresh scope per bathroom: new floor tiles, tub wall tiles, shower fixtures, toilet, vanity, faucet, mirror, light fixture, accessories. Existing toilet plumbing rough-in &amp; tub re-used (unless &ldquo;new tub&rdquo;, &ldquo;freestanding tub&rdquo;, or &ldquo;new stand-up shower&rdquo; is checked below).</i>` });
     state.bathroom.rooms.forEach((b,i) => {
       items.push({ hdr:true, html:`Bathroom #${i+1}` });
       items.push({ sub:true, html:`Pieces: <b>${bathroomLabel(b.pieces)}</b>` });
@@ -7274,6 +7278,13 @@ function renderContractorSheet(){
         const sw = (num(b.showerWidth)||4), sd = (num(b.showerDepth)||3), sh = (num(b.showerHeight)||8);
         items.push({ sub:true, html:`Stand-up shower: <b>included</b> &mdash; ${showerNote} (waterproofing, new tile, new fixtures, new glass enclosure). Size: <b>${sw}&prime; &times; ${sd}&prime; &times; ${sh}&prime; high</b>.` });
       }
+      // Per-bathroom "Existing (re-used)" disclosure — mirrors on-screen panel.
+      const layoutHasTub_ = (b.pieces === "3" || b.pieces === "4");
+      const convertingTubToShower_ = !!b.standUpShower && (b.showerType||"convert") === "convert" && layoutHasTub_;
+      const tubReused_ = layoutHasTub_ && !b.newTub && !b.freestandingTub && !convertingTubToShower_;
+      const existingPartsC = ["existing toilet plumbing rough-in"];
+      if(tubReused_) existingPartsC.push("existing tub");
+      items.push({ sub:true, html:`<i>Existing (re-used): ${existingPartsC.join(", ")}.</i>` });
     });
     html += scopeSection("Bathrooms", items);
   }
@@ -8078,7 +8089,7 @@ function buildEstimateLineItems(){
       if(baseRow){
         addRow(rows, {
           desc: `${lbl} — ${bathroomLabel(pieces)}`,
-          subdesc: "Refresh: new fixtures, toilet, vanity, faucet, mirror, light, accessories. Existing plumbing & tub re-used unless noted.",
+          subdesc: "Refresh: new fixtures, toilet, vanity, faucet, mirror, light, accessories. Existing toilet plumbing rough-in & tub re-used unless noted.",
           qty: 1, unit: "ea",
           labour: baseRow.labour, material: baseRow.material
         });
@@ -8642,6 +8653,18 @@ function buildEstimateSummary(){
         bullets.push(`Stand-up shower (${stLbl}) — ${sw}′ × ${sd}′ × ${sh}′ high, new tile, fixtures, glass walls &amp; door`);
         if(st === "new") bullets.push("New stand-up shower plumbing rough-in");
       }
+
+      // Closing "Existing (re-used)" disclosure — mirrors the on-screen
+      // refresh-includes panel so client PDF / Email-to-Client output is
+      // consistent. Toilet plumbing rough-in is always re-used; the existing
+      // tub is only re-used if there's a built-in tub AND it's not being
+      // replaced/converted to shower/swapped for freestanding.
+      const layoutHasTub_ = (pieces === "3" || pieces === "4");
+      const convertingTubToShower_ = !!b.standUpShower && (b.showerType||"convert") === "convert" && layoutHasTub_;
+      const tubReused_ = layoutHasTub_ && !b.newTub && !b.freestandingTub && !convertingTubToShower_;
+      const existingParts = ["existing toilet plumbing rough-in"];
+      if(tubReused_) existingParts.push("existing tub");
+      bullets.push(`<i>Existing (re-used): ${existingParts.join(", ")}.</i>`);
 
       const { labour, material } = computeBathroomRoom(b);
       return { title:`Bathroom #${i+1}`, bullets, total: labour + material };
