@@ -14961,7 +14961,11 @@ window.ET={ goHome:goHome, openNewProject:openNewProject, switchHome:switchHome,
                   </div>
                   <div class="brv-bid-grid" style="margin-top:6px;">
                     <div class="brv-field" style="grid-column:1 / -1;"><label>Your supplied &amp; installed price $</label>
-                      <input type="text" inputmode="decimal" data-fld="si_total" value="${escAttr(si != null ? fmtMoney(si) : "")}"></div>
+                      <!-- Cap the input width so it ends roughly where the
+                           uppercase label above ends. Looks much cleaner
+                           than stretching full card width. max-width keeps
+                           the responsive collapse on narrow screens. -->
+                      <input type="text" inputmode="decimal" data-fld="si_total" style="max-width:280px;" value="${escAttr(si != null ? fmtMoney(si) : "")}"></div>
                   </div>
                 </div>
               `;
