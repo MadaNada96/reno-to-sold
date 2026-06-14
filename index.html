@@ -3650,6 +3650,10 @@ const DEFAULT_PRICES = {
       sixPanel: { rate: 450 },  // $/door — classic 6-panel
       shaker:   { rate: 550 }   // $/door — clean 5-piece shaker (popular reno look)
     },
+    // NEW window trim — supplied & installed casing around windows. Per
+    // linear foot of trim. Includes MDF/poplar casing, install, primer +
+    // 2 coats paint. Typical GTA ~$8/LF supplied & installed.
+    newWindowTrim: { rate: 8 },
     // Popcorn ceiling removal — scrape, skim-coat smooth, prime, repaint
     popcorn: {
       standard: { labour: 5.00, material: 1.50 },   // $/sqft — flat 8-9ft ceiling
@@ -3852,6 +3856,8 @@ function freshState(){
       // NEW interior doors — supplied + installed + painted + hardware included.
       // Style: twoPanel | sixPanel | shaker. Single rate per door (no L/M split).
       newDoors: false, newDoorStyle: "shaker", newDoorCount: "",
+      // NEW window trim — per linear foot of casing, supplied & installed.
+      newWindowTrim: false, newWindowTrimLinFt: "",
       popcorn: false, popcornTier: "standard", popcornSqft: ""
     },
     flooring:  {
@@ -4031,6 +4037,10 @@ function migrateFlatShowerPrice(p){
     if(!nd.twoPanel || typeof nd.twoPanel.rate !== "number") nd.twoPanel = { rate: 400 };
     if(!nd.sixPanel || typeof nd.sixPanel.rate !== "number") nd.sixPanel = { rate: 450 };
     if(!nd.shaker   || typeof nd.shaker.rate   !== "number") nd.shaker   = { rate: 550 };
+    // NEW window trim — per LF, single rate. Backfill if missing.
+    if(!p.painting.newWindowTrim || typeof p.painting.newWindowTrim.rate !== "number"){
+      p.painting.newWindowTrim = { rate: 8 };
+    }
   }
   // Lighting & Electrical (key still "potlights") schema rebuild.
   //   Old: { replace:{L,M}, new:{L,M} }
@@ -4371,6 +4381,8 @@ function migrateOldEstimate(m){
     if(typeof m.painting.newDoors        !== "boolean") m.painting.newDoors        = false;
     if(typeof m.painting.newDoorStyle    !== "string")  m.painting.newDoorStyle    = "shaker";
     if(typeof m.painting.newDoorCount    !== "string")  m.painting.newDoorCount    = "";
+    if(typeof m.painting.newWindowTrim       !== "boolean") m.painting.newWindowTrim       = false;
+    if(typeof m.painting.newWindowTrimLinFt  !== "string")  m.painting.newWindowTrimLinFt  = "";
     if(typeof m.painting.garageDoors     !== "boolean") m.painting.garageDoors     = false;
     if(typeof m.painting.garageDoorCount !== "string")  m.painting.garageDoorCount = "";
   }
@@ -4463,9 +4475,9 @@ function paintingSqft(){
   return s.scope === "custom" ? num(s.sqft) : num(state.propSqft);
 }
 function suggestedTrimLinFt(){
-  // ~0.20 lin ft of baseboards/trim per sqft of property (typical layout)
+  // ~0.30 lin ft of baseboards/trim per sqft of property (typical layout)
   const sqft = num(state.propSqft);
-  return sqft > 0 ? Math.round((sqft * 0.20) / 5) * 5 : 0;
+  return sqft > 0 ? Math.round((sqft * 0.30) / 5) * 5 : 0;
 }
 function onPropSqftInput(){
   state.propSqft = document.getElementById("propSqft").value;
@@ -4545,6 +4557,12 @@ function computeCategory(cat, priceSet){
       const entry = p.newDoor[style] || p.newDoor.shaker;
       const rateOf = (e) => e && typeof e.rate === "number" ? e.rate : ((e && e.labour) || 0) + ((e && e.material) || 0);
       if(entry) material += c * rateOf(entry);
+    }
+    // NEW window trim — per linear foot of casing, supplied & installed.
+    if(s.newWindowTrim && p.newWindowTrim){
+      const lf = num(s.newWindowTrimLinFt);
+      const rateOf = (e) => e && typeof e.rate === "number" ? e.rate : ((e && e.labour) || 0) + ((e && e.material) || 0);
+      if(lf > 0) material += lf * rateOf(p.newWindowTrim);
     }
     // Popcorn ceiling removal — scrape, skim-coat smooth, prime, repaint
     if(s.popcorn && p.popcorn){
@@ -5307,7 +5325,7 @@ function renderCatBody(cat){
               <input type="number" min="0" value="${s.trimLinFt || (suggestedTrimLinFt() > 0 ? suggestedTrimLinFt() : '')}" placeholder="${suggestedTrimLinFt() > 0 ? 'override if needed' : 'enter property sqft first'}" oninput="state.painting.trimLinFt=this.value;renderTotals()">
             </div>
           </div>
-          <div class="footnote" style="margin-top:8px;">Auto-suggest = property sqft &times; 0.20 (typical layout). Type over the value to override.</div>
+          <div class="footnote" style="margin-top:8px;">Auto-suggest = property sqft &times; 0.30 (typical layout). Type over the value to override.</div>
         ` : ""}
       </div>
 
@@ -5333,7 +5351,7 @@ function renderCatBody(cat){
       <div class="addon">
         <label class="check-row" style="margin-bottom:${s.newDoors?'10px':'0'};">
           <input type="checkbox" ${s.newDoors?'checked':''} onchange="state.painting.newDoors=this.checked;renderCatBodyOnly('painting');renderTotals()">
-          <span class="addon-title">Add new interior doors (supplied &amp; installed)</span>
+          <span class="addon-title">Add new <b>hollow core</b> interior doors (supplied &amp; installed)</span>
         </label>
         ${s.newDoors ? `
           <div style="margin-bottom:10px;">
@@ -5350,7 +5368,25 @@ function renderCatBody(cat){
               <input type="number" min="0" value="${s.newDoorCount||""}" placeholder="e.g. 4" oninput="state.painting.newDoorCount=this.value;renderTotals()">
             </div>
           </div>
-          <div class="footnote" style="margin-top:8px;"><b style="color:var(--gold-bright)">Supplied &amp; installed:</b> new door slab, hinges, knob/lever set, casing touch-up, primer + 2 finish coats. <b>All hardware included</b> in the per-door rate.</div>
+          <div class="footnote" style="margin-top:8px;"><b style="color:var(--gold-bright)">Supplied &amp; installed:</b> new <b>hollow core</b> door slab, hinges, knob/lever set, casing touch-up, primer + 2 finish coats. <b>All hardware included</b> in the per-door rate.</div>
+        ` : ""}
+      </div>
+
+      <!-- NEW window trim add-on — per linear foot of casing (sits directly
+           under "Add new doors" per owner request) -->
+      <div class="addon">
+        <label class="check-row" style="margin-bottom:${s.newWindowTrim?'10px':'0'};">
+          <input type="checkbox" ${s.newWindowTrim?'checked':''} onchange="state.painting.newWindowTrim=this.checked;renderCatBodyOnly('painting');renderTotals()">
+          <span class="addon-title">Add new window trim (supplied &amp; installed)</span>
+        </label>
+        ${s.newWindowTrim ? `
+          <div class="grid grid-2">
+            <div>
+              <label>Linear feet of new window trim</label>
+              <input type="number" min="0" value="${s.newWindowTrimLinFt||""}" placeholder="e.g. 80" oninput="state.painting.newWindowTrimLinFt=this.value;renderTotals()">
+            </div>
+          </div>
+          <div class="footnote" style="margin-top:8px;"><b style="color:var(--gold-bright)">Supplied &amp; installed:</b> new MDF/poplar casing around windows, install, primer + 2 finish coats. Priced per linear foot of trim.</div>
         ` : ""}
       </div>
 
@@ -5464,7 +5500,7 @@ function renderCatBody(cat){
               <input type="number" min="0" value="${s.baseboardLinFt || (suggestedTrimLinFt() > 0 ? suggestedTrimLinFt() : '')}" placeholder="${suggestedTrimLinFt() > 0 ? 'override if needed' : 'enter property sqft first'}" oninput="state.flooring.baseboardLinFt=this.value;renderTotals()">
             </div>
           </div>
-          <div class="footnote" style="margin-top:8px;">Supply &amp; install of new MDF/poplar baseboards (4&ndash;5"), unpainted. Auto-suggest = property sqft &times; 0.20. Type over the value to override.</div>
+          <div class="footnote" style="margin-top:8px;">Supply &amp; install of new MDF/poplar baseboards (4&ndash;5"), unpainted. Auto-suggest = property sqft &times; 0.30. Type over the value to override.</div>
         ` : ""}
       </div>
 
@@ -5731,8 +5767,8 @@ function renderCatBody(cat){
       <!-- Live total preview -->
       ${num(wr.linearFt) > 0 && totalCost > 0 ? `
         <div class="info-readout" style="margin-top:12px;padding:10px 12px;border-radius:8px;border:1px solid var(--gold);background:#0f1414;">
-          <span style="font-size:9.5px;letter-spacing:.20em;text-transform:uppercase;color:var(--muted);">Wall Removal &mdash; estimated total</span>
-          <div style="font-size:18px;font-weight:800;color:var(--gold-bright);font-variant-numeric:tabular-nums;margin-top:4px;">$${fmt(totalCost)}</div>
+          <span style="font-size:9.5px;letter-spacing:.20em;text-transform:uppercase;color:var(--muted);">Wall Removal Total</span>
+          <div style="font-size:18px;font-weight:800;color:var(--gold-bright);font-variant-numeric:tabular-nums;margin-top:4px;">${fmt(totalCost)}</div>
         </div>
       ` : ""}
     `;
@@ -6127,6 +6163,7 @@ function bathroomIncludesPanel(b, i){
   if(b.newTub)                newItems.push("New tub &amp; tub wall tiles");
   newItems.push("Toilet");
   newItems.push("Vanity");
+  newItems.push("Faucet");
   newItems.push("Mirror");
   newItems.push("Light fixture");
   newItems.push("Bathroom accessories");
@@ -6495,6 +6532,18 @@ function renderPricingEditor(){
         <div>${priceInput("painting.newDoor."+o.key+".rate", row.rate, 10)}</div>
       </div>`;
     });
+  }
+
+  // Painting — NEW window trim (per LF supplied & installed)
+  if(prices.painting.newWindowTrim){
+    const row = prices.painting.newWindowTrim || { rate:0 };
+    html += `<div class="section-title">Painting &mdash; new window trim (per linear foot, supplied &amp; installed)</div>
+      <div class="footnote" style="margin-bottom:8px;">Single rate per LF of new casing around windows: MDF/poplar material + install + primer + 2 coats paint.</div>
+      <div class="price-edit-row head single"><div></div><div>$/LF</div></div>
+      <div class="price-edit-row single">
+        <div class="lbl">Per linear foot</div>
+        <div>${priceInput("painting.newWindowTrim.rate", row.rate, 1)}</div>
+      </div>`;
   }
 
   // Painting — exterior doors (front, back, side entry)
@@ -6976,7 +7025,10 @@ function renderContractorSheet(){
     if(s.newDoors){
       const style = s.newDoorStyle || "shaker";
       const styleLbl = style === "twoPanel" ? "2-Panel" : style === "sixPanel" ? "6-Panel" : "Shaker";
-      items.push({ html:`New interior doors: <b>${s.newDoorCount||'?'} ${styleLbl} doors</b> &mdash; <b>supplied &amp; installed.</b> Includes door slab, hinges, knob/lever set, casing touch-up, primer + 2 coats paint. <b>All hardware included.</b>` });
+      items.push({ html:`New interior <b>hollow core</b> doors: <b>${s.newDoorCount||'?'} ${styleLbl} doors</b> &mdash; <b>supplied &amp; installed.</b> Includes hollow core door slab, hinges, knob/lever set, casing touch-up, primer + 2 coats paint. <b>All hardware included.</b>` });
+    }
+    if(s.newWindowTrim){
+      items.push({ html:`New window trim: <b>${s.newWindowTrimLinFt||'?'} linear feet</b> &mdash; <b>supplied &amp; installed.</b> New MDF/poplar casing around windows, primer + 2 finish coats.` });
     }
     if(s.popcorn){
       const popSqft = num(s.popcornSqft) || num(s.ceilingSqft) || psqft;
@@ -7084,7 +7136,7 @@ function renderContractorSheet(){
   if(includeCat("bathroom")){
     anyEnabled = true;
     const items = [];
-    items.push({ sub:false, html:`<i>Refresh scope per bathroom: new floor tiles, tub wall tiles, shower fixtures, toilet, vanity, mirror, light fixture, accessories. Existing plumbing &amp; tub re-used (unless &ldquo;new tub&rdquo; is checked below).</i>` });
+    items.push({ sub:false, html:`<i>Refresh scope per bathroom: new floor tiles, tub wall tiles, shower fixtures, toilet, vanity, faucet, mirror, light fixture, accessories. Existing plumbing &amp; tub re-used (unless &ldquo;new tub&rdquo; is checked below).</i>` });
     state.bathroom.rooms.forEach((b,i) => {
       items.push({ hdr:true, html:`Bathroom #${i+1}` });
       items.push({ sub:true, html:`Pieces: <b>${bathroomLabel(b.pieces)}</b>` });
@@ -7692,11 +7744,26 @@ function buildEstimateLineItems(){
       if(c > 0 && entry){
         const r = rateOf(entry);
         addRow(rows, {
-          desc: `New interior doors — ${styleLbl} (supplied & installed)`,
-          subdesc: "Door slab + hinges + knob/lever set + casing touch-up + primer + 2 coats paint. All hardware included.",
+          desc: `New interior hollow core doors — ${styleLbl} (supplied & installed)`,
+          subdesc: "Hollow core door slab + hinges + knob/lever set + casing touch-up + primer + 2 coats paint. All hardware included.",
           qty: c, unit: "doors",
           labour: 0,
           material: c * r
+        });
+      }
+    }
+    // NEW window trim — per LF supplied & installed.
+    if(s.newWindowTrim && p.newWindowTrim){
+      const lf = num(s.newWindowTrimLinFt);
+      const rateOf = (e) => e && typeof e.rate === "number" ? e.rate : ((e && e.labour) || 0) + ((e && e.material) || 0);
+      if(lf > 0){
+        const r = rateOf(p.newWindowTrim);
+        addRow(rows, {
+          desc: "New window trim (supplied & installed)",
+          subdesc: "MDF/poplar casing around windows, install, primer + 2 finish coats.",
+          qty: lf, unit: "LF",
+          labour: 0,
+          material: lf * r
         });
       }
     }
@@ -7895,7 +7962,7 @@ function buildEstimateLineItems(){
       if(baseRow){
         addRow(rows, {
           desc: `${lbl} — ${bathroomLabel(pieces)}`,
-          subdesc: "Refresh: new fixtures, toilet, vanity, mirror, light, accessories. Existing plumbing & tub re-used unless noted.",
+          subdesc: "Refresh: new fixtures, toilet, vanity, faucet, mirror, light, accessories. Existing plumbing & tub re-used unless noted.",
           qty: 1, unit: "ea",
           labour: baseRow.labour, material: baseRow.material
         });
@@ -8312,7 +8379,10 @@ function buildEstimateSummary(){
     if(s.newDoors){
       const style = s.newDoorStyle || "shaker";
       const styleLbl = style === "twoPanel" ? "2-Panel" : style === "sixPanel" ? "6-Panel" : "Shaker";
-      bullets.push(`New interior doors — ${num(s.newDoorCount)||'?'} ${styleLbl} doors (supplied &amp; installed, hardware included, primed &amp; painted)`);
+      bullets.push(`New interior hollow core doors — ${num(s.newDoorCount)||'?'} ${styleLbl} doors (supplied &amp; installed, hardware included, primed &amp; painted)`);
+    }
+    if(s.newWindowTrim){
+      bullets.push(`New window trim — ${num(s.newWindowTrimLinFt)||'?'} linear feet (supplied &amp; installed, MDF/poplar casing, primed &amp; painted)`);
     }
     const { labour, material } = computeCategory("painting");
     sections.push({ cat:"painting", title:"Painting", bullets, total: labour + material });
@@ -8401,7 +8471,7 @@ function buildEstimateSummary(){
     const subblocks = state.bathroom.rooms.map((b, i) => {
       const bullets = [];
       const pieces = b.pieces || "4";
-      bullets.push(`Layout: <b>${bathroomLabel(pieces)}</b> — full refresh (fixtures, toilet, vanity, mirror, light, accessories)`);
+      bullets.push(`Layout: <b>${bathroomLabel(pieces)}</b> — full refresh (fixtures, toilet, vanity, faucet, mirror, light, accessories)`);
       if(num(b.floorTileSqft)) bullets.push(`Floor tile — ${b.floorTileSqft} sqft`);
       if(num(b.wallTileSqft))  bullets.push(`Wall tile (shower/tub surround) — ${b.wallTileSqft} sqft`);
       if(b.newTub)        bullets.push("New tub installed (replaces existing)");
@@ -11104,6 +11174,16 @@ function renderContractorPricingEditor(){
         <div>${ctrPriceInput("painting.newDoor."+o.key+".rate", row.rate, 10)}</div>
       </div>`;
     });
+  }
+  // NEW window trim (contractor rate)
+  if(cp.painting.newWindowTrim){
+    const row = cp.painting.newWindowTrim || { rate:0 };
+    html += `<div class="section-title">Painting &mdash; new window trim (per linear foot, supplied &amp; installed)</div>
+      <div class="price-edit-row head single"><div></div><div>$/LF</div></div>
+      <div class="price-edit-row single">
+        <div class="lbl">Per linear foot (MDF/poplar casing + install + 2 coats paint)</div>
+        <div>${ctrPriceInput("painting.newWindowTrim.rate", row.rate, 1)}</div>
+      </div>`;
   }
   // Exterior doors
   {
