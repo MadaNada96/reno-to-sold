@@ -546,15 +546,18 @@
   .price-edit-row .lbl{font-size:13px;color:var(--ink);}
   .price-edit-row input{padding:7px 10px;font-size:13px;}
   /* Hide the browser's built-in up/down spinner arrows on number inputs
-     inside the pricing editors. Pure text-style number entry only. The
-     onchange handler still fires on blur, so click-out-of-field autosave
-     keeps working. */
+     inside the pricing editors and the Miscellaneous item cards. Pure
+     text-style number entry only. The onchange handler still fires on
+     blur, so click-out-of-field autosave keeps working. */
   .price-edit-row input[type="number"]::-webkit-inner-spin-button,
-  .price-edit-row input[type="number"]::-webkit-outer-spin-button{
+  .price-edit-row input[type="number"]::-webkit-outer-spin-button,
+  .misc-item-card input[type="number"]::-webkit-inner-spin-button,
+  .misc-item-card input[type="number"]::-webkit-outer-spin-button{
     -webkit-appearance:none;
     margin:0;
   }
-  .price-edit-row input[type="number"]{
+  .price-edit-row input[type="number"],
+  .misc-item-card input[type="number"]{
     -moz-appearance:textfield;     /* Firefox */
     appearance:textfield;          /* Standard / future-proofing */
   }
@@ -3828,7 +3831,7 @@ const CATEGORY_META = {
   // saved estimates. The UI title is "Lighting & Electrical".
   potlights:   { title:"Lighting & Electrical", sub:"Pot lights, switches, dimmers, plugs" },
   wallRemoval: { title:"Wall Removal",          sub:"Per linear foot, load-bearing or not" },
-  miscellaneous:{ title:"Miscellaneous",         sub:"Custom line items, permits, owner-supplied materials" }
+  miscellaneous:{ title:"Miscellaneous",         sub:"Custom line items" }
 };
 
 const FLOORING_LABELS = {
@@ -5945,7 +5948,7 @@ function renderMiscellaneous(){
   const grandClient = items.reduce((a,it) => a + (num(it.qty) * num(it.clientRate)), 0);
   return `
     <div class="footnote" style="margin-bottom:14px;background:rgba(212,175,106,.08);border:1px solid rgba(212,175,106,.30);border-radius:8px;padding:10px 12px;line-height:1.55;">
-      <b style="color:var(--gold-bright)">Use this for anything that doesn't fit a category:</b> permits, surveys, owner-supplied materials, change orders, demo allowances, dumpster fees, custom one-off items. Each line is its own price &mdash; <b>qty × $/unit</b>. The 10% client discount applies to this total just like every other category.
+      <b style="color:var(--gold-bright)">Use this for anything that doesn't fit a category:</b> permits, surveys, change orders, demo allowances, dumpster fees, custom one-off items. Each line is its own price &mdash; <b>qty × $/unit</b>.
       ${internal ? `
         <br><br>
         <span style="color:var(--gold-bright);font-weight:600;">Internal Mode visible:</span> the optional &ldquo;Contractor cost actual&rdquo; field lets you record what a contractor will charge for each item. Snapshot uses this for margin tracking when no bid has been submitted yet.
@@ -5959,8 +5962,17 @@ function renderMiscellaneous(){
 }
 function renderMiscItem(it, i, internal){
   const lineTotal = num(it.qty) * num(it.clientRate);
+  // Unit pill toggle — closed set of common GTA renovation units. Defaults
+  // to "ea". The class `misc-item-card` hides browser spinner arrows on the
+  // qty + rate number inputs (see CSS rule alongside .price-edit-row).
+  const unitOpts = [
+    { value:"ea",   label:"ea"   },
+    { value:"sqft", label:"sqft" },
+    { value:"LF",   label:"LF"   },
+    { value:"hrs",  label:"hrs"  }
+  ];
   return `
-    <div class="addon" id="misc-item-${i}" style="position:relative;padding-right:42px;">
+    <div class="addon misc-item-card" id="misc-item-${i}" style="position:relative;padding-right:42px;">
       <button class="remove-btn no-print" title="Remove this item" onclick="removeMiscItem(${i})" style="position:absolute;top:10px;right:10px;background:transparent;border:1px solid var(--line-strong);color:var(--muted);width:26px;height:26px;border-radius:6px;cursor:pointer;font-size:14px;line-height:1;">&times;</button>
       <div class="addon-title" style="margin-bottom:8px;">Item #${i+1}</div>
       <div class="grid grid-2">
@@ -5978,10 +5990,10 @@ function renderMiscItem(it, i, internal){
         </div>
         <div>
           <label>Unit</label>
-          <input type="text" value="${escapeHtmlAttr(it.unit||'ea')}" placeholder="ea / sqft / LF / hrs" oninput="state.miscellaneous.items[${i}].unit=this.value">
+          ${pillToggle("misc-unit-"+i, it.unit || "ea", unitOpts, "state.miscellaneous.items["+i+"].unit=this.value")}
         </div>
         <div>
-          <label>Client $/unit</label>
+          <label>$/unit</label>
           <input type="number" min="0" step="any" value="${escapeHtmlAttr(it.clientRate||'')}" placeholder="0.00" oninput="state.miscellaneous.items[${i}].clientRate=this.value;updateMiscItemTotal(${i})">
         </div>
         <div>
