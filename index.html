@@ -3720,6 +3720,17 @@ const DEFAULT_PRICES = {
     floorTile: { labour: 12.00, material: 8.00 },
     wallTile:  { labour: 17.00, material: 11.00 },
     newTub:        { labour: 2345, material: 1600 },
+    // Freestanding tub — supply + install with floor-mount plumbing rough-in,
+    // floor-mount faucet, drain rough-in. NO wall tile required (the tub
+    // doesn't touch a wall). Priced per size tier per the GTA 2026 range:
+    //   small (45–54″)   ≈ $3,500 S&I  ($1,500 L + $2,000 M)
+    //   standard (55–65″)≈ $4,500 S&I  ($1,800 L + $2,700 M)
+    //   large (66–72″)   ≈ $6,500 S&I  ($2,200 L + $4,300 M)
+    freestandingTub: {
+      small:    { labour: 1500, material: 2000 },
+      standard: { labour: 1800, material: 2700 },
+      large:    { labour: 2200, material: 4300 }
+    },
     doubleVanity:  { labour: 1485, material: 1825 },   // upgrade single -> double vanity
     standUpShower: {
       // GTA 2026 rates per stand-up shower scenario (single bathroom):
@@ -3965,6 +3976,12 @@ function defaultBath(){
     floorTileSqft:"",
     wallTileSqft:"",
     newTub:false,
+    // Freestanding tub — separate add-on, mutually exclusive with newTub.
+    // When enabled, wall tile sqft is treated as 0 and the standard tub-
+    // dimension inputs are hidden (the freestanding tub doesn't touch a
+    // wall). Sizes: "small" | "standard" | "large" (see DEFAULT_PRICES).
+    freestandingTub:false,
+    freestandingTubSize:"standard",
     doubleVanity:false,
     standUpShower:false,
     showerType:"convert",
@@ -4007,6 +4024,14 @@ function migrateFlatShowerPrice(p){
   // Backfill the "refresh" tier on older saves that only have convert + new
   if(p && p.bathroom && p.bathroom.standUpShower && !p.bathroom.standUpShower.refresh){
     p.bathroom.standUpShower.refresh = { labour: 1800, material: 2700 };
+  }
+  // Freestanding tub — new price entry per size tier. Backfill defaults if missing.
+  if(p && p.bathroom){
+    if(!p.bathroom.freestandingTub) p.bathroom.freestandingTub = {};
+    const ft = p.bathroom.freestandingTub;
+    if(!ft.small    || typeof ft.small.labour    !== "number") ft.small    = { labour: 1500, material: 2000 };
+    if(!ft.standard || typeof ft.standard.labour !== "number") ft.standard = { labour: 1800, material: 2700 };
+    if(!ft.large    || typeof ft.large.labour    !== "number") ft.large    = { labour: 2200, material: 4300 };
   }
   // Popcorn ceiling: legacy flat shape { labour, material } → { standard, premium }
   if(p && p.painting && p.painting.popcorn && typeof p.painting.popcorn.labour === "number"){
@@ -4274,6 +4299,8 @@ function migrateOldEstimate(m){
       // 5-piece no longer exists — fold into 4-piece + double-vanity add-on
       else if(b.pieces === "5pc" || b.pieces === "5"){ b.pieces = "4"; b.doubleVanity = true; }
       if(typeof b.newTub !== "boolean") b.newTub = false;
+      if(typeof b.freestandingTub !== "boolean") b.freestandingTub = false;
+      if(!b.freestandingTubSize) b.freestandingTubSize = "standard";
       if(typeof b.doubleVanity !== "boolean") b.doubleVanity = false;
       if(!b.showerType) b.showerType = "convert";
       if(typeof b.showerWidth  !== "number" || !isFinite(b.showerWidth))  b.showerWidth  = 4;
@@ -4641,11 +4668,20 @@ function computeCategory(cat, priceSet){
       }
       const ft = num(b.floorTileSqft);
       if(p.floorTile){ labour += ft * p.floorTile.labour; material += ft * p.floorTile.material; }
-      const wt = num(b.wallTileSqft);
-      if(p.wallTile){ labour += wt * p.wallTile.labour; material += wt * p.wallTile.material; }
+      // Wall tile zeroes out when freestanding tub is selected (no tub surround).
+      if(!b.freestandingTub){
+        const wt = num(b.wallTileSqft);
+        if(p.wallTile){ labour += wt * p.wallTile.labour; material += wt * p.wallTile.material; }
+      }
       if(b.newTub && p.newTub){
         labour += p.newTub.labour;
         material += p.newTub.material;
+      }
+      // Freestanding tub — separate price tier (small/standard/large).
+      if(b.freestandingTub && p.freestandingTub){
+        const size = b.freestandingTubSize || "standard";
+        const fR = p.freestandingTub[size] || p.freestandingTub.standard;
+        if(fR){ labour += fR.labour; material += fR.material; }
       }
       if(b.doubleVanity && p.doubleVanity){
         labour += p.doubleVanity.labour;
@@ -6152,15 +6188,25 @@ function bathroomIncludesPanel(b, i){
   // not adding a new one. If they convert the tub to a shower, the tub is
   // gone too — handled by the standUpShower=="convert" case.
   const convertingTubToShower = !!b.standUpShower && (b.showerType||"convert") === "convert" && layoutHasTub;
-  const tubReused = layoutHasTub && !b.newTub && !convertingTubToShower;
+  // Tub re-used only if there's a built-in tub, NO new drop-in, NO freestanding,
+  // and we're not converting it to a shower.
+  const tubReused = layoutHasTub && !b.newTub && !b.freestandingTub && !convertingTubToShower;
 
   // "New" column — items installed/included by default
   const newItems = [];
   newItems.push("Floor tiles");
   if(hasShower)               newItems.push("Shower wall tiles");
   if(hasShower)               newItems.push("Shower fixtures");
-  if(layoutHasTub && !b.newTub && !convertingTubToShower) newItems.push("Tub wall tiles");
-  if(b.newTub)                newItems.push("New tub &amp; tub wall tiles");
+  // Tub wall tiles only when there's a DROP-IN tub against the wall.
+  // Freestanding tubs don't have a surround so no wall tile is included.
+  if(layoutHasTub && !b.newTub && !b.freestandingTub && !convertingTubToShower) newItems.push("Tub wall tiles");
+  if(b.newTub && !b.freestandingTub) newItems.push("New tub &amp; tub wall tiles");
+  if(b.freestandingTub){
+    const sizeLbl = (b.freestandingTubSize === "large") ? "Large / Two-Person"
+                  : (b.freestandingTubSize === "small") ? "Small / Compact"
+                  : "Standard / Mid-Size";
+    newItems.push("Freestanding tub (" + sizeLbl + ") &mdash; <i>no tub-surround wall tile</i>");
+  }
   newItems.push("Toilet");
   newItems.push("Vanity");
   newItems.push("Faucet");
@@ -6199,10 +6245,14 @@ function renderBathrooms(){
     // Does this bathroom layout have a built-in tub? (Stand-up-shower-only
     // layouts and 2-pc do not.)
     const layoutHasTub = (pieces === "3" || pieces === "4");
-    // Show tub-size inputs whenever there's a tub in scope (built-in OR newly added)
-    const hasTub = layoutHasTub || b.newTub;
-    // Wall tile only applies when there's a tub surround or stand-up shower
-    const showsWallTile = pieces !== "2";
+    // Show tub-size inputs whenever there's a DROP-IN tub in scope (built-in OR
+    // newly added). Freestanding tubs don't have a surround so the dimension
+    // inputs are irrelevant.
+    const hasTub = (layoutHasTub || b.newTub) && !b.freestandingTub;
+    // Wall tile only applies when there's a tub surround or stand-up shower.
+    // If a freestanding tub is selected for this bathroom, hide wall tile
+    // input entirely (compute already treats it as zero).
+    const showsWallTile = pieces !== "2" && !b.freestandingTub;
     return `
     <div class="bath-row">
       <div style="margin-bottom:10px;">
@@ -6248,9 +6298,29 @@ function renderBathrooms(){
       ` : ""}
       <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px;">
         <label class="check-row">
-          <input type="checkbox" ${b.newTub?'checked':''} onchange="state.bathroom.rooms[${i}].newTub=this.checked;applyTubTileAuto(${i});renderBathBody()">
-          <span>Add new tub <span style="color:var(--muted);font-weight:400;font-size:12px;">(replaces existing tub)</span></span>
+          <input type="checkbox" ${b.newTub?'checked':''} onchange="state.bathroom.rooms[${i}].newTub=this.checked;if(this.checked)state.bathroom.rooms[${i}].freestandingTub=false;applyTubTileAuto(${i});renderBathBody()">
+          <span>Add new <b>drop-in</b> tub <span style="color:var(--muted);font-weight:400;font-size:12px;">(replaces existing built-in tub)</span></span>
         </label>
+        <!-- Freestanding tub — mutually exclusive with "Add new tub". Hides
+             wall tile + tub-dimension inputs in this bathroom. -->
+        <label class="check-row">
+          <input type="checkbox" ${b.freestandingTub?'checked':''} onchange="state.bathroom.rooms[${i}].freestandingTub=this.checked;if(this.checked){state.bathroom.rooms[${i}].newTub=false;state.bathroom.rooms[${i}].wallTileSqft='';}renderBathBody()">
+          <span>Add <b>freestanding</b> tub <span style="color:var(--muted);font-weight:400;font-size:12px;">(floor-mount &mdash; no wall tile required)</span></span>
+        </label>
+        ${b.freestandingTub ? `
+          <div style="margin-left:25px;margin-top:-2px;">
+            ${pillToggle("ftub-size-"+i, b.freestandingTubSize || "standard", [
+              {value:"small",    label:"Small / Compact"},
+              {value:"standard", label:"Standard / Mid-Size"},
+              {value:"large",    label:"Large / Two-Person"}
+            ], "state.bathroom.rooms["+i+"].freestandingTubSize=this.value;renderTotals()")}
+            <div class="footnote" style="margin-top:6px;margin-bottom:8px;">
+              <b style="color:var(--gold-bright)">Small / Compact</b>: 45&ndash;54&Prime; &times; 25&ndash;30&Prime; &times; 14&ndash;17&Prime; &mdash; ideal for small bathrooms, en-suites, or tiny homes.<br>
+              <b style="color:var(--gold-bright)">Standard / Mid-Size</b>: 55&ndash;65&Prime; &times; 27&ndash;32&Prime; &times; 15&ndash;20&Prime; &mdash; the most common size, comfortable for a single average-height adult.<br>
+              <b style="color:var(--gold-bright)">Large / Two-Person</b>: 66&ndash;72&Prime; &times; 32&ndash;36+&Prime; &times; 18&ndash;22&Prime; &mdash; fits taller individuals or two bathers; requires a large master bathroom.
+            </div>
+          </div>
+        ` : ""}
         <label class="check-row">
           <input type="checkbox" ${b.doubleVanity?'checked':''} onchange="state.bathroom.rooms[${i}].doubleVanity=this.checked;renderTotals()">
           <span>Add double vanity <span style="color:var(--muted);font-weight:400;font-size:12px;">(upgrade from single vanity, plumbed for two sinks)</span></span>
@@ -6717,10 +6787,25 @@ function renderPricingEditor(){
   html += `<div class="section-title">New tub add-on (per bathroom)</div>
     <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>
     <div class="price-edit-row">
-      <div class="lbl">Replace existing tub</div>
+      <div class="lbl">Replace existing tub (drop-in)</div>
       <div>${priceInput("bathroom.newTub.labour", prices.bathroom.newTub.labour, 50)}</div>
       <div>${priceInput("bathroom.newTub.material", prices.bathroom.newTub.material, 50)}</div>
     </div>`;
+
+  // Freestanding tub add-on — 3 size tiers
+  if(prices.bathroom.freestandingTub){
+    html += `<div class="section-title">Freestanding tub add-on (per bathroom)</div>
+      <div class="footnote" style="margin-bottom:8px;">Floor-mount supply &amp; install incl. plumbing rough-in, drain, floor-mount faucet. <b>No tub-surround wall tile</b> is included with this option.</div>
+      <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
+    [{key:"small",l:"Small / Compact (45–54&Prime;)"},{key:"standard",l:"Standard / Mid-Size (55–65&Prime;)"},{key:"large",l:"Large / Two-Person (66–72&Prime;)"}].forEach(o=>{
+      const row = prices.bathroom.freestandingTub[o.key] || { labour:0, material:0 };
+      html += `<div class="price-edit-row">
+        <div class="lbl">${o.l}</div>
+        <div>${priceInput("bathroom.freestandingTub."+o.key+".labour", row.labour, 50)}</div>
+        <div>${priceInput("bathroom.freestandingTub."+o.key+".material", row.material, 50)}</div>
+      </div>`;
+    });
+  }
 
   // Double vanity add-on
   html += `<div class="section-title">Double vanity add-on (per bathroom)</div>
@@ -7142,12 +7227,20 @@ function renderContractorSheet(){
       items.push({ sub:true, html:`Pieces: <b>${bathroomLabel(b.pieces)}</b>` });
       if(num(b.floorTileSqft)) items.push({ sub:true, html:`Floor tile: <b>${b.floorTileSqft} sqft</b>` });
       if(num(b.wallTileSqft))  items.push({ sub:true, html:`Wall tile: <b>${b.wallTileSqft} sqft</b>` });
-      const hasTub_ = (b.pieces === "3" || b.pieces === "4" || b.newTub);
+      // Tub surround tile suppressed when freestanding tub is selected.
+      const hasTub_ = (b.pieces === "3" || b.pieces === "4" || b.newTub) && !b.freestandingTub;
       if(hasTub_){
         const tl = (num(b.tubLength)||5), ew = (num(b.tubEndWall)||3), th = (num(b.tubWallHeight)||8);
         items.push({ sub:true, html:`Tub surround tile: based on <b>${tl}&prime; tub, ${ew}&prime; end walls, ${th}&prime; wall height</b>.` });
       }
-      if(b.newTub) items.push({ sub:true, html:`New tub: <b>included</b> (replaces existing)` });
+      if(b.newTub && !b.freestandingTub) items.push({ sub:true, html:`New drop-in tub: <b>included</b> (replaces existing)` });
+      if(b.freestandingTub){
+        const size = b.freestandingTubSize || "standard";
+        const sizeLbl = size === "small"    ? "Small / Compact (45–54&Prime; &times; 25–30&Prime; &times; 14–17&Prime;)"
+                      : size === "large"    ? "Large / Two-Person (66–72&Prime; &times; 32–36+&Prime; &times; 18–22&Prime;)"
+                      :                       "Standard / Mid-Size (55–65&Prime; &times; 27–32&Prime; &times; 15–20&Prime;)";
+        items.push({ sub:true, html:`Freestanding tub: <b>${sizeLbl}</b> &mdash; supplied &amp; installed, floor-mount plumbing rough-in, drain rough-in, floor-mount faucet. <b>No tub-surround wall tile.</b>` });
+      }
       if(b.doubleVanity) items.push({ sub:true, html:`Double vanity: <b>included</b> (upgrade from single, plumbed for two sinks)` });
       if(b.standUpShower){
         const st = b.showerType || "convert";
@@ -7977,23 +8070,41 @@ function buildEstimateLineItems(){
           material: ft * p.floorTile.material
         });
       }
-      const wt = num(b.wallTileSqft);
-      if(p.wallTile && wt > 0){
-        addRow(rows, {
-          desc: `${lbl} — Wall tile`,
-          subdesc: "Tub surround / shower walls — supply & install",
-          qty: wt, unit: "sqft",
-          labour: wt * p.wallTile.labour,
-          material: wt * p.wallTile.material
-        });
+      // Wall tile is suppressed when freestanding tub is selected (no surround).
+      if(!b.freestandingTub){
+        const wt = num(b.wallTileSqft);
+        if(p.wallTile && wt > 0){
+          addRow(rows, {
+            desc: `${lbl} — Wall tile`,
+            subdesc: "Tub surround / shower walls — supply & install",
+            qty: wt, unit: "sqft",
+            labour: wt * p.wallTile.labour,
+            material: wt * p.wallTile.material
+          });
+        }
       }
-      if(b.newTub && p.newTub){
+      if(b.newTub && p.newTub && !b.freestandingTub){
         addRow(rows, {
-          desc: `${lbl} — New tub (replaces existing)`,
+          desc: `${lbl} — New drop-in tub (replaces existing)`,
           subdesc: "Supply & install, reuse existing tub plumbing",
           qty: 1, unit: "ea",
           labour: p.newTub.labour, material: p.newTub.material
         });
+      }
+      if(b.freestandingTub && p.freestandingTub){
+        const size = b.freestandingTubSize || "standard";
+        const fR = p.freestandingTub[size] || p.freestandingTub.standard;
+        const sizeLbl = size === "small"    ? "Small / Compact (45–54″ × 25–30″ × 14–17″)"
+                      : size === "large"    ? "Large / Two-Person (66–72″ × 32–36+″ × 18–22″)"
+                      :                       "Standard / Mid-Size (55–65″ × 27–32″ × 15–20″)";
+        if(fR){
+          addRow(rows, {
+            desc: `${lbl} — Freestanding tub (${sizeLbl})`,
+            subdesc: "Supply & install — floor-mount plumbing rough-in, drain rough-in, floor-mount faucet. No tub-surround wall tile.",
+            qty: 1, unit: "ea",
+            labour: fR.labour, material: fR.material
+          });
+        }
       }
       if(b.doubleVanity && p.doubleVanity){
         addRow(rows, {
@@ -8134,9 +8245,19 @@ function computeBathroomRoom(b, priceSet){
   if(baseRow){ L += baseRow.labour; M += baseRow.material; }
   const ft = num(b.floorTileSqft);
   if(p.floorTile && ft > 0){ L += ft * p.floorTile.labour; M += ft * p.floorTile.material; }
-  const wt = num(b.wallTileSqft);
-  if(p.wallTile && wt > 0){ L += wt * p.wallTile.labour; M += wt * p.wallTile.material; }
+  // Wall tile is ZERO when freestanding tub is selected (no tub surround).
+  if(!b.freestandingTub){
+    const wt = num(b.wallTileSqft);
+    if(p.wallTile && wt > 0){ L += wt * p.wallTile.labour; M += wt * p.wallTile.material; }
+  }
+  // New drop-in tub (mutually exclusive with freestanding — handled in UI).
   if(b.newTub && p.newTub){ L += p.newTub.labour; M += p.newTub.material; }
+  // Freestanding tub — separate price tier (small / standard / large).
+  if(b.freestandingTub && p.freestandingTub){
+    const size = b.freestandingTubSize || "standard";
+    const fR = p.freestandingTub[size] || p.freestandingTub.standard;
+    if(fR){ L += fR.labour; M += fR.material; }
+  }
   if(b.doubleVanity && p.doubleVanity){ L += p.doubleVanity.labour; M += p.doubleVanity.material; }
   if(b.standUpShower && p.standUpShower){
     const sR = p.standUpShower[b.showerType || "convert"] || p.standUpShower.convert;
@@ -8473,8 +8594,16 @@ function buildEstimateSummary(){
       const pieces = b.pieces || "4";
       bullets.push(`Layout: <b>${bathroomLabel(pieces)}</b> — full refresh (fixtures, toilet, vanity, faucet, mirror, light, accessories)`);
       if(num(b.floorTileSqft)) bullets.push(`Floor tile — ${b.floorTileSqft} sqft`);
-      if(num(b.wallTileSqft))  bullets.push(`Wall tile (shower/tub surround) — ${b.wallTileSqft} sqft`);
-      if(b.newTub)        bullets.push("New tub installed (replaces existing)");
+      // Wall tile suppressed when freestanding tub is selected (no surround).
+      if(!b.freestandingTub && num(b.wallTileSqft)) bullets.push(`Wall tile (shower/tub surround) — ${b.wallTileSqft} sqft`);
+      if(b.newTub && !b.freestandingTub) bullets.push("New drop-in tub installed (replaces existing)");
+      if(b.freestandingTub){
+        const size = b.freestandingTubSize || "standard";
+        const sizeLbl = size === "small"    ? "Small / Compact (45–54″ × 25–30″ × 14–17″)"
+                      : size === "large"    ? "Large / Two-Person (66–72″ × 32–36+″ × 18–22″)"
+                      :                       "Standard / Mid-Size (55–65″ × 27–32″ × 15–20″)";
+        bullets.push(`Freestanding tub — <b>${sizeLbl}</b> — supplied &amp; installed (floor-mount, no wall surround)`);
+      }
       if(b.doubleVanity)  bullets.push("Double vanity upgrade (plumbed for two sinks)");
       if(b.standUpShower){
         const st = b.showerType || "convert";
@@ -11352,10 +11481,23 @@ function renderContractorPricingEditor(){
   html += `<div class="section-title">New tub add-on (per bathroom)</div>
     <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>
     <div class="price-edit-row">
-      <div class="lbl">Replace existing tub</div>
+      <div class="lbl">Replace existing tub (drop-in)</div>
       <div>${ctrPriceInput("bathroom.newTub.labour", cp.bathroom.newTub.labour, 50)}</div>
       <div>${ctrPriceInput("bathroom.newTub.material", cp.bathroom.newTub.material, 50)}</div>
     </div>`;
+  // Freestanding tub (3 size tiers)
+  if(cp.bathroom.freestandingTub){
+    html += `<div class="section-title">Freestanding tub add-on &mdash; contractor cost (per bathroom)</div>
+      <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
+    [{key:"small",l:"Small / Compact (45–54&Prime;)"},{key:"standard",l:"Standard / Mid-Size (55–65&Prime;)"},{key:"large",l:"Large / Two-Person (66–72&Prime;)"}].forEach(o=>{
+      const row = cp.bathroom.freestandingTub[o.key] || { labour:0, material:0 };
+      html += `<div class="price-edit-row">
+        <div class="lbl">${o.l}</div>
+        <div>${ctrPriceInput("bathroom.freestandingTub."+o.key+".labour", row.labour, 50)}</div>
+        <div>${ctrPriceInput("bathroom.freestandingTub."+o.key+".material", row.material, 50)}</div>
+      </div>`;
+    });
+  }
   // Double vanity
   html += `<div class="section-title">Double vanity add-on (per bathroom)</div>
     <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>
