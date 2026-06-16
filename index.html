@@ -14304,9 +14304,30 @@ function findInvoiceByMilestone(milestoneId){
   return state.invoices.find(inv => inv.milestone === milestoneId && inv.status !== "void") || null;
 }
 
+/* Find the ACCEPTED contractor bid for the current estimate, if any.
+   Matches via the address-based project key (same matching the Bids
+   dashboard uses). Returns null when no accepted bid exists.
+   Resolves the bid's total_bid (post-HST if Resend recorded it that way;
+   we use whatever the contractor submitted as their bottom-line). */
+function acceptedBidForCurrentEstimate(){
+  try{
+    if(typeof _receivedBidsCache === "undefined" || !Array.isArray(_receivedBidsCache)) return null;
+    if(typeof currentProjectKey !== "function") return null;
+    const key = currentProjectKey();
+    if(!key) return null;
+    const matched = _receivedBidsCache.filter(b => bidProjectKey(b) === key && b.status === "accepted");
+    if(!matched.length) return null;
+    // If multiple accepted bids (rare), pick the most recently accepted.
+    matched.sort((a,b) => String(b.accepted_at||"").localeCompare(String(a.accepted_at||"")));
+    return matched[0];
+  }catch(e){ return null; }
+}
+
 /* Project Financials — aggregates contract value, invoiced, collected,
    outstanding A/R, expenses, projected margin. Shared between Invoicing
-   and Expense Tracker. Returns an object with raw numbers. */
+   and Expense Tracker. Returns an object with raw numbers + a
+   marginSource indicator so the UI can show a placeholder when there's
+   no accepted bid (the source of truth for cost). */
 function computeProjectFinancials(){
   const contract = invoiceContractValue();
   const invoices = Array.isArray(state.invoices) ? state.invoices : [];
@@ -14317,7 +14338,8 @@ function computeProjectFinancials(){
     if(inv.status === "paid") collected += +(inv.amount || 0);
   });
   const outstandingAR = invoiced - collected;
-  // Pull expenses from the linked tracker project, if any.
+  // Pull expenses from the linked tracker project (still surfaced as its
+  // own number, but it no longer drives the margin calculation).
   let expensesToDate = 0;
   try{
     const estId = state && state._id;
@@ -14328,20 +14350,53 @@ function computeProjectFinancials(){
       }
     }
   }catch(e){}
-  const projectedMargin = contract - expensesToDate;
-  const marginPct = contract > 0 ? (projectedMargin / contract * 100) : 0;
+  // Projected margin now references the ACCEPTED bid (contractor cost) —
+  // the source of truth for what RTS pays out. Surfaces only when a bid
+  // has been formally accepted via the Bids dashboard.
+  const acceptedBid = acceptedBidForCurrentEstimate();
+  let acceptedBidTotal = null;
+  if(acceptedBid){
+    const sub = acceptedBid.submitted_data || {};
+    const summary = sub.bid_summary || {};
+    const t = (typeof rbParseMoney === "function") ? rbParseMoney(summary.total_bid) : parseFloat(summary.total_bid);
+    if(isFinite(t) && t > 0) acceptedBidTotal = t;
+  }
+  const hasAcceptedBid = acceptedBidTotal != null;
+  const projectedMargin = hasAcceptedBid ? (contract - acceptedBidTotal) : null;
+  const marginPct = (hasAcceptedBid && contract > 0) ? (projectedMargin / contract * 100) : null;
   return {
     contract, invoiced, collected, outstandingAR,
-    expensesToDate, projectedMargin, marginPct
+    expensesToDate,
+    acceptedBidTotal, hasAcceptedBid,
+    projectedMargin, marginPct
   };
 }
 
 /* Render the Project Financials card. Used in BOTH Invoicing modal AND
-   Expense Tracker (top of the page). Pure presentational helper. */
+   Expense Tracker (top of the page). Pure presentational helper.
+   Projected Margin: shown ONLY when an accepted contractor bid exists
+   (Contract − Accepted Bid Total). Otherwise we display a placeholder
+   message in the same slot so the layout doesn't shift. */
 function renderProjectFinancialsCard(){
   const f = computeProjectFinancials();
   const fmt = (n) => "$" + Math.round(n).toLocaleString("en-US");
-  const marginCls = f.projectedMargin >= 0 ? "green" : "red";
+  let marginCellHtml;
+  if(f.hasAcceptedBid){
+    const marginCls = f.projectedMargin >= 0 ? "green" : "red";
+    marginCellHtml = `
+      <div class="pf-stat ${marginCls}" title="Contract − Accepted contractor bid total = your projected profit on this project.">
+        <span class="pf-lbl">Projected Margin (${f.marginPct.toFixed(1)}%)</span>
+        <span class="pf-val">${fmt(f.projectedMargin)}</span>
+      </div>
+    `;
+  } else {
+    marginCellHtml = `
+      <div class="pf-stat" style="grid-column:span 1;">
+        <span class="pf-lbl">Projected Margin</span>
+        <span class="pf-val" style="font-size:11.5px;font-weight:500;color:var(--muted);line-height:1.4;">Generated once a contractor bid is submitted and accepted.</span>
+      </div>
+    `;
+  }
   return `
     <div class="pf-card">
       <div class="pf-card-title">Project Financials</div>
@@ -14366,10 +14421,7 @@ function renderProjectFinancialsCard(){
           <span class="pf-lbl">Expenses</span>
           <span class="pf-val">${fmt(f.expensesToDate)}</span>
         </div>
-        <div class="pf-stat ${marginCls}">
-          <span class="pf-lbl">Projected Margin (${f.marginPct.toFixed(1)}%)</span>
-          <span class="pf-val">${fmt(f.projectedMargin)}</span>
-        </div>
+        ${marginCellHtml}
       </div>
     </div>
   `;
@@ -14845,28 +14897,41 @@ function buildInvoicePdfEl(inv){
         <tr>
           <td style="padding:14px 12px;border-bottom:1px solid #eee;vertical-align:top;">
             <div style="font-weight:700;font-size:13.5px;color:#0a0a0a;margin-bottom:4px;">${escapeHtml(inv.milestoneLabel || "Invoice")}</div>
-            ${inv.milestoneDesc ? `<div style="font-size:11.5px;color:#555;line-height:1.5;">${escapeHtml(inv.milestoneDesc)}</div>` : ""}
-            ${inv.percent ? `<div style="font-size:10.5px;color:#a8853f;margin-top:4px;letter-spacing:.10em;text-transform:uppercase;">${inv.percent}% of contract</div>` : ""}
+            ${inv.milestoneDesc ? `<div style="font-size:11.5px;color:#555;line-height:1.5;margin-bottom:6px;">${escapeHtml(inv.milestoneDesc)}</div>` : ""}
+            <div style="font-size:11.5px;color:#3b2e10;line-height:1.5;background:#fbf5e6;border-left:3px solid #d4af6a;padding:7px 10px;margin-top:6px;">
+              This invoice is associated with the scope of work approved and signed by all parties in the estimate for this project.
+            </div>
+            ${inv.percent ? `<div style="font-size:10.5px;color:#a8853f;margin-top:6px;letter-spacing:.10em;text-transform:uppercase;">${inv.percent}% of contract</div>` : ""}
           </td>
           <td style="padding:14px 12px;border-bottom:1px solid #eee;text-align:right;font-weight:700;font-variant-numeric:tabular-nums;font-size:14px;color:#0a0a0a;vertical-align:top;">${fmtMoneyDec(inv.amount || 0)}</td>
         </tr>
       </tbody>
     </table>
-    <div style="display:flex;justify-content:flex-end;margin-bottom:24px;">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:18px;">
       <div style="min-width:280px;">
         <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;"><span style="color:#555;">Subtotal</span><span style="font-weight:700;font-variant-numeric:tabular-nums;">${fmtMoneyDec(inv.amount || 0)}</span></div>
         <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;"><span style="color:#555;">HST (${((inv.hstRate||0)*100).toFixed(1)}%)</span><span style="font-weight:700;font-variant-numeric:tabular-nums;">${fmtMoneyDec(inv.hstAmount || 0)}</span></div>
         <div style="display:flex;justify-content:space-between;padding:10px 0 4px;background:#fbf5e6;margin-top:4px;border-radius:4px;padding-left:10px;padding-right:10px;"><span style="font-weight:800;font-size:14px;">Total Due</span><span style="font-weight:800;font-size:15px;color:#0a0a0a;font-variant-numeric:tabular-nums;">${fmtMoneyDec(inv.total || 0)}</span></div>
       </div>
     </div>
+    <!-- Payable To — the client uses this block to know how to send payment. -->
+    <div style="background:#0a0a0a;color:#ffffff;border-radius:6px;padding:14px 16px;margin-bottom:16px;">
+      <div style="font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:#d4af6a;font-weight:700;margin-bottom:8px;">Make Payment Payable To</div>
+      <div style="display:grid;grid-template-columns:140px 1fr;gap:6px 14px;font-size:12.5px;line-height:1.5;">
+        <div style="color:#d4af6a;font-weight:700;">Cheque:</div>
+        <div style="font-weight:700;letter-spacing:.04em;">RENO TO SOLD INC.</div>
+        <div style="color:#d4af6a;font-weight:700;">e-Transfer:</div>
+        <div style="font-weight:700;font-family:'Courier New',monospace;">renotosold@gmail.com</div>
+      </div>
+    </div>
     ${inv.notes ? `
       <div style="background:#fbf5e6;border:1px solid #e9d989;border-radius:6px;padding:11px 14px;margin-bottom:18px;font-size:12px;color:#3b2e10;line-height:1.5;">
-        <b style="color:#a8853f;font-size:10px;letter-spacing:.14em;text-transform:uppercase;">Notes / Payment Instructions</b><br>
+        <b style="color:#a8853f;font-size:10px;letter-spacing:.14em;text-transform:uppercase;">Notes / Additional Instructions</b><br>
         <div style="margin-top:4px;white-space:pre-wrap;">${escapeHtml(inv.notes)}</div>
       </div>
     ` : ""}
     <div style="border-top:2px solid #0a0a0a;padding-top:12px;font-size:10.5px;color:#666;text-align:center;line-height:1.6;">
-      Thank you for your business. Reno to Sold Inc. &middot; Payment due within ${escapeHtml(String(inv.dueDate || "agreed terms"))} of issue.
+      Thank you for your business. Reno to Sold Inc. &middot; Payment due by ${escapeHtml(String(inv.dueDate || "agreed terms"))}.
     </div>
   `;
   return wrapper;
