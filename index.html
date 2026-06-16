@@ -589,6 +589,170 @@
     font-size:10.5px;color:var(--muted);font-weight:400;
     text-transform:none;letter-spacing:0;
   }
+  /* =============================
+     Invoicing UI
+     ============================= */
+  .pf-card{
+    background:linear-gradient(135deg, rgba(212,175,106,.10), rgba(212,175,106,.04));
+    border:1px solid rgba(212,175,106,.35);
+    border-radius:12px;
+    padding:16px 18px;
+    margin-bottom:18px;
+  }
+  .pf-card-title{
+    font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;
+    color:var(--gold-bright);font-weight:700;margin-bottom:12px;
+  }
+  .pf-grid{
+    display:grid;grid-template-columns:repeat(6,1fr);gap:14px;
+  }
+  @media (max-width:880px){ .pf-grid{ grid-template-columns:repeat(3,1fr); } }
+  @media (max-width:560px){ .pf-grid{ grid-template-columns:repeat(2,1fr); } }
+  .pf-stat{
+    display:flex;flex-direction:column;gap:3px;
+    padding:8px 10px;background:#0a0a0e;
+    border:1px solid var(--line);border-radius:8px;
+  }
+  .pf-stat .pf-lbl{
+    font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--muted);font-weight:600;
+  }
+  .pf-stat .pf-val{
+    font-size:15px;font-weight:800;color:var(--ink);
+    font-variant-numeric:tabular-nums;
+  }
+  .pf-stat.gold .pf-val{ color:var(--gold-bright); }
+  .pf-stat.green .pf-val{ color:#5fce86; }
+  .pf-stat.red .pf-val{ color:#ff9090; }
+  .pf-stat.contract .pf-val{ font-size:17px; color:#ffe89e; }
+
+  /* Milestone payment-schedule grid */
+  .inv-schedule-title{
+    font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--gold-bright);font-weight:700;margin:14px 0 10px;
+  }
+  .inv-milestones{
+    display:grid;grid-template-columns:repeat(4,1fr);gap:12px;
+  }
+  @media (max-width:880px){ .inv-milestones{ grid-template-columns:repeat(2,1fr); } }
+  @media (max-width:540px){ .inv-milestones{ grid-template-columns:1fr; } }
+  .inv-milestone-card{
+    background:#0a0a0e;border:1px solid var(--line-strong);
+    border-radius:10px;padding:14px 14px;cursor:pointer;
+    transition:border-color .15s, transform .1s;
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .inv-milestone-card:hover{ border-color:var(--gold); transform:translateY(-1px); }
+  .inv-milestone-card .ms-pct{
+    font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--gold-bright);font-weight:700;
+  }
+  .inv-milestone-card .ms-name{
+    font-size:13px;font-weight:700;color:var(--ink);line-height:1.3;
+  }
+  .inv-milestone-card .ms-amount{
+    font-size:18px;font-weight:800;color:#ffe89e;
+    font-variant-numeric:tabular-nums;margin-top:4px;
+  }
+  .inv-milestone-card .ms-status-row{
+    display:flex;justify-content:space-between;align-items:center;
+    margin-top:6px;
+  }
+  .inv-status-pill{
+    display:inline-block;padding:3px 9px;border-radius:999px;
+    font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;
+  }
+  .inv-status-pill.uninvoiced{ background:#1a1a1a;color:#888;border:1px solid var(--line); }
+  .inv-status-pill.draft{ background:#332715;color:#f5c878;border:1px solid #c98e2a; }
+  .inv-status-pill.sent{ background:#1e2533;color:#8db4ff;border:1px solid #4a6fb5; }
+  .inv-status-pill.paid{ background:#0f2918;color:#5fce86;border:1px solid #2e7e4e; }
+  .inv-status-pill.void{ background:#2b1212;color:#ff9090;border:1px solid #8a2828; }
+
+  /* Invoice list */
+  .inv-list-title{
+    font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--gold-bright);font-weight:700;margin:20px 0 8px;
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .inv-list-table{
+    width:100%;border-collapse:collapse;
+    background:#0a0a0e;border:1px solid var(--line-strong);border-radius:8px;
+    overflow:hidden;
+  }
+  .inv-list-table thead th{
+    background:#19170f;color:var(--gold-bright);
+    font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+    padding:8px 10px;text-align:left;font-weight:700;
+    border-bottom:1px solid var(--gold-deep);
+  }
+  .inv-list-table tbody tr{ cursor:pointer; transition:background .12s; }
+  .inv-list-table tbody tr:hover{ background:rgba(212,175,106,.06); }
+  .inv-list-table td{
+    padding:9px 10px;border-bottom:1px solid var(--line);
+    font-size:12.5px;color:var(--ink);
+  }
+  .inv-list-table td.money{ text-align:right;font-variant-numeric:tabular-nums;font-weight:700; }
+  .inv-list-empty{
+    padding:14px;color:var(--muted);font-size:12px;font-style:italic;text-align:center;
+  }
+
+  /* Invoice detail */
+  .inv-detail-meta{
+    display:grid;grid-template-columns:repeat(4,1fr);gap:10px;
+    margin-bottom:14px;
+  }
+  @media (max-width:680px){ .inv-detail-meta{ grid-template-columns:repeat(2,1fr); } }
+  .inv-detail-meta label{
+    display:block;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--muted);font-weight:700;margin-bottom:4px;
+  }
+  .inv-detail-meta input, .inv-detail-meta select{
+    width:100%;padding:7px 10px;font-size:13px;
+  }
+  .inv-totals{
+    background:#0a0a0e;border:1px solid var(--line-strong);
+    border-radius:8px;padding:12px 14px;margin:12px 0;
+  }
+  .inv-totals-row{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:5px 0;font-size:13px;
+  }
+  .inv-totals-row.grand{
+    border-top:1px solid var(--gold-deep);margin-top:6px;padding-top:10px;
+    font-weight:800;font-size:15px;color:#ffe89e;
+  }
+  .inv-totals-row .v{ font-variant-numeric:tabular-nums; }
+  .inv-actions{
+    display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;
+    padding-top:14px;border-top:1px solid var(--line);
+  }
+  .inv-linked-expenses{
+    background:rgba(95,206,134,.04);border:1px solid rgba(95,206,134,.25);
+    border-radius:8px;padding:12px 14px;margin-top:14px;
+  }
+  .inv-linked-expenses .lex-title{
+    font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;
+    color:#5fce86;font-weight:700;margin-bottom:8px;
+  }
+  .inv-linked-expenses table{ width:100%;border-collapse:collapse;font-size:12px; }
+  .inv-linked-expenses td{ padding:5px 8px;border-bottom:1px solid var(--line);color:var(--ink); }
+  .inv-linked-expenses td.money{ text-align:right;font-variant-numeric:tabular-nums;font-weight:700; }
+  .inv-linked-expenses .lex-empty{ color:var(--muted);font-style:italic;font-size:11.5px; }
+  .inv-linked-expenses .lex-margin-row{
+    display:flex;justify-content:space-between;align-items:center;
+    margin-top:10px;padding-top:8px;border-top:1px solid var(--line-strong);
+  }
+  .inv-linked-expenses .lex-margin-row.positive{ color:#5fce86; }
+  .inv-linked-expenses .lex-margin-row.negative{ color:#ff9090; }
+
+  /* Add Custom Invoice button */
+  .inv-add-custom{
+    margin-top:14px;padding:9px 14px;background:transparent;
+    border:1px dashed var(--gold-deep);color:var(--gold-bright);
+    border-radius:8px;cursor:pointer;font-weight:600;font-size:12px;
+  }
+  .inv-add-custom:hover{ background:rgba(212,175,106,.06); }
+
   .section-title{font-weight:700;font-size:11px;margin-top:18px;margin-bottom:8px;color:var(--gold-bright);text-transform:uppercase;letter-spacing:.18em;border-top:1px solid var(--line);padding-top:14px;}
   .section-title:first-child{margin-top:0;border-top:none;padding-top:0;}
   .footnote{color:var(--muted);font-size:11px;margin-top:8px;line-height:1.5;}
@@ -2934,6 +3098,7 @@
       <button onclick="openClientEstimate()">Print / PDF</button>
       <button onclick="openEmailEstimateModal()">Email to Client</button>
       <button onclick="openExpenseTracker()" title="Track renovation expenses & profit for this estimate">Expense Tracker</button>
+      <button onclick="openInvoicing()" title="Issue invoices on the 10/40/40/10 payment schedule for this estimate">Invoicing</button>
       <input type="file" id="pdfImportInput" accept="application/pdf,.pdf" style="display:none;" onchange="onPdfFileChosen(event)">
     </div>
   </div>
@@ -3202,6 +3367,7 @@
           <th>Category</th>
           <th>Vendor</th>
           <th style="width:90px">Type</th>
+          <th style="width:150px" title="Link this expense to an invoice for milestone-level margin tracking">Invoice</th>
           <th class="r" style="width:120px">Amount</th>
           <th style="width:80px"></th>
         </tr></thead>
@@ -3488,6 +3654,37 @@
       <ul class="saved-list" id="savedList"></ul>
       <p id="savedEmpty" class="footnote" style="display:none">No saved estimates yet.</p>
     </div>
+  </div>
+</div>
+
+<!-- Invoicing modal — per-estimate invoice list + payment-schedule cards.
+     Opens from the toolbar next to Expense Tracker. The 10/40/40/10 milestones
+     pre-populate based on the current contract total; custom invoices (change
+     orders, extras) can be added separately. -->
+<div class="modal-bg" id="invoicingModal" onclick="if(event.target===this)closeInvoicing()">
+  <div class="modal" style="max-width:1080px;">
+    <h3>
+      <span>Invoicing &mdash; <span id="invModalEstimateName">Project</span></span>
+      <span class="small-stack">
+        <button class="primary" onclick="closeInvoicing()">Done</button>
+      </span>
+    </h3>
+    <div class="modal-body" id="invoicingBody"></div>
+  </div>
+</div>
+
+<!-- Invoice detail modal — opens when the user clicks on a milestone card
+     or an existing invoice row. Lets the user edit the amount, dates,
+     notes, mark sent/paid/void, download PDF. -->
+<div class="modal-bg" id="invoiceDetailModal" onclick="if(event.target===this)closeInvoiceDetail()">
+  <div class="modal" style="max-width:880px;">
+    <h3>
+      <span id="invDetailHeading">Invoice</span>
+      <span class="small-stack">
+        <button class="ghost" onclick="closeInvoiceDetail()">Close</button>
+      </span>
+    </h3>
+    <div class="modal-body" id="invoiceDetailBody"></div>
   </div>
 </div>
 
@@ -3998,6 +4195,14 @@ function freshState(){
     // Mode override is for cases where there's no bid yet but Mo wants to
     // pre-set a contractor cost for margin tracking.
     miscellaneous: { items: [] },
+    // INVOICES — array of invoice records tied to this estimate. Pre-populated
+    // by the 10/40/40/10 payment schedule (via lazy creation in the UI), plus
+    // any custom invoices the user adds for change orders / extras.
+    // Each invoice: { id, number, milestone, milestoneLabel, milestoneDesc,
+    //                 percent, amount, hstRate, hstAmount, total, status,
+    //                 issuedDate, dueDate, paidDate, paymentMethod, notes,
+    //                 createdAt, updatedAt }
+    invoices: [],
     discount:  { enabled:false, listing:false, customEnabled:false, customType:"percent", customValue:"", customNote:"" }
   };
 }
@@ -4304,7 +4509,8 @@ function resetPricing(){
 function loadSavedList(){ try{ return JSON.parse(localStorage.getItem("reno_estimates_v1")||"[]"); }catch(e){ return []; } }
 function persistSavedList(arr){ localStorage.setItem("reno_estimates_v1", JSON.stringify(arr)); }
 
-function saveEstimate(){
+function saveEstimate(opts){
+  opts = opts || {};
   const list = loadSavedList();
   const name = state.propName.trim() || "Untitled property";
   const id = state._id || ("e_"+Date.now());
@@ -4313,7 +4519,9 @@ function saveEstimate(){
   const entry = { id, name, savedAt: new Date().toISOString(), state: JSON.parse(JSON.stringify(state)) };
   if(idx>=0) list[idx] = entry; else list.unshift(entry);
   persistSavedList(list);
-  flash("Saved estimate: " + name);
+  // Silent path — used by invoicing edits where we don't want a toast on
+  // every keystroke. Otherwise show the normal "Saved estimate: X" flash.
+  if(!opts.silent) flash("Saved estimate: " + name);
   // Mirror to cloud if signed in (fire-and-forget — local save is the source of truth offline)
   if(currentUser && supa){ upsertCloudEstimate(entry); }
   // Keep any linked Expense Tracker project in sync with the estimate's
@@ -4563,6 +4771,29 @@ function migrateOldEstimate(m){
     // Optional Internal-Mode-only manual override for contractor cost per unit.
     // null = not entered (snapshot reports "not entered" and margin uses 0).
     if(it.contractorCostOverride !== null && typeof it.contractorCostOverride !== "string") it.contractorCostOverride = null;
+  });
+  // Invoices — backfill empty array on older saves. Each invoice gets a
+  // stable id so expense-tracker rows can link to it.
+  if(!Array.isArray(m.invoices)) m.invoices = [];
+  m.invoices.forEach((inv, idx) => {
+    if(!inv.id || typeof inv.id !== "string") inv.id = "inv_" + Date.now() + "_" + idx + "_" + Math.floor(Math.random()*1e6).toString(36);
+    if(typeof inv.number       !== "string") inv.number = "";
+    if(typeof inv.milestone    !== "string") inv.milestone = "custom";
+    if(typeof inv.milestoneLabel !== "string") inv.milestoneLabel = "";
+    if(typeof inv.milestoneDesc  !== "string") inv.milestoneDesc  = "";
+    if(typeof inv.percent      !== "number")  inv.percent = 0;
+    if(typeof inv.amount       !== "number")  inv.amount = 0;
+    if(typeof inv.hstRate      !== "number")  inv.hstRate = 0.13;
+    if(typeof inv.hstAmount    !== "number")  inv.hstAmount = +(inv.amount * inv.hstRate).toFixed(2);
+    if(typeof inv.total        !== "number")  inv.total = +(inv.amount + inv.hstAmount).toFixed(2);
+    if(typeof inv.status       !== "string")  inv.status = "draft";
+    if(typeof inv.issuedDate   !== "string")  inv.issuedDate = "";
+    if(typeof inv.dueDate      !== "string")  inv.dueDate = "";
+    if(typeof inv.paidDate     !== "string")  inv.paidDate = "";
+    if(typeof inv.paymentMethod !== "string") inv.paymentMethod = "";
+    if(typeof inv.notes        !== "string")  inv.notes = "";
+    if(typeof inv.createdAt    !== "string")  inv.createdAt = new Date().toISOString();
+    if(typeof inv.updatedAt    !== "string")  inv.updatedAt = inv.createdAt;
   });
   // Discount schema migration
   if(m.discount){
@@ -13980,6 +14211,681 @@ function openExpenseTracker(){
     }
   }catch(e){ if(window.ET && ET.show) ET.show(); }
 }
+
+/* ===============================================================
+   Invoicing — Phase 1
+   ===============================================================
+   Per-estimate invoicing tied to the existing 10/40/40/10 payment
+   schedule. Invoices live on the estimate state (state.invoices)
+   so they sync via the normal estimate save/load path.
+
+   Architecture:
+   - INVOICE_MILESTONES: the 4 milestones, with stable IDs ("deposit",
+     "start", "substantial", "final"). Custom invoices use id "custom".
+   - state.invoices: array of invoice records (see freshState comment)
+   - Invoice numbering: sequential global counter in localStorage
+     (RTS_INVOICE_COUNTER_KEY). Format: RTS-INV-0001.
+   - HST: 13% Ontario default, editable per invoice.
+   - Due date: 7 days after issue date, editable per invoice.
+   - Expense linking: each Expense Tracker row gets an optional
+     `invoiceId` field that references an invoice on the estimate.
+     The Linked Expenses panel inside an invoice's detail view
+     queries the linked tracker project for matching expenses.
+   =============================================================== */
+
+const INVOICE_MILESTONES = [
+  {
+    id: "deposit",
+    pct: 10,
+    label: "Deposit — On Acceptance",
+    desc: "Locks in your project start date, secures all subcontracted trades, and triggers ordering of long-lead materials."
+  },
+  {
+    id: "start",
+    pct: 40,
+    label: "Start of Demolition",
+    desc: "Due the day demolition begins. Covers site protection, demolition, debris disposal, and delivery of rough materials."
+  },
+  {
+    id: "substantial",
+    pct: 40,
+    label: "Flooring, Painting, Electrical & Plumbing Rough-Ins",
+    desc: "Due once electrical and plumbing rough-ins are complete and flooring, drywall, and paint are installed."
+  },
+  {
+    id: "final",
+    pct: 10,
+    label: "Final Completion & Cleaning",
+    desc: "Due on Substantial Completion — all trim and fixtures installed, professional deep-clean done, property MLS®-ready."
+  }
+];
+
+const INVOICE_HST_RATE_DEFAULT = 0.13;
+const INVOICE_DUE_DAYS_DEFAULT = 7;
+const INVOICE_COUNTER_KEY = "rts_invoice_counter_v1";
+
+/* Generates the next sequential invoice number, e.g. "RTS-INV-0042".
+   Counter persists in localStorage so it survives reloads. Global across
+   all estimates (per user request: not per-project numbering). */
+function nextInvoiceNumber(){
+  const cur = parseInt(localStorage.getItem(INVOICE_COUNTER_KEY) || "0", 10) || 0;
+  const next = cur + 1;
+  localStorage.setItem(INVOICE_COUNTER_KEY, String(next));
+  return "RTS-INV-" + String(next).padStart(4, "0");
+}
+
+/* Compute current contract value (post-discount, pre-HST). */
+function invoiceContractValue(){
+  try{
+    const t = computeTotals();
+    return Math.round((t.total || 0) * 100) / 100;
+  }catch(e){ return 0; }
+}
+
+/* Today's date in YYYY-MM-DD format (used for issued/paid dates). */
+function todayISO(){
+  const d = new Date();
+  const tz = d.getTimezoneOffset() * 60000;
+  return new Date(d.getTime() - tz).toISOString().slice(0,10);
+}
+
+/* Add N days to a YYYY-MM-DD date, returning a new YYYY-MM-DD. */
+function addDaysISO(iso, days){
+  const [y, m, d] = (iso || todayISO()).split("-").map(Number);
+  const dt = new Date(y, (m||1)-1, d||1);
+  dt.setDate(dt.getDate() + days);
+  const tz = dt.getTimezoneOffset() * 60000;
+  return new Date(dt.getTime() - tz).toISOString().slice(0,10);
+}
+
+/* Returns an existing invoice for a given milestone id, or null. */
+function findInvoiceByMilestone(milestoneId){
+  if(!Array.isArray(state.invoices)) return null;
+  return state.invoices.find(inv => inv.milestone === milestoneId && inv.status !== "void") || null;
+}
+
+/* Project Financials — aggregates contract value, invoiced, collected,
+   outstanding A/R, expenses, projected margin. Shared between Invoicing
+   and Expense Tracker. Returns an object with raw numbers. */
+function computeProjectFinancials(){
+  const contract = invoiceContractValue();
+  const invoices = Array.isArray(state.invoices) ? state.invoices : [];
+  let invoiced = 0, collected = 0;
+  invoices.forEach(inv => {
+    if(inv.status === "void" || inv.status === "draft") return;
+    invoiced += +(inv.amount || 0);
+    if(inv.status === "paid") collected += +(inv.amount || 0);
+  });
+  const outstandingAR = invoiced - collected;
+  // Pull expenses from the linked tracker project, if any.
+  let expensesToDate = 0;
+  try{
+    const estId = state && state._id;
+    if(estId && window.ET && typeof ET.getProjectForEstimate === "function"){
+      const proj = ET.getProjectForEstimate(estId);
+      if(proj && Array.isArray(proj.expenses)){
+        expensesToDate = proj.expenses.reduce((a,e) => a + (Number(e.amount)||0), 0);
+      }
+    }
+  }catch(e){}
+  const projectedMargin = contract - expensesToDate;
+  const marginPct = contract > 0 ? (projectedMargin / contract * 100) : 0;
+  return {
+    contract, invoiced, collected, outstandingAR,
+    expensesToDate, projectedMargin, marginPct
+  };
+}
+
+/* Render the Project Financials card. Used in BOTH Invoicing modal AND
+   Expense Tracker (top of the page). Pure presentational helper. */
+function renderProjectFinancialsCard(){
+  const f = computeProjectFinancials();
+  const fmt = (n) => "$" + Math.round(n).toLocaleString("en-US");
+  const marginCls = f.projectedMargin >= 0 ? "green" : "red";
+  return `
+    <div class="pf-card">
+      <div class="pf-card-title">Project Financials</div>
+      <div class="pf-grid">
+        <div class="pf-stat contract">
+          <span class="pf-lbl">Contract</span>
+          <span class="pf-val">${fmt(f.contract)}</span>
+        </div>
+        <div class="pf-stat gold">
+          <span class="pf-lbl">Invoiced</span>
+          <span class="pf-val">${fmt(f.invoiced)}</span>
+        </div>
+        <div class="pf-stat green">
+          <span class="pf-lbl">Collected</span>
+          <span class="pf-val">${fmt(f.collected)}</span>
+        </div>
+        <div class="pf-stat ${f.outstandingAR > 0 ? "red" : ""}">
+          <span class="pf-lbl">A/R Outstanding</span>
+          <span class="pf-val">${fmt(f.outstandingAR)}</span>
+        </div>
+        <div class="pf-stat">
+          <span class="pf-lbl">Expenses</span>
+          <span class="pf-val">${fmt(f.expensesToDate)}</span>
+        </div>
+        <div class="pf-stat ${marginCls}">
+          <span class="pf-lbl">Projected Margin (${f.marginPct.toFixed(1)}%)</span>
+          <span class="pf-val">${fmt(f.projectedMargin)}</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/* Open the Invoicing modal. Requires the estimator's current state to be
+   the project we're invoicing for. If unsaved, prompt the user to save. */
+function openInvoicing(){
+  if(!state._id){
+    if(!confirm("Save this estimate first to start invoicing?\n\nClick OK to save (the estimate will be saved under its current name).")) return;
+    try{ saveEstimate(); }catch(e){}
+    if(!state._id){
+      alert("Could not save the estimate. Please give it a name and address, then try again.");
+      return;
+    }
+  }
+  if(!Array.isArray(state.invoices)) state.invoices = [];
+  const nameEl = document.getElementById("invModalEstimateName");
+  if(nameEl){
+    const propName = (state.propName || "").trim();
+    const addr = (state.propAddress || "").trim();
+    nameEl.textContent = propName || addr || "Project";
+  }
+  renderInvoicing();
+  document.getElementById("invoicingModal").classList.add("show");
+}
+
+function closeInvoicing(){
+  document.getElementById("invoicingModal").classList.remove("show");
+}
+
+/* Render the full Invoicing body — Project Financials, milestone cards,
+   custom invoices, all invoices list. */
+function renderInvoicing(){
+  const body = document.getElementById("invoicingBody");
+  if(!body) return;
+  const contract = invoiceContractValue();
+  const fmt = (n) => "$" + Math.round(n).toLocaleString("en-US");
+
+  // Milestone cards — show status for each of the 4 milestones
+  const milestonesHtml = INVOICE_MILESTONES.map(m => {
+    const inv = findInvoiceByMilestone(m.id);
+    const amount = +(contract * (m.pct/100)).toFixed(2);
+    const status = inv ? inv.status : "uninvoiced";
+    const statusLabel = inv ? status.toUpperCase() : "Not yet invoiced";
+    const handler = inv
+      ? `openInvoiceDetail('${escapeHtmlAttr(inv.id)}')`
+      : `createMilestoneInvoice('${m.id}')`;
+    return `
+      <div class="inv-milestone-card" onclick="${handler}">
+        <div class="ms-pct">${m.pct}% &mdash; Milestone</div>
+        <div class="ms-name">${m.label}</div>
+        <div class="ms-amount">${fmt(amount)}</div>
+        <div class="ms-status-row">
+          <span class="inv-status-pill ${status === "uninvoiced" ? "uninvoiced" : status}">${statusLabel}</span>
+          ${inv ? `<span style="font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums;">${escapeHtml(inv.number || "—")}</span>` : ""}
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  // All invoices list — combines milestone + custom
+  const invoices = Array.isArray(state.invoices) ? state.invoices.slice() : [];
+  invoices.sort((a,b) => (a.createdAt || "").localeCompare(b.createdAt || ""));
+  const rowsHtml = invoices.length === 0
+    ? `<tr><td colspan="6" class="inv-list-empty">No invoices issued yet. Click a milestone above to create your first one.</td></tr>`
+    : invoices.map(inv => `
+        <tr onclick="openInvoiceDetail('${escapeHtmlAttr(inv.id)}')">
+          <td>${escapeHtml(inv.number || "—")}</td>
+          <td>${escapeHtml(inv.milestoneLabel || "Custom")}</td>
+          <td>${escapeHtml(inv.issuedDate || "—")}</td>
+          <td>${escapeHtml(inv.dueDate || "—")}</td>
+          <td><span class="inv-status-pill ${inv.status}">${escapeHtml((inv.status || "draft").toUpperCase())}</span></td>
+          <td class="money">${fmt(inv.total || 0)}</td>
+        </tr>
+      `).join("");
+
+  body.innerHTML = `
+    ${renderProjectFinancialsCard()}
+
+    <div class="inv-schedule-title">Payment Schedule &mdash; 10 / 40 / 40 / 10</div>
+    <div class="inv-milestones">${milestonesHtml}</div>
+
+    <div class="inv-list-title">
+      <span>All Invoices</span>
+      <button class="inv-add-custom" onclick="createCustomInvoice()">+ Add Custom Invoice</button>
+    </div>
+    <table class="inv-list-table">
+      <thead>
+        <tr>
+          <th>Invoice #</th>
+          <th>Milestone</th>
+          <th>Issued</th>
+          <th>Due</th>
+          <th>Status</th>
+          <th style="text-align:right;">Total (incl. HST)</th>
+        </tr>
+      </thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+  `;
+}
+
+/* Create a new milestone invoice (called from clicking a milestone card
+   that doesn't have an invoice yet). */
+function createMilestoneInvoice(milestoneId){
+  const m = INVOICE_MILESTONES.find(x => x.id === milestoneId);
+  if(!m){ alert("Unknown milestone: " + milestoneId); return; }
+  const contract = invoiceContractValue();
+  const amount = +(contract * (m.pct/100)).toFixed(2);
+  const hstAmount = +(amount * INVOICE_HST_RATE_DEFAULT).toFixed(2);
+  const total = +(amount + hstAmount).toFixed(2);
+  const now = new Date().toISOString();
+  const issued = todayISO();
+  const inv = {
+    id: "inv_" + Date.now().toString(36) + "_" + Math.floor(Math.random()*1e6).toString(36),
+    number: nextInvoiceNumber(),
+    milestone: m.id,
+    milestoneLabel: m.label,
+    milestoneDesc: m.desc,
+    percent: m.pct,
+    amount, hstRate: INVOICE_HST_RATE_DEFAULT, hstAmount, total,
+    status: "draft",
+    issuedDate: issued,
+    dueDate: addDaysISO(issued, INVOICE_DUE_DAYS_DEFAULT),
+    paidDate: "",
+    paymentMethod: "",
+    notes: "",
+    createdAt: now,
+    updatedAt: now
+  };
+  if(!Array.isArray(state.invoices)) state.invoices = [];
+  state.invoices.push(inv);
+  saveEstimate({ silent:true });
+  renderInvoicing();
+  openInvoiceDetail(inv.id);
+}
+
+/* Create a new custom invoice (free-form, not tied to a milestone). */
+function createCustomInvoice(){
+  const name = prompt("Custom invoice name (e.g. \"Change Order #1 — Add island countertop\"):", "Change Order");
+  if(!name) return;
+  const amtStr = prompt("Invoice amount $ (pre-HST):", "1000");
+  const amount = parseFloat(amtStr);
+  if(!isFinite(amount) || amount <= 0){ alert("Invalid amount."); return; }
+  const hstAmount = +(amount * INVOICE_HST_RATE_DEFAULT).toFixed(2);
+  const total = +(amount + hstAmount).toFixed(2);
+  const now = new Date().toISOString();
+  const issued = todayISO();
+  const inv = {
+    id: "inv_" + Date.now().toString(36) + "_" + Math.floor(Math.random()*1e6).toString(36),
+    number: nextInvoiceNumber(),
+    milestone: "custom",
+    milestoneLabel: name.trim(),
+    milestoneDesc: "",
+    percent: 0,
+    amount: +amount.toFixed(2),
+    hstRate: INVOICE_HST_RATE_DEFAULT, hstAmount, total,
+    status: "draft",
+    issuedDate: issued,
+    dueDate: addDaysISO(issued, INVOICE_DUE_DAYS_DEFAULT),
+    paidDate: "", paymentMethod: "", notes: "",
+    createdAt: now, updatedAt: now
+  };
+  if(!Array.isArray(state.invoices)) state.invoices = [];
+  state.invoices.push(inv);
+  saveEstimate({ silent:true });
+  renderInvoicing();
+  openInvoiceDetail(inv.id);
+}
+
+/* Open the detail modal for an invoice (by id). */
+function openInvoiceDetail(invoiceId){
+  const inv = (state.invoices || []).find(x => x.id === invoiceId);
+  if(!inv){ alert("Invoice not found."); return; }
+  const heading = document.getElementById("invDetailHeading");
+  if(heading) heading.textContent = "Invoice " + (inv.number || "—") + " — " + (inv.milestoneLabel || "");
+  renderInvoiceDetail(inv);
+  document.getElementById("invoiceDetailModal").classList.add("show");
+}
+
+function closeInvoiceDetail(){
+  document.getElementById("invoiceDetailModal").classList.remove("show");
+  renderInvoicing();
+}
+
+function renderInvoiceDetail(inv){
+  const body = document.getElementById("invoiceDetailBody");
+  if(!body) return;
+  const fmt = (n) => "$" + Math.round(n).toLocaleString("en-US");
+  const fmtMoneyDec = (n) => "$" + (Math.round(n*100)/100).toLocaleString("en-US", { minimumFractionDigits:2, maximumFractionDigits:2 });
+
+  // Linked expenses — pull from tracker
+  let linkedExpenses = [];
+  let linkedTotal = 0;
+  try{
+    const estId = state && state._id;
+    if(estId && window.ET && typeof ET.getProjectForEstimate === "function"){
+      const proj = ET.getProjectForEstimate(estId);
+      if(proj && Array.isArray(proj.expenses)){
+        linkedExpenses = proj.expenses.filter(e => e && e.invoiceId === inv.id);
+        linkedTotal = linkedExpenses.reduce((a,e) => a + (Number(e.amount)||0), 0);
+      }
+    }
+  }catch(e){}
+  const milestoneMargin = (+inv.amount || 0) - linkedTotal;
+  const marginCls = milestoneMargin >= 0 ? "positive" : "negative";
+
+  const linkedHtml = linkedExpenses.length === 0
+    ? `<div class="lex-empty">No expenses linked to this invoice yet. From the Expense Tracker, pick this invoice in any expense's "Invoice" dropdown.</div>`
+    : `<table>
+        <thead><tr><th style="text-align:left;font-size:9.5px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;padding:5px 8px;">Date</th><th style="text-align:left;font-size:9.5px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;padding:5px 8px;">Category</th><th style="text-align:left;font-size:9.5px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;padding:5px 8px;">Vendor / Note</th><th style="text-align:right;font-size:9.5px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;padding:5px 8px;">Amount</th></tr></thead>
+        <tbody>
+          ${linkedExpenses.map(e => `
+            <tr>
+              <td>${escapeHtml(e.date || "—")}</td>
+              <td>${escapeHtml(e.category || "—")}</td>
+              <td>${escapeHtml(e.vendor || e.notes || "—")}</td>
+              <td class="money">${fmtMoneyDec(Number(e.amount)||0)}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>`;
+
+  const isVoid = inv.status === "void";
+  const disabled = isVoid ? "disabled" : "";
+
+  body.innerHTML = `
+    ${inv.milestoneDesc ? `
+      <div style="background:rgba(212,175,106,.08);border:1px solid rgba(212,175,106,.30);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12.5px;color:var(--ink);line-height:1.5;">
+        <b style="color:var(--gold-bright);">${escapeHtml(inv.milestoneLabel)}</b><br>
+        ${escapeHtml(inv.milestoneDesc)}
+      </div>
+    ` : ""}
+
+    <div class="inv-detail-meta">
+      <div>
+        <label>Invoice #</label>
+        <input type="text" value="${escapeHtmlAttr(inv.number || '')}" ${disabled} oninput="updateInvoiceField('${inv.id}','number',this.value)">
+      </div>
+      <div>
+        <label>Status</label>
+        <select ${disabled} onchange="updateInvoiceField('${inv.id}','status',this.value)">
+          <option value="draft" ${inv.status === "draft" ? "selected" : ""}>Draft</option>
+          <option value="sent" ${inv.status === "sent" ? "selected" : ""}>Sent</option>
+          <option value="paid" ${inv.status === "paid" ? "selected" : ""}>Paid</option>
+          <option value="void" ${inv.status === "void" ? "selected" : ""}>Void</option>
+        </select>
+      </div>
+      <div>
+        <label>Issued Date</label>
+        <input type="date" value="${escapeHtmlAttr(inv.issuedDate || '')}" ${disabled} onchange="updateInvoiceField('${inv.id}','issuedDate',this.value)">
+      </div>
+      <div>
+        <label>Due Date</label>
+        <input type="date" value="${escapeHtmlAttr(inv.dueDate || '')}" ${disabled} onchange="updateInvoiceField('${inv.id}','dueDate',this.value)">
+      </div>
+      <div>
+        <label>Amount $ (pre-HST)</label>
+        <input type="number" min="0" step="0.01" value="${escapeHtmlAttr(inv.amount || 0)}" ${disabled} oninput="updateInvoiceAmount('${inv.id}', this.value)">
+      </div>
+      <div>
+        <label>HST Rate (decimal)</label>
+        <input type="number" min="0" step="0.01" value="${escapeHtmlAttr(inv.hstRate || 0.13)}" ${disabled} oninput="updateInvoiceHstRate('${inv.id}', this.value)">
+      </div>
+      <div>
+        <label>Paid Date</label>
+        <input type="date" value="${escapeHtmlAttr(inv.paidDate || '')}" ${disabled} onchange="updateInvoiceField('${inv.id}','paidDate',this.value)">
+      </div>
+      <div>
+        <label>Payment Method</label>
+        <input type="text" placeholder="e-transfer / cheque / wire" value="${escapeHtmlAttr(inv.paymentMethod || '')}" ${disabled} oninput="updateInvoiceField('${inv.id}','paymentMethod',this.value)">
+      </div>
+    </div>
+
+    <div>
+      <label style="display:block;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:4px;">Notes / Payment Instructions</label>
+      <textarea rows="2" style="width:100%;padding:8px 10px;font-size:13px;" ${disabled} oninput="updateInvoiceField('${inv.id}','notes',this.value)" placeholder="Optional notes for the client (payment instructions, references, etc.)">${escapeHtml(inv.notes || '')}</textarea>
+    </div>
+
+    <div class="inv-totals">
+      <div class="inv-totals-row"><span>Subtotal (pre-HST)</span><span class="v" id="inv-detail-subtotal">${fmtMoneyDec(inv.amount || 0)}</span></div>
+      <div class="inv-totals-row"><span>HST (${((inv.hstRate||0)*100).toFixed(1)}%)</span><span class="v" id="inv-detail-hst">${fmtMoneyDec(inv.hstAmount || 0)}</span></div>
+      <div class="inv-totals-row grand"><span>Total Due</span><span class="v" id="inv-detail-total">${fmtMoneyDec(inv.total || 0)}</span></div>
+    </div>
+
+    <div class="inv-linked-expenses">
+      <div class="lex-title">Linked Expenses</div>
+      ${linkedHtml}
+      ${linkedExpenses.length > 0 ? `
+        <div class="lex-margin-row ${marginCls}">
+          <span style="font-weight:700;">Milestone margin</span>
+          <span style="font-weight:800;font-variant-numeric:tabular-nums;">${fmtMoneyDec(milestoneMargin)} <span style="font-size:11px;color:var(--muted);font-weight:400;">(invoice ${fmtMoneyDec(inv.amount||0)} − expenses ${fmtMoneyDec(linkedTotal)})</span></span>
+        </div>
+      ` : ""}
+    </div>
+
+    <div class="inv-actions">
+      <button class="primary" onclick="downloadInvoicePdf('${inv.id}')">Download PDF</button>
+      <button onclick="markInvoiceSent('${inv.id}')" ${inv.status === "sent" || inv.status === "paid" ? "disabled" : ""}>Mark Sent</button>
+      <button onclick="markInvoicePaid('${inv.id}')" ${inv.status === "paid" || isVoid ? "disabled" : ""}>Mark Paid</button>
+      <button class="ghost" style="margin-left:auto;" onclick="voidInvoice('${inv.id}')" ${isVoid ? "disabled" : ""}>Void Invoice</button>
+      <button class="ghost danger" onclick="deleteInvoice('${inv.id}')">Delete</button>
+    </div>
+  `;
+}
+
+/* Live update on any invoice field. */
+function updateInvoiceField(invId, field, value){
+  const inv = (state.invoices || []).find(x => x.id === invId);
+  if(!inv) return;
+  inv[field] = value;
+  inv.updatedAt = new Date().toISOString();
+  saveEstimate({ silent:true });
+}
+
+function updateInvoiceAmount(invId, value){
+  const inv = (state.invoices || []).find(x => x.id === invId);
+  if(!inv) return;
+  const v = parseFloat(value) || 0;
+  inv.amount = +v.toFixed(2);
+  inv.hstAmount = +(inv.amount * (inv.hstRate || 0)).toFixed(2);
+  inv.total = +(inv.amount + inv.hstAmount).toFixed(2);
+  inv.updatedAt = new Date().toISOString();
+  // Refresh the totals row live
+  const fmtMoneyDec = (n) => "$" + (Math.round(n*100)/100).toLocaleString("en-US", { minimumFractionDigits:2, maximumFractionDigits:2 });
+  const s = document.getElementById("inv-detail-subtotal"); if(s) s.textContent = fmtMoneyDec(inv.amount);
+  const h = document.getElementById("inv-detail-hst"); if(h) h.textContent = fmtMoneyDec(inv.hstAmount);
+  const t = document.getElementById("inv-detail-total"); if(t) t.textContent = fmtMoneyDec(inv.total);
+  saveEstimate({ silent:true });
+}
+
+function updateInvoiceHstRate(invId, value){
+  const inv = (state.invoices || []).find(x => x.id === invId);
+  if(!inv) return;
+  const v = parseFloat(value) || 0;
+  inv.hstRate = v;
+  inv.hstAmount = +(inv.amount * v).toFixed(2);
+  inv.total = +(inv.amount + inv.hstAmount).toFixed(2);
+  inv.updatedAt = new Date().toISOString();
+  renderInvoiceDetail(inv);
+  saveEstimate({ silent:true });
+}
+
+function markInvoiceSent(invId){
+  const inv = (state.invoices || []).find(x => x.id === invId);
+  if(!inv) return;
+  inv.status = "sent";
+  inv.updatedAt = new Date().toISOString();
+  saveEstimate({ silent:true });
+  renderInvoiceDetail(inv);
+}
+
+function markInvoicePaid(invId){
+  const inv = (state.invoices || []).find(x => x.id === invId);
+  if(!inv) return;
+  inv.status = "paid";
+  if(!inv.paidDate) inv.paidDate = todayISO();
+  inv.updatedAt = new Date().toISOString();
+  saveEstimate({ silent:true });
+  renderInvoiceDetail(inv);
+}
+
+function voidInvoice(invId){
+  if(!confirm("Void this invoice? It will be marked void and excluded from totals. Use this for invoices issued in error.")) return;
+  const inv = (state.invoices || []).find(x => x.id === invId);
+  if(!inv) return;
+  inv.status = "void";
+  inv.updatedAt = new Date().toISOString();
+  saveEstimate({ silent:true });
+  renderInvoiceDetail(inv);
+}
+
+function deleteInvoice(invId){
+  if(!confirm("Delete this invoice permanently? This cannot be undone. (For invoices issued in error, prefer 'Void' instead.)")) return;
+  const idx = (state.invoices || []).findIndex(x => x.id === invId);
+  if(idx < 0) return;
+  state.invoices.splice(idx, 1);
+  saveEstimate({ silent:true });
+  closeInvoiceDetail();
+}
+
+/* Build an invoice PDF and download it. Reuses pdfFromElement. */
+async function downloadInvoicePdf(invId){
+  const inv = (state.invoices || []).find(x => x.id === invId);
+  if(!inv){ alert("Invoice not found."); return; }
+  try{
+    const el = buildInvoicePdfEl(inv);
+    document.body.appendChild(el);
+    try{
+      const blob = await pdfFromElement({
+        sourceEl: el,
+        filename: (inv.number || "invoice") + ".pdf",
+        marginInches: 0.4,
+        orientation: "portrait",
+        pageFormat: "letter"
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = (inv.number || "invoice") + ".pdf";
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } finally {
+      if(el.parentNode) el.parentNode.removeChild(el);
+    }
+  } catch(e){
+    console.error("Invoice PDF failed:", e);
+    alert("PDF generation failed: " + (e && e.message ? e.message : "unknown error"));
+  }
+}
+
+/* Build the printable invoice element (hidden, off-screen).
+   Branded, with bill-to from the estimate's seller(s). */
+function buildInvoicePdfEl(inv){
+  const ci = COMPANY_INFO;
+  const propName = (state.propName || "").trim();
+  const propAddr = (state.propAddress || "").trim();
+  const sellers = (Array.isArray(state.sellers) ? state.sellers : [])
+    .map(s => ({
+      name:  ((s && s.name)  || "").trim(),
+      email: ((s && s.email) || "").trim(),
+      phone: ((s && s.phone) || "").trim()
+    }))
+    .filter(s => s.name || s.email || s.phone);
+  const fmtMoneyDec = (n) => "$" + (Math.round(n*100)/100).toLocaleString("en-US", { minimumFractionDigits:2, maximumFractionDigits:2 });
+
+  const wrapper = document.createElement("div");
+  wrapper.style.cssText = "background:#ffffff;color:#0a0a0a;padding:36px 40px;font-family:'Montserrat',sans-serif;line-height:1.5;font-size:12px;";
+  wrapper.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #0a0a0a;padding-bottom:14px;margin-bottom:18px;">
+      <div>
+        <img src="${escapeHtmlAttr(ci.logoSrc)}" alt="Reno to Sold" style="max-height:48px;display:block;margin-bottom:6px;">
+        <div style="font-size:10.5px;color:#444;line-height:1.5;">
+          ${escapeHtml(ci.phone)}<br>
+          ${escapeHtml(ci.email)}<br>
+          ${escapeHtml(ci.addressLine1)}<br>
+          ${escapeHtml(ci.addressLine2)}
+        </div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:24px;font-weight:800;color:#0a0a0a;letter-spacing:.04em;">INVOICE</div>
+        <div style="font-size:11px;color:#555;margin-top:8px;">Invoice #</div>
+        <div style="font-size:14px;font-weight:700;color:#0a0a0a;">${escapeHtml(inv.number || "—")}</div>
+        <div style="font-size:11px;color:#555;margin-top:8px;">Issued</div>
+        <div style="font-size:12px;font-weight:600;color:#0a0a0a;">${escapeHtml(inv.issuedDate || "—")}</div>
+        <div style="font-size:11px;color:#555;margin-top:6px;">Due</div>
+        <div style="font-size:12px;font-weight:600;color:#0a0a0a;">${escapeHtml(inv.dueDate || "—")}</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:22px;">
+      <div>
+        <div style="font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:#a8853f;font-weight:700;margin-bottom:6px;">Bill To</div>
+        ${sellers.length === 0 ? '<div style="color:#888;">(no sellers on file)</div>' : sellers.map(s => `
+          <div style="font-size:13px;font-weight:700;color:#0a0a0a;">${escapeHtml(s.name)}</div>
+          ${s.email ? `<div style="font-size:11px;color:#555;">${escapeHtml(s.email)}</div>` : ""}
+          ${s.phone ? `<div style="font-size:11px;color:#555;">${escapeHtml(s.phone)}</div>` : ""}
+        `).join('<div style="height:6px;"></div>')}
+      </div>
+      <div>
+        <div style="font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:#a8853f;font-weight:700;margin-bottom:6px;">Project</div>
+        <div style="font-size:13px;font-weight:700;color:#0a0a0a;">${escapeHtml(propName || "—")}</div>
+        <div style="font-size:11px;color:#555;">${escapeHtml(propAddr || "")}</div>
+      </div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:18px;">
+      <thead>
+        <tr style="background:#0a0a0a;color:#d4af6a;">
+          <th style="text-align:left;padding:10px 12px;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;font-weight:700;">Description</th>
+          <th style="text-align:right;padding:10px 12px;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;font-weight:700;width:140px;">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="padding:14px 12px;border-bottom:1px solid #eee;vertical-align:top;">
+            <div style="font-weight:700;font-size:13.5px;color:#0a0a0a;margin-bottom:4px;">${escapeHtml(inv.milestoneLabel || "Invoice")}</div>
+            ${inv.milestoneDesc ? `<div style="font-size:11.5px;color:#555;line-height:1.5;">${escapeHtml(inv.milestoneDesc)}</div>` : ""}
+            ${inv.percent ? `<div style="font-size:10.5px;color:#a8853f;margin-top:4px;letter-spacing:.10em;text-transform:uppercase;">${inv.percent}% of contract</div>` : ""}
+          </td>
+          <td style="padding:14px 12px;border-bottom:1px solid #eee;text-align:right;font-weight:700;font-variant-numeric:tabular-nums;font-size:14px;color:#0a0a0a;vertical-align:top;">${fmtMoneyDec(inv.amount || 0)}</td>
+        </tr>
+      </tbody>
+    </table>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:24px;">
+      <div style="min-width:280px;">
+        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;"><span style="color:#555;">Subtotal</span><span style="font-weight:700;font-variant-numeric:tabular-nums;">${fmtMoneyDec(inv.amount || 0)}</span></div>
+        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;"><span style="color:#555;">HST (${((inv.hstRate||0)*100).toFixed(1)}%)</span><span style="font-weight:700;font-variant-numeric:tabular-nums;">${fmtMoneyDec(inv.hstAmount || 0)}</span></div>
+        <div style="display:flex;justify-content:space-between;padding:10px 0 4px;background:#fbf5e6;margin-top:4px;border-radius:4px;padding-left:10px;padding-right:10px;"><span style="font-weight:800;font-size:14px;">Total Due</span><span style="font-weight:800;font-size:15px;color:#0a0a0a;font-variant-numeric:tabular-nums;">${fmtMoneyDec(inv.total || 0)}</span></div>
+      </div>
+    </div>
+    ${inv.notes ? `
+      <div style="background:#fbf5e6;border:1px solid #e9d989;border-radius:6px;padding:11px 14px;margin-bottom:18px;font-size:12px;color:#3b2e10;line-height:1.5;">
+        <b style="color:#a8853f;font-size:10px;letter-spacing:.14em;text-transform:uppercase;">Notes / Payment Instructions</b><br>
+        <div style="margin-top:4px;white-space:pre-wrap;">${escapeHtml(inv.notes)}</div>
+      </div>
+    ` : ""}
+    <div style="border-top:2px solid #0a0a0a;padding-top:12px;font-size:10.5px;color:#666;text-align:center;line-height:1.6;">
+      Thank you for your business. Reno to Sold Inc. &middot; Payment due within ${escapeHtml(String(inv.dueDate || "agreed terms"))} of issue.
+    </div>
+  `;
+  return wrapper;
+}
+
+/* Expose for the Expense Tracker module so it can pull the list of
+   invoices for the linked estimate when rendering the per-expense
+   "Invoice" dropdown. */
+window.__getEstimateInvoices = function(estId){
+  // If the active estimator state matches this estId, return its invoices.
+  if(state && state._id === estId && Array.isArray(state.invoices)) return state.invoices;
+  // Otherwise, look up the saved estimate in localStorage (read-only).
+  try{
+    const saved = JSON.parse(localStorage.getItem("reno_estimates_v1") || "[]");
+    const est = (Array.isArray(saved) ? saved : []).find(e => e._id === estId);
+    return (est && Array.isArray(est.invoices)) ? est.invoices : [];
+  }catch(e){ return []; }
+};
+
 </script>
 
 <script>
@@ -14424,6 +15330,32 @@ function renderExpenses(){
   emptyEl.classList.add("hidden");
   if(summary) summary.classList.remove("hidden");
   selectedExpenses.forEach(id=>{ if(!(p.expenses||[]).some(e=>e.id===id)) selectedExpenses.delete(id); });
+  // Pull the invoice list for the linked estimate so we can render the
+  // per-expense Invoice dropdown. If this tracker isn't linked to any
+  // estimate (a standalone project) the dropdown shows "—".
+  const linkedEstId = p.linkedEstimateId || "";
+  let projInvoices = [];
+  if(linkedEstId && typeof window.__getEstimateInvoices === "function"){
+    try{ projInvoices = window.__getEstimateInvoices(linkedEstId) || []; }catch(_){ projInvoices = []; }
+  }
+  const invoiceOptions = (selectedId) => {
+    const opt = (val, label, sel) => `<option value="${esc(String(val))}" ${sel?"selected":""}>${esc(label)}</option>`;
+    let out = opt("", "— Unbilled —", !selectedId);
+    projInvoices.forEach(inv => {
+      const lbl = (inv.number || "INV") + " · " + (inv.milestoneLabel || "Custom");
+      out += opt(inv.id, lbl, inv.id === selectedId);
+    });
+    return out;
+  };
+  const invCellHtml = (e) => {
+    if(!linkedEstId){
+      return `<span style="color:var(--muted);font-size:11.5px;">(no estimate linked)</span>`;
+    }
+    if(!projInvoices.length){
+      return `<span style="color:var(--muted);font-size:11.5px;">(no invoices yet)</span>`;
+    }
+    return `<select style="width:100%;font-size:12px;padding:4px 6px;" onchange="ET.setExpenseInvoice('${e.id}', this.value)">${invoiceOptions(e.invoiceId || "")}</select>`;
+  };
   body.innerHTML=rows.map(e=>`<tr class="${selectedExpenses.has(e.id)?'sel':''}">
     <td><input type="checkbox" style="width:auto;cursor:pointer" ${selectedExpenses.has(e.id)?'checked':''} onclick="ET.toggleSelect('${e.id}',this)"></td>
     <td>${fmtDate(e.date)}</td>
@@ -14431,6 +15363,7 @@ function renderExpenses(){
     <td><span class="tag cat">${esc(e.category)||"Other"}</span></td>
     <td>${esc(e.vendor)||"<span style='color:var(--muted)'>—</span>"}</td>
     <td><span class="tag ${e.planned?"planned":"unplanned"}">${e.planned?"Planned":"Unplanned"}</span></td>
+    <td>${invCellHtml(e)}</td>
     <td class="r amt">${money2(e.amount)}</td>
     <td class="r"><span class="rowact">
       <button class="iconbtn" title="Edit" onclick="ET.openExpense('${e.id}')">✎</button>
@@ -15038,6 +15971,31 @@ function openEstimate(id){
   backToEstimator();
   if(typeof window.loadEstimate==="function"){ try{ window.loadEstimate(id); }catch(e){} }
 }
+
+/* Returns the tracker project linked to a given estimate id, or null. Used
+   by the invoicing module to surface linked expenses inside an invoice's
+   detail view, and to compute "expenses to date" for the Project
+   Financials card. Pure read — does NOT auto-create. */
+function getProjectForEstimate(estId){
+  if(!estId) return null;
+  return (DB.projects || []).find(function(x){ return x.linkedEstimateId === estId; }) || null;
+}
+
+/* Updates the invoiceId tag on a single expense. Called from the per-row
+   Invoice dropdown. Empty string = unlink. */
+function setExpenseInvoice(expenseId, invoiceId){
+  var p = curr();
+  if(!p) return;
+  var e = (p.expenses || []).find(function(x){ return x.id === expenseId; });
+  if(!e) return;
+  e.invoiceId = invoiceId || "";
+  e.updatedAt = Date.now();
+  p.updatedAt = Date.now();
+  save(p);
+  // Re-render so the dropdown reflects the saved state and totals update.
+  if(typeof renderExpenses === "function") renderExpenses();
+}
+
 window.ET={ goHome:goHome, openNewProject:openNewProject, switchHome:switchHome, switchTab:switchTab,
   renderExpenses:renderExpenses, exportCSV:exportCSV, importCSV:importCSV, openExpense:openExpense,
   clearSelection:clearSelection, deleteSelected:deleteSelected, toggleSelectAll:toggleSelectAll,
@@ -15048,6 +16006,9 @@ window.ET={ goHome:goHome, openNewProject:openNewProject, switchHome:switchHome,
   deleteProject:deleteProject, show:show, backToEstimator:backToEstimator,
   openFromEstimator:openFromEstimator, syncLinkedFromEstimate:syncLinkedFromEstimate,
   openEstimate:openEstimate,
+  // Invoicing tie-ins (Phase 1)
+  getProjectForEstimate:getProjectForEstimate,
+  setExpenseInvoice:setExpenseInvoice,
   bootstrapCloudSync:bootstrapCloudSync };
 
 })();
