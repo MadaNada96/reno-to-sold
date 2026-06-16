@@ -562,6 +562,33 @@
     appearance:textfield;          /* Standard / future-proofing */
   }
   .price-edit-row.single{grid-template-columns:1fr 110px;}
+  /* Export Snapshots section at top of contractor rates modal. Each button
+     stacks a bold label over a small subtitle so the user knows which
+     export does what at a glance. */
+  .exports-section{
+    background:rgba(212,175,106,.05);
+    border:1px solid rgba(212,175,106,.25);
+    border-radius:10px;
+    padding:14px 16px;
+    margin-bottom:18px;
+  }
+  .exports-title{
+    font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;
+    color:var(--gold-bright);font-weight:700;margin-bottom:10px;
+  }
+  .exports-grid{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:10px;
+  }
+  @media (max-width:680px){ .exports-grid{ grid-template-columns:1fr; } }
+  .exports-grid > button{
+    display:flex;flex-direction:column;align-items:flex-start;
+    gap:3px;padding:10px 12px;text-align:left;line-height:1.3;
+  }
+  .exports-grid > button > b{ font-size:13px; color:var(--ink); font-weight:700; }
+  .exports-grid > button .exports-sub{
+    font-size:10.5px;color:var(--muted);font-weight:400;
+    text-transform:none;letter-spacing:0;
+  }
   .section-title{font-weight:700;font-size:11px;margin-top:18px;margin-bottom:8px;color:var(--gold-bright);text-transform:uppercase;letter-spacing:.18em;border-top:1px solid var(--line);padding-top:14px;}
   .section-title:first-child{margin-top:0;border-top:none;padding-top:0;}
   .footnote{color:var(--muted);font-size:11px;margin-top:8px;line-height:1.5;}
@@ -3359,16 +3386,37 @@
     <h3>
       <span>Edit Contractor Rates</span>
       <span class="small-stack">
-        <!-- Export Snapshot lives here (not on the Internal Mode toolbar) so
-             it's discreet — only an admin who's already inside the contractor
-             rates editor will see it. Dumps both client + contractor pricing
-             as JSON for archival, audit, or margin analysis. -->
-        <button class="ghost" onclick="exportPricingSnapshot()" title="Download client + contractor pricing as a JSON snapshot (also copied to clipboard)">Export Snapshot</button>
         <button class="ghost" onclick="resetContractorPricing()">Reset to 70% of client</button>
         <button class="primary" onclick="closeContractorPricing()">Done</button>
       </span>
     </h3>
-    <div class="modal-body" id="contractorPricingEditor"></div>
+    <div class="modal-body">
+      <!--
+        Export Snapshots section — three exports for different audiences.
+        Lives at the top of the contractor rates editor because:
+          (1) every export is a pricing report → grouped logically here
+          (2) you're already in the "back office pricing" surface
+          (3) one place to look instead of split between two modals
+      -->
+      <div class="exports-section">
+        <div class="exports-title">Export Snapshots</div>
+        <div class="exports-grid">
+          <button class="ghost" onclick="exportContractorRatesPdf()" title="PDF rate sheet to send to subcontractors so they can quote against your criteria">
+            <b>Contractor Rates</b>
+            <span class="exports-sub">PDF rate sheet for subs</span>
+          </button>
+          <button class="ghost" onclick="exportClientPricingPdf()" title="PDF rate sheet of your client-facing prices (archive / bookkeeping)">
+            <b>Client Pricing</b>
+            <span class="exports-sub">PDF rate sheet, client-facing</span>
+          </button>
+          <button class="ghost" onclick="exportPricingSnapshot()" title="JSON snapshot of client prices + contractor rates + current project Misc items for margin analysis">
+            <b>Margin Comparison</b>
+            <span class="exports-sub">JSON, both sides side-by-side</span>
+          </button>
+        </div>
+      </div>
+      <div id="contractorPricingEditor"></div>
+    </div>
   </div>
 </div>
 
@@ -11632,6 +11680,205 @@ function resetContractorPricing(){
   renderContractorPricingEditor();
   renderInternalSheet();
 }
+
+/* ----------------------------------------------------------------------
+   Export Rate Sheet PDFs
+   ----------------------------------------------------------------------
+   Two PDF exports for sending to subs / archiving:
+     - Contractor Rates: PDF of contractorPrices, with intro for subs
+     - Client Pricing:   PDF of prices, for archive / bookkeeping
+   Both reuse the existing pricing-editor render functions to extract the
+   structured price data. We render the editor into the live element
+   (which the user has already opened, so it's in the DOM), clone it,
+   convert each <input> to a read-only display span, wrap with a branded
+   header, and ship through pdfFromElement.
+   ---------------------------------------------------------------------- */
+
+/* Walks a cloned DOM node and replaces every <input> with a styled
+   span showing the input's current value. Numbers are money-formatted
+   to two decimals with thousands separators. */
+function replaceInputsWithDisplaySpans(rootEl){
+  const inputs = rootEl.querySelectorAll("input");
+  inputs.forEach(inp => {
+    const raw = inp.value;
+    const n = parseFloat(raw);
+    const display = isFinite(n)
+      ? "$" + n.toLocaleString("en-CA", { minimumFractionDigits:2, maximumFractionDigits:2 })
+      : "—";
+    const span = document.createElement("span");
+    span.className = "rates-pdf-value";
+    span.style.cssText = "display:inline-block;padding:6px 10px;background:#fbf5e6;border:1px solid #d4af6a;border-radius:6px;font-weight:700;color:#0a0a0a;font-variant-numeric:tabular-nums;font-size:13px;min-width:90px;text-align:right;";
+    span.textContent = display;
+    if(inp.parentNode) inp.parentNode.replaceChild(span, inp);
+  });
+}
+
+/* Build the wrapped, printable element for one rate sheet. Returns the
+   DOM element (still detached from body — caller appends + cleans up). */
+function buildRatesSheetEl({ type, title, intro }){
+  // 1. Make sure the source editor element has content. Render if empty.
+  let sourceId, srcEl;
+  if(type === "contractor"){
+    if(!contractorPrices) loadContractorPrices();
+    sourceId = "contractorPricingEditor";
+    srcEl = document.getElementById(sourceId);
+    if(srcEl && !srcEl.innerHTML.trim()) renderContractorPricingEditor();
+  } else {
+    sourceId = "pricingEditor";
+    srcEl = document.getElementById(sourceId);
+    if(srcEl && !srcEl.innerHTML.trim()) renderPricingEditor();
+  }
+  if(!srcEl) throw new Error("buildRatesSheetEl: missing source editor #" + sourceId);
+
+  // 2. Clone the editor content + convert inputs to display spans.
+  const content = srcEl.cloneNode(true);
+  content.removeAttribute("id");
+  replaceInputsWithDisplaySpans(content);
+
+  // 3. Drop any footnote paragraph already at the top of the editor
+  //    (the contractor editor has a "These are what you pay your
+  //    contractors..." note that isn't appropriate for the PDF).
+  const firstChild = content.firstElementChild;
+  if(firstChild && firstChild.classList && firstChild.classList.contains("footnote")){
+    content.removeChild(firstChild);
+  }
+
+  // 4. Wrap in a branded outer element with header + intro + date.
+  const ci = COMPANY_INFO;
+  const dateStr = new Date().toLocaleDateString("en-CA", { year:"numeric", month:"long", day:"numeric" });
+  const wrapper = document.createElement("div");
+  wrapper.className = "rates-pdf-wrapper";
+  wrapper.style.cssText = "background:#ffffff;color:#0a0a0a;padding:24px 28px;font-family:'Montserrat',sans-serif;line-height:1.45;";
+  wrapper.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #0a0a0a;padding-bottom:14px;margin-bottom:18px;">
+      <div>
+        <div style="font-size:11px;letter-spacing:.20em;text-transform:uppercase;color:#a8853f;font-weight:700;margin-bottom:4px;">Reno to Sold</div>
+        <div style="font-size:20px;font-weight:800;color:#0a0a0a;">${escapeHtml(title)}</div>
+        <div style="font-size:11px;color:#555;margin-top:3px;">Generated ${escapeHtml(dateStr)}</div>
+      </div>
+      <div style="text-align:right;font-size:10.5px;color:#444;line-height:1.5;">
+        ${escapeHtml(ci.phone)}<br>
+        ${escapeHtml(ci.email)}<br>
+        ${escapeHtml(ci.addressLine1)}
+      </div>
+    </div>
+    <div style="background:#fbf5e6;border:1px solid #e9d989;border-radius:8px;padding:11px 14px;margin-bottom:16px;font-size:12px;color:#3b2e10;line-height:1.55;">
+      ${intro}
+    </div>
+  `;
+  // 5. Append the editor clone after the header/intro.
+  wrapper.appendChild(content);
+
+  return wrapper;
+}
+
+/* PDF-mode CSS overrides — invert the dark editor styles to light theme
+   so the rate sheet is readable when rendered to PDF. */
+const RATES_PDF_CSS = `
+  .rates-pdf-wrapper{ background:#fff !important; color:#0a0a0a !important; }
+  .rates-pdf-wrapper .section-title{
+    color:#0a0a0a !important;
+    border-top:none !important;
+    background:#0a0a0a;
+    color:#d4af6a !important;
+    padding:8px 12px !important;
+    margin:18px 0 8px 0 !important;
+    border-radius:5px;
+    font-size:11px !important;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact;
+  }
+  .rates-pdf-wrapper .section-title:first-child{ margin-top:0 !important; }
+  .rates-pdf-wrapper .price-edit-row{
+    display:grid !important;
+    grid-template-columns:1fr 120px 120px !important;
+    gap:10px !important;
+    align-items:center !important;
+    padding:6px 8px !important;
+    border-bottom:1px solid #efe7d0 !important;
+  }
+  .rates-pdf-wrapper .price-edit-row.single{
+    grid-template-columns:1fr 120px !important;
+  }
+  .rates-pdf-wrapper .price-edit-row.head{
+    background:#f4ecd0 !important;
+    color:#3b2e10 !important;
+    font-weight:700 !important;
+    font-size:10px !important;
+    text-transform:uppercase;
+    letter-spacing:.10em;
+    padding:7px 8px !important;
+    border-radius:4px;
+    margin-bottom:4px !important;
+    border-bottom:none !important;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact;
+  }
+  .rates-pdf-wrapper .price-edit-row .lbl{
+    color:#0a0a0a !important;
+    font-size:12.5px !important;
+  }
+  .rates-pdf-wrapper .footnote{
+    background:#fbf5e6 !important;
+    border:1px solid #e9d989 !important;
+    border-radius:5px;
+    color:#3b2e10 !important;
+    font-size:11px !important;
+    padding:7px 10px !important;
+    margin-bottom:8px !important;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact;
+  }
+`;
+
+/* Generic PDF export driver — both contractor + client funnel through here. */
+async function exportRatesPdf({ type, filename, title, intro }){
+  try{
+    const el = buildRatesSheetEl({ type, title, intro });
+    document.body.appendChild(el);
+    try{
+      const blob = await pdfFromElement({
+        sourceEl: el,
+        filename,
+        marginInches: 0.4,
+        orientation: "portrait",
+        pageFormat: "letter",
+        extraCss: RATES_PDF_CSS,
+        avoidBreakSelectors: [".section-title", ".price-edit-row", ".footnote"]
+      });
+      // Trigger download
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      try { flash && flash("Exported " + title); } catch(_){}
+    } finally {
+      if(el.parentNode) el.parentNode.removeChild(el);
+    }
+  } catch(e){
+    console.error("exportRatesPdf failed:", e);
+    alert("PDF export failed: " + (e && e.message ? e.message : "unknown error"));
+  }
+}
+
+async function exportContractorRatesPdf(){
+  const dateTag = new Date().toISOString().slice(0, 10);
+  await exportRatesPdf({
+    type: "contractor",
+    filename: "RTS-contractor-rates-" + dateTag + ".pdf",
+    title: "Contractor Rate Sheet",
+    intro: `<b>For subcontractors:</b> these are the rates Reno to Sold uses to evaluate your quote. Please reference each line against the work you'll perform and account for ALL materials, labour, supplies, fixtures, finishes, fasteners, consumables, and disposal needed to deliver the scope &mdash; nothing is supplied separately. If anything is unclear, ask before quoting.`
+  });
+}
+
+async function exportClientPricingPdf(){
+  const dateTag = new Date().toISOString().slice(0, 10);
+  await exportRatesPdf({
+    type: "client",
+    filename: "RTS-client-pricing-" + dateTag + ".pdf",
+    title: "Client Price Sheet",
+    intro: `Reno to Sold's client-facing per-unit pricing. All prices are supplied &amp; installed (labour + material rolled in) unless split out as separate Labour / Material columns. Subject to project specifics and the 10% listing-client discount where applicable.`
+  });
+}
+
 function setContractorPrice(path, val){
   const v = parseFloat(val);
   if(!isFinite(v) || v < 0) return;
