@@ -5195,7 +5195,7 @@ function deriveWallRemoval(s, p){
     // Per-LF reroutes
     if(w.electricalInWall){
       const r = rateOf(p.electricalReroute);
-      if(r > 0) wLines.push({ label: prefix + "Electrical re-route (wires + outlets + ESA inspection)", qty: lf, unit:"LF", rate: r, amount: lf * r });
+      if(r > 0) wLines.push({ label: prefix + "Electrical re-route (wires + outlets)", qty: lf, unit:"LF", rate: r, amount: lf * r });
     }
     if(w.plumbingInWall){
       const r = rateOf(p.plumbingReroute);
@@ -5305,7 +5305,7 @@ function renderWallRemovalCard(w, i, totalWalls){
 
       <div style="margin-top:14px;">
         <div class="addon-title" style="margin-bottom:8px;font-size:11px;">Add-ons for this wall</div>
-        <label class="check-row" style="margin-bottom:6px;"><input type="checkbox" ${w.electricalInWall?'checked':''} onchange="state.wallRemoval.walls[${i}].electricalInWall=this.checked;renderTotals()"><span>Electrical inside this wall &mdash; <i style="color:var(--muted);font-weight:400;">re-route outlets/switches, ESA inspection</i></span></label>
+        <label class="check-row" style="margin-bottom:6px;"><input type="checkbox" ${w.electricalInWall?'checked':''} onchange="state.wallRemoval.walls[${i}].electricalInWall=this.checked;renderTotals()"><span>Electrical inside this wall &mdash; <i style="color:var(--muted);font-weight:400;">re-route outlets/switches</i></span></label>
         <label class="check-row" style="margin-bottom:6px;"><input type="checkbox" ${w.plumbingInWall?'checked':''} onchange="state.wallRemoval.walls[${i}].plumbingInWall=this.checked;renderTotals()"><span>Plumbing inside this wall &mdash; <i style="color:var(--muted);font-weight:400;">re-route lines + vents through ceiling/floor</i></span></label>
         <label class="check-row" style="margin-bottom:6px;"><input type="checkbox" ${w.ductworkInWall?'checked':''} onchange="state.wallRemoval.walls[${i}].ductworkInWall=this.checked;renderTotals()"><span>HVAC ductwork inside this wall &mdash; <i style="color:var(--muted);font-weight:400;">re-route via basement/attic, add return if needed</i></span></label>
         <label class="check-row" style="margin-bottom:0;"><input type="checkbox" ${w.flooringTransition?'checked':''} onchange="state.wallRemoval.walls[${i}].flooringTransition=this.checked;renderTotals()"><span>Flooring transition / blend along seam &mdash; <i style="color:var(--muted);font-weight:400;">where the wall used to meet the floor</i></span></label>
@@ -6299,7 +6299,7 @@ function renderCatBody(cat){
     return `
       <!-- What's included -->
       <div class="footnote" style="margin-bottom:14px;background:rgba(212,175,106,.08);border:1px solid rgba(212,175,106,.30);border-radius:8px;padding:10px 12px;line-height:1.55;">
-        <b style="color:var(--gold-bright)">What's included with every wall removal:</b> demo + disposal, drywall edge finish at the corners where the removed wall met the remaining walls, baseboard re-trim along the seam, ceiling drywall patch + skim + prime + 2 coats paint along the line. Any outlets, switches, vent ducts, or plumbing routed through the wall are re-routed to remaining walls or through ceiling/floor cavities. ESA inspection is required whenever electrical is touched.
+        <b style="color:var(--gold-bright)">What's included with every wall removal:</b> demo + disposal, drywall edge finish at the corners where the removed wall met the remaining walls, baseboard re-trim along the seam, ceiling drywall patch + skim + prime + 2 coats paint along the line. Any outlets, switches, vent ducts, or plumbing routed through the wall are re-routed to remaining walls or through ceiling/floor cavities.
         <br><br>
         <b style="color:var(--gold-bright)">For load-bearing walls:</b> structural engineer drawings + City of Toronto permit + temporary support during demo + beam supply &amp; install (LVL or steel) are all included. The permit and engineer cover ALL walls in the project, so they're only charged once.
         <br><br>
@@ -8025,7 +8025,7 @@ function renderContractorSheet(){
         const beam = (w.beamType === "steel") ? "Steel beam" : "LVL beam";
         items.push({ sub: walls.length > 1, html:`Beam material: <b>${beam}</b> &mdash; supply &amp; install, temporary support during demo, all hardware.` });
       }
-      if(w.electricalInWall) items.push({ sub: walls.length > 1, html:`Electrical inside the wall: <b>re-route outlets/switches</b> to remaining walls + ESA inspection (per LF).` });
+      if(w.electricalInWall) items.push({ sub: walls.length > 1, html:`Electrical inside the wall: <b>re-route outlets/switches</b> to remaining walls (per LF).` });
       if(w.plumbingInWall)   items.push({ sub: walls.length > 1, html:`Plumbing inside the wall: <b>re-route lines &amp; vents</b> through ceiling/floor cavities (per LF).` });
       if(w.ductworkInWall)   items.push({ sub: walls.length > 1, html:`HVAC ductwork inside the wall: <b>re-route via basement/attic</b>, add cold-air return where needed (per LF).` });
       if(w.flooringTransition) items.push({ sub: walls.length > 1, html:`Flooring transition / blend along the wall seam (per LF).` });
@@ -9492,7 +9492,7 @@ function buildEstimateSummary(){
         const beam = (w.beamType === "steel") ? "Steel beam" : "LVL beam";
         bullets.push(`${prefix}Beam material: ${beam} (supply &amp; install, temporary support during demo)`);
       }
-      if(w.electricalInWall) bullets.push(`${prefix}Electrical inside the wall — re-route outlets/switches + ESA inspection`);
+      if(w.electricalInWall) bullets.push(`${prefix}Electrical inside the wall — re-route outlets/switches`);
       if(w.plumbingInWall)   bullets.push(`${prefix}Plumbing inside the wall — re-route lines &amp; vents`);
       if(w.ductworkInWall)   bullets.push(`${prefix}HVAC ductwork inside the wall — re-route + add return if needed`);
       if(w.flooringTransition) bullets.push(`${prefix}Flooring transition / blend along the wall seam`);
