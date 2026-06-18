@@ -4168,22 +4168,18 @@ function freshState(){
     },
     // WALL REMOVAL — per-LF S&I pricing with stackable add-ons. Designed to
     // match Kitchen + L&E patterns (single-rate, supplied & installed).
+    //
+    // v2: supports multiple walls per project. Each wall in walls[] has
+    // its own type / length / height / add-ons / beam / flooring-transition.
+    // Permit + engineer + asbestos test/detected are PROJECT-LEVEL — the
+    // City permit covers all walls in the same project, the engineer
+    // signs off on all proposed removals at once, and asbestos testing is
+    // per-property, not per-wall.
     wallRemoval: {
-      loadBearing: false,            // false = non-LB; true = load-bearing
-      linearFt: "",                  // ft
-      wallHeight: "8",               // "8" | "9" | "10"  (used as integer ft)
-      // Add-ons (per-LF, checkbox-gated)
-      electricalInWall: false,
-      plumbingInWall:   false,
-      ductworkInWall:   false,
-      flooringTransition: false,
-      // Beam type — only relevant when loadBearing is on
-      beamType: "lvl",               // "lvl" | "steel"
-      // Flat charges — default-on when loadBearing is enabled (set on enable).
+      walls: [ defaultWallRemovalWall() ],
+      // Project-level flat charges (charged once, not per wall):
       includePermit:       true,
       includeEngineer:     true,
-      // Asbestos test — checkbox; opens disclaimer about abatement if checked.
-      // If `asbestosDetected` is set, abatement cost is added.
       includeAsbestosTest: false,
       asbestosDetected:    false
     },
@@ -4254,6 +4250,22 @@ function defaultKitchenInstance(isBasement){
     inst.basement = defaultKitchenInstance(true);
   }
   return inst;
+}
+/* Default for a single wall in state.wallRemoval.walls. Each call gets a
+   unique id so the UI can track which DOM card maps to which wall (used
+   by the targeted live-updater for the LVL warning). */
+function defaultWallRemovalWall(){
+  return {
+    id: "wr_" + Date.now().toString(36) + "_" + Math.floor(Math.random()*1e6).toString(36),
+    loadBearing: false,
+    linearFt: "",
+    wallHeight: "8",         // "8" | "9" | "10"
+    electricalInWall: false,
+    plumbingInWall:   false,
+    ductworkInWall:   false,
+    flooringTransition: false,
+    beamType: "lvl"          // "lvl" | "steel" (only used when loadBearing)
+  };
 }
 function defaultBath(){
   return {
@@ -4729,24 +4741,50 @@ function migrateOldEstimate(m){
     if(typeof m.painting.garageDoorCount !== "string")  m.painting.garageDoorCount = "";
   }
   // WALL REMOVAL — new category, backfill defaults for any saved estimate.
+  // v2: walls[] array. Migration folds any pre-v2 single-wall fields into
+  // walls[0]. Project-level fields (permit/engineer/asbestos) stay on the
+  // outer object. Per-wall add-ons (electrical/plumbing/duct/flooring) move
+  // onto each wall.
   if(!m.wallRemoval || typeof m.wallRemoval !== "object"){
     m.wallRemoval = {
-      loadBearing:false, linearFt:"", wallHeight:"8",
-      electricalInWall:false, plumbingInWall:false, ductworkInWall:false,
-      flooringTransition:false, beamType:"lvl",
+      walls: [ defaultWallRemovalWall() ],
       includePermit:true, includeEngineer:true,
       includeAsbestosTest:false, asbestosDetected:false
     };
   } else {
     const wr = m.wallRemoval;
-    if(typeof wr.loadBearing        !== "boolean") wr.loadBearing        = false;
-    if(typeof wr.linearFt           !== "string")  wr.linearFt           = "";
-    if(typeof wr.wallHeight         !== "string")  wr.wallHeight         = "8";
-    if(typeof wr.electricalInWall   !== "boolean") wr.electricalInWall   = false;
-    if(typeof wr.plumbingInWall     !== "boolean") wr.plumbingInWall     = false;
-    if(typeof wr.ductworkInWall     !== "boolean") wr.ductworkInWall     = false;
-    if(typeof wr.flooringTransition !== "boolean") wr.flooringTransition = false;
-    if(typeof wr.beamType           !== "string")  wr.beamType           = "lvl";
+    // If no walls[] yet, this is an older save — migrate the top-level
+    // per-wall fields into walls[0].
+    if(!Array.isArray(wr.walls)){
+      const firstWall = defaultWallRemovalWall();
+      if(typeof wr.loadBearing        === "boolean") firstWall.loadBearing = wr.loadBearing;
+      if(typeof wr.linearFt           === "string")  firstWall.linearFt    = wr.linearFt;
+      if(typeof wr.wallHeight         === "string")  firstWall.wallHeight  = wr.wallHeight;
+      if(typeof wr.electricalInWall   === "boolean") firstWall.electricalInWall   = wr.electricalInWall;
+      if(typeof wr.plumbingInWall     === "boolean") firstWall.plumbingInWall     = wr.plumbingInWall;
+      if(typeof wr.ductworkInWall     === "boolean") firstWall.ductworkInWall     = wr.ductworkInWall;
+      if(typeof wr.flooringTransition === "boolean") firstWall.flooringTransition = wr.flooringTransition;
+      if(typeof wr.beamType           === "string")  firstWall.beamType    = wr.beamType;
+      wr.walls = [ firstWall ];
+      delete wr.loadBearing; delete wr.linearFt; delete wr.wallHeight;
+      delete wr.electricalInWall; delete wr.plumbingInWall;
+      delete wr.ductworkInWall; delete wr.flooringTransition; delete wr.beamType;
+    }
+    // Ensure each wall has every required field (defensive).
+    wr.walls.forEach(w => {
+      if(!w.id || typeof w.id !== "string") w.id = "wr_" + Date.now().toString(36) + "_" + Math.floor(Math.random()*1e6).toString(36);
+      if(typeof w.loadBearing        !== "boolean") w.loadBearing        = false;
+      if(typeof w.linearFt           !== "string")  w.linearFt           = "";
+      if(typeof w.wallHeight         !== "string")  w.wallHeight         = "8";
+      if(typeof w.electricalInWall   !== "boolean") w.electricalInWall   = false;
+      if(typeof w.plumbingInWall     !== "boolean") w.plumbingInWall     = false;
+      if(typeof w.ductworkInWall     !== "boolean") w.ductworkInWall     = false;
+      if(typeof w.flooringTransition !== "boolean") w.flooringTransition = false;
+      if(typeof w.beamType           !== "string")  w.beamType           = "lvl";
+    });
+    // Always at least one wall.
+    if(wr.walls.length === 0) wr.walls.push(defaultWallRemovalWall());
+    // Project-level fields.
     if(typeof wr.includePermit      !== "boolean") wr.includePermit      = true;
     if(typeof wr.includeEngineer    !== "boolean") wr.includeEngineer    = true;
     if(typeof wr.includeAsbestosTest!== "boolean") wr.includeAsbestosTest= false;
@@ -5103,81 +5141,107 @@ function computeCategory(cat, priceSet){
 }
 
 /* deriveWallRemoval — single source of truth for the wall-removal math.
-   Returns: { lines: [{label, qty, unit, rate, amount, note?}], total }
-   `p` is prices.wallRemoval; `s` is state.wallRemoval. */
+   Returns: { lines: [{label, qty, unit, rate, amount, note?}], total, walls }
+   `p` is prices.wallRemoval; `s` is state.wallRemoval.
+
+   v2 — iterates each wall in s.walls[] computing per-wall lines, then adds
+   project-level flat charges (permit + engineer + asbestos test/abatement)
+   once based on totals across all walls. Each per-wall line is prefixed
+   with "Wall #N — ..." so the contractor bid / PDF can show clearly which
+   wall the charge belongs to. */
 function deriveWallRemoval(s, p){
   s = s || {}; p = p || {};
   const rateOf = (e) => e && typeof e.rate === "number" ? e.rate : ((e && e.labour) || 0) + ((e && e.material) || 0);
-  const lf = Math.max(0, num(s.linearFt));
+  const walls = Array.isArray(s.walls) ? s.walls : [];
   const lines = [];
-  if(lf <= 0) return { lines, total: 0 };
+  const perWall = [];
 
-  // 1. Base rate per linear foot (load-bearing or not).
-  const baseKey  = s.loadBearing ? "loadBearing" : "nonLoadBearing";
-  const baseRate = rateOf(p.base && p.base[baseKey]);
-  if(baseRate > 0){
-    lines.push({
-      label: s.loadBearing ? "Load-bearing wall removal (base)" : "Non-load-bearing wall removal (base)",
-      qty: lf, unit: "LF", rate: baseRate, amount: lf * baseRate
-    });
-  }
-  // 2. Wall height adder — per LF for each extra foot above 8.
-  const heightFt = Math.max(8, parseInt(s.wallHeight || "8", 10) || 8);
-  const extraFt  = heightFt - 8;
-  if(extraFt > 0){
-    const r = rateOf(p.heightAdder);
-    if(r > 0){
-      lines.push({
-        label: "Wall height adder (" + extraFt + " ft above 8 ft)",
-        qty: lf * extraFt, unit: "LF·ft", rate: r, amount: lf * extraFt * r
+  let totalLf = 0;
+  let anyLoadBearing = false;
+
+  walls.forEach((w, i) => {
+    const lf = Math.max(0, num(w.linearFt));
+    if(lf <= 0){
+      // Track a placeholder per-wall summary even when length is empty so
+      // the UI can show 0 for an in-progress wall.
+      perWall.push({ wall:w, index:i, lf:0, lines:[], total:0 });
+      return;
+    }
+    totalLf += lf;
+    if(w.loadBearing) anyLoadBearing = true;
+    const prefix = walls.length > 1 ? `Wall #${i+1} — ` : "";
+    const wLines = [];
+    // Base rate (load-bearing or not)
+    const baseKey  = w.loadBearing ? "loadBearing" : "nonLoadBearing";
+    const baseRate = rateOf(p.base && p.base[baseKey]);
+    if(baseRate > 0){
+      wLines.push({
+        label: prefix + (w.loadBearing ? "Load-bearing wall removal (base)" : "Non-load-bearing wall removal (base)"),
+        qty: lf, unit: "LF", rate: baseRate, amount: lf * baseRate
       });
     }
-  }
-  // 3. Stackable per-LF reroutes.
-  if(s.electricalInWall){
-    const r = rateOf(p.electricalReroute);
-    if(r > 0) lines.push({ label:"Electrical re-route (wires + outlets + ESA inspection)", qty: lf, unit:"LF", rate: r, amount: lf * r });
-  }
-  if(s.plumbingInWall){
-    const r = rateOf(p.plumbingReroute);
-    if(r > 0) lines.push({ label:"Plumbing re-route (lines + vents)", qty: lf, unit:"LF", rate: r, amount: lf * r });
-  }
-  if(s.ductworkInWall){
-    const r = rateOf(p.ductworkReroute);
-    if(r > 0) lines.push({ label:"HVAC ductwork re-route (relocate ducts, add return if needed)", qty: lf, unit:"LF", rate: r, amount: lf * r });
-  }
-  // 4. Steel beam upgrade — only if load-bearing AND steel chosen.
-  if(s.loadBearing && (s.beamType === "steel")){
-    const r = rateOf(p.beamSteelUpgrade);
-    if(r > 0) lines.push({ label:"Steel beam upgrade (over default LVL)", qty: lf, unit:"LF", rate: r, amount: lf * r });
-  }
-  // 5. Flooring transition along the seam.
-  if(s.flooringTransition){
-    const r = rateOf(p.flooringTransition);
-    if(r > 0) lines.push({ label:"Flooring transition / blend along wall seam", qty: lf, unit:"LF", rate: r, amount: lf * r });
-  }
-  // 6. Flat charges — engineer + permit (load-bearing only).
-  if(s.loadBearing && s.includeEngineer){
+    // Wall height adder
+    const heightFt = Math.max(8, parseInt(w.wallHeight || "8", 10) || 8);
+    const extraFt  = heightFt - 8;
+    if(extraFt > 0){
+      const r = rateOf(p.heightAdder);
+      if(r > 0){
+        wLines.push({
+          label: prefix + "Wall height adder (" + extraFt + " ft above 8 ft)",
+          qty: lf * extraFt, unit: "LF·ft", rate: r, amount: lf * extraFt * r
+        });
+      }
+    }
+    // Per-LF reroutes
+    if(w.electricalInWall){
+      const r = rateOf(p.electricalReroute);
+      if(r > 0) wLines.push({ label: prefix + "Electrical re-route (wires + outlets + ESA inspection)", qty: lf, unit:"LF", rate: r, amount: lf * r });
+    }
+    if(w.plumbingInWall){
+      const r = rateOf(p.plumbingReroute);
+      if(r > 0) wLines.push({ label: prefix + "Plumbing re-route (lines + vents)", qty: lf, unit:"LF", rate: r, amount: lf * r });
+    }
+    if(w.ductworkInWall){
+      const r = rateOf(p.ductworkReroute);
+      if(r > 0) wLines.push({ label: prefix + "HVAC ductwork re-route (relocate ducts, add return if needed)", qty: lf, unit:"LF", rate: r, amount: lf * r });
+    }
+    // Steel beam upgrade
+    if(w.loadBearing && (w.beamType === "steel")){
+      const r = rateOf(p.beamSteelUpgrade);
+      if(r > 0) wLines.push({ label: prefix + "Steel beam upgrade (over default LVL)", qty: lf, unit:"LF", rate: r, amount: lf * r });
+    }
+    // Flooring transition
+    if(w.flooringTransition){
+      const r = rateOf(p.flooringTransition);
+      if(r > 0) wLines.push({ label: prefix + "Flooring transition / blend along wall seam", qty: lf, unit:"LF", rate: r, amount: lf * r });
+    }
+    const wTotal = wLines.reduce((a, l) => a + (l.amount || 0), 0);
+    perWall.push({ wall:w, index:i, lf, lines:wLines, total:wTotal });
+    wLines.forEach(l => lines.push(l));
+  });
+
+  // ---- Project-level flat charges (charged ONCE for the whole project)
+  // Engineer + permit only if ANY wall is load-bearing.
+  if(anyLoadBearing && s.includeEngineer){
     const r = rateOf(p.structuralEngineer);
-    if(r > 0) lines.push({ label:"Structural engineer drawings + review", qty: 1, unit:"flat", rate: r, amount: r });
+    if(r > 0) lines.push({ label:"Structural engineer drawings + review (project)", qty: 1, unit:"flat", rate: r, amount: r });
   }
-  if(s.loadBearing && s.includePermit){
+  if(anyLoadBearing && s.includePermit){
     const r = rateOf(p.buildingPermit);
-    if(r > 0) lines.push({ label:"City of Toronto building permit", qty: 1, unit:"flat", rate: r, amount: r });
+    if(r > 0) lines.push({ label:"City of Toronto building permit (project)", qty: 1, unit:"flat", rate: r, amount: r });
   }
-  // 7. Asbestos pre-test (any wall, optional).
-  if(s.includeAsbestosTest){
+  // Asbestos pre-test
+  if(s.includeAsbestosTest && totalLf > 0){
     const r = rateOf(p.asbestosTest);
-    if(r > 0) lines.push({ label:"Asbestos pre-test (lab analysis + report)", qty: 1, unit:"flat", rate: r, amount: r });
+    if(r > 0) lines.push({ label:"Asbestos pre-test (lab analysis + report, property-wide)", qty: 1, unit:"flat", rate: r, amount: r });
   }
-  // 8. Asbestos abatement — only if user confirmed it WAS detected.
-  //    Charged as: (LF × 8 ft of drywall) × per-sqft rate + flat setup minimum.
-  if(s.includeAsbestosTest && s.asbestosDetected){
+  // Asbestos abatement — uses TOTAL LF across all walls × 8 ft
+  if(s.includeAsbestosTest && s.asbestosDetected && totalLf > 0){
     const perSqft = rateOf(p.asbestosAbatementPerSqft);
     const setupMin = rateOf(p.asbestosSetupMinimum);
-    const sqft = lf * 8;  // assume 8-ft height for affected drywall area
+    const sqft = totalLf * 8;
     if(perSqft > 0){
-      lines.push({ label:"Asbestos abatement — affected drywall (" + sqft + " sqft × $" + perSqft + "/sqft)",
+      lines.push({ label:"Asbestos abatement — affected drywall across all walls (" + sqft + " sqft × $" + perSqft + "/sqft)",
                    qty: sqft, unit:"sqft", rate: perSqft, amount: sqft * perSqft });
     }
     if(setupMin > 0){
@@ -5186,7 +5250,110 @@ function deriveWallRemoval(s, p){
     }
   }
   const total = lines.reduce((a, l) => a + (l.amount || 0), 0);
-  return { lines, total };
+  return { lines, total, walls: perWall, totalLf, anyLoadBearing };
+}
+
+/* Render one wall card. The wall length input is bound by INDEX into
+   state.wallRemoval.walls — so when a wall is removed and the array
+   re-renders, each remaining card's index gets updated cleanly. */
+function renderWallRemovalCard(w, i, totalWalls){
+  const showLvlWarn = w.loadBearing && w.beamType === "lvl" && num(w.linearFt) >= 16;
+  const removable = totalWalls > 1;
+  return `
+    <div class="addon wr-wall-card" data-wall-index="${i}" style="position:relative;padding-right:${removable ? '42px' : '12px'};margin-bottom:14px;">
+      <div class="addon-title" style="margin-bottom:10px;color:var(--gold-bright);">Wall #${i+1}</div>
+      ${removable ? `<button class="remove-btn no-print" title="Remove this wall" onclick="removeWallRemovalWall(${i})" style="position:absolute;top:10px;right:10px;background:transparent;border:1px solid var(--line-strong);color:var(--muted);width:26px;height:26px;border-radius:6px;cursor:pointer;font-size:14px;line-height:1;">&times;</button>` : ""}
+
+      <div style="margin-bottom:10px;">
+        <label style="margin-bottom:6px;">Wall type</label>
+        ${pillToggle("wr-type-"+i, w.loadBearing ? "lb" : "nlb", [
+          {value:"nlb", label:"Non-load-bearing"},
+          {value:"lb",  label:"Load-bearing"}
+        ], "var v=this.value;state.wallRemoval.walls["+i+"].loadBearing=(v==='lb');if(v==='lb'){state.wallRemoval.includePermit=true;state.wallRemoval.includeEngineer=true;}renderCatBodyOnly('wallRemoval');renderTotals()")}
+      </div>
+      <div class="grid grid-2">
+        <div>
+          <label>Wall length (linear feet)</label>
+          <input type="number" min="0" inputmode="numeric" value="${w.linearFt||''}" placeholder="e.g. 12" oninput="state.wallRemoval.walls[${i}].linearFt=this.value;updateWallRemovalLive();renderTotals()">
+        </div>
+        <div>
+          <label style="margin-bottom:6px;">Wall height</label>
+          ${pillToggle("wr-height-"+i, String(w.wallHeight || "8"), [
+            {value:"8",  label:"8 ft"},
+            {value:"9",  label:"9 ft"},
+            {value:"10", label:"10 ft+"}
+          ], "state.wallRemoval.walls["+i+"].wallHeight=this.value;renderTotals()")}
+        </div>
+      </div>
+
+      ${w.loadBearing ? `
+        <div style="margin-top:10px;">
+          <label style="margin-bottom:6px;">Beam material</label>
+          ${pillToggle("wr-beam-"+i, w.beamType || "lvl", [
+            {value:"lvl",   label:"LVL (default)"},
+            {value:"steel", label:"Steel"}
+          ], "state.wallRemoval.walls["+i+"].beamType=this.value;updateWallRemovalLive();renderTotals()")}
+          <!-- Two warning DOM nodes — toggled by updateWallRemovalLive
+               so we don't re-render the wall length input on every
+               keystroke (which was stealing focus). -->
+          <div class="wr-lvl-warn footnote" style="margin-top:6px;background:rgba(220,60,60,.10);border:1px solid rgba(220,60,60,.35);border-radius:6px;padding:8px 10px;color:#ffcccc;${showLvlWarn ? "" : "display:none;"}">
+            <b style="color:var(--danger)">Heads up:</b> LVL beams typically max out around 16&ndash;20 ft of unsupported span for residential loads. For wall openings <b>16 ft and longer</b>, a steel beam is often required &mdash; your structural engineer will confirm. Pricing here assumes LVL; switch to <b>Steel</b> if your engineer specifies it.
+          </div>
+          <div class="wr-lvl-ok footnote" style="margin-top:6px;${showLvlWarn ? "display:none;" : ""}">LVL is the default for residential spans up to ~16 ft. For longer or heavier loads, the structural engineer may specify steel &mdash; switch above if so.</div>
+        </div>
+      ` : ""}
+
+      <div style="margin-top:14px;">
+        <div class="addon-title" style="margin-bottom:8px;font-size:11px;">Add-ons for this wall</div>
+        <label class="check-row" style="margin-bottom:6px;"><input type="checkbox" ${w.electricalInWall?'checked':''} onchange="state.wallRemoval.walls[${i}].electricalInWall=this.checked;renderTotals()"><span>Electrical inside this wall &mdash; <i style="color:var(--muted);font-weight:400;">re-route outlets/switches, ESA inspection</i></span></label>
+        <label class="check-row" style="margin-bottom:6px;"><input type="checkbox" ${w.plumbingInWall?'checked':''} onchange="state.wallRemoval.walls[${i}].plumbingInWall=this.checked;renderTotals()"><span>Plumbing inside this wall &mdash; <i style="color:var(--muted);font-weight:400;">re-route lines + vents through ceiling/floor</i></span></label>
+        <label class="check-row" style="margin-bottom:6px;"><input type="checkbox" ${w.ductworkInWall?'checked':''} onchange="state.wallRemoval.walls[${i}].ductworkInWall=this.checked;renderTotals()"><span>HVAC ductwork inside this wall &mdash; <i style="color:var(--muted);font-weight:400;">re-route via basement/attic, add return if needed</i></span></label>
+        <label class="check-row" style="margin-bottom:0;"><input type="checkbox" ${w.flooringTransition?'checked':''} onchange="state.wallRemoval.walls[${i}].flooringTransition=this.checked;renderTotals()"><span>Flooring transition / blend along seam &mdash; <i style="color:var(--muted);font-weight:400;">where the wall used to meet the floor</i></span></label>
+      </div>
+    </div>
+  `;
+}
+function addWallRemovalWall(){
+  if(!state.wallRemoval || typeof state.wallRemoval !== "object") return;
+  if(!Array.isArray(state.wallRemoval.walls)) state.wallRemoval.walls = [];
+  state.wallRemoval.walls.push(defaultWallRemovalWall());
+  renderCatBodyOnly("wallRemoval");
+  renderTotals();
+}
+function removeWallRemovalWall(idx){
+  if(!state.wallRemoval || !Array.isArray(state.wallRemoval.walls)) return;
+  if(state.wallRemoval.walls.length <= 1) return;
+  state.wallRemoval.walls.splice(idx, 1);
+  renderCatBodyOnly("wallRemoval");
+  renderTotals();
+}
+/* Targeted live updater for wall removal — toggles the LVL warning
+   visibility per wall and refreshes the total readout, WITHOUT
+   re-rendering the wall length input (which would lose focus mid-typing).
+   Called from the wall-length input's oninput handler. */
+function updateWallRemovalLive(){
+  if(!state.wallRemoval || !Array.isArray(state.wallRemoval.walls)) return;
+  const cards = document.querySelectorAll(".wr-wall-card");
+  state.wallRemoval.walls.forEach((w, i) => {
+    const card = cards[i];
+    if(!card) return;
+    const warn = card.querySelector(".wr-lvl-warn");
+    const ok   = card.querySelector(".wr-lvl-ok");
+    if(!warn || !ok) return;
+    const showLvlWarn = w.loadBearing && w.beamType === "lvl" && num(w.linearFt) >= 16;
+    warn.style.display = showLvlWarn ? "" : "none";
+    ok.style.display   = showLvlWarn ? "none" : "";
+  });
+  // Total readout
+  try {
+    const der = deriveWallRemoval(state.wallRemoval, prices.wallRemoval) || { total:0, totalLf:0 };
+    const wrap = document.getElementById("wr-total-readout");
+    const val  = document.getElementById("wr-total-readout-val");
+    if(wrap){
+      wrap.style.display = (der.totalLf > 0 && der.total > 0) ? "" : "none";
+    }
+    if(val){ val.textContent = fmt(der.total); }
+  } catch(_){}
 }
 
 function computeTotals(){
@@ -5540,6 +5707,11 @@ function renderTotals(){
       fmro.style.display = "none";
     }
   }
+  // Live wall-removal readouts (LVL warning visibility per wall + total $).
+  // Called here so any state change refreshes the wall-removal UI without
+  // forcing a full re-render of the wall length input (which would steal
+  // focus mid-typing).
+  try{ if(typeof updateWallRemovalLive === "function") updateWallRemovalLive(); }catch(_){}
 }
 
 function renderCategories(){
@@ -6111,107 +6283,61 @@ function renderCatBody(cat){
     `;
   }
   if(cat === "wallRemoval"){
-    // WALL REMOVAL — per-LF S&I pricing with stackable add-ons. Auto-checks
-    // engineer + permit when load-bearing is toggled on (user can uncheck).
+    // WALL REMOVAL v2 — supports multiple walls per project. Each wall card
+    // owns its own type/length/height/beam/add-ons. Project-level shared
+    // charges (permit/engineer/asbestos) live in their own section.
+    //
+    // Focus-loss fix: the wall-length input now only calls renderTotals on
+    // input — NOT renderCatBodyOnly. The LVL warning visibility is toggled
+    // via a targeted live updater (updateWallRemovalLive) that mutates only
+    // the warning DOM nodes without re-rendering the input that would steal
+    // focus.
     const wr = state.wallRemoval;
-    const totalCost = (deriveWallRemoval(wr, prices.wallRemoval) || {}).total || 0;
-    const showLvlWarn = wr.loadBearing && wr.beamType === "lvl" && num(wr.linearFt) >= 16;
+    if(!Array.isArray(wr.walls)) wr.walls = [ defaultWallRemovalWall() ];
+    const der = deriveWallRemoval(wr, prices.wallRemoval) || { total:0, totalLf:0, anyLoadBearing:false };
+    const totalCost = der.total;
     return `
-      <!-- What's included (educational footer at the top so client sees scope) -->
+      <!-- What's included -->
       <div class="footnote" style="margin-bottom:14px;background:rgba(212,175,106,.08);border:1px solid rgba(212,175,106,.30);border-radius:8px;padding:10px 12px;line-height:1.55;">
         <b style="color:var(--gold-bright)">What's included with every wall removal:</b> demo + disposal, drywall edge finish at the corners where the removed wall met the remaining walls, baseboard re-trim along the seam, ceiling drywall patch + skim + prime + 2 coats paint along the line. Any outlets, switches, vent ducts, or plumbing routed through the wall are re-routed to remaining walls or through ceiling/floor cavities. ESA inspection is required whenever electrical is touched.
         <br><br>
-        <b style="color:var(--gold-bright)">For load-bearing walls:</b> structural engineer drawings + City of Toronto permit + temporary support during demo + beam supply &amp; install (LVL or steel) are all included.
+        <b style="color:var(--gold-bright)">For load-bearing walls:</b> structural engineer drawings + City of Toronto permit + temporary support during demo + beam supply &amp; install (LVL or steel) are all included. The permit and engineer cover ALL walls in the project, so they're only charged once.
         <br><br>
         <b style="color:var(--danger);">Pre-1980 homes:</b> asbestos test strongly recommended before scope is finalized — abatement (if detected) is a separate cost detailed below.
       </div>
 
-      <!-- Wall type pill -->
-      <div class="addon">
-        <div style="margin-bottom:10px;">
-          <label style="margin-bottom:6px;">Wall type</label>
-          ${pillToggle("wr-type", wr.loadBearing ? "lb" : "nlb", [
-            {value:"nlb", label:"Non-load-bearing"},
-            {value:"lb",  label:"Load-bearing"}
-          ], "var v=this.value;state.wallRemoval.loadBearing=(v==='lb');if(v==='lb'){state.wallRemoval.includePermit=true;state.wallRemoval.includeEngineer=true;}renderCatBodyOnly('wallRemoval');renderTotals()")}
-        </div>
-        <div class="grid grid-2">
-          <div>
-            <label>Wall length (linear feet)</label>
-            <input type="number" min="0" inputmode="numeric" value="${wr.linearFt||''}" placeholder="e.g. 12" oninput="state.wallRemoval.linearFt=this.value;renderCatBodyOnly('wallRemoval');renderTotals()">
-          </div>
-          <div>
-            <label style="margin-bottom:6px;">Wall height</label>
-            ${pillToggle("wr-height", String(wr.wallHeight || "8"), [
-              {value:"8",  label:"8 ft"},
-              {value:"9",  label:"9 ft"},
-              {value:"10", label:"10 ft+"}
-            ], "state.wallRemoval.wallHeight=this.value;renderCatBodyOnly('wallRemoval');renderTotals()")}
-          </div>
-        </div>
+      <!-- Per-wall cards -->
+      <div id="wr-walls">${wr.walls.map((w,i) => renderWallRemovalCard(w, i, wr.walls.length)).join("")}</div>
+      <button class="add-btn no-print" onclick="addWallRemovalWall()">+ Add another wall</button>
+
+      <!-- Project-level: Engineer + Permit (only relevant when ANY wall is load-bearing) -->
+      <div class="addon" id="wr-permit-engineer" style="${der.anyLoadBearing ? "" : "display:none;"}margin-top:14px;">
+        <div class="addon-title" style="margin-bottom:8px;">Permits &amp; engineering <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;font-size:11.5px;">(load-bearing &mdash; charged once for the whole project)</span></div>
+        <label class="check-row" style="margin-bottom:6px;"><input type="checkbox" ${wr.includeEngineer?'checked':''} onchange="state.wallRemoval.includeEngineer=this.checked;renderTotals()"><span>Structural engineer drawings + review &mdash; <i style="color:var(--muted);font-weight:400;">required by City of Toronto for any structural modification</i></span></label>
+        <label class="check-row" style="margin-bottom:0;"><input type="checkbox" ${wr.includePermit?'checked':''} onchange="state.wallRemoval.includePermit=this.checked;renderTotals()"><span>City of Toronto building permit &mdash; <i style="color:var(--muted);font-weight:400;">required for load-bearing wall removal</i></span></label>
+        <div class="footnote" style="margin-top:6px;color:var(--muted);">Both are default-on for load-bearing scopes but can be unchecked in unusual cases.</div>
       </div>
 
-      <!-- Beam choice (only when load-bearing) -->
-      ${wr.loadBearing ? `
-        <div class="addon">
-          <div style="margin-bottom:10px;">
-            <label style="margin-bottom:6px;">Beam material</label>
-            ${pillToggle("wr-beam", wr.beamType || "lvl", [
-              {value:"lvl",   label:"LVL (default)"},
-              {value:"steel", label:"Steel"}
-            ], "state.wallRemoval.beamType=this.value;renderCatBodyOnly('wallRemoval');renderTotals()")}
-          </div>
-          ${showLvlWarn ? `
-            <div class="footnote" style="margin-top:6px;background:rgba(220,60,60,.10);border:1px solid rgba(220,60,60,.35);border-radius:6px;padding:8px 10px;color:#ffcccc;">
-              <b style="color:var(--danger)">Heads up:</b> LVL beams typically max out around 16–20 ft of unsupported span for residential loads. For wall openings <b>16 ft and longer</b>, a steel beam is often required — your structural engineer will confirm. Pricing here assumes LVL; switch to <b>Steel</b> if your engineer specifies it.
-            </div>
-          ` : `
-            <div class="footnote" style="margin-top:6px;">LVL is the default for residential spans up to ~16 ft. For longer or heavier loads, the structural engineer may specify steel — switch above if so.</div>
-          `}
-        </div>
-      ` : ""}
-
-      <!-- Add-on checkboxes (stackable per-LF reroutes) -->
+      <!-- Project-level: Asbestos test (always relevant — per-property, not per-wall) -->
       <div class="addon">
-        <div class="addon-title" style="margin-bottom:8px;">Add-ons (stack on top of the base rate)</div>
-        <label class="check-row" style="margin-bottom:6px;"><input type="checkbox" ${wr.electricalInWall?'checked':''} onchange="state.wallRemoval.electricalInWall=this.checked;renderCatBodyOnly('wallRemoval');renderTotals()"><span>Electrical inside this wall &mdash; <i style="color:var(--muted);font-weight:400;">re-route outlets/switches, ESA inspection</i></span></label>
-        <label class="check-row" style="margin-bottom:6px;"><input type="checkbox" ${wr.plumbingInWall?'checked':''} onchange="state.wallRemoval.plumbingInWall=this.checked;renderCatBodyOnly('wallRemoval');renderTotals()"><span>Plumbing inside this wall &mdash; <i style="color:var(--muted);font-weight:400;">re-route lines + vents through ceiling/floor</i></span></label>
-        <label class="check-row" style="margin-bottom:6px;"><input type="checkbox" ${wr.ductworkInWall?'checked':''} onchange="state.wallRemoval.ductworkInWall=this.checked;renderCatBodyOnly('wallRemoval');renderTotals()"><span>HVAC ductwork inside this wall &mdash; <i style="color:var(--muted);font-weight:400;">re-route via basement/attic, add return if needed</i></span></label>
-        <label class="check-row" style="margin-bottom:0;"><input type="checkbox" ${wr.flooringTransition?'checked':''} onchange="state.wallRemoval.flooringTransition=this.checked;renderCatBodyOnly('wallRemoval');renderTotals()"><span>Flooring transition / blend along seam &mdash; <i style="color:var(--muted);font-weight:400;">where the wall used to meet the floor</i></span></label>
-      </div>
-
-      <!-- Engineer + Permit (load-bearing only, default on) -->
-      ${wr.loadBearing ? `
-        <div class="addon">
-          <div class="addon-title" style="margin-bottom:8px;">Permits &amp; engineering (load-bearing)</div>
-          <label class="check-row" style="margin-bottom:6px;"><input type="checkbox" ${wr.includeEngineer?'checked':''} onchange="state.wallRemoval.includeEngineer=this.checked;renderCatBodyOnly('wallRemoval');renderTotals()"><span>Structural engineer drawings + review &mdash; <i style="color:var(--muted);font-weight:400;">required by City of Toronto for any structural modification</i></span></label>
-          <label class="check-row" style="margin-bottom:0;"><input type="checkbox" ${wr.includePermit?'checked':''} onchange="state.wallRemoval.includePermit=this.checked;renderCatBodyOnly('wallRemoval');renderTotals()"><span>City of Toronto building permit &mdash; <i style="color:var(--muted);font-weight:400;">required for load-bearing wall removal</i></span></label>
-          <div class="footnote" style="margin-top:6px;color:var(--muted);">Both are default-on for load-bearing scopes but can be unchecked in unusual cases.</div>
-        </div>
-      ` : ""}
-
-      <!-- Asbestos test -->
-      <div class="addon">
-        <div class="addon-title" style="margin-bottom:8px;">Hazardous materials</div>
+        <div class="addon-title" style="margin-bottom:8px;">Hazardous materials <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;font-size:11.5px;">(per-property, charged once)</span></div>
         <label class="check-row" style="margin-bottom:0;"><input type="checkbox" ${wr.includeAsbestosTest?'checked':''} onchange="state.wallRemoval.includeAsbestosTest=this.checked;if(!this.checked){state.wallRemoval.asbestosDetected=false;}renderCatBodyOnly('wallRemoval');renderTotals()"><span>Asbestos pre-test &mdash; <i style="color:var(--muted);font-weight:400;">recommended for any pre-1980 home before demo starts</i></span></label>
         ${wr.includeAsbestosTest ? `
           <div class="footnote" style="margin-top:10px;background:rgba(220,60,60,.10);border:1px solid rgba(220,60,60,.35);border-radius:6px;padding:10px 12px;color:#ffcccc;line-height:1.55;">
             <b style="color:var(--danger)">If asbestos is detected:</b> additional cost will apply to safely demo + dispose under Ontario regulation. GTA rates (2026):
-            <br>• Affected drywall removal: ~$15/sqft (8-ft wall × your linear feet)
+            <br>• Affected drywall removal: ~$15/sqft (8-ft wall × total linear feet across all walls)
             <br>• Containment + decontamination setup (flat minimum): ~$1,100
             <br>Check the box below ONLY after lab confirms detection — abatement is performed by a certified contractor and ESA-cleared before re-occupancy.
           </div>
-          <label class="check-row" style="margin-top:10px;margin-bottom:0;"><input type="checkbox" ${wr.asbestosDetected?'checked':''} onchange="state.wallRemoval.asbestosDetected=this.checked;renderCatBodyOnly('wallRemoval');renderTotals()"><span><b style="color:var(--danger)">Asbestos was detected</b> &mdash; include abatement cost</span></label>
+          <label class="check-row" style="margin-top:10px;margin-bottom:0;"><input type="checkbox" ${wr.asbestosDetected?'checked':''} onchange="state.wallRemoval.asbestosDetected=this.checked;renderTotals()"><span><b style="color:var(--danger)">Asbestos was detected</b> &mdash; include abatement cost</span></label>
         ` : ""}
       </div>
 
       <!-- Live total preview -->
-      ${num(wr.linearFt) > 0 && totalCost > 0 ? `
-        <div class="info-readout" style="margin-top:12px;padding:10px 12px;border-radius:8px;border:1px solid var(--gold);background:#0f1414;">
-          <span style="font-size:9.5px;letter-spacing:.20em;text-transform:uppercase;color:var(--muted);">Wall Removal Total</span>
-          <div style="font-size:18px;font-weight:800;color:var(--gold-bright);font-variant-numeric:tabular-nums;margin-top:4px;">${fmt(totalCost)}</div>
-        </div>
-      ` : ""}
+      <div id="wr-total-readout" class="info-readout" style="margin-top:12px;padding:10px 12px;border-radius:8px;border:1px solid var(--gold);background:#0f1414;${(der.totalLf > 0 && totalCost > 0) ? "" : "display:none;"}">
+        <span style="font-size:9.5px;letter-spacing:.20em;text-transform:uppercase;color:var(--muted);">Wall Removal Total</span>
+        <div id="wr-total-readout-val" style="font-size:18px;font-weight:800;color:var(--gold-bright);font-variant-numeric:tabular-nums;margin-top:4px;">${fmt(totalCost)}</div>
+      </div>
     `;
   }
   if(cat === "miscellaneous"){
@@ -7880,29 +8006,43 @@ function renderContractorSheet(){
   if(includeCat("wallRemoval")){
     anyEnabled = true;
     const wr = state.wallRemoval;
-    const lf = num(wr.linearFt);
+    const walls = Array.isArray(wr.walls) ? wr.walls : [];
     const items = [];
-    if(lf > 0){
-      const wallType = wr.loadBearing ? "Load-bearing" : "Non-load-bearing";
-      const ht = wr.wallHeight || "8";
-      items.push({ html:`Wall type: <b>${wallType}</b> &mdash; ${lf} linear ft &times; ${ht} ft tall.` });
-      if(wr.loadBearing){
-        const beam = (wr.beamType === "steel") ? "Steel beam" : "LVL beam";
-        items.push({ html:`Beam material: <b>${beam}</b> &mdash; supply &amp; install, temporary support during demo, all hardware.` });
-        if(wr.includeEngineer) items.push({ html:`Structural engineer drawings + review (City of Toronto requirement for any structural modification).` });
-        if(wr.includePermit)   items.push({ html:`City of Toronto building permit (required for load-bearing wall removal).` });
+    let totalLf = 0;
+    let anyLoadBearing = false;
+    walls.forEach((w, i) => {
+      const lf = num(w.linearFt);
+      if(lf <= 0) return;
+      totalLf += lf;
+      if(w.loadBearing) anyLoadBearing = true;
+      const ht = w.wallHeight || "8";
+      const wallType = w.loadBearing ? "Load-bearing" : "Non-load-bearing";
+      if(walls.length > 1){
+        items.push({ hdr:true, html:`Wall #${i+1}` });
       }
-      if(wr.electricalInWall) items.push({ html:`Electrical inside the wall: <b>re-route outlets/switches</b> to remaining walls + ESA inspection (per LF).` });
-      if(wr.plumbingInWall)   items.push({ html:`Plumbing inside the wall: <b>re-route lines &amp; vents</b> through ceiling/floor cavities (per LF).` });
-      if(wr.ductworkInWall)   items.push({ html:`HVAC ductwork inside the wall: <b>re-route via basement/attic</b>, add cold-air return where needed (per LF).` });
-      if(wr.flooringTransition) items.push({ html:`Flooring transition / blend along the wall seam (per LF).` });
+      items.push({ sub: walls.length > 1, html:`Wall type: <b>${wallType}</b> &mdash; ${lf} linear ft &times; ${ht} ft tall.` });
+      if(w.loadBearing){
+        const beam = (w.beamType === "steel") ? "Steel beam" : "LVL beam";
+        items.push({ sub: walls.length > 1, html:`Beam material: <b>${beam}</b> &mdash; supply &amp; install, temporary support during demo, all hardware.` });
+      }
+      if(w.electricalInWall) items.push({ sub: walls.length > 1, html:`Electrical inside the wall: <b>re-route outlets/switches</b> to remaining walls + ESA inspection (per LF).` });
+      if(w.plumbingInWall)   items.push({ sub: walls.length > 1, html:`Plumbing inside the wall: <b>re-route lines &amp; vents</b> through ceiling/floor cavities (per LF).` });
+      if(w.ductworkInWall)   items.push({ sub: walls.length > 1, html:`HVAC ductwork inside the wall: <b>re-route via basement/attic</b>, add cold-air return where needed (per LF).` });
+      if(w.flooringTransition) items.push({ sub: walls.length > 1, html:`Flooring transition / blend along the wall seam (per LF).` });
+    });
+    if(totalLf > 0){
+      // Project-level (shared across walls).
+      if(anyLoadBearing){
+        if(wr.includeEngineer) items.push({ sub:false, html:`<i>Project-level:</i> Structural engineer drawings + review &mdash; covers all load-bearing walls (City of Toronto requirement).` });
+        if(wr.includePermit)   items.push({ sub:false, html:`<i>Project-level:</i> City of Toronto building permit &mdash; covers all load-bearing walls.` });
+      }
       if(wr.includeAsbestosTest){
-        items.push({ html:`Asbestos pre-test &mdash; lab analysis + report (recommended for pre-1980 homes).` });
+        items.push({ sub:false, html:`<i>Project-level:</i> Asbestos pre-test &mdash; lab analysis + report (property-wide, charged once).` });
         if(wr.asbestosDetected){
-          items.push({ html:`<b style="color:#a32a2a">Asbestos abatement included:</b> affected drywall removal (${lf*8} sqft) + containment &amp; decontamination setup. <b>Certified contractor required &mdash; ESA air-clearance test before re-occupancy.</b>` });
+          items.push({ sub:false, html:`<i>Project-level:</i> <b style="color:#a32a2a">Asbestos abatement included:</b> affected drywall removal (${totalLf*8} sqft across all walls) + containment &amp; decontamination setup. <b>Certified contractor required &mdash; ESA air-clearance test before re-occupancy.</b>` });
         }
       }
-      items.push({ html:`<i>Included by default:</i> demo + disposal, drywall edge finish at adjoining walls, baseboard re-trim along the seam, ceiling drywall patch + skim + prime + 2 coats paint along the line.` });
+      items.push({ sub:false, html:`<i>Included by default for each wall:</i> demo + disposal, drywall edge finish at adjoining walls, baseboard re-trim along the seam, ceiling drywall patch + skim + prime + 2 coats paint along the line.` });
     }
     if(items.length) html += scopeSection("Wall Removal", items);
   }
@@ -9335,29 +9475,41 @@ function buildEstimateSummary(){
   // -- Wall Removal
   if(state.enabled.wallRemoval){
     const wr = state.wallRemoval;
-    const lf = num(wr.linearFt);
+    const walls = Array.isArray(wr.walls) ? wr.walls : [];
     const bullets = [];
-    if(lf > 0){
-      const wallType = wr.loadBearing ? "Load-bearing" : "Non-load-bearing";
-      const heightFt = wr.wallHeight || "8";
-      bullets.push(`${wallType} wall removal — ${lf} linear ft · ${heightFt} ft tall`);
-      if(wr.loadBearing){
-        const beam = (wr.beamType === "steel") ? "Steel beam" : "LVL beam";
-        bullets.push(`Beam material: ${beam} (supply &amp; install, temporary support during demo)`);
-        if(wr.includeEngineer) bullets.push("Structural engineer drawings + review (City of Toronto requirement)");
-        if(wr.includePermit)   bullets.push("City of Toronto building permit");
+    let totalLf = 0;
+    let anyLoadBearing = false;
+    walls.forEach((w, i) => {
+      const lf = num(w.linearFt);
+      if(lf <= 0) return;
+      totalLf += lf;
+      if(w.loadBearing) anyLoadBearing = true;
+      const prefix = walls.length > 1 ? `Wall #${i+1}: ` : "";
+      const wallType = w.loadBearing ? "Load-bearing" : "Non-load-bearing";
+      const heightFt = w.wallHeight || "8";
+      bullets.push(`${prefix}${wallType} wall removal — ${lf} linear ft · ${heightFt} ft tall`);
+      if(w.loadBearing){
+        const beam = (w.beamType === "steel") ? "Steel beam" : "LVL beam";
+        bullets.push(`${prefix}Beam material: ${beam} (supply &amp; install, temporary support during demo)`);
       }
-      if(wr.electricalInWall) bullets.push("Electrical inside the wall — re-route outlets/switches + ESA inspection");
-      if(wr.plumbingInWall)   bullets.push("Plumbing inside the wall — re-route lines &amp; vents");
-      if(wr.ductworkInWall)   bullets.push("HVAC ductwork inside the wall — re-route + add return if needed");
-      if(wr.flooringTransition) bullets.push("Flooring transition / blend along the wall seam");
+      if(w.electricalInWall) bullets.push(`${prefix}Electrical inside the wall — re-route outlets/switches + ESA inspection`);
+      if(w.plumbingInWall)   bullets.push(`${prefix}Plumbing inside the wall — re-route lines &amp; vents`);
+      if(w.ductworkInWall)   bullets.push(`${prefix}HVAC ductwork inside the wall — re-route + add return if needed`);
+      if(w.flooringTransition) bullets.push(`${prefix}Flooring transition / blend along the wall seam`);
+    });
+    if(totalLf > 0){
+      // Project-level shared items, charged once across all walls.
+      if(anyLoadBearing){
+        if(wr.includeEngineer) bullets.push("Structural engineer drawings + review &mdash; <i>covers all load-bearing walls in this project</i>");
+        if(wr.includePermit)   bullets.push("City of Toronto building permit &mdash; <i>covers all load-bearing walls in this project</i>");
+      }
       if(wr.includeAsbestosTest){
-        bullets.push("Asbestos pre-test (lab analysis + report)");
+        bullets.push("Asbestos pre-test (lab analysis + report) &mdash; <i>property-wide, charged once</i>");
         if(wr.asbestosDetected){
-          bullets.push(`<b>Asbestos abatement included</b> — affected drywall removal (${lf*8} sqft) + containment &amp; decontamination setup. Performed by a certified contractor and ESA-cleared.`);
+          bullets.push(`<b>Asbestos abatement included</b> — affected drywall removal (${totalLf*8} sqft across all walls) + containment &amp; decontamination setup. Performed by a certified contractor and ESA-cleared.`);
         }
       }
-      bullets.push("<i>Includes: demo, disposal, drywall edge finish at adjoining walls, baseboard re-trim along seam, ceiling drywall patch + skim + prime + 2 coats paint along the line.</i>");
+      bullets.push("<i>Each wall includes: demo, disposal, drywall edge finish at adjoining walls, baseboard re-trim along seam, ceiling drywall patch + skim + prime + 2 coats paint along the line.</i>");
     } else {
       bullets.push("No items configured yet.");
     }
