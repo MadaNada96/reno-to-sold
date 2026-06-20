@@ -667,6 +667,83 @@
   .inv-status-pill.sent{ background:#1e2533;color:#8db4ff;border:1px solid #4a6fb5; }
   .inv-status-pill.paid{ background:#0f2918;color:#5fce86;border:1px solid #2e7e4e; }
   .inv-status-pill.void{ background:#2b1212;color:#ff9090;border:1px solid #8a2828; }
+  /* Overdue — supersedes the 'sent' color when an invoice is sent + past due.
+     A red pill with a subtle pulse makes overdue invoices impossible to miss
+     in the milestone cards and the invoice list. */
+  .inv-status-pill.overdue{
+    background:#3a0e0e;color:#ff7676;border:1px solid #c93838;
+    box-shadow:0 0 0 0 rgba(201,56,56,.55);
+    animation: inv-overdue-pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes inv-overdue-pulse{
+    0%   { box-shadow:0 0 0 0 rgba(201,56,56,.45); }
+    70%  { box-shadow:0 0 0 6px rgba(201,56,56,0); }
+    100% { box-shadow:0 0 0 0 rgba(201,56,56,0); }
+  }
+
+  /* Project-scope toggle ("Current Project" ↔ "All Projects") sits at the top
+     of the Invoicing modal. Mirror the pill-style pattern used in pricing
+     editors so it reads as a single segmented control. */
+  .inv-scope-toggle{
+    display:inline-flex;gap:0;padding:3px;background:#0a0a0e;
+    border:1px solid var(--line-strong);border-radius:999px;margin-bottom:14px;
+  }
+  .inv-scope-toggle button{
+    background:transparent;border:none;color:var(--muted);
+    padding:6px 14px;font-size:11.5px;letter-spacing:.10em;text-transform:uppercase;
+    font-weight:700;border-radius:999px;cursor:pointer;transition:all .15s ease;
+  }
+  .inv-scope-toggle button:hover{ color:var(--ink); }
+  .inv-scope-toggle button.active{
+    background:linear-gradient(180deg,#2a2010,#1a1408);
+    color:var(--gold-bright);border:1px solid var(--gold-deep);
+    box-shadow:inset 0 0 12px rgba(212,175,106,.18);
+  }
+
+  /* All Projects YTD stats card row — 4 KPI tiles. */
+  .inv-stats-grid{
+    display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;
+  }
+  @media (max-width:880px){ .inv-stats-grid{ grid-template-columns:repeat(2,1fr); } }
+  .inv-stat-card{
+    background:#0a0a0e;border:1px solid var(--line-strong);border-radius:8px;
+    padding:11px 14px;
+  }
+  .inv-stat-card .label{
+    font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--muted);font-weight:700;margin-bottom:4px;
+  }
+  .inv-stat-card .value{
+    font-size:20px;font-weight:800;color:var(--gold-bright);
+    font-variant-numeric:tabular-nums;letter-spacing:-.01em;
+  }
+  .inv-stat-card.warn .value{ color:#ff9090; }
+  .inv-stat-card .sub{
+    font-size:10.5px;color:var(--muted);margin-top:2px;
+  }
+
+  /* Filter chips — segmented row that filters the All Projects invoice list. */
+  .inv-filter-row{
+    display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:6px 0 10px;
+    font-size:11.5px;
+  }
+  .inv-filter-row .label{
+    font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--muted);font-weight:700;margin-right:4px;
+  }
+  .inv-filter-chip{
+    background:#0a0a0e;border:1px solid var(--line-strong);border-radius:999px;
+    color:var(--muted);padding:5px 12px;font-size:11px;font-weight:600;
+    cursor:pointer;transition:all .12s ease;
+  }
+  .inv-filter-chip:hover{ color:var(--ink); border-color:var(--gold-deep); }
+  .inv-filter-chip.active{
+    background:linear-gradient(180deg,#2a2010,#1a1408);
+    color:var(--gold-bright);border-color:var(--gold-deep);
+  }
+  .inv-filter-chip.overdue.active{
+    background:#3a0e0e;color:#ff9090;border-color:#c93838;
+  }
 
   /* Invoice list */
   .inv-list-title{
@@ -3668,6 +3745,7 @@
     <h3>
       <span>Invoicing &mdash; <span id="invModalEstimateName">Project</span></span>
       <span class="small-stack">
+        <button class="ghost" onclick="runEmailHealthCheck()" title="Send a small test email to your own address to verify the Resend pipeline (Supabase → Edge Function → Resend) is alive. Use before sending a real client invoice if anything feels off.">Test Email</button>
         <button class="primary" onclick="closeInvoicing()">Done</button>
       </span>
     </h3>
@@ -3687,6 +3765,44 @@
       </span>
     </h3>
     <div class="modal-body" id="invoiceDetailBody"></div>
+  </div>
+</div>
+
+<!-- Email Invoice modal — sends the rendered invoice PDF to the client.
+     Reuses the email-estimate Supabase Edge Function (it's generic over
+     to/cc/subject/body/pdfBase64/filename). Auto-fills sellers as To and
+     defaults BCC self ON, matching the email-to-client flow. -->
+<div class="modal-bg" id="emailInvoiceModal" onclick="if(event.target===this)closeEmailInvoiceModal()">
+  <div class="modal" style="max-width:560px;">
+    <h3>Email Invoice to Client
+      <button class="ghost" onclick="closeEmailInvoiceModal()">Close</button>
+    </h3>
+    <div class="modal-body">
+      <div class="email-field">
+        <label for="emailInvTo">To (comma-separated for multiple)</label>
+        <input type="text" id="emailInvTo" placeholder="jane@example.com, john@example.com" autocomplete="off">
+      </div>
+      <div class="email-field">
+        <label for="emailInvSubject">Subject</label>
+        <input type="text" id="emailInvSubject" placeholder="Your invoice" autocomplete="off">
+      </div>
+      <div class="email-field">
+        <label for="emailInvBody">Message</label>
+        <textarea id="emailInvBody" rows="7" placeholder="Add a personal note..."></textarea>
+      </div>
+      <label class="email-cc">
+        <input type="checkbox" id="emailInvBccSelf">
+        <span>BCC me a copy at <span id="emailInvBccSelfAddr" style="color:var(--gold-bright);font-weight:600;"></span></span>
+      </label>
+      <div id="emailInvStatus" class="email-status" style="display:none;"></div>
+      <div class="email-actions">
+        <button class="ghost" onclick="closeEmailInvoiceModal()">Cancel</button>
+        <button class="primary" id="emailInvSendBtn" onclick="sendInvoiceEmail()">Generate PDF &amp; Send</button>
+      </div>
+      <p class="footnote" style="margin-top:14px;line-height:1.5;">
+        A PDF of the invoice will be generated and attached automatically. The email is sent from <b style="color:var(--gold-bright);">estimates@renotosold.homes</b> via Resend. On successful send, the invoice is marked <b>Sent</b> and its due-date clock starts.
+      </p>
+    </div>
   </div>
 </div>
 
@@ -14780,6 +14896,339 @@ function findInvoiceByMilestone(milestoneId){
   return state.invoices.find(inv => inv.milestone === milestoneId && inv.status !== "void") || null;
 }
 
+/* ----- Overdue helpers ---------------------------------------------------
+   An invoice is OVERDUE when:
+     • its status is "sent" (i.e. the client has been billed and the clock
+       has started), AND
+     • its dueDate is strictly before today (YYYY-MM-DD string compare is
+       safe — ISO dates are lexically sortable when same length).
+   Paid invoices never count as overdue (the money is in). Drafts never
+   count (they haven't been billed yet). Void invoices never count. */
+function isInvoiceOverdue(inv){
+  if(!inv || inv.status !== "sent") return false;
+  if(!inv.dueDate || typeof inv.dueDate !== "string") return false;
+  return inv.dueDate < todayISO();
+}
+/* Effective status for UI display purposes — when sent + past due, callers
+   probably want to render "overdue" instead of "sent". We don't mutate the
+   stored status (paying later doesn't change history) — this is a derived
+   read-only field used by pills, filters, and dashboard counts. */
+function invoiceEffectiveStatus(inv){
+  if(isInvoiceOverdue(inv)) return "overdue";
+  return (inv && inv.status) || "draft";
+}
+
+/* ===== Email Invoice — sends a per-invoice PDF via the existing
+   email-estimate Edge Function (which is generic over the payload shape). */
+let _currentEmailInvoiceId = null;
+
+function openEmailInvoiceModal(invId){
+  const inv = (state.invoices || []).find(x => x.id === invId);
+  if(!inv){ alert("Invoice not found."); return; }
+  if(inv.status === "void"){ alert("This invoice is voided — can't send."); return; }
+  _currentEmailInvoiceId = invId;
+
+  // Pre-fill recipients from sellers' emails (same convention as Email Estimate).
+  const sellers = Array.isArray(state.sellers) ? state.sellers : [];
+  const sellerEmails = sellers.map(s => (s && s.email || "").trim()).filter(Boolean);
+  document.getElementById("emailInvTo").value = sellerEmails.join(", ");
+
+  // Subject — "Invoice RTS-INV-0042 — 123 Main St, Toronto, ON"
+  const addr = (state.propAddress || state.propName || "your property").trim();
+  document.getElementById("emailInvSubject").value =
+    `Invoice ${inv.number || ""} — ${addr}`.replace(/\s+—\s+$/,"").trim();
+
+  // Multi-seller greeting, matching Email Estimate.
+  const firstNames = sellers
+    .map(s => ((s && s.name) || "").trim().split(/\s+/)[0])
+    .filter(Boolean);
+  let greeting;
+  if(firstNames.length === 0)       greeting = "Hi,";
+  else if(firstNames.length === 1)  greeting = `Hi ${firstNames[0]},`;
+  else if(firstNames.length === 2)  greeting = `Hi ${firstNames[0]} & ${firstNames[1]},`;
+  else                              greeting = `Hi ${firstNames.slice(0,-1).join(", ")} & ${firstNames[firstNames.length-1]},`;
+
+  const fmtMoneyDec = (n) => "$" + (Math.round(n*100)/100).toLocaleString("en-US", { minimumFractionDigits:2, maximumFractionDigits:2 });
+  const amtLine    = fmtMoneyDec(inv.total || 0);
+  const milestoneLine = inv.milestoneLabel ? `\n\nMilestone: ${inv.milestoneLabel}` : "";
+
+  document.getElementById("emailInvBody").value =
+    `${greeting}\n\n`+
+    `Please find attached invoice ${inv.number || ""} for ${amtLine} (incl. HST), due ${inv.dueDate || "on receipt"}.`+
+    `${milestoneLine}\n\n`+
+    `Payment can be made by cheque (payable to RENO TO SOLD INC.) or e-transfer to renotosold@gmail.com.\n\n`+
+    `Thanks,\nMohamed Nada\nReno to Sold Inc.`;
+
+  // BCC self — defaults to ON when signed in (locked in during Phase 2 prep).
+  const bccLabel    = document.getElementById("emailInvBccSelfAddr");
+  const bccCheckbox = document.getElementById("emailInvBccSelf");
+  const bccRow      = bccCheckbox && bccCheckbox.closest(".email-cc");
+  if(currentUser && currentUser.email){
+    bccLabel.textContent = currentUser.email;
+    bccCheckbox.checked = true;        // default ON for invoices
+    if(bccRow) bccRow.style.display = "";
+  } else {
+    if(bccRow) bccRow.style.display = "none";
+  }
+
+  setInvoiceEmailStatus("", "");
+  const btn = document.getElementById("emailInvSendBtn");
+  if(btn){ btn.disabled = false; btn.textContent = "Generate PDF & Send"; }
+
+  document.getElementById("emailInvoiceModal").classList.add("show");
+}
+
+function closeEmailInvoiceModal(){
+  document.getElementById("emailInvoiceModal").classList.remove("show");
+  _currentEmailInvoiceId = null;
+}
+
+function setInvoiceEmailStatus(msg, kind){
+  const el = document.getElementById("emailInvStatus");
+  if(!el) return;
+  if(!msg){ el.style.display = "none"; el.className = "email-status"; el.textContent = ""; return; }
+  el.style.display = "";
+  el.className = "email-status" + (kind ? " " + kind : "");
+  el.textContent = msg;
+}
+
+/* ===== Email-pipeline error classification =====
+   Translates a raw error string (from Supabase / Resend / network) into a
+   specific failure mode + the exact fix. Makes "Failed: Function not found"
+   read as "Edge Function not deployed — run: supabase functions deploy
+   email-estimate" instead of a generic Supabase trace.
+
+   Returns { code, title, detail, fix } so callers can render it richly.
+   Codes:
+     "not-deployed"  → email-estimate function isn't deployed
+     "no-auth"       → user isn't signed in to Supabase
+     "no-resend-key" → RESEND_API_KEY secret missing on Supabase
+     "bad-resend-key"→ key present but invalid / revoked / 401 from Resend
+     "domain"        → sender domain not verified in Resend
+     "recipient"     → recipient address rejected by Resend
+     "rate-limit"    → Resend rate limit hit
+     "network"       → couldn't reach Supabase or Resend
+     "validation"    → payload was rejected (missing field, etc.)
+     "unknown"       → anything else, raw message passed through
+*/
+function classifyEmailError(err){
+  const msg = (err && (err.message || err.error || String(err))) || "Unknown error";
+  const m = String(msg).toLowerCase();
+
+  if(/sign in|not auth|no session|unauthor[iz]ed user/.test(m)){
+    return { code:"no-auth",
+      title:"Not signed in",
+      detail:"You need to be signed in to Supabase to send emails.",
+      fix:"Click 'Sign in' in the toolbar, then try again." };
+  }
+  if(/function not found|404.*function|not deployed|no function/.test(m)){
+    return { code:"not-deployed",
+      title:"Email function not deployed",
+      detail:"The email-estimate Edge Function isn't deployed in this Supabase project.",
+      fix:"From the project root: supabase functions deploy email-estimate" };
+  }
+  if(/resend.{0,40}401|resend_api_key.{0,40}not set|api key.{0,20}(invalid|missing)/.test(m)){
+    return { code:"bad-resend-key",
+      title:"Resend API key invalid or missing",
+      detail:"Resend rejected the API key (401). It may be missing, revoked, or expired.",
+      fix:"Set it on Supabase: supabase secrets set RESEND_API_KEY=re_xxx — then redeploy the function." };
+  }
+  if(/RESEND_API_KEY.{0,30}not set/i.test(msg)){
+    return { code:"no-resend-key",
+      title:"Resend API key not set",
+      detail:"RESEND_API_KEY secret is missing on Supabase.",
+      fix:"supabase secrets set RESEND_API_KEY=re_xxx — then redeploy the function." };
+  }
+  if(/domain.{0,20}(not.{0,5}verified|unverified)|sender.{0,20}not.{0,15}verified/.test(m)){
+    return { code:"domain",
+      title:"Sender domain not verified",
+      detail:"Resend won't send from a domain that hasn't been DNS-verified.",
+      fix:"Go to https://resend.com/domains, verify renotosold.homes, then try again." };
+  }
+  if(/(invalid|bad|reject).{0,15}(recipient|to address|email address)|recipient.{0,15}(rejected|invalid)/.test(m)){
+    return { code:"recipient",
+      title:"Recipient address rejected",
+      detail:"One of the To addresses was rejected as invalid or undeliverable.",
+      fix:"Check the email addresses for typos and try again." };
+  }
+  if(/rate.{0,5}limit|too many request|429/.test(m)){
+    return { code:"rate-limit",
+      title:"Resend rate limit",
+      detail:"You've hit Resend's per-second or per-day quota.",
+      fix:"Wait a minute and try again. If this keeps happening, check your Resend plan limits." };
+  }
+  if(/networkerror|failed to fetch|ecconn|enotfound|timeout|network error reaching/.test(m)){
+    return { code:"network",
+      title:"Network error",
+      detail:"Couldn't reach Supabase or Resend.",
+      fix:"Check your internet connection and try again." };
+  }
+  if(/validation failed|is required/.test(m)){
+    return { code:"validation",
+      title:"Payload validation failed",
+      detail:msg,
+      fix:"This is an app bug — please report it (tell Mo)." };
+  }
+  return { code:"unknown",
+    title:"Send failed",
+    detail:msg,
+    fix:"Click 'Test Email' in the Invoicing toolbar to isolate the cause, then check INVOICE_EMAIL_SETUP.md for troubleshooting." };
+}
+/* Human-readable single-line summary suitable for the inline status pill. */
+function formatEmailErrorLine(err){
+  const c = classifyEmailError(err);
+  return `${c.title}. ${c.fix}`;
+}
+
+/* ===== Email pipeline health check =====
+   Triggered by the "Test Email" button in the Invoicing modal header.
+   Two-step check:
+     (1) Ping the Edge Function via { action: "ping" } — confirms it's
+         deployed and that the Resend secrets are configured.
+     (2) Send a tiny test email (with a 1-byte placeholder attachment)
+         to currentUser.email — confirms Resend actually delivers.
+   Status is shown via a non-blocking flash + alert if it fails. */
+async function runEmailHealthCheck(){
+  if(!supa){ alert("Supabase isn't initialised yet — wait a moment and try again."); return; }
+  if(!currentUser || !currentUser.email){
+    alert("Sign in first so we have an email address to send the test to.");
+    return;
+  }
+  const btn = document.activeElement;
+  const restoreLabel = btn && btn.tagName === "BUTTON" ? btn.textContent : null;
+  if(btn && btn.tagName === "BUTTON"){ btn.disabled = true; btn.textContent = "Pinging…"; }
+  try{
+    // ---- Step 1: ping ----
+    const { data: pingData, error: pingErr } = await supa.functions.invoke(
+      'email-estimate', { body: { action: "ping" } }
+    );
+    if(pingErr) throw pingErr;
+    if(pingData && pingData.error) throw new Error(pingData.error);
+    if(!pingData || !pingData.ok)  throw new Error("Ping returned no ok flag");
+    if(pingData.resend_key_present === false){
+      throw new Error("RESEND_API_KEY not set on Supabase. Run: supabase secrets set RESEND_API_KEY=re_xxx");
+    }
+
+    // ---- Step 2: tiny real send ----
+    if(btn && btn.tagName === "BUTTON") btn.textContent = "Sending test…";
+    // 1×1 transparent PNG, just to satisfy the payload shape. Resend handles
+    // non-PDF attachments fine; the filename gives a hint that this is a test.
+    const tinyAttachment = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkAAIAAAoAAv/lxKUAAAAASUVORK5CYII=";
+    const now = new Date();
+    const payload = {
+      to: [currentUser.email],
+      cc: [],
+      subject: "Reno to Sold — Email Pipeline Test",
+      body: `This is an automated test of your Reno to Sold email pipeline.\n\n`+
+            `If you can read this, everything is working:\n`+
+            `  • Supabase Edge Function: deployed and reachable\n`+
+            `  • Resend API key: valid\n`+
+            `  • Sender domain: verified\n`+
+            `  • Recipient delivery: successful\n\n`+
+            `Triggered: ${now.toISOString()}\n`+
+            `From: in-app 'Test Email' button in the Invoicing modal.\n\n`+
+            `You can safely delete this email.`,
+      pdfBase64: tinyAttachment,
+      filename:  "email-pipeline-test.png"
+    };
+    const { data, error } = await supa.functions.invoke('email-estimate', { body: payload });
+    if(error)              throw error;
+    if(data && data.error) throw new Error(data.error);
+
+    const fns = (typeof flash === "function") ? flash : (m => alert(m));
+    fns(`✓ Email pipeline OK. Test message sent to ${currentUser.email}.`);
+  } catch(e){
+    console.error("Email health check failed:", e);
+    const c = classifyEmailError(e);
+    alert("Email pipeline FAILED\n\n" +
+      "What broke: " + c.title + "\n" +
+      "Why: "        + c.detail + "\n\n" +
+      "Fix: "        + c.fix);
+  } finally {
+    if(btn && btn.tagName === "BUTTON"){ btn.disabled = false; if(restoreLabel) btn.textContent = restoreLabel; }
+  }
+}
+
+async function sendInvoiceEmail(){
+  const invId = _currentEmailInvoiceId;
+  if(!invId){ setInvoiceEmailStatus("No invoice selected.", "error"); return; }
+  const inv = (state.invoices || []).find(x => x.id === invId);
+  if(!inv){ setInvoiceEmailStatus("Invoice not found.", "error"); return; }
+
+  const toRaw      = (document.getElementById("emailInvTo").value || "").trim();
+  const subject    = (document.getElementById("emailInvSubject").value || "").trim();
+  const body       = (document.getElementById("emailInvBody").value || "").trim();
+  const bccSelfEl  = document.getElementById("emailInvBccSelf");
+  const bccSelf    = !!(bccSelfEl && bccSelfEl.checked);
+
+  const recipients = toRaw.split(",").map(s => s.trim()).filter(Boolean);
+  if(recipients.length === 0){ setInvoiceEmailStatus("Enter at least one recipient.", "error"); return; }
+  if(!subject){                setInvoiceEmailStatus("Subject is required.", "error"); return; }
+
+  // Supabase must be initialised + the user must be signed in to call the
+  // Edge Function (Resend access is gated server-side by user_id).
+  if(!supa){ setInvoiceEmailStatus("Sign in to send emails. (Supabase not initialised.)", "error"); return; }
+  if(!currentUser){ setInvoiceEmailStatus("Sign in to send emails.", "error"); return; }
+
+  const btn = document.getElementById("emailInvSendBtn");
+  if(btn){ btn.disabled = true; btn.textContent = "Generating PDF…"; }
+  setInvoiceEmailStatus("Generating PDF attachment...", "working");
+
+  try{
+    // ---- 1. Build the invoice PDF (same renderer as Download PDF) ----
+    const el = buildInvoicePdfEl(inv);
+    document.body.appendChild(el);
+    let blob;
+    try{
+      blob = await pdfFromElement({
+        sourceEl: el,
+        filename: (inv.number || "invoice") + ".pdf",
+        marginInches: 0.4,
+        orientation: "portrait",
+        pageFormat: "letter"
+      });
+    } finally {
+      if(el.parentNode) el.parentNode.removeChild(el);
+    }
+    const pdfBase64 = await blobToBase64(blob);
+    const sizeKB    = Math.round(blob.size / 1024);
+    const filename  = (inv.number || "invoice") + ".pdf";
+
+    // ---- 2. Send via the generic email-estimate Edge Function ----
+    // We pass BCC via cc (the function accepts cc[] and forwards as bcc-ish
+    // headers; for safety we BCC by adding to cc which Resend treats as cc).
+    setInvoiceEmailStatus(`Sending (${sizeKB} KB attachment)...`, "working");
+    const payload = {
+      to: recipients,
+      cc: (bccSelf && currentUser && currentUser.email) ? [currentUser.email] : [],
+      subject, body, pdfBase64, filename
+    };
+    const { data, error } = await supa.functions.invoke('email-estimate', { body: payload });
+    if(error)            throw new Error(error.message || "Edge Function error");
+    if(data && data.error) throw new Error(data.error);
+
+    // ---- 3. Auto-mark invoice as Sent (clock starts → due-date matters) ----
+    inv.status = "sent";
+    inv.updatedAt = new Date().toISOString();
+    if(typeof saveEstimate === "function") saveEstimate({ silent:true });
+
+    setInvoiceEmailStatus(
+      `Sent to ${recipients.join(", ")}${bccSelf?" (BCC'd to you)":""}. Invoice marked Sent.`,
+      "success"
+    );
+    if(btn){ btn.textContent = "Sent ✓"; btn.disabled = true; }
+    // Refresh the invoicing modal in the background so the status flips live.
+    if(typeof renderInvoicing === "function")    renderInvoicing();
+    if(typeof renderInvoiceDetail === "function") renderInvoiceDetail(inv);
+    setTimeout(closeEmailInvoiceModal, 2200);
+  } catch(e){
+    console.error("Invoice email failed:", e);
+    // Show a specific, actionable message instead of the raw error.
+    setInvoiceEmailStatus(formatEmailErrorLine(e), "error");
+    if(btn){ btn.disabled = false; btn.textContent = "Generate PDF & Send"; }
+  }
+}
+
 /* Find the ACCEPTED contractor bid for the current estimate, if any.
    Matches via the address-based project key (same matching the Bids
    dashboard uses). Returns null when no accepted bid exists.
@@ -14931,9 +15380,44 @@ function closeInvoicing(){
 
 /* Render the full Invoicing body — Project Financials, milestone cards,
    custom invoices, all invoices list. */
+/* ===== Invoicing modal scope + filter state =====
+   Module-level so toggling scope / filters doesn't get lost across
+   re-renders. The All Projects view also persists its filter chip
+   selection so reopening the modal feels stable. */
+let _invoicingScope = "current";   // "current" | "all"
+let _invAllFilter = {
+  status: "all",                    // "all" | "draft" | "sent" | "paid" | "overdue"
+  year:   "all"                     // "all" or 4-digit year string
+};
+
+function setInvoicingScope(scope){
+  _invoicingScope = (scope === "all") ? "all" : "current";
+  renderInvoicing();
+}
+function setInvAllFilter(field, value){
+  if(field !== "status" && field !== "year") return;
+  _invAllFilter[field] = value;
+  renderInvoicing();
+}
+
 function renderInvoicing(){
   const body = document.getElementById("invoicingBody");
   if(!body) return;
+
+  // Top scope toggle — always shown. Cleanly delegates to the right renderer.
+  const scopeHtml = `
+    <div class="inv-scope-toggle" role="tablist" aria-label="Invoicing scope">
+      <button class="${_invoicingScope === "current" ? "active" : ""}" onclick="setInvoicingScope('current')" role="tab">Current Project</button>
+      <button class="${_invoicingScope === "all"     ? "active" : ""}" onclick="setInvoicingScope('all')"     role="tab">All Projects</button>
+    </div>
+  `;
+
+  if(_invoicingScope === "all"){
+    body.innerHTML = scopeHtml + renderInvoicingAllProjects();
+    return;
+  }
+
+  // ===== Current-project view (Phase 1 layout, unchanged) =====
   const contract = invoiceContractValue();
   const fmt = (n) => "$" + Math.round(n).toLocaleString("en-US");
 
@@ -14952,7 +15436,8 @@ function renderInvoicing(){
     const displayAmount = inv ? (inv.amount || +(contract * (inv.percent/100)).toFixed(2))
                               : +(contract * (m.pct/100)).toFixed(2);
     const displayLabel  = inv ? (inv.milestoneLabel || m.label) : m.label;
-    const status = inv ? inv.status : "uninvoiced";
+    // Effective status promotes "sent + past due" to "overdue" for display.
+    const status = inv ? invoiceEffectiveStatus(inv) : "uninvoiced";
     const statusLabel = inv ? status.toUpperCase() : "Not yet invoiced";
     const handler = inv
       ? `openInvoiceDetail('${escapeHtmlAttr(inv.id)}')`
@@ -14975,18 +15460,21 @@ function renderInvoicing(){
   invoices.sort((a,b) => (a.createdAt || "").localeCompare(b.createdAt || ""));
   const rowsHtml = invoices.length === 0
     ? `<tr><td colspan="6" class="inv-list-empty">No invoices issued yet. Click a milestone above to create your first one.</td></tr>`
-    : invoices.map(inv => `
+    : invoices.map(inv => {
+        const effStatus = invoiceEffectiveStatus(inv);
+        return `
         <tr onclick="openInvoiceDetail('${escapeHtmlAttr(inv.id)}')">
           <td>${escapeHtml(inv.number || "—")}</td>
           <td>${escapeHtml(inv.milestoneLabel || "Custom")}</td>
           <td>${escapeHtml(inv.issuedDate || "—")}</td>
           <td>${escapeHtml(inv.dueDate || "—")}</td>
-          <td><span class="inv-status-pill ${inv.status}">${escapeHtml((inv.status || "draft").toUpperCase())}</span></td>
+          <td><span class="inv-status-pill ${effStatus}">${escapeHtml(effStatus.toUpperCase())}</span></td>
           <td class="money">${fmt(inv.total || 0)}</td>
         </tr>
-      `).join("");
+      `;}).join("");
 
   body.innerHTML = `
+    ${scopeHtml}
     ${renderProjectFinancialsCard()}
 
     <div class="inv-schedule-title">Payment Schedule &mdash; ${scheduleLabel}</div>
@@ -15010,6 +15498,207 @@ function renderInvoicing(){
       <tbody>${rowsHtml}</tbody>
     </table>
   `;
+}
+
+/* ===== All Projects dashboard ============================================
+   Cross-estimate invoice view. Walks every locally-cached estimate
+   (loadSavedList()) — which is kept in sync with the cloud "estimates"
+   table via the normal save/load path — and aggregates every invoice
+   on every estimate's state.invoices array.
+
+   YTD stats are scoped to the current calendar year. Filter chips refine
+   the table without affecting the YTD card numbers (so you can isolate
+   "overdue only" while still seeing the year's headline totals).        */
+function renderInvoicingAllProjects(){
+  const fmt = (n) => "$" + Math.round(n).toLocaleString("en-US");
+  const saved = (typeof loadSavedList === "function") ? loadSavedList() : [];
+
+  // Also include the live (unsaved or in-memory) state, so freshly issued
+  // invoices on the current project appear without needing a save cycle.
+  // Match by _id to dedupe against the saved copy.
+  const liveId = state && state._id;
+  const flat = [];   // [{est, inv}]
+  let foundLive = false;
+  saved.forEach(est => {
+    if(liveId && est.id === liveId){
+      foundLive = true;
+      // Use the LIVE state's invoices (more recent than what saved has)
+      const invs = (state && Array.isArray(state.invoices)) ? state.invoices : [];
+      invs.forEach(inv => flat.push({ est, inv, fromLive:true }));
+    } else {
+      const st  = est && est.state;
+      const invs = (st && Array.isArray(st.invoices)) ? st.invoices : [];
+      invs.forEach(inv => flat.push({ est, inv, fromLive:false }));
+    }
+  });
+  if(!foundLive && state && Array.isArray(state.invoices) && state.invoices.length > 0){
+    // Live estimate isn't in saved list yet — still surface its invoices.
+    const pseudoEst = {
+      id: state._id || "_live",
+      name: state.propName || state.propAddress || "Current (unsaved) project",
+      state
+    };
+    state.invoices.forEach(inv => flat.push({ est: pseudoEst, inv, fromLive:true }));
+  }
+
+  // ---- YTD stats (current calendar year, by issuedDate) ----
+  const thisYear = String(new Date().getFullYear());
+  let invoicedYtd = 0, collectedYtd = 0, outstandingYtd = 0, overdueYtd = 0, overdueCount = 0;
+  flat.forEach(({inv}) => {
+    if(!inv || inv.status === "void" || inv.status === "draft") return;
+    const yr = String((inv.issuedDate || "").slice(0,4));
+    if(yr !== thisYear) return;
+    const amt = +(inv.amount || 0);
+    invoicedYtd += amt;
+    if(inv.status === "paid") collectedYtd += amt;
+    else if(inv.status === "sent") outstandingYtd += amt;
+    if(isInvoiceOverdue(inv)){ overdueYtd += amt; overdueCount++; }
+  });
+
+  // ---- Available year filter values ----
+  const years = new Set();
+  flat.forEach(({inv}) => {
+    const yr = (inv.issuedDate || "").slice(0,4);
+    if(/^\d{4}$/.test(yr)) years.add(yr);
+  });
+  const yearList = Array.from(years).sort().reverse();
+
+  // ---- Build the YTD stats card ----
+  const statsHtml = `
+    <div class="inv-stats-grid">
+      <div class="inv-stat-card">
+        <div class="label">${thisYear} Invoiced</div>
+        <div class="value">${fmt(invoicedYtd)}</div>
+        <div class="sub">All issued invoices (sent + paid) YTD</div>
+      </div>
+      <div class="inv-stat-card">
+        <div class="label">${thisYear} Collected</div>
+        <div class="value">${fmt(collectedYtd)}</div>
+        <div class="sub">Marked Paid YTD</div>
+      </div>
+      <div class="inv-stat-card${outstandingYtd > 0 ? " warn" : ""}">
+        <div class="label">A/R Outstanding</div>
+        <div class="value">${fmt(outstandingYtd)}</div>
+        <div class="sub">Sent &amp; not yet paid (YTD)</div>
+      </div>
+      <div class="inv-stat-card${overdueYtd > 0 ? " warn" : ""}">
+        <div class="label">Overdue</div>
+        <div class="value">${fmt(overdueYtd)}</div>
+        <div class="sub">${overdueCount} invoice${overdueCount===1?"":"s"} past due date</div>
+      </div>
+    </div>
+  `;
+
+  // ---- Filter chip row ----
+  const statusChips = ["all","draft","sent","overdue","paid"].map(s => `
+    <span class="inv-filter-chip ${s === "overdue" ? "overdue " : ""}${_invAllFilter.status === s ? "active" : ""}"
+          onclick="setInvAllFilter('status','${s}')">${s === "all" ? "All" : s.charAt(0).toUpperCase()+s.slice(1)}</span>
+  `).join("");
+  const yearChips = ["all", ...yearList].map(y => `
+    <span class="inv-filter-chip ${_invAllFilter.year === y ? "active" : ""}"
+          onclick="setInvAllFilter('year','${y}')">${y === "all" ? "All years" : y}</span>
+  `).join("");
+  const filterHtml = `
+    <div class="inv-filter-row">
+      <span class="label">Status:</span>
+      ${statusChips}
+    </div>
+    <div class="inv-filter-row">
+      <span class="label">Year:</span>
+      ${yearChips}
+    </div>
+  `;
+
+  // ---- Apply filters to the flat list ----
+  let filtered = flat.filter(({inv}) => {
+    if(!inv) return false;
+    const yr  = String((inv.issuedDate || "").slice(0,4));
+    if(_invAllFilter.year !== "all" && yr !== _invAllFilter.year) return false;
+    const eff = invoiceEffectiveStatus(inv);
+    if(_invAllFilter.status === "all") return true;
+    if(_invAllFilter.status === "overdue") return eff === "overdue";
+    return eff === _invAllFilter.status;
+  });
+  // Sort newest first by issuedDate, fall back to createdAt.
+  filtered.sort((a,b) => {
+    const ad = (a.inv.issuedDate || a.inv.createdAt || "");
+    const bd = (b.inv.issuedDate || b.inv.createdAt || "");
+    return bd.localeCompare(ad);
+  });
+
+  const tableRowsHtml = filtered.length === 0
+    ? `<tr><td colspan="7" class="inv-list-empty">No invoices match the current filters.</td></tr>`
+    : filtered.map(({est, inv, fromLive}) => {
+        const eff   = invoiceEffectiveStatus(inv);
+        const proj  = (est && (est.name || (est.state && (est.state.propName || est.state.propAddress)))) || "—";
+        const click = fromLive
+          // Live project — just open the invoice detail in this estimate.
+          ? `openInvoiceDetail('${escapeHtmlAttr(inv.id)}')`
+          // Other project — switch to it, then open the invoice detail.
+          : `openInvoiceFromAllProjects('${escapeHtmlAttr(est.id)}','${escapeHtmlAttr(inv.id)}')`;
+        return `
+          <tr onclick="${click}">
+            <td>${escapeHtml(inv.number || "—")}</td>
+            <td title="${escapeHtmlAttr(proj)}">${escapeHtml(proj.length > 38 ? proj.slice(0,36)+"…" : proj)}</td>
+            <td>${escapeHtml(inv.milestoneLabel || "Custom")}</td>
+            <td>${escapeHtml(inv.issuedDate || "—")}</td>
+            <td>${escapeHtml(inv.dueDate || "—")}</td>
+            <td><span class="inv-status-pill ${eff}">${escapeHtml(eff.toUpperCase())}</span></td>
+            <td class="money">${fmt(inv.total || 0)}</td>
+          </tr>
+        `;
+      }).join("");
+
+  return `
+    ${statsHtml}
+    ${filterHtml}
+    <div class="inv-list-title">
+      <span>All Invoices Across Projects</span>
+      <span style="font-size:11px;color:var(--muted);font-weight:500;letter-spacing:.04em;text-transform:none;">${filtered.length} invoice${filtered.length===1?"":"s"} shown</span>
+    </div>
+    <table class="inv-list-table">
+      <thead>
+        <tr>
+          <th>Invoice #</th>
+          <th>Project</th>
+          <th>Milestone</th>
+          <th>Issued</th>
+          <th>Due</th>
+          <th>Status</th>
+          <th style="text-align:right;">Total (incl. HST)</th>
+        </tr>
+      </thead>
+      <tbody>${tableRowsHtml}</tbody>
+    </table>
+  `;
+}
+
+/* When the user clicks an invoice row in All Projects that belongs to a
+   DIFFERENT estimate, we need to load that estimate into the workspace
+   first (otherwise openInvoiceDetail can't find the invoice on
+   state.invoices). Uses the existing loadEstimate path. */
+function openInvoiceFromAllProjects(estId, invId){
+  // Persist the user's desire to land on this invoice after the load swap.
+  try{ localStorage.setItem("rts_pending_invoice_open", invId); }catch(e){}
+  // Switch to the target estimate.
+  if(typeof loadEstimate === "function"){
+    loadEstimate(estId);
+  } else {
+    alert("Can't switch projects — load helper not available.");
+    return;
+  }
+  // Defer the open to give the load + render cycle a tick.
+  setTimeout(() => {
+    try{
+      const pending = localStorage.getItem("rts_pending_invoice_open");
+      localStorage.removeItem("rts_pending_invoice_open");
+      if(pending){
+        _invoicingScope = "current";  // bring them back to per-project view
+        renderInvoicing();
+        openInvoiceDetail(pending);
+      }
+    }catch(e){}
+  }, 250);
 }
 
 /* Create a new milestone invoice (called from clicking a milestone card
@@ -15207,7 +15896,8 @@ function renderInvoiceDetail(inv){
     </div>
 
     <div class="inv-actions">
-      <button class="primary" onclick="downloadInvoicePdf('${inv.id}')">Download PDF</button>
+      <button class="primary" onclick="openEmailInvoiceModal('${inv.id}')" ${isVoid ? "disabled" : ""} title="Email the invoice PDF to the client (auto-marks Sent on success)">Send to Client</button>
+      <button onclick="downloadInvoicePdf('${inv.id}')">Download PDF</button>
       <button onclick="markInvoiceSent('${inv.id}')" ${inv.status === "sent" || inv.status === "paid" ? "disabled" : ""}>Mark Sent</button>
       <button onclick="markInvoicePaid('${inv.id}')" ${inv.status === "paid" || isVoid ? "disabled" : ""}>Mark Paid</button>
       <button class="ghost" style="margin-left:auto;" onclick="voidInvoice('${inv.id}')" ${isVoid ? "disabled" : ""}>Void Invoice</button>
