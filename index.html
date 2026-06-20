@@ -3098,7 +3098,7 @@
       <button onclick="openClientEstimate()">Print / PDF</button>
       <button onclick="openEmailEstimateModal()">Email to Client</button>
       <button onclick="openExpenseTracker()" title="Track renovation expenses & profit for this estimate">Expense Tracker</button>
-      <button onclick="openInvoicing()" title="Issue invoices on the 10/40/40/10 payment schedule for this estimate">Invoicing</button>
+      <button onclick="openInvoicing()" title="Issue invoices on the project payment schedule (10/40/40/10 — or 10/40/20/20/10 when a kitchen reno is part of the scope)">Invoicing</button>
       <input type="file" id="pdfImportInput" accept="application/pdf,.pdf" style="display:none;" onchange="onPdfFileChosen(event)">
     </div>
   </div>
@@ -3658,9 +3658,11 @@
 </div>
 
 <!-- Invoicing modal — per-estimate invoice list + payment-schedule cards.
-     Opens from the toolbar next to Expense Tracker. The 10/40/40/10 milestones
-     pre-populate based on the current contract total; custom invoices (change
-     orders, extras) can be added separately. -->
+     Opens from the toolbar next to Expense Tracker. The milestones pre-populate
+     based on the current contract total. Schedule is dynamic: 10/40/40/10
+     normally, or 10/40/20/20/10 when a kitchen reno is part of the scope
+     (the extra 20% milestone locks in cabinet production). Custom invoices
+     (change orders, extras) can be added separately. -->
 <div class="modal-bg" id="invoicingModal" onclick="if(event.target===this)closeInvoicing()">
   <div class="modal" style="max-width:1080px;">
     <h3>
@@ -4217,8 +4219,10 @@ function freshState(){
     // pre-set a contractor cost for margin tracking.
     miscellaneous: { items: [] },
     // INVOICES — array of invoice records tied to this estimate. Pre-populated
-    // by the 10/40/40/10 payment schedule (via lazy creation in the UI), plus
-    // any custom invoices the user adds for change orders / extras.
+    // by the active milestone schedule (10/40/40/10 by default, or
+    // 10/40/20/20/10 when kitchen is in scope — see getMilestoneSchedule()),
+    // via lazy creation in the UI. Custom invoices for change orders / extras
+    // can be added separately.
     // Each invoice: { id, number, milestone, milestoneLabel, milestoneDesc,
     //                 percent, amount, hstRate, hstAmount, total, status,
     //                 issuedDate, dueDate, paidDate, paymentMethod, notes,
@@ -9984,32 +9988,30 @@ function renderClientEstimate(){
     }
 
     // ============================================================
-    // PAYMENT SCHEDULE & TIMELINE — 4-stage milestone schedule.
-    // Sums to 100% of the grand total (Total with HST).
+    // PAYMENT SCHEDULE & TIMELINE — dynamic milestone schedule.
+    //
+    //   • No kitchen → 4 milestones (10 / 40 / 40 / 10)
+    //   • Kitchen   → 5 milestones (10 / 40 / 20 / 20 / 10)
+    //
+    // Source of truth is getMilestoneSchedule() — the exact same helper
+    // that drives the Invoicing modal's milestone cards. Keeping a single
+    // source guarantees the estimator print, the email-to-client PDF, and
+    // the invoicing UI all show the same draws to the homeowner.
     // ============================================================
     const grand = t.total;
-    const milestones = [
-      {
-        n: 1, pct: 10,
-        name: "Deposit &mdash; On Acceptance",
-        desc: "Locks in your project start date, secures all subcontracted trades, and triggers ordering of long-lead materials."
-      },
-      {
-        n: 2, pct: 40,
-        name: "Start of Demolition",
-        desc: "Due the day demolition begins. Covers site protection, demolition, debris disposal, and delivery of rough materials."
-      },
-      {
-        n: 3, pct: 40,
-        name: "Flooring, Painting, Electrical &amp; Plumbing Rough-Ins",
-        desc: "Due once electrical and plumbing rough-ins are complete and flooring, drywall, and paint are installed."
-      },
-      {
-        n: 4, pct: 10,
-        name: "Final Completion &amp; Cleaning",
-        desc: "Due on Substantial Completion &mdash; all trim and fixtures installed, professional deep-clean done, property MLS&reg;-ready."
-      }
-    ];
+    const milestones = getMilestoneSchedule().map((m, i) => ({
+      n: i + 1,
+      pct: m.pct,
+      // The helper uses &mdash; safe characters; render through textContent
+      // by way of a tiny inline transform so we don't HTML-escape and break
+      // the live em-dash in the visible label.
+      name: m.label,
+      desc: m.desc
+    }));
+
+    // Build a short label like "10 / 40 / 40 / 10" or "10 / 40 / 20 / 20 / 10"
+    // so the section heading reflects whichever schedule is in play.
+    const pctLabel = milestones.map(m => m.pct).join(" / ");
 
     // Sanity check: percentages should sum to 100
     const pctSum = milestones.reduce((a,m) => a + m.pct, 0);
@@ -10032,7 +10034,7 @@ function renderClientEstimate(){
     const totalAmt = fmtMoney(grand, 0);
     html += `
       <div class="es-payments-wrap">
-        <div class="es-payments-title">Payment Schedule &amp; Timeline</div>
+        <div class="es-payments-title">Payment Schedule &amp; Timeline &mdash; ${pctLabel}</div>
         <div class="es-payments-intro">
           Payments are tied to project milestones rather than calendar dates. Each draw is invoiced on completion of the milestone described below and is due within <b>3 business days</b> of invoice. All amounts are in Canadian dollars and include HST where applicable.
         </div>
@@ -14595,6 +14597,71 @@ function applyPdfImport(){
   const basementNote = pdfIncludeBasement ? " (incl. basement)" : (d.basementSqft ? " (basement excluded)" : "");
   flash && flash("Imported: " + bathroomsToImport.length + " bathroom" + (bathroomsToImport.length===1?"":"s") + ", " + doorCount + " doors, " + (potlightCount||0) + " pot lights" + basementNote);
 }
+
+/* ===============================================================
+   Milestone schedule helper — used by both the client-estimate
+   Print/PDF (renderClientEstimate above) AND the Invoicing modal
+   in the next script block. Dynamic based on whether kitchen reno
+   is part of scope:
+     • No kitchen → 4 milestones (10 / 40 / 40 / 10)
+     • Kitchen   → 5 milestones (10 / 40 / 20 / 20 / 10)
+   The extra 20% on kitchen projects is a cabinet production lock-in.
+   Lives here (main app block) so the test loader — which picks only
+   the largest inline script — can reach it.
+   =============================================================== */
+function getMilestoneSchedule(){
+  const hasKitchen = !!(state && state.enabled && state.enabled.kitchen);
+  const deposit = {
+    id: "deposit", pct: 10,
+    label: "Deposit — On Acceptance",
+    desc: "Locks in your project start date, secures all subcontracted trades, and triggers ordering of long-lead materials."
+  };
+  const start = {
+    id: "start", pct: 40,
+    label: "Start of Demolition",
+    desc: "Due the day demolition begins. Covers site protection, demolition, debris disposal, and delivery of rough materials."
+  };
+  const kitchenDesign = {
+    id: "kitchen-design", pct: 20,
+    label: "Kitchen Design Approved & Submitted for Production",
+    desc: "Due once the kitchen design has been approved by the homeowner and submitted to the cabinet maker for production. Locks in your cabinet manufacturing slot and protects your timeline against material lead times."
+  };
+  const substantial = {
+    id: "substantial", pct: hasKitchen ? 20 : 40,
+    label: "Flooring, Painting, Electrical & Plumbing Rough-Ins",
+    desc: "Due once electrical and plumbing rough-ins are complete and flooring, drywall, and paint are installed."
+  };
+  const finalMs = {
+    id: "final", pct: 10,
+    label: "Final Completion & Cleaning",
+    desc: "Due on Substantial Completion — all trim and fixtures installed, professional deep-clean done, property MLS®-ready."
+  };
+  return hasKitchen
+    ? [deposit, start, kitchenDesign, substantial, finalMs]
+    : [deposit, start, substantial, finalMs];
+}
+/* Back-compat alias — anything that references INVOICE_MILESTONES still
+   works (returns the CURRENT schedule based on live state.enabled.kitchen).
+   Defined as a getter via Object.defineProperty so the lookup happens at
+   access time, not at module load. Guarded so the test environment (which
+   may not have a real `window`) doesn't crash. */
+try {
+  if (typeof window !== "undefined") {
+    Object.defineProperty(window, "INVOICE_MILESTONES", {
+      get: () => getMilestoneSchedule(),
+      configurable: true
+    });
+  }
+} catch (e) { /* test env may have window frozen — fall back to bare global */ }
+// Always expose as a bare global too, for callers that reference it without
+// the `window.` prefix in environments where window isn't defined.
+try { INVOICE_MILESTONES; } catch (e) {
+  // eslint-disable-next-line no-implicit-globals
+  Object.defineProperty(globalThis, "INVOICE_MILESTONES", {
+    get: () => getMilestoneSchedule(),
+    configurable: true
+  });
+}
 </script>
 
 <script>
@@ -14639,13 +14706,19 @@ function openExpenseTracker(){
 /* ===============================================================
    Invoicing — Phase 1
    ===============================================================
-   Per-estimate invoicing tied to the existing 10/40/40/10 payment
-   schedule. Invoices live on the estimate state (state.invoices)
-   so they sync via the normal estimate save/load path.
+   Per-estimate invoicing tied to the project payment schedule.
+   Schedule is dynamic — see getMilestoneSchedule(): 4 milestones
+   (10/40/40/10) on non-kitchen projects, 5 milestones (10/40/20/20/10)
+   on kitchen projects, where the extra 20% is a cabinet production
+   lock-in. Invoices live on the estimate state (state.invoices) so
+   they sync via the normal estimate save/load path.
 
    Architecture:
-   - INVOICE_MILESTONES: the 4 milestones, with stable IDs ("deposit",
-     "start", "substantial", "final"). Custom invoices use id "custom".
+   - getMilestoneSchedule(): returns the currently-active milestone
+     array (4 or 5 items) based on state.enabled.kitchen. Stable IDs:
+     "deposit", "start", "kitchen-design" (kitchen only), "substantial",
+     "final". Custom invoices use id "custom". INVOICE_MILESTONES is a
+     back-compat getter alias that returns whatever the helper returns.
    - state.invoices: array of invoice records (see freshState comment)
    - Invoice numbering: sequential global counter in localStorage
      (RTS_INVOICE_COUNTER_KEY). Format: RTS-INV-0001.
@@ -14657,32 +14730,11 @@ function openExpenseTracker(){
      queries the linked tracker project for matching expenses.
    =============================================================== */
 
-const INVOICE_MILESTONES = [
-  {
-    id: "deposit",
-    pct: 10,
-    label: "Deposit — On Acceptance",
-    desc: "Locks in your project start date, secures all subcontracted trades, and triggers ordering of long-lead materials."
-  },
-  {
-    id: "start",
-    pct: 40,
-    label: "Start of Demolition",
-    desc: "Due the day demolition begins. Covers site protection, demolition, debris disposal, and delivery of rough materials."
-  },
-  {
-    id: "substantial",
-    pct: 40,
-    label: "Flooring, Painting, Electrical & Plumbing Rough-Ins",
-    desc: "Due once electrical and plumbing rough-ins are complete and flooring, drywall, and paint are installed."
-  },
-  {
-    id: "final",
-    pct: 10,
-    label: "Final Completion & Cleaning",
-    desc: "Due on Substantial Completion — all trim and fixtures installed, professional deep-clean done, property MLS®-ready."
-  }
-];
+/* getMilestoneSchedule() and the INVOICE_MILESTONES back-compat alias are
+   defined in the main app script block above (search for
+   "function getMilestoneSchedule") so they're available to renderClientEstimate
+   (which also lives in that block) as well as to anything in this Invoicing
+   block. */
 
 const INVOICE_HST_RATE_DEFAULT = 0.13;
 const INVOICE_DUE_DAYS_DEFAULT = 7;
@@ -14885,10 +14937,21 @@ function renderInvoicing(){
   const contract = invoiceContractValue();
   const fmt = (n) => "$" + Math.round(n).toLocaleString("en-US");
 
-  // Milestone cards — show status for each of the 4 milestones
-  const milestonesHtml = INVOICE_MILESTONES.map(m => {
+  // Milestone cards — schedule is dynamic (4 or 5 milestones depending on
+  // whether kitchen reno is part of the scope). See getMilestoneSchedule().
+  const schedule = getMilestoneSchedule();
+  const scheduleLabel = schedule.map(m => m.pct).join(" / ");
+  const milestonesHtml = schedule.map(m => {
     const inv = findInvoiceByMilestone(m.id);
-    const amount = +(contract * (m.pct/100)).toFixed(2);
+    // When an invoice already exists, show its FROZEN percent + amount.
+    // This avoids a confusing card display if the user toggles kitchen
+    // (and therefore the live schedule percentages) after an invoice was
+    // issued — the card stays truthful about what was actually billed.
+    // No invoice → show the live schedule's projection.
+    const displayPct    = inv ? inv.percent : m.pct;
+    const displayAmount = inv ? (inv.amount || +(contract * (inv.percent/100)).toFixed(2))
+                              : +(contract * (m.pct/100)).toFixed(2);
+    const displayLabel  = inv ? (inv.milestoneLabel || m.label) : m.label;
     const status = inv ? inv.status : "uninvoiced";
     const statusLabel = inv ? status.toUpperCase() : "Not yet invoiced";
     const handler = inv
@@ -14896,9 +14959,9 @@ function renderInvoicing(){
       : `createMilestoneInvoice('${m.id}')`;
     return `
       <div class="inv-milestone-card" onclick="${handler}">
-        <div class="ms-pct">${m.pct}% &mdash; Milestone</div>
-        <div class="ms-name">${m.label}</div>
-        <div class="ms-amount">${fmt(amount)}</div>
+        <div class="ms-pct">${displayPct}% &mdash; Milestone</div>
+        <div class="ms-name">${escapeHtml(displayLabel)}</div>
+        <div class="ms-amount">${fmt(displayAmount)}</div>
         <div class="ms-status-row">
           <span class="inv-status-pill ${status === "uninvoiced" ? "uninvoiced" : status}">${statusLabel}</span>
           ${inv ? `<span style="font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums;">${escapeHtml(inv.number || "—")}</span>` : ""}
@@ -14926,7 +14989,7 @@ function renderInvoicing(){
   body.innerHTML = `
     ${renderProjectFinancialsCard()}
 
-    <div class="inv-schedule-title">Payment Schedule &mdash; 10 / 40 / 40 / 10</div>
+    <div class="inv-schedule-title">Payment Schedule &mdash; ${scheduleLabel}</div>
     <div class="inv-milestones">${milestonesHtml}</div>
 
     <div class="inv-list-title">
