@@ -4143,7 +4143,14 @@ function freshState(){
     // DOORS & TRIMS — moved out of Painting into its own category. State
     // mirrors the old painting.* fields so the migration is a straight copy.
     // newDoorTrim is brand-new (per-LF, L/M, defaults to baseboard pricing).
+    //
+    // newInteriorDoors is the master toggle that gates the combined hollow
+    // core + solid wood section. When OFF, neither material contributes
+    // (regardless of sub-toggle state). The sub-toggles newDoors and
+    // newSolidDoors are multi-selectable — both can be on simultaneously
+    // and each contributes its own count × style × rate.
     doorsTrims: {
+      newInteriorDoors: false,
       newDoors: false,      newDoorStyle: "shaker",      newDoorCount: "",
       newSolidDoors: false, newSolidDoorStyle: "shaker", newSolidDoorCount: "",
       newWindowTrim: false, newWindowTrimLinFt: "",
@@ -4800,6 +4807,12 @@ function migrateOldEstimate(m){
   // Brand-new item: door trims to match baseboard
   if(typeof dt.newDoorTrim       !== "boolean") dt.newDoorTrim       = false;
   if(typeof dt.newDoorTrimLinFt  !== "string")  dt.newDoorTrimLinFt  = "";
+  // Master toggle that gates the combined hollow core + solid wood section.
+  // For older saves that pre-date the consolidation, auto-set to true if
+  // either material was active so the user doesn't lose visibility.
+  if(typeof dt.newInteriorDoors !== "boolean"){
+    dt.newInteriorDoors = !!(dt.newDoors || dt.newSolidDoors);
+  }
   // If any pre-extraction items were enabled, auto-enable the new category
   // so the user doesn't lose visibility of their existing work.
   if(!m.enabled || typeof m.enabled !== "object") m.enabled = {};
@@ -5058,13 +5071,16 @@ function computeCategory(cat, priceSet){
     //   - newWindowTrim: per LF (rate × LF, into material)
     //   - newDoorTrim: per LF L/M split (defaults to baseboard rates)
     const rateOf = (e) => e && typeof e.rate === "number" ? e.rate : ((e && e.labour) || 0) + ((e && e.material) || 0);
-    if(s.newDoors && p.newDoor){
+    // Hollow + solid wood doors are both gated by the master newInteriorDoors
+    // toggle. If the master is off, neither material contributes regardless
+    // of the individual sub-toggle state.
+    if(s.newInteriorDoors && s.newDoors && p.newDoor){
       const c = num(s.newDoorCount);
       const style = s.newDoorStyle || "shaker";
       const entry = p.newDoor[style] || p.newDoor.shaker;
       if(entry) material += c * rateOf(entry);
     }
-    if(s.newSolidDoors && p.newSolidDoor){
+    if(s.newInteriorDoors && s.newSolidDoors && p.newSolidDoor){
       const c = num(s.newSolidDoorCount);
       const style = s.newSolidDoorStyle || "shaker";
       const entry = p.newSolidDoor[style] || p.newSolidDoor.shaker;
@@ -6070,53 +6086,62 @@ function renderCatBody(cat){
         <b style="color:var(--gold-bright)">Doors &amp; Trims</b> covers brand-new interior doors, window casing, and door casing &mdash; all <b>supplied &amp; installed</b>, hardware and finishing included. Pricing is per-door for door units and per-linear-foot for trim runs.
       </div>
 
-      <!-- Hollow core interior doors -->
+      <!-- New interior doors — consolidated master toggle. The user picks
+           the door type(s) via the multi-pill (Hollow Core / Solid Wood);
+           both can be active simultaneously, each with its own style + count.
+           Same pattern as the dual-toggle pot lights. -->
       <div class="addon">
-        <label class="check-row" style="margin-bottom:${s.newDoors?'10px':'0'};">
-          <input type="checkbox" ${s.newDoors?'checked':''} onchange="state.doorsTrims.newDoors=this.checked;renderCatBodyOnly('doorsTrims');renderTotals()">
-          <span class="addon-title">Add new <b>hollow core</b> interior doors (supplied &amp; installed)</span>
+        <label class="check-row" style="margin-bottom:${s.newInteriorDoors?'10px':'0'};">
+          <input type="checkbox" ${s.newInteriorDoors?'checked':''} onchange="state.doorsTrims.newInteriorDoors=this.checked;renderCatBodyOnly('doorsTrims');renderTotals()">
+          <span class="addon-title">Add new interior doors (supplied &amp; installed)</span>
         </label>
-        ${s.newDoors ? `
+        ${s.newInteriorDoors ? `
           <div style="margin-bottom:10px;">
-            <label style="margin-bottom:6px;">Door style</label>
-            ${pillToggle("dt-new-door-style", s.newDoorStyle || "shaker", [
-              {value:"twoPanel", label:"2-Panel"},
-              {value:"sixPanel", label:"6-Panel"},
-              {value:"shaker",   label:"Shaker"}
-            ], "state.doorsTrims.newDoorStyle=this.value;renderTotals()")}
+            <label style="margin-bottom:6px;">Door material(s) &mdash; toggle one or both</label>
+            ${multiToggle([
+              { label:"Hollow Core", on: !!s.newDoors,      onChangeExpr: "state.doorsTrims.newDoors=this.checked;renderCatBodyOnly('doorsTrims');renderTotals()" },
+              { label:"Solid Wood",  on: !!s.newSolidDoors, onChangeExpr: "state.doorsTrims.newSolidDoors=this.checked;renderCatBodyOnly('doorsTrims');renderTotals()" }
+            ])}
           </div>
-          <div class="grid grid-2">
-            <div>
-              <label>Number of new doors</label>
-              <input type="number" min="0" value="${s.newDoorCount||""}" placeholder="e.g. 4" oninput="state.doorsTrims.newDoorCount=this.value;renderTotals()">
+          ${s.newDoors ? `
+            <div style="border-top:1px dashed var(--line);padding:10px 0 4px;">
+              <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold-bright);font-weight:700;margin-bottom:8px;">Hollow Core</div>
+              <div style="margin-bottom:10px;">
+                <label style="margin-bottom:6px;">Door style</label>
+                ${pillToggle("dt-new-door-style", s.newDoorStyle || "shaker", [
+                  {value:"twoPanel", label:"2-Panel"},
+                  {value:"sixPanel", label:"6-Panel"},
+                  {value:"shaker",   label:"Shaker"}
+                ], "state.doorsTrims.newDoorStyle=this.value;renderTotals()")}
+              </div>
+              <div class="grid grid-2">
+                <div>
+                  <label>Number of hollow core doors</label>
+                  <input type="number" min="0" value="${s.newDoorCount||""}" placeholder="e.g. 4" oninput="state.doorsTrims.newDoorCount=this.value;renderTotals()">
+                </div>
+              </div>
             </div>
-          </div>
-          <div class="footnote" style="margin-top:8px;"><b style="color:var(--gold-bright)">Supplied &amp; installed:</b> new <b>hollow core</b> door slab, hinges, knob/lever set, casing touch-up, primer + 2 finish coats. <b>All hardware included</b> in the per-door rate.</div>
-        ` : ""}
-      </div>
-
-      <!-- Solid wood interior doors -->
-      <div class="addon">
-        <label class="check-row" style="margin-bottom:${s.newSolidDoors?'10px':'0'};">
-          <input type="checkbox" ${s.newSolidDoors?'checked':''} onchange="state.doorsTrims.newSolidDoors=this.checked;renderCatBodyOnly('doorsTrims');renderTotals()">
-          <span class="addon-title">Add new <b>solid wood</b> interior doors (supplied &amp; installed)</span>
-        </label>
-        ${s.newSolidDoors ? `
-          <div style="margin-bottom:10px;">
-            <label style="margin-bottom:6px;">Door style</label>
-            ${pillToggle("dt-new-solid-door-style", s.newSolidDoorStyle || "shaker", [
-              {value:"twoPanel", label:"2-Panel"},
-              {value:"sixPanel", label:"6-Panel"},
-              {value:"shaker",   label:"Shaker"}
-            ], "state.doorsTrims.newSolidDoorStyle=this.value;renderTotals()")}
-          </div>
-          <div class="grid grid-2">
-            <div>
-              <label>Number of new doors</label>
-              <input type="number" min="0" value="${s.newSolidDoorCount||""}" placeholder="e.g. 4" oninput="state.doorsTrims.newSolidDoorCount=this.value;renderTotals()">
+          ` : ""}
+          ${s.newSolidDoors ? `
+            <div style="border-top:1px dashed var(--line);padding:10px 0 4px;">
+              <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold-bright);font-weight:700;margin-bottom:8px;">Solid Wood</div>
+              <div style="margin-bottom:10px;">
+                <label style="margin-bottom:6px;">Door style</label>
+                ${pillToggle("dt-new-solid-door-style", s.newSolidDoorStyle || "shaker", [
+                  {value:"twoPanel", label:"2-Panel"},
+                  {value:"sixPanel", label:"6-Panel"},
+                  {value:"shaker",   label:"Shaker"}
+                ], "state.doorsTrims.newSolidDoorStyle=this.value;renderTotals()")}
+              </div>
+              <div class="grid grid-2">
+                <div>
+                  <label>Number of solid wood doors</label>
+                  <input type="number" min="0" value="${s.newSolidDoorCount||""}" placeholder="e.g. 4" oninput="state.doorsTrims.newSolidDoorCount=this.value;renderTotals()">
+                </div>
+              </div>
             </div>
-          </div>
-          <div class="footnote" style="margin-top:8px;"><b style="color:var(--gold-bright)">Supplied &amp; installed:</b> new <b>solid wood</b> door slab (heavier, premium feel, better acoustic/fire resistance), hinges, knob/lever set, casing touch-up, primer + 2 finish coats. <b>All hardware included</b> in the per-door rate.</div>
+          ` : ""}
+          <div class="footnote" style="margin-top:10px;"><b style="color:var(--gold-bright)">Supplied &amp; installed:</b> new door slab (per selected material), hinges, knob/lever set, casing touch-up, primer + 2 finish coats. <b>All hardware included</b> in the per-door rate. Hollow core is the standard choice; <b>solid wood</b> adds weight, premium feel, and better acoustic / fire resistance at roughly 2&times; the rate.</div>
         ` : ""}
       </div>
 
@@ -7981,12 +8006,12 @@ function renderContractorSheet(){
     anyEnabled = true;
     const s = state.doorsTrims;
     const items = [];
-    if(s.newDoors){
+    if(s.newInteriorDoors && s.newDoors){
       const style = s.newDoorStyle || "shaker";
       const styleLbl = style === "twoPanel" ? "2-Panel" : style === "sixPanel" ? "6-Panel" : "Shaker";
       items.push({ html:`New interior <b>hollow core</b> doors: <b>${s.newDoorCount||'?'} ${styleLbl} doors</b> &mdash; <b>supplied &amp; installed.</b> Includes hollow core door slab, hinges, knob/lever set, casing touch-up, primer + 2 coats paint. <b>All hardware included.</b>` });
     }
-    if(s.newSolidDoors){
+    if(s.newInteriorDoors && s.newSolidDoors){
       const style = s.newSolidDoorStyle || "shaker";
       const styleLbl = style === "twoPanel" ? "2-Panel" : style === "sixPanel" ? "6-Panel" : "Shaker";
       items.push({ html:`New interior <b>solid wood</b> doors: <b>${s.newSolidDoorCount||'?'} ${styleLbl} doors</b> &mdash; <b>supplied &amp; installed.</b> Includes solid wood door slab, hinges, knob/lever set, casing touch-up, primer + 2 coats paint. <b>All hardware included.</b>` });
@@ -8757,7 +8782,8 @@ function buildEstimateLineItems(){
     const p = prices.doorsTrims || {};
     const rows = [];
     const rateOf = (e) => e && typeof e.rate === "number" ? e.rate : ((e && e.labour) || 0) + ((e && e.material) || 0);
-    if(s.newDoors && p.newDoor){
+    // Both door materials gated by master newInteriorDoors.
+    if(s.newInteriorDoors && s.newDoors && p.newDoor){
       const c = num(s.newDoorCount);
       const style = s.newDoorStyle || "shaker";
       const entry = p.newDoor[style] || p.newDoor.shaker;
@@ -8772,7 +8798,7 @@ function buildEstimateLineItems(){
         });
       }
     }
-    if(s.newSolidDoors && p.newSolidDoor){
+    if(s.newInteriorDoors && s.newSolidDoors && p.newSolidDoor){
       const c = num(s.newSolidDoorCount);
       const style = s.newSolidDoorStyle || "shaker";
       const entry = p.newSolidDoor[style] || p.newSolidDoor.shaker;
@@ -9501,12 +9527,13 @@ function buildEstimateSummary(){
   if(state.enabled.doorsTrims){
     const s = state.doorsTrims;
     const bullets = [];
-    if(s.newDoors){
+    // Both door materials are gated by the master newInteriorDoors toggle.
+    if(s.newInteriorDoors && s.newDoors){
       const style = s.newDoorStyle || "shaker";
       const styleLbl = style === "twoPanel" ? "2-Panel" : style === "sixPanel" ? "6-Panel" : "Shaker";
       bullets.push(`New interior hollow core doors — ${num(s.newDoorCount)||'?'} ${styleLbl} doors (supplied &amp; installed, hardware included, primed &amp; painted)`);
     }
-    if(s.newSolidDoors){
+    if(s.newInteriorDoors && s.newSolidDoors){
       const style = s.newSolidDoorStyle || "shaker";
       const styleLbl = style === "twoPanel" ? "2-Panel" : style === "sixPanel" ? "6-Panel" : "Shaker";
       bullets.push(`New interior solid wood doors — ${num(s.newSolidDoorCount)||'?'} ${styleLbl} doors (supplied &amp; installed, hardware included, primed &amp; painted)`);
