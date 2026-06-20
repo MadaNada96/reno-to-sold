@@ -277,7 +277,7 @@
     font-size:11px; letter-spacing:0;
   }
   /* Coats explainer cards — small side-by-side callouts that sit directly
-     under the 1 Coat / 2 Coats toggle. Visually distinct, but kept low-key. */
+     under the Standard 2 Coats / 3 Coats toggle. Visually distinct, but kept low-key. */
   .coats-explainer{
     display:grid; grid-template-columns:1fr 1fr; gap:10px;
     margin-bottom:14px;
@@ -3883,8 +3883,8 @@ const DEFAULT_PRICES = {
   painting: {
     // walls + trim (NOT ceiling) per sqft of property — premium paint, full prep both
     walls: {
-      one: { labour: 2.25, material: 1.00 },        // 1 coat (light->similar light)
-      two: { labour: 3.00, material: 1.25 }         // 2 coats (dark->lighter)
+      one: { labour: 2.25, material: 1.00 },        // Standard 2 coats (default service — most situations, light→similar light)
+      two: { labour: 3.00, material: 1.25 }         // 3 coats (dark→lighter or high-contrast colour change)
     },
     // Ceiling tiers renamed flat/vaulted (was standard/premium). $/sqft.
     ceiling: {
@@ -5913,8 +5913,8 @@ function renderCatBody(cat){
       <!-- "When to use which" callout sits directly under the coats picker so
            the user understands the choice at a glance. Two compact cards. -->
       <div class="coats-explainer">
-        <div class="cek"><b>1 Coat</b>Use for <b style="color:var(--gold-bright);font-weight:700;">light&rarr;similar light</b> repaints (same colour family, only refreshing).</div>
-        <div class="cek"><b>2 Coats</b><b style="color:var(--gold-bright);font-weight:700;">Required</b> when going from a dark colour to a lighter one for proper coverage.</div>
+        <div class="cek"><b>Standard 2 Coats</b>Our <b style="color:var(--gold-bright);font-weight:700;">default service</b> &mdash; primer + 2 finish coats covers most situations including light&rarr;similar light or moderate colour shifts.</div>
+        <div class="cek"><b>3 Coats</b><b style="color:var(--gold-bright);font-weight:700;">Required</b> for full coverage when going from a dark colour to a lighter one, or any high-contrast colour change.</div>
       </div>
       <div class="footnote" style="margin-bottom:14px;">
         Walls only &mdash; premium paint + full prep (patching, sanding, priming) included in both options. Ceilings, trim &amp; doors are extras below.
@@ -14391,7 +14391,7 @@ function applyPdfImport(){
   state.enabled.potlights = true;
 
   // ---- Painting auto-population ----
-  // Walls: default 1 coat, whole property — keep as-is.
+  // Walls: default Standard 2 Coats (data key "one"), whole property — keep as-is.
   // Auto-select baseboards & trim painting.
   state.painting.trim = true;
   // Write the suggested linear-feet value into state so the number shows up
