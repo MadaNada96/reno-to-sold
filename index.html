@@ -3901,32 +3901,36 @@ const DEFAULT_PRICES = {
     // Garage doors — sand/prime/paint per garage door panel. Single car door
     // typical ~$300-450; double ~$500-700. Per-door rate, you pick the count.
     garageDoor: { labour: 320, material: 80 },      // $/door
-    // NEW interior doors — supplied + installed + painted + hardware included.
-    // Single rate per door covering: door slab, hinges, knob/lever set, casing
-    // touch-up, prime + 2 coats paint. Selectable style.
-    newDoor: {
-      twoPanel: { rate: 400 },  // $/door — 2-panel raised, builder grade
-      sixPanel: { rate: 450 },  // $/door — classic 6-panel
-      shaker:   { rate: 550 }   // $/door — clean 5-piece shaker (popular reno look)
-    },
-    // NEW interior doors — SOLID WOOD variant. Same supply + install + paint
-    // + hardware scope as hollow core, but solid wood slab (heavier, premium
-    // feel, better acoustic / fire resistance). GTA pricing ~2x hollow core
-    // driven by material cost and heavier-duty hardware.
-    newSolidDoor: {
-      twoPanel: { rate: 800 },  // $/door — solid 2-panel
-      sixPanel: { rate: 900 },  // $/door — solid 6-panel
-      shaker:   { rate: 1100 }  // $/door — solid shaker
-    },
-    // NEW window trim — supplied & installed casing around windows. Per
-    // linear foot of trim. Includes MDF/poplar casing, install, primer +
-    // 2 coats paint. Typical GTA ~$8/LF supplied & installed.
-    newWindowTrim: { rate: 8 },
     // Popcorn ceiling removal — scrape, skim-coat smooth, prime, repaint
     popcorn: {
       standard: { labour: 5.00, material: 1.50 },   // $/sqft — flat 8-9ft ceiling
       premium:  { labour: 6.75, material: 1.75 }    // $/sqft — textured / vaulted / 10ft+
     }
+  },
+  // ── DOORS & TRIMS ─────────────────────────────────────────────────
+  // Brand-new (not painting an existing door / trim) — supplied + installed,
+  // all hardware + materials included. Pulled out of painting so it has its
+  // own category card and pricing section.
+  doorsTrims: {
+    // Hollow core interior doors — single rate per door per style.
+    newDoor: {
+      twoPanel: { rate: 400 },
+      sixPanel: { rate: 450 },
+      shaker:   { rate: 550 }
+    },
+    // Solid wood interior doors — same shape, ~2x rates for material cost.
+    newSolidDoor: {
+      twoPanel: { rate: 800 },
+      sixPanel: { rate: 900 },
+      shaker:   { rate: 1100 }
+    },
+    // New window trim — per linear foot (MDF/poplar casing, install, primer
+    // + 2 coats paint).
+    newWindowTrim: { rate: 8 },
+    // New door trims to match baseboard — per LF, L/M split mirroring the
+    // baseboard install rate ($4.00 labour / $2.50 material) since the
+    // material and labour profile is identical to baseboard install.
+    newDoorTrim: { labour: 4.00, material: 2.50 }
   },
   flooring: {
     // Per sqft installed — labour is per sqft of space, material is per sqft × waste factor
@@ -4083,6 +4087,7 @@ const DEFAULT_PRICES = {
 
 const CATEGORY_META = {
   painting:  { title:"Painting",   sub:"Walls, trim, ceilings, doors" },
+  doorsTrims:{ title:"Doors & Trims", sub:"New interior doors, window trim, door casing" },
   flooring:  { title:"Flooring",   sub:"Per sqft of space + baseboards" },
   tiling:    { title:"Tiling",     sub:"Per sqft of space" },
   kitchen:   { title:"Kitchen",    sub:"Base + counters + island + lighting" },
@@ -4120,7 +4125,7 @@ function freshState(){
     // Legacy sellerName/sellerPhone/sellerEmail are migrated into sellers[0]
     // on load (see migrateOldEstimate).
     sellers: [ { name:"", phone:"", email:"" } ],
-    enabled: { painting:false, flooring:false, tiling:false, kitchen:false, bathroom:false, potlights:false, wallRemoval:false, miscellaneous:false },
+    enabled: { painting:false, doorsTrims:false, flooring:false, tiling:false, kitchen:false, bathroom:false, potlights:false, wallRemoval:false, miscellaneous:false },
     painting:  {
       coats: "one",          // "one" | "two"
       scope: "whole",        // "whole" | "custom"
@@ -4133,15 +4138,16 @@ function freshState(){
       extDoors: false, extDoorCount: "",
       // Garage doors — paint per door panel.
       garageDoors: false, garageDoorCount: "",
-      // NEW interior doors — supplied + installed + painted + hardware included.
-      // Style: twoPanel | sixPanel | shaker. Single rate per door (no L/M split).
-      newDoors: false, newDoorStyle: "shaker", newDoorCount: "",
-      // NEW interior doors — SOLID WOOD variant (parallel to newDoors above).
-      // Same style choices, same UI shape, just a different rate set.
-      newSolidDoors: false, newSolidDoorStyle: "shaker", newSolidDoorCount: "",
-      // NEW window trim — per linear foot of casing, supplied & installed.
-      newWindowTrim: false, newWindowTrimLinFt: "",
       popcorn: false, popcornTier: "standard", popcornSqft: ""
+    },
+    // DOORS & TRIMS — moved out of Painting into its own category. State
+    // mirrors the old painting.* fields so the migration is a straight copy.
+    // newDoorTrim is brand-new (per-LF, L/M, defaults to baseboard pricing).
+    doorsTrims: {
+      newDoors: false,      newDoorStyle: "shaker",      newDoorCount: "",
+      newSolidDoors: false, newSolidDoorStyle: "shaker", newSolidDoorCount: "",
+      newWindowTrim: false, newWindowTrimLinFt: "",
+      newDoorTrim: false,   newDoorTrimLinFt: ""
     },
     flooring:  {
       type: "vinyl",         // vinyl | laminate | engineered | hardwood
@@ -4363,23 +4369,36 @@ function migrateFlatShowerPrice(p){
     if(c.standard && !c.flat)    { c.flat    = c.standard; delete c.standard; }
     if(c.premium  && !c.vaulted) { c.vaulted = c.premium;  delete c.premium;  }
   }
-  // Painting NEW interior doors — supplied & installed & painted, hardware included.
-  // Single rate per door. Backfill defaults if missing.
-  if(p && p.painting){
-    if(!p.painting.newDoor) p.painting.newDoor = {};
-    const nd = p.painting.newDoor;
+  // DOORS & TRIMS pricing — moved out of painting into its own block.
+  // Migrate any existing painting.newDoor/newSolidDoor/newWindowTrim values
+  // into doorsTrims.* preserving customizations. Then backfill defaults +
+  // strip the old keys from painting.
+  if(p){
+    if(!p.doorsTrims) p.doorsTrims = {};
+    if(p.painting){
+      if(p.painting.newDoor       && !p.doorsTrims.newDoor)       p.doorsTrims.newDoor       = p.painting.newDoor;
+      if(p.painting.newSolidDoor  && !p.doorsTrims.newSolidDoor)  p.doorsTrims.newSolidDoor  = p.painting.newSolidDoor;
+      if(p.painting.newWindowTrim && !p.doorsTrims.newWindowTrim) p.doorsTrims.newWindowTrim = p.painting.newWindowTrim;
+      delete p.painting.newDoor;
+      delete p.painting.newSolidDoor;
+      delete p.painting.newWindowTrim;
+    }
+    if(!p.doorsTrims.newDoor) p.doorsTrims.newDoor = {};
+    const nd = p.doorsTrims.newDoor;
     if(!nd.twoPanel || typeof nd.twoPanel.rate !== "number") nd.twoPanel = { rate: 400 };
     if(!nd.sixPanel || typeof nd.sixPanel.rate !== "number") nd.sixPanel = { rate: 450 };
     if(!nd.shaker   || typeof nd.shaker.rate   !== "number") nd.shaker   = { rate: 550 };
-    // Solid wood doors — parallel structure, higher rates. Backfill if missing.
-    if(!p.painting.newSolidDoor) p.painting.newSolidDoor = {};
-    const nsd = p.painting.newSolidDoor;
+    if(!p.doorsTrims.newSolidDoor) p.doorsTrims.newSolidDoor = {};
+    const nsd = p.doorsTrims.newSolidDoor;
     if(!nsd.twoPanel || typeof nsd.twoPanel.rate !== "number") nsd.twoPanel = { rate: 800 };
     if(!nsd.sixPanel || typeof nsd.sixPanel.rate !== "number") nsd.sixPanel = { rate: 900 };
     if(!nsd.shaker   || typeof nsd.shaker.rate   !== "number") nsd.shaker   = { rate: 1100 };
-    // NEW window trim — per LF, single rate. Backfill if missing.
-    if(!p.painting.newWindowTrim || typeof p.painting.newWindowTrim.rate !== "number"){
-      p.painting.newWindowTrim = { rate: 8 };
+    if(!p.doorsTrims.newWindowTrim || typeof p.doorsTrims.newWindowTrim.rate !== "number"){
+      p.doorsTrims.newWindowTrim = { rate: 8 };
+    }
+    // New: door trims to match baseboard — L/M per LF, defaults to baseboard rates.
+    if(!p.doorsTrims.newDoorTrim || typeof p.doorsTrims.newDoorTrim.labour !== "number" || typeof p.doorsTrims.newDoorTrim.material !== "number"){
+      p.doorsTrims.newDoorTrim = { labour: 4.00, material: 2.50 };
     }
   }
   // Lighting & Electrical (key still "potlights") schema rebuild.
@@ -4750,17 +4769,47 @@ function migrateOldEstimate(m){
     if(m.painting.ceilingTier === "premium")  m.painting.ceilingTier = "vaulted";
     if(typeof m.painting.extDoors        !== "boolean") m.painting.extDoors        = false;
     if(typeof m.painting.extDoorCount    !== "string")  m.painting.extDoorCount    = "";
-    if(typeof m.painting.newDoors        !== "boolean") m.painting.newDoors        = false;
-    if(typeof m.painting.newDoorStyle    !== "string")  m.painting.newDoorStyle    = "shaker";
-    if(typeof m.painting.newDoorCount    !== "string")  m.painting.newDoorCount    = "";
-    if(typeof m.painting.newSolidDoors    !== "boolean") m.painting.newSolidDoors    = false;
-    if(typeof m.painting.newSolidDoorStyle !== "string")  m.painting.newSolidDoorStyle = "shaker";
-    if(typeof m.painting.newSolidDoorCount !== "string")  m.painting.newSolidDoorCount = "";
-    if(typeof m.painting.newWindowTrim       !== "boolean") m.painting.newWindowTrim       = false;
-    if(typeof m.painting.newWindowTrimLinFt  !== "string")  m.painting.newWindowTrimLinFt  = "";
     if(typeof m.painting.garageDoors     !== "boolean") m.painting.garageDoors     = false;
     if(typeof m.painting.garageDoorCount !== "string")  m.painting.garageDoorCount = "";
   }
+  // DOORS & TRIMS — new top-level category that was extracted out of
+  // painting. Move any pre-extraction fields from painting.* into
+  // doorsTrims.* and clean up. If the user had any of these enabled in an
+  // old saved estimate, auto-enable the new category.
+  if(!m.doorsTrims || typeof m.doorsTrims !== "object") m.doorsTrims = {};
+  const dt = m.doorsTrims;
+  const oldP = m.painting || {};
+  // Copy any pre-extraction values from painting.* → doorsTrims.*
+  const copyIfPresent = (key, defVal) => {
+    if(typeof dt[key] === "undefined" || dt[key] === null){
+      if(typeof oldP[key] !== "undefined" && oldP[key] !== null){
+        dt[key] = oldP[key];
+      } else {
+        dt[key] = defVal;
+      }
+    }
+  };
+  copyIfPresent("newDoors",        false);
+  copyIfPresent("newDoorStyle",    "shaker");
+  copyIfPresent("newDoorCount",    "");
+  copyIfPresent("newSolidDoors",   false);
+  copyIfPresent("newSolidDoorStyle","shaker");
+  copyIfPresent("newSolidDoorCount","");
+  copyIfPresent("newWindowTrim",   false);
+  copyIfPresent("newWindowTrimLinFt","");
+  // Brand-new item: door trims to match baseboard
+  if(typeof dt.newDoorTrim       !== "boolean") dt.newDoorTrim       = false;
+  if(typeof dt.newDoorTrimLinFt  !== "string")  dt.newDoorTrimLinFt  = "";
+  // If any pre-extraction items were enabled, auto-enable the new category
+  // so the user doesn't lose visibility of their existing work.
+  if(!m.enabled || typeof m.enabled !== "object") m.enabled = {};
+  if(typeof m.enabled.doorsTrims !== "boolean"){
+    m.enabled.doorsTrims = !!(dt.newDoors || dt.newSolidDoors || dt.newWindowTrim);
+  }
+  // Strip old painting.* fields so future loads use the new home.
+  delete oldP.newDoors; delete oldP.newDoorStyle; delete oldP.newDoorCount;
+  delete oldP.newSolidDoors; delete oldP.newSolidDoorStyle; delete oldP.newSolidDoorCount;
+  delete oldP.newWindowTrim; delete oldP.newWindowTrimLinFt;
   // WALL REMOVAL — new category, backfill defaults for any saved estimate.
   // v2: walls[] array. Migration folds any pre-v2 single-wall fields into
   // walls[0]. Project-level fields (permit/engineer/asbestos) stay on the
@@ -4991,30 +5040,6 @@ function computeCategory(cat, priceSet){
       labour += c * p.garageDoor.labour;
       material += c * p.garageDoor.material;
     }
-    // NEW interior doors — supplied & installed & painted, hardware included.
-    // Single rate per door (rate-based, all goes into material to keep totals
-    // ties out with the line-item view, matching the kitchen rate convention).
-    if(s.newDoors && p.newDoor){
-      const c = num(s.newDoorCount);
-      const style = s.newDoorStyle || "shaker";
-      const entry = p.newDoor[style] || p.newDoor.shaker;
-      const rateOf = (e) => e && typeof e.rate === "number" ? e.rate : ((e && e.labour) || 0) + ((e && e.material) || 0);
-      if(entry) material += c * rateOf(entry);
-    }
-    // NEW interior doors — SOLID WOOD variant. Same compute pattern.
-    if(s.newSolidDoors && p.newSolidDoor){
-      const c = num(s.newSolidDoorCount);
-      const style = s.newSolidDoorStyle || "shaker";
-      const entry = p.newSolidDoor[style] || p.newSolidDoor.shaker;
-      const rateOf = (e) => e && typeof e.rate === "number" ? e.rate : ((e && e.labour) || 0) + ((e && e.material) || 0);
-      if(entry) material += c * rateOf(entry);
-    }
-    // NEW window trim — per linear foot of casing, supplied & installed.
-    if(s.newWindowTrim && p.newWindowTrim){
-      const lf = num(s.newWindowTrimLinFt);
-      const rateOf = (e) => e && typeof e.rate === "number" ? e.rate : ((e && e.labour) || 0) + ((e && e.material) || 0);
-      if(lf > 0) material += lf * rateOf(p.newWindowTrim);
-    }
     // Popcorn ceiling removal — scrape, skim-coat smooth, prime, repaint
     if(s.popcorn && p.popcorn){
       const popSqft = num(s.popcornSqft) || num(s.ceilingSqft) || paintingSqft();
@@ -5023,6 +5048,37 @@ function computeCategory(cat, priceSet){
       if(pr){
         labour   += popSqft * pr.labour;
         material += popSqft * pr.material;
+      }
+    }
+  }
+  else if(cat === "doorsTrims"){
+    // DOORS & TRIMS — extracted from painting. Four items:
+    //   - newDoors: hollow core (rate × count, into material)
+    //   - newSolidDoors: solid wood (rate × count, into material)
+    //   - newWindowTrim: per LF (rate × LF, into material)
+    //   - newDoorTrim: per LF L/M split (defaults to baseboard rates)
+    const rateOf = (e) => e && typeof e.rate === "number" ? e.rate : ((e && e.labour) || 0) + ((e && e.material) || 0);
+    if(s.newDoors && p.newDoor){
+      const c = num(s.newDoorCount);
+      const style = s.newDoorStyle || "shaker";
+      const entry = p.newDoor[style] || p.newDoor.shaker;
+      if(entry) material += c * rateOf(entry);
+    }
+    if(s.newSolidDoors && p.newSolidDoor){
+      const c = num(s.newSolidDoorCount);
+      const style = s.newSolidDoorStyle || "shaker";
+      const entry = p.newSolidDoor[style] || p.newSolidDoor.shaker;
+      if(entry) material += c * rateOf(entry);
+    }
+    if(s.newWindowTrim && p.newWindowTrim){
+      const lf = num(s.newWindowTrimLinFt);
+      if(lf > 0) material += lf * rateOf(p.newWindowTrim);
+    }
+    if(s.newDoorTrim && p.newDoorTrim){
+      const lf = num(s.newDoorTrimLinFt);
+      if(lf > 0){
+        labour   += lf * (p.newDoorTrim.labour   || 0);
+        material += lf * (p.newDoorTrim.material || 0);
       }
     }
   }
@@ -5852,7 +5908,7 @@ function renderCatBody(cat){
     return `
       <div style="margin-bottom:8px;">
         <label style="margin-bottom:6px;">Coats</label>
-        ${tierToggle("painting", s.coats, [{value:"one",label:"1 Coat"},{value:"two",label:"2 Coats"}])}
+        ${tierToggle("painting", s.coats, [{value:"one",label:"Standard 2 Coats"},{value:"two",label:"3 Coats"}])}
       </div>
       <!-- "When to use which" callout sits directly under the coats picker so
            the user understands the choice at a glance. Two compact cards. -->
@@ -5967,73 +6023,8 @@ function renderCatBody(cat){
         ` : ""}
       </div>
 
-      <!-- NEW interior doors add-on — supplied & installed & painted, hardware included -->
-      <div class="addon">
-        <label class="check-row" style="margin-bottom:${s.newDoors?'10px':'0'};">
-          <input type="checkbox" ${s.newDoors?'checked':''} onchange="state.painting.newDoors=this.checked;renderCatBodyOnly('painting');renderTotals()">
-          <span class="addon-title">Add new <b>hollow core</b> interior doors (supplied &amp; installed)</span>
-        </label>
-        ${s.newDoors ? `
-          <div style="margin-bottom:10px;">
-            <label style="margin-bottom:6px;">Door style</label>
-            ${pillToggle("new-door-style", s.newDoorStyle || "shaker", [
-              {value:"twoPanel", label:"2-Panel"},
-              {value:"sixPanel", label:"6-Panel"},
-              {value:"shaker",   label:"Shaker"}
-            ], "state.painting.newDoorStyle=this.value;renderTotals()")}
-          </div>
-          <div class="grid grid-2">
-            <div>
-              <label>Number of new doors</label>
-              <input type="number" min="0" value="${s.newDoorCount||""}" placeholder="e.g. 4" oninput="state.painting.newDoorCount=this.value;renderTotals()">
-            </div>
-          </div>
-          <div class="footnote" style="margin-top:8px;"><b style="color:var(--gold-bright)">Supplied &amp; installed:</b> new <b>hollow core</b> door slab, hinges, knob/lever set, casing touch-up, primer + 2 finish coats. <b>All hardware included</b> in the per-door rate.</div>
-        ` : ""}
-      </div>
-
-      <!-- NEW interior doors — SOLID WOOD variant (parallel to hollow core above) -->
-      <div class="addon">
-        <label class="check-row" style="margin-bottom:${s.newSolidDoors?'10px':'0'};">
-          <input type="checkbox" ${s.newSolidDoors?'checked':''} onchange="state.painting.newSolidDoors=this.checked;renderCatBodyOnly('painting');renderTotals()">
-          <span class="addon-title">Add new <b>solid wood</b> interior doors (supplied &amp; installed)</span>
-        </label>
-        ${s.newSolidDoors ? `
-          <div style="margin-bottom:10px;">
-            <label style="margin-bottom:6px;">Door style</label>
-            ${pillToggle("new-solid-door-style", s.newSolidDoorStyle || "shaker", [
-              {value:"twoPanel", label:"2-Panel"},
-              {value:"sixPanel", label:"6-Panel"},
-              {value:"shaker",   label:"Shaker"}
-            ], "state.painting.newSolidDoorStyle=this.value;renderTotals()")}
-          </div>
-          <div class="grid grid-2">
-            <div>
-              <label>Number of new doors</label>
-              <input type="number" min="0" value="${s.newSolidDoorCount||""}" placeholder="e.g. 4" oninput="state.painting.newSolidDoorCount=this.value;renderTotals()">
-            </div>
-          </div>
-          <div class="footnote" style="margin-top:8px;"><b style="color:var(--gold-bright)">Supplied &amp; installed:</b> new <b>solid wood</b> door slab (heavier, premium feel, better acoustic/fire resistance), hinges, knob/lever set, casing touch-up, primer + 2 finish coats. <b>All hardware included</b> in the per-door rate.</div>
-        ` : ""}
-      </div>
-
-      <!-- NEW window trim add-on — per linear foot of casing (sits directly
-           under "Add new doors" per owner request) -->
-      <div class="addon">
-        <label class="check-row" style="margin-bottom:${s.newWindowTrim?'10px':'0'};">
-          <input type="checkbox" ${s.newWindowTrim?'checked':''} onchange="state.painting.newWindowTrim=this.checked;renderCatBodyOnly('painting');renderTotals()">
-          <span class="addon-title">Add new window trim (supplied &amp; installed)</span>
-        </label>
-        ${s.newWindowTrim ? `
-          <div class="grid grid-2">
-            <div>
-              <label>Linear feet of new window trim</label>
-              <input type="number" min="0" value="${s.newWindowTrimLinFt||""}" placeholder="e.g. 80" oninput="state.painting.newWindowTrimLinFt=this.value;renderTotals()">
-            </div>
-          </div>
-          <div class="footnote" style="margin-top:8px;"><b style="color:var(--gold-bright)">Supplied &amp; installed:</b> new MDF/poplar casing around windows, install, primer + 2 finish coats. Priced per linear foot of trim.</div>
-        ` : ""}
-      </div>
+      <!-- Note: New hollow core / solid wood / window trim moved to the
+           dedicated Doors & Trims category. -->
 
       <!-- Exterior doors add-on -->
       <div class="addon">
@@ -6066,6 +6057,100 @@ function renderCatBody(cat){
             </div>
           </div>
           <div class="footnote" style="margin-top:8px;">Sand, prime, and two coats of exterior-grade paint per garage door panel.</div>
+        ` : ""}
+      </div>
+
+      <div style="margin-top:14px">${breakdownRows(cat)}</div>
+    `;
+  }
+  if(cat === "doorsTrims"){
+    // DOORS & TRIMS — four items, all supply + install (hardware included).
+    return `
+      <div class="footnote" style="margin-bottom:14px;background:rgba(212,175,106,.08);border:1px solid rgba(212,175,106,.30);border-radius:8px;padding:10px 12px;line-height:1.55;">
+        <b style="color:var(--gold-bright)">Doors &amp; Trims</b> covers brand-new interior doors, window casing, and door casing &mdash; all <b>supplied &amp; installed</b>, hardware and finishing included. Pricing is per-door for door units and per-linear-foot for trim runs.
+      </div>
+
+      <!-- Hollow core interior doors -->
+      <div class="addon">
+        <label class="check-row" style="margin-bottom:${s.newDoors?'10px':'0'};">
+          <input type="checkbox" ${s.newDoors?'checked':''} onchange="state.doorsTrims.newDoors=this.checked;renderCatBodyOnly('doorsTrims');renderTotals()">
+          <span class="addon-title">Add new <b>hollow core</b> interior doors (supplied &amp; installed)</span>
+        </label>
+        ${s.newDoors ? `
+          <div style="margin-bottom:10px;">
+            <label style="margin-bottom:6px;">Door style</label>
+            ${pillToggle("dt-new-door-style", s.newDoorStyle || "shaker", [
+              {value:"twoPanel", label:"2-Panel"},
+              {value:"sixPanel", label:"6-Panel"},
+              {value:"shaker",   label:"Shaker"}
+            ], "state.doorsTrims.newDoorStyle=this.value;renderTotals()")}
+          </div>
+          <div class="grid grid-2">
+            <div>
+              <label>Number of new doors</label>
+              <input type="number" min="0" value="${s.newDoorCount||""}" placeholder="e.g. 4" oninput="state.doorsTrims.newDoorCount=this.value;renderTotals()">
+            </div>
+          </div>
+          <div class="footnote" style="margin-top:8px;"><b style="color:var(--gold-bright)">Supplied &amp; installed:</b> new <b>hollow core</b> door slab, hinges, knob/lever set, casing touch-up, primer + 2 finish coats. <b>All hardware included</b> in the per-door rate.</div>
+        ` : ""}
+      </div>
+
+      <!-- Solid wood interior doors -->
+      <div class="addon">
+        <label class="check-row" style="margin-bottom:${s.newSolidDoors?'10px':'0'};">
+          <input type="checkbox" ${s.newSolidDoors?'checked':''} onchange="state.doorsTrims.newSolidDoors=this.checked;renderCatBodyOnly('doorsTrims');renderTotals()">
+          <span class="addon-title">Add new <b>solid wood</b> interior doors (supplied &amp; installed)</span>
+        </label>
+        ${s.newSolidDoors ? `
+          <div style="margin-bottom:10px;">
+            <label style="margin-bottom:6px;">Door style</label>
+            ${pillToggle("dt-new-solid-door-style", s.newSolidDoorStyle || "shaker", [
+              {value:"twoPanel", label:"2-Panel"},
+              {value:"sixPanel", label:"6-Panel"},
+              {value:"shaker",   label:"Shaker"}
+            ], "state.doorsTrims.newSolidDoorStyle=this.value;renderTotals()")}
+          </div>
+          <div class="grid grid-2">
+            <div>
+              <label>Number of new doors</label>
+              <input type="number" min="0" value="${s.newSolidDoorCount||""}" placeholder="e.g. 4" oninput="state.doorsTrims.newSolidDoorCount=this.value;renderTotals()">
+            </div>
+          </div>
+          <div class="footnote" style="margin-top:8px;"><b style="color:var(--gold-bright)">Supplied &amp; installed:</b> new <b>solid wood</b> door slab (heavier, premium feel, better acoustic/fire resistance), hinges, knob/lever set, casing touch-up, primer + 2 finish coats. <b>All hardware included</b> in the per-door rate.</div>
+        ` : ""}
+      </div>
+
+      <!-- New window trim -->
+      <div class="addon">
+        <label class="check-row" style="margin-bottom:${s.newWindowTrim?'10px':'0'};">
+          <input type="checkbox" ${s.newWindowTrim?'checked':''} onchange="state.doorsTrims.newWindowTrim=this.checked;renderCatBodyOnly('doorsTrims');renderTotals()">
+          <span class="addon-title">Add new window trim (supplied &amp; installed)</span>
+        </label>
+        ${s.newWindowTrim ? `
+          <div class="grid grid-2">
+            <div>
+              <label>Linear feet of new window trim</label>
+              <input type="number" min="0" value="${s.newWindowTrimLinFt||""}" placeholder="e.g. 80" oninput="state.doorsTrims.newWindowTrimLinFt=this.value;renderTotals()">
+            </div>
+          </div>
+          <div class="footnote" style="margin-top:8px;"><b style="color:var(--gold-bright)">Supplied &amp; installed:</b> new MDF/poplar casing around windows, install, primer + 2 finish coats. Priced per linear foot of trim.</div>
+        ` : ""}
+      </div>
+
+      <!-- New door trims to match baseboard (NEW item) -->
+      <div class="addon last">
+        <label class="check-row" style="margin-bottom:${s.newDoorTrim?'10px':'0'};">
+          <input type="checkbox" ${s.newDoorTrim?'checked':''} onchange="state.doorsTrims.newDoorTrim=this.checked;renderCatBodyOnly('doorsTrims');renderTotals()">
+          <span class="addon-title">Add new door trims to match baseboard (supplied &amp; installed)</span>
+        </label>
+        ${s.newDoorTrim ? `
+          <div class="grid grid-2">
+            <div>
+              <label>Linear feet of new door casing</label>
+              <input type="number" min="0" value="${s.newDoorTrimLinFt||""}" placeholder="e.g. 70" oninput="state.doorsTrims.newDoorTrimLinFt=this.value;renderTotals()">
+            </div>
+          </div>
+          <div class="footnote" style="margin-top:8px;"><b style="color:var(--gold-bright)">Supplied &amp; installed:</b> new MDF/poplar casing around interior doors, profile matched to your baseboard, install, primer + 2 finish coats. Priced per linear foot at the same rate as new baseboards.</div>
         ` : ""}
       </div>
 
@@ -7305,7 +7390,7 @@ function renderPricingEditor(){
   // Painting — walls
   html += `<div class="section-title">Painting &mdash; walls (per sqft, premium paint + full prep)</div>
     <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
-  [{k:"one",l:"1 Coat"},{k:"two",l:"2 Coats"}].forEach(o=>{
+  [{k:"one",l:"Standard 2 Coats"},{k:"two",l:"3 Coats"}].forEach(o=>{
     html += `<div class="price-edit-row">
       <div class="lbl">${o.l}</div>
       <div>${priceInput("painting.walls."+o.k+".labour", prices.painting.walls[o.k].labour)}</div>
@@ -7343,48 +7428,6 @@ function renderPricingEditor(){
       <div>${priceInput("painting.door.material", prices.painting.door.material, 5)}</div>
     </div>`;
 
-  // Painting — NEW interior doors (supplied & installed & painted, hardware included)
-  // Single rate per door per style. Following the same supplied & installed
-  // format used by kitchen / Lighting & Electrical.
-  if(prices.painting.newDoor){
-    html += `<div class="section-title">Painting &mdash; new <b>hollow core</b> interior doors (per door, supplied &amp; installed)</div>
-      <div class="footnote" style="margin-bottom:8px;">Single rate per door: hollow core door slab + hinges + knob/lever set + casing touch-up + primer + 2 coats paint. All hardware included.</div>
-      <div class="price-edit-row head single"><div></div><div>$/door</div></div>`;
-    [{key:"twoPanel",label:"2-Panel"},{key:"sixPanel",label:"6-Panel"},{key:"shaker",label:"Shaker"}].forEach(o=>{
-      const row = prices.painting.newDoor[o.key] || { rate:0 };
-      html += `<div class="price-edit-row single">
-        <div class="lbl">${o.label}</div>
-        <div>${priceInput("painting.newDoor."+o.key+".rate", row.rate, 10)}</div>
-      </div>`;
-    });
-  }
-
-  // Painting — NEW solid wood interior doors (per door, supplied & installed)
-  if(prices.painting.newSolidDoor){
-    html += `<div class="section-title">Painting &mdash; new <b>solid wood</b> interior doors (per door, supplied &amp; installed)</div>
-      <div class="footnote" style="margin-bottom:8px;">Single rate per door: solid wood door slab + hinges + knob/lever set + casing touch-up + primer + 2 coats paint. All hardware included.</div>
-      <div class="price-edit-row head single"><div></div><div>$/door</div></div>`;
-    [{key:"twoPanel",label:"2-Panel"},{key:"sixPanel",label:"6-Panel"},{key:"shaker",label:"Shaker"}].forEach(o=>{
-      const row = prices.painting.newSolidDoor[o.key] || { rate:0 };
-      html += `<div class="price-edit-row single">
-        <div class="lbl">${o.label}</div>
-        <div>${priceInput("painting.newSolidDoor."+o.key+".rate", row.rate, 10)}</div>
-      </div>`;
-    });
-  }
-
-  // Painting — NEW window trim (per LF supplied & installed)
-  if(prices.painting.newWindowTrim){
-    const row = prices.painting.newWindowTrim || { rate:0 };
-    html += `<div class="section-title">Painting &mdash; new window trim (per linear foot, supplied &amp; installed)</div>
-      <div class="footnote" style="margin-bottom:8px;">Single rate per LF of new casing around windows: MDF/poplar material + install + primer + 2 coats paint.</div>
-      <div class="price-edit-row head single"><div></div><div>$/LF</div></div>
-      <div class="price-edit-row single">
-        <div class="lbl">Per linear foot</div>
-        <div>${priceInput("painting.newWindowTrim.rate", row.rate, 1)}</div>
-      </div>`;
-  }
-
   // Painting — exterior doors (front, back, side entry)
   if(prices.painting.extDoor){
     html += `<div class="section-title">Painting &mdash; exterior doors (per door)</div>
@@ -7417,6 +7460,55 @@ function renderPricingEditor(){
       <div>${priceInput("painting.popcorn."+t+".material", row.material)}</div>
     </div>`;
   });
+
+  // Doors & Trims pricing block (moved out of painting)
+  if(prices.doorsTrims){
+    if(prices.doorsTrims.newDoor){
+      html += `<div class="section-title">Doors &amp; Trims &mdash; new <b>hollow core</b> interior doors (per door, supplied &amp; installed)</div>
+        <div class="footnote" style="margin-bottom:8px;">Single rate per door: hollow core door slab + hinges + knob/lever set + casing touch-up + primer + 2 coats paint. All hardware included.</div>
+        <div class="price-edit-row head single"><div></div><div>$/door</div></div>`;
+      [{key:"twoPanel",label:"2-Panel"},{key:"sixPanel",label:"6-Panel"},{key:"shaker",label:"Shaker"}].forEach(o=>{
+        const row = prices.doorsTrims.newDoor[o.key] || { rate:0 };
+        html += `<div class="price-edit-row single">
+          <div class="lbl">${o.label}</div>
+          <div>${priceInput("doorsTrims.newDoor."+o.key+".rate", row.rate, 10)}</div>
+        </div>`;
+      });
+    }
+    if(prices.doorsTrims.newSolidDoor){
+      html += `<div class="section-title">Doors &amp; Trims &mdash; new <b>solid wood</b> interior doors (per door, supplied &amp; installed)</div>
+        <div class="footnote" style="margin-bottom:8px;">Single rate per door: solid wood door slab + hinges + knob/lever set + casing touch-up + primer + 2 coats paint. All hardware included.</div>
+        <div class="price-edit-row head single"><div></div><div>$/door</div></div>`;
+      [{key:"twoPanel",label:"2-Panel"},{key:"sixPanel",label:"6-Panel"},{key:"shaker",label:"Shaker"}].forEach(o=>{
+        const row = prices.doorsTrims.newSolidDoor[o.key] || { rate:0 };
+        html += `<div class="price-edit-row single">
+          <div class="lbl">${o.label}</div>
+          <div>${priceInput("doorsTrims.newSolidDoor."+o.key+".rate", row.rate, 10)}</div>
+        </div>`;
+      });
+    }
+    if(prices.doorsTrims.newWindowTrim){
+      const row = prices.doorsTrims.newWindowTrim || { rate:0 };
+      html += `<div class="section-title">Doors &amp; Trims &mdash; new window trim (per linear foot, supplied &amp; installed)</div>
+        <div class="footnote" style="margin-bottom:8px;">Single rate per LF of new casing around windows: MDF/poplar material + install + primer + 2 coats paint.</div>
+        <div class="price-edit-row head single"><div></div><div>$/LF</div></div>
+        <div class="price-edit-row single">
+          <div class="lbl">Per linear foot</div>
+          <div>${priceInput("doorsTrims.newWindowTrim.rate", row.rate, 1)}</div>
+        </div>`;
+    }
+    if(prices.doorsTrims.newDoorTrim){
+      const row = prices.doorsTrims.newDoorTrim || { labour:0, material:0 };
+      html += `<div class="section-title">Doors &amp; Trims &mdash; new door trims to match baseboard (per linear foot)</div>
+        <div class="footnote" style="margin-bottom:8px;">L/M split per LF (defaults match the baseboard install rate). MDF/poplar door casing matched to baseboard profile, install, primer + 2 coats paint.</div>
+        <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>
+        <div class="price-edit-row">
+          <div class="lbl">Per linear foot</div>
+          <div>${priceInput("doorsTrims.newDoorTrim.labour", row.labour)}</div>
+          <div>${priceInput("doorsTrims.newDoorTrim.material", row.material)}</div>
+        </div>`;
+    }
+  }
 
   // Flooring — types
   html += `<div class="section-title">Flooring &mdash; install (per sqft)</div>
@@ -7694,7 +7786,8 @@ function renderPricingEditor(){
    state. Excluded categories are skipped in renderContractorSheet().
    ============================================================ */
 const CONTRACTOR_CAT_LABELS = {
-  painting:"Painting", flooring:"Flooring", tiling:"Tiling",
+  painting:"Painting", doorsTrims:"Doors & Trims",
+  flooring:"Flooring", tiling:"Tiling",
   kitchen:"Kitchen", bathroom:"Bathrooms", potlights:"Lighting & Electrical",
   wallRemoval:"Wall Removal", miscellaneous:"Miscellaneous"
 };
@@ -7853,7 +7946,7 @@ function renderContractorSheet(){
     const s = state.painting;
     const psqft = paintingSqft();
     const items = [];
-    items.push({ html:`Walls: <b>${s.coats==="two"?"Two coats":"One coat"}</b> &mdash; premium paint, full prep (patch, sand, prime).` });
+    items.push({ html:`Walls: <b>${s.coats==="two"?"3 coats":"Standard 2 coats"}</b> &mdash; premium paint, full prep (patch, sand, prime).` });
     items.push({ html:`Painting area: <b>${s.scope==="custom" ? `Specific area &mdash; ${psqft||'?'} sqft` : `Entire property &mdash; ${psqft||'?'} sqft`}</b>` });
     if(s.ceiling){
       const cs = num(s.ceilingSqft) || psqft;
@@ -7876,6 +7969,18 @@ function renderContractorSheet(){
     if(s.garageDoors){
       items.push({ html:`Garage doors: <b>${s.garageDoorCount||'?'} doors</b> &mdash; sand, prime, two coats exterior-grade paint per panel.` });
     }
+    if(s.popcorn){
+      const popSqft = num(s.popcornSqft) || num(s.ceilingSqft) || psqft;
+      items.push({ html:`Popcorn ceiling removal: <b>${(s.popcornTier||'standard')==='premium' ? 'Vaulted / 10 ft+' : 'Flat 8&ndash;9 ft'}</b> &mdash; ${popSqft||'?'} sqft. Scrape, full skim-coat smooth, prime, two finish coats. <i style="color:#666;font-weight:400">Asbestos abatement (pre-1980 homes) is a separate scope, not included.</i>` });
+    }
+    html += scopeSection("Painting", items);
+  }
+
+  // -- Doors & Trims --
+  if(includeCat("doorsTrims")){
+    anyEnabled = true;
+    const s = state.doorsTrims;
+    const items = [];
     if(s.newDoors){
       const style = s.newDoorStyle || "shaker";
       const styleLbl = style === "twoPanel" ? "2-Panel" : style === "sixPanel" ? "6-Panel" : "Shaker";
@@ -7889,11 +7994,10 @@ function renderContractorSheet(){
     if(s.newWindowTrim){
       items.push({ html:`New window trim: <b>${s.newWindowTrimLinFt||'?'} linear feet</b> &mdash; <b>supplied &amp; installed.</b> New MDF/poplar casing around windows, primer + 2 finish coats.` });
     }
-    if(s.popcorn){
-      const popSqft = num(s.popcornSqft) || num(s.ceilingSqft) || psqft;
-      items.push({ html:`Popcorn ceiling removal: <b>${(s.popcornTier||'standard')==='premium' ? 'Vaulted / 10 ft+' : 'Flat 8&ndash;9 ft'}</b> &mdash; ${popSqft||'?'} sqft. Scrape, full skim-coat smooth, prime, two finish coats. <i style="color:#666;font-weight:400">Asbestos abatement (pre-1980 homes) is a separate scope, not included.</i>` });
+    if(s.newDoorTrim){
+      items.push({ html:`New door trims to match baseboard: <b>${s.newDoorTrimLinFt||'?'} linear feet</b> &mdash; <b>supplied &amp; installed.</b> New MDF/poplar casing around interior doors, profile matched to baseboard, primer + 2 finish coats.` });
     }
-    html += scopeSection("Painting", items);
+    if(items.length) html += scopeSection("Doors & Trims", items);
   }
 
   // -- Flooring --
@@ -8146,7 +8250,7 @@ function renderContractorSheet(){
       : `<div class="empty-state">No categories are enabled in the estimate. Turn on the categories you want bid on from the estimator, then come back here.</div>`;
   } else {
     // Bid summary
-    const labels = {painting:"Painting", flooring:"Flooring", tiling:"Tiling", kitchen:"Kitchen", bathroom:"Bathrooms", potlights:"Lighting & Electrical", wallRemoval:"Wall Removal", miscellaneous:"Miscellaneous"};
+    const labels = {painting:"Painting", doorsTrims:"Doors & Trims", flooring:"Flooring", tiling:"Tiling", kitchen:"Kitchen", bathroom:"Bathrooms", potlights:"Lighting & Electrical", wallRemoval:"Wall Removal", miscellaneous:"Miscellaneous"};
     let rows = "";
     Object.keys(labels).forEach(cat => {
       if(includeCat(cat)){
@@ -8556,7 +8660,7 @@ function buildEstimateLineItems(){
     const psqft = paintingSqft();
     const wr = (p.walls && p.walls[s.coats||"one"]) || (p.walls && p.walls.one);
     if(wr && psqft > 0){
-      const coatsLbl = (s.coats === "two") ? "Two coats" : "One coat";
+      const coatsLbl = (s.coats === "two") ? "3 coats" : "Standard 2 coats";
       const scopeLbl = s.scope === "custom" ? "specific area" : "entire property";
       addRow(rows, {
         desc: `Wall painting — ${coatsLbl}`,
@@ -8644,62 +8748,70 @@ function buildEstimateLineItems(){
         });
       }
     }
-    // NEW interior doors — supplied & installed & painted, hardware included.
+    if(rows.length) groups.push({ cat:"painting", title:"Painting", rows });
+  }
+
+  // ---- Doors & Trims
+  if(state.enabled.doorsTrims){
+    const s = state.doorsTrims;
+    const p = prices.doorsTrims || {};
+    const rows = [];
+    const rateOf = (e) => e && typeof e.rate === "number" ? e.rate : ((e && e.labour) || 0) + ((e && e.material) || 0);
     if(s.newDoors && p.newDoor){
       const c = num(s.newDoorCount);
       const style = s.newDoorStyle || "shaker";
       const entry = p.newDoor[style] || p.newDoor.shaker;
-      const styleLbl = style === "twoPanel" ? "2-Panel"
-                     : style === "sixPanel" ? "6-Panel"
-                     : "Shaker";
-      const rateOf = (e) => e && typeof e.rate === "number" ? e.rate : ((e && e.labour) || 0) + ((e && e.material) || 0);
+      const styleLbl = style === "twoPanel" ? "2-Panel" : style === "sixPanel" ? "6-Panel" : "Shaker";
       if(c > 0 && entry){
-        const r = rateOf(entry);
         addRow(rows, {
           desc: `New interior hollow core doors — ${styleLbl} (supplied & installed)`,
           subdesc: "Hollow core door slab + hinges + knob/lever set + casing touch-up + primer + 2 coats paint. All hardware included.",
           qty: c, unit: "doors",
           labour: 0,
-          material: c * r
+          material: c * rateOf(entry)
         });
       }
     }
-    // NEW interior doors — SOLID WOOD variant. Same line-item shape.
     if(s.newSolidDoors && p.newSolidDoor){
       const c = num(s.newSolidDoorCount);
       const style = s.newSolidDoorStyle || "shaker";
       const entry = p.newSolidDoor[style] || p.newSolidDoor.shaker;
-      const styleLbl = style === "twoPanel" ? "2-Panel"
-                     : style === "sixPanel" ? "6-Panel"
-                     : "Shaker";
-      const rateOf = (e) => e && typeof e.rate === "number" ? e.rate : ((e && e.labour) || 0) + ((e && e.material) || 0);
+      const styleLbl = style === "twoPanel" ? "2-Panel" : style === "sixPanel" ? "6-Panel" : "Shaker";
       if(c > 0 && entry){
-        const r = rateOf(entry);
         addRow(rows, {
           desc: `New interior solid wood doors — ${styleLbl} (supplied & installed)`,
           subdesc: "Solid wood door slab + hinges + knob/lever set + casing touch-up + primer + 2 coats paint. All hardware included.",
           qty: c, unit: "doors",
           labour: 0,
-          material: c * r
+          material: c * rateOf(entry)
         });
       }
     }
-    // NEW window trim — per LF supplied & installed.
     if(s.newWindowTrim && p.newWindowTrim){
       const lf = num(s.newWindowTrimLinFt);
-      const rateOf = (e) => e && typeof e.rate === "number" ? e.rate : ((e && e.labour) || 0) + ((e && e.material) || 0);
       if(lf > 0){
-        const r = rateOf(p.newWindowTrim);
         addRow(rows, {
           desc: "New window trim (supplied & installed)",
           subdesc: "MDF/poplar casing around windows, install, primer + 2 finish coats.",
           qty: lf, unit: "LF",
           labour: 0,
-          material: lf * r
+          material: lf * rateOf(p.newWindowTrim)
         });
       }
     }
-    if(rows.length) groups.push({ cat:"painting", title:"Painting", rows });
+    if(s.newDoorTrim && p.newDoorTrim){
+      const lf = num(s.newDoorTrimLinFt);
+      if(lf > 0){
+        addRow(rows, {
+          desc: "New door trims to match baseboard (supplied & installed)",
+          subdesc: "MDF/poplar casing around interior doors, profile matched to baseboard, install, primer + 2 finish coats.",
+          qty: lf, unit: "LF",
+          labour: lf * (p.newDoorTrim.labour || 0),
+          material: lf * (p.newDoorTrim.material || 0)
+        });
+      }
+    }
+    if(rows.length) groups.push({ cat:"doorsTrims", title:"Doors & Trims", rows });
   }
 
   // ---- Flooring
@@ -9355,7 +9467,7 @@ function buildEstimateSummary(){
     const s = state.painting;
     const psqft = paintingSqft();
     const bullets = [];
-    const coatsLbl = s.coats === "two" ? "Two coats" : "One coat";
+    const coatsLbl = s.coats === "two" ? "3 coats" : "Standard 2 coats";
     const scopeLbl = s.scope === "custom" ? `specific area (${psqft||'?'} sqft)` : `entire property (${psqft||'?'} sqft)`;
     bullets.push(`Wall painting — ${coatsLbl}, ${scopeLbl}, premium prep & paint`);
     if(s.popcorn){
@@ -9381,6 +9493,14 @@ function buildEstimateSummary(){
     if(s.garageDoors){
       bullets.push(`Garage doors — ${num(s.garageDoorCount)||'?'} doors painted (sand, prime, two coats exterior-grade)`);
     }
+    const { labour, material } = computeCategory("painting");
+    sections.push({ cat:"painting", title:"Painting", bullets, total: labour + material });
+  }
+
+  // -- Doors & Trims
+  if(state.enabled.doorsTrims){
+    const s = state.doorsTrims;
+    const bullets = [];
     if(s.newDoors){
       const style = s.newDoorStyle || "shaker";
       const styleLbl = style === "twoPanel" ? "2-Panel" : style === "sixPanel" ? "6-Panel" : "Shaker";
@@ -9394,8 +9514,12 @@ function buildEstimateSummary(){
     if(s.newWindowTrim){
       bullets.push(`New window trim — ${num(s.newWindowTrimLinFt)||'?'} linear feet (supplied &amp; installed, MDF/poplar casing, primed &amp; painted)`);
     }
-    const { labour, material } = computeCategory("painting");
-    sections.push({ cat:"painting", title:"Painting", bullets, total: labour + material });
+    if(s.newDoorTrim){
+      bullets.push(`New door trims to match baseboard — ${num(s.newDoorTrimLinFt)||'?'} linear feet (supplied &amp; installed, profile matched to baseboard, primed &amp; painted)`);
+    }
+    if(bullets.length === 0) bullets.push("No items configured yet.");
+    const { labour, material } = computeCategory("doorsTrims");
+    sections.push({ cat:"doorsTrims", title:"Doors & Trims", bullets, total: labour + material });
   }
 
   // -- Flooring
@@ -12526,7 +12650,7 @@ function renderContractorPricingEditor(){
   // Painting walls
   html += `<div class="section-title">Painting &mdash; walls (per sqft)</div>
     <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
-  [{k:"one",l:"1 Coat"},{k:"two",l:"2 Coats"}].forEach(o=>{
+  [{k:"one",l:"Standard 2 Coats"},{k:"two",l:"3 Coats"}].forEach(o=>{
     html += `<div class="price-edit-row">
       <div class="lbl">${o.l}</div>
       <div>${ctrPriceInput("painting.walls."+o.k+".labour", cp.painting.walls[o.k].labour)}</div>
@@ -12560,43 +12684,6 @@ function renderContractorPricingEditor(){
       <div>${ctrPriceInput("painting.door.labour", cp.painting.door.labour, 5)}</div>
       <div>${ctrPriceInput("painting.door.material", cp.painting.door.material, 5)}</div>
     </div>`;
-  // NEW interior doors — supplied & installed & painted, hardware included.
-  // Single rate per door per style (matches client editor format).
-  if(cp.painting.newDoor){
-    html += `<div class="section-title">Painting &mdash; new <b>hollow core</b> interior doors (per door, supplied &amp; installed)</div>
-      <div class="footnote" style="margin-bottom:8px;">Single rate per door covering hollow core slab + hinges + knob/lever set + casing touch-up + primer + 2 coats paint. All hardware included.</div>
-      <div class="price-edit-row head single"><div></div><div>$/door</div></div>`;
-    [{key:"twoPanel",label:"2-Panel"},{key:"sixPanel",label:"6-Panel"},{key:"shaker",label:"Shaker"}].forEach(o=>{
-      const row = cp.painting.newDoor[o.key] || { rate:0 };
-      html += `<div class="price-edit-row single">
-        <div class="lbl">${o.label}</div>
-        <div>${ctrPriceInput("painting.newDoor."+o.key+".rate", row.rate, 10)}</div>
-      </div>`;
-    });
-  }
-  // NEW solid wood interior doors (contractor rate)
-  if(cp.painting.newSolidDoor){
-    html += `<div class="section-title">Painting &mdash; new <b>solid wood</b> interior doors (per door, supplied &amp; installed)</div>
-      <div class="footnote" style="margin-bottom:8px;">Single rate per door covering solid wood slab + hinges + knob/lever set + casing touch-up + primer + 2 coats paint. All hardware included.</div>
-      <div class="price-edit-row head single"><div></div><div>$/door</div></div>`;
-    [{key:"twoPanel",label:"2-Panel"},{key:"sixPanel",label:"6-Panel"},{key:"shaker",label:"Shaker"}].forEach(o=>{
-      const row = cp.painting.newSolidDoor[o.key] || { rate:0 };
-      html += `<div class="price-edit-row single">
-        <div class="lbl">${o.label}</div>
-        <div>${ctrPriceInput("painting.newSolidDoor."+o.key+".rate", row.rate, 10)}</div>
-      </div>`;
-    });
-  }
-  // NEW window trim (contractor rate)
-  if(cp.painting.newWindowTrim){
-    const row = cp.painting.newWindowTrim || { rate:0 };
-    html += `<div class="section-title">Painting &mdash; new window trim (per linear foot, supplied &amp; installed)</div>
-      <div class="price-edit-row head single"><div></div><div>$/LF</div></div>
-      <div class="price-edit-row single">
-        <div class="lbl">Per linear foot (MDF/poplar casing + install + 2 coats paint)</div>
-        <div>${ctrPriceInput("painting.newWindowTrim.rate", row.rate, 1)}</div>
-      </div>`;
-  }
   // Exterior doors
   {
     const extRow = cp.painting.extDoor || { labour:0, material:0 };
@@ -12630,6 +12717,53 @@ function renderContractorPricingEditor(){
       <div>${ctrPriceInput("painting.popcorn."+t+".material", row.material)}</div>
     </div>`;
   });
+  // Doors & Trims (contractor pricing) — moved out of painting
+  if(cp.doorsTrims){
+    if(cp.doorsTrims.newDoor){
+      html += `<div class="section-title">Doors &amp; Trims &mdash; new <b>hollow core</b> interior doors (per door, supplied &amp; installed)</div>
+        <div class="footnote" style="margin-bottom:8px;">Single rate per door covering hollow core slab + hinges + knob/lever set + casing touch-up + primer + 2 coats paint. All hardware included.</div>
+        <div class="price-edit-row head single"><div></div><div>$/door</div></div>`;
+      [{key:"twoPanel",label:"2-Panel"},{key:"sixPanel",label:"6-Panel"},{key:"shaker",label:"Shaker"}].forEach(o=>{
+        const row = cp.doorsTrims.newDoor[o.key] || { rate:0 };
+        html += `<div class="price-edit-row single">
+          <div class="lbl">${o.label}</div>
+          <div>${ctrPriceInput("doorsTrims.newDoor."+o.key+".rate", row.rate, 10)}</div>
+        </div>`;
+      });
+    }
+    if(cp.doorsTrims.newSolidDoor){
+      html += `<div class="section-title">Doors &amp; Trims &mdash; new <b>solid wood</b> interior doors (per door, supplied &amp; installed)</div>
+        <div class="footnote" style="margin-bottom:8px;">Single rate per door covering solid wood slab + hinges + knob/lever set + casing touch-up + primer + 2 coats paint. All hardware included.</div>
+        <div class="price-edit-row head single"><div></div><div>$/door</div></div>`;
+      [{key:"twoPanel",label:"2-Panel"},{key:"sixPanel",label:"6-Panel"},{key:"shaker",label:"Shaker"}].forEach(o=>{
+        const row = cp.doorsTrims.newSolidDoor[o.key] || { rate:0 };
+        html += `<div class="price-edit-row single">
+          <div class="lbl">${o.label}</div>
+          <div>${ctrPriceInput("doorsTrims.newSolidDoor."+o.key+".rate", row.rate, 10)}</div>
+        </div>`;
+      });
+    }
+    if(cp.doorsTrims.newWindowTrim){
+      const row = cp.doorsTrims.newWindowTrim || { rate:0 };
+      html += `<div class="section-title">Doors &amp; Trims &mdash; new window trim (per linear foot, supplied &amp; installed)</div>
+        <div class="price-edit-row head single"><div></div><div>$/LF</div></div>
+        <div class="price-edit-row single">
+          <div class="lbl">Per linear foot (MDF/poplar casing + install + 2 coats paint)</div>
+          <div>${ctrPriceInput("doorsTrims.newWindowTrim.rate", row.rate, 1)}</div>
+        </div>`;
+    }
+    if(cp.doorsTrims.newDoorTrim){
+      const row = cp.doorsTrims.newDoorTrim || { labour:0, material:0 };
+      html += `<div class="section-title">Doors &amp; Trims &mdash; new door trims to match baseboard (per linear foot)</div>
+        <div class="footnote" style="margin-bottom:8px;">L/M split per LF (defaults match the baseboard install rate). MDF/poplar door casing matched to baseboard profile.</div>
+        <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>
+        <div class="price-edit-row">
+          <div class="lbl">Per linear foot</div>
+          <div>${ctrPriceInput("doorsTrims.newDoorTrim.labour", row.labour)}</div>
+          <div>${ctrPriceInput("doorsTrims.newDoorTrim.material", row.material)}</div>
+        </div>`;
+    }
+  }
   // Flooring types
   html += `<div class="section-title">Flooring &mdash; install (per sqft)</div>
     <div class="price-edit-row head"><div></div><div>Labour $</div><div>Material $</div></div>`;
@@ -13015,7 +13149,7 @@ function scopeItemsFor(cat){
   const s = state[cat];
   if(cat === "painting"){
     const psqft = paintingSqft();
-    items.push({ html:`Walls: <b>${s.coats==="two"?"Two coats":"One coat"}</b>, premium paint + full prep` });
+    items.push({ html:`Walls: <b>${s.coats==="two"?"3 coats":"Standard 2 coats"}</b>, premium paint + full prep` });
     items.push({ html:`Area: <b>${s.scope==="custom" ? `Specific area &mdash; ${psqft||'?'} sqft` : `Entire property &mdash; ${psqft||'?'} sqft`}</b>` });
     if(s.ceiling){
       const cs = num(s.ceilingSqft) || psqft;
