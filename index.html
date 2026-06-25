@@ -13613,17 +13613,26 @@ function accountLockoutReason(){
    On success → sets currentProfile + returns it.
    On failure → leaves currentProfile=null + returns null.
    The Mo-fallback (email match) handles the bootstrap case where
-   his profile doesn't exist yet on first deploy. */
+   his profile doesn't exist yet on first deploy.
+
+   Includes a 3-second timeout — if the Supabase query hangs (network
+   issue, RLS recursion, anything), we give up and proceed to the
+   fallback path. This guarantees an admin email in the fallback list
+   gets full access even when the database is misbehaving. */
 async function fetchCurrentProfile(){
   if(!supa || !currentUser){ currentProfile = null; return null; }
   try{
-    const { data, error } = await supa.from("profiles")
+    const queryPromise = supa.from("profiles")
       .select("id,email,full_name,brokerage,phone,role,features,subscription_starts_at,subscription_expires_at,suspended")
       .eq("id", currentUser.id)
       .maybeSingle();
+    const timeoutPromise = new Promise((resolve) =>
+      setTimeout(() => resolve({ data: null, error: { message: "client-side 3s timeout" } }), 3000)
+    );
+    const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
     if(error){
-      console.warn("Profile fetch failed:", error.message);
-      // RLS rejection or table missing — fall through to fallback
+      console.warn("Profile fetch:", error.message);
+      // RLS rejection, timeout, etc — fall through to fallback
     }
     if(data){
       currentProfile = data;
