@@ -13517,6 +13517,144 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 let supa = null;
 let currentUser = null;
 
+/* ============================================================
+   MULTI-TENANT PROFILE SYSTEM — Phase 1 of the SaaS migration
+   ============================================================
+   Each authenticated user has a row in `profiles` (Supabase table)
+   with their role (admin / staff / agent), feature flags, and
+   subscription expiry. The profile is fetched on every sign-in
+   and cached here in `currentProfile`. UI gates and feature
+   visibility all read from `currentProfile.features`.
+
+   SECURITY MODEL:
+   - This client-side cache is just for UX. The REAL security gate
+     is Supabase Row-Level Security (RLS) on every table. Even if
+     someone tampers with `currentProfile` in DevTools, the database
+     refuses any query they're not authorized for.
+   - currentProfile === null means "anonymous user / profile not
+     yet loaded" — treat as no permissions.
+   - If profile fetch fails (e.g. RLS denies, network down), we
+     keep currentProfile=null and show the lockout screen.
+
+   FAIL-SAFE for the existing admin (Mo):
+   - On the very first load after Phase 1 deploys, his profile row
+     may not exist yet (the SQL migration creates it). If we see
+     `email===ADMIN_EMAIL_FALLBACK` AND profile fetch returns null,
+     we treat him as admin temporarily so he isn't locked out of
+     his own app. This is a one-time bootstrap; once he runs the SQL
+     migration, the profile row exists and this fallback is never hit.
+   ============================================================ */
+let currentProfile = null;
+/* List of emails that get the bootstrap-fallback admin access if the
+   SQL migration hasn't been run yet (or if their profile row somehow
+   went missing). Once Phase 1 SQL has been applied AND both rows are
+   in public.profiles, the fallback is harmless dead code. Keeping it
+   here is belt-and-suspenders so neither admin ever locks themselves
+   out of their own app. */
+const ADMIN_EMAIL_FALLBACKS = [
+  "realestatenada@gmail.com",
+  "renotosold@gmail.com"
+];
+
+/* All feature names used in the UI. Keep this in sync with the
+   features JSONB in the profiles table (defined in SQL migration).
+   Adding a feature = add it here AND add it to the SQL migration. */
+const ALL_FEATURES = [
+  "estimator",          // base — the renovation estimator (everyone gets this)
+  "submit_for_review",  // agents → submits to admin for approval
+  "expense_tracker",    // tracker page (staff + admin)
+  "invoicing",          // invoicing modal (staff + admin)
+  "contractor_bids",    // contractor bid creation + email + bids dashboard
+  "pricing_editor",     // edit unit prices (admin only)
+  "user_management"     // create/edit user accounts (admin only)
+];
+
+/* canUse(feature) — central permission check.
+   Returns true iff the current user is allowed to see/use a feature.
+   Admins implicitly have access to everything regardless of flag value.
+   Suspended accounts have access to nothing.
+   Expired subscriptions have access to nothing (except admins, who
+   never expire). */
+function canUse(feature){
+  if(!currentProfile) return false;
+  if(currentProfile.suspended) return false;
+  // Subscription expiry check (admins exempt — their expiry is NULL)
+  if(currentProfile.role !== "admin" && currentProfile.subscription_expires_at){
+    if(new Date(currentProfile.subscription_expires_at) < new Date()) return false;
+  }
+  // Admin has everything
+  if(currentProfile.role === "admin") return true;
+  // Estimator is granted to everyone by default
+  if(feature === "estimator") return true;
+  // Submit-for-review is granted to agents by default
+  if(feature === "submit_for_review") return currentProfile.role === "agent";
+  // Admin-only features are NEVER granted to non-admins via feature flag
+  if(feature === "pricing_editor" || feature === "user_management") return false;
+  // Everything else respects the per-feature flag in the profile
+  return !!(currentProfile.features && currentProfile.features[feature]);
+}
+function isAdmin(){ return !!(currentProfile && currentProfile.role === "admin" && !currentProfile.suspended); }
+function isAgent(){ return !!(currentProfile && currentProfile.role === "agent"); }
+function isStaff(){ return !!(currentProfile && currentProfile.role === "staff"); }
+
+/* Returns a human-readable reason WHY the current user is locked
+   out, or empty string if they're fine. Used by the lockout screen. */
+function accountLockoutReason(){
+  if(!currentUser) return "not_signed_in";
+  if(!currentProfile) return "no_profile";  // session exists but no profile row → not invited
+  if(currentProfile.suspended) return "suspended";
+  if(currentProfile.role !== "admin" && currentProfile.subscription_expires_at){
+    if(new Date(currentProfile.subscription_expires_at) < new Date()) return "expired";
+  }
+  return "";
+}
+
+/* Fetches the profile row for the current authenticated user.
+   On success → sets currentProfile + returns it.
+   On failure → leaves currentProfile=null + returns null.
+   The Mo-fallback (email match) handles the bootstrap case where
+   his profile doesn't exist yet on first deploy. */
+async function fetchCurrentProfile(){
+  if(!supa || !currentUser){ currentProfile = null; return null; }
+  try{
+    const { data, error } = await supa.from("profiles")
+      .select("id,email,full_name,brokerage,phone,role,features,subscription_starts_at,subscription_expires_at,suspended")
+      .eq("id", currentUser.id)
+      .maybeSingle();
+    if(error){
+      console.warn("Profile fetch failed:", error.message);
+      // RLS rejection or table missing — fall through to fallback
+    }
+    if(data){
+      currentProfile = data;
+      return data;
+    }
+  }catch(e){
+    console.warn("Profile fetch error:", e);
+  }
+  /* Bootstrap fallback: if no profile row exists but this email is
+     in the admin-fallback list, treat as admin so they can't lock
+     themselves out before running the SQL migration. */
+  if(ADMIN_EMAIL_FALLBACKS.indexOf(currentUser.email) >= 0){
+    currentProfile = {
+      id: currentUser.id,
+      email: currentUser.email,
+      full_name: "Mohamed Nada",
+      role: "admin",
+      features: { estimator:true, expense_tracker:true, invoicing:true,
+                  contractor_bids:true, pricing_editor:true },
+      subscription_expires_at: null,
+      suspended: false,
+      _bootstrap_fallback: true  // flag so we can warn in console
+    };
+    console.warn("Profile bootstrap fallback in use for " + currentUser.email +
+                 " — run the Phase 1 SQL migration to create the real profile row.");
+    return currentProfile;
+  }
+  currentProfile = null;
+  return null;
+}
+
 function initSupabase(){
   if(typeof window.supabase === "undefined"){
     console.warn("Supabase JS not loaded — cloud sync disabled.");
@@ -13526,21 +13664,34 @@ function initSupabase(){
     auth: { autoRefreshToken:true, persistSession:true, detectSessionInUrl:true }
   });
   // Resume any existing session
-  supa.auth.getSession().then(({ data: { session } }) => {
+  supa.auth.getSession().then(async ({ data: { session } }) => {
     if(session){
       setCurrentUser(session.user);
+      await fetchCurrentProfile();      // hydrate profile + features
+      await bootstrapServerPricing();   // pull global pricing + subscribe
+      applyAuthGate();                  // show login or lockout if needed
+      applyFeatureGates();              // hide UI for features the user doesn't have
       // Background-sync after a tick so UI is responsive
       setTimeout(() => bootstrapCloudSync(false), 250);
+    } else {
+      applyAuthGate();                  // no session → show login screen
     }
   });
   // Listen for sign-in / sign-out events
-  supa.auth.onAuthStateChange((event, session) => {
+  supa.auth.onAuthStateChange(async (event, session) => {
     if(event === "SIGNED_IN" && session){
       setCurrentUser(session.user);
+      await fetchCurrentProfile();
+      await bootstrapServerPricing();
+      applyAuthGate();
+      applyFeatureGates();
       flash("Signed in as " + session.user.email);
       bootstrapCloudSync(true);
     } else if(event === "SIGNED_OUT"){
       setCurrentUser(null);
+      currentProfile = null;
+      teardownServerPricing();
+      applyAuthGate();
       flash("Signed out");
     }
   });
@@ -13549,6 +13700,98 @@ function initSupabase(){
 function setCurrentUser(u){
   currentUser = u;
   updateAuthUI();
+}
+
+/* ============================================================
+   STUBS — Phase 1a foundation
+   ============================================================
+   These functions are referenced by initSupabase() so the
+   sign-in flow doesn't crash. They're intentionally minimal
+   for Phase 1a:
+     • bootstrapServerPricing — fetches global pricing from
+       Supabase if available (read-only for non-admins).
+       Phase 1b will add Realtime subscription + admin write.
+     • teardownServerPricing — cleans up the subscription.
+     • applyAuthGate — Phase 1b will show login/lockout screens.
+       For now it's a no-op so the existing UI behaviour is
+       preserved.
+     • applyFeatureGates — Phase 1b will hide toolbar buttons
+       per the user's feature flags. For now it's a no-op
+       (admins see everything, which is the existing default).
+   ============================================================ */
+let _pricingChannel = null;
+
+async function bootstrapServerPricing(){
+  if(!supa || !currentUser) return;
+  /* Fetch global client pricing. If it's non-empty and we're
+     NOT the admin, merge it onto our local prices (admin = source
+     of truth). If we ARE the admin and the server is empty, push
+     our local prices up to seed it. */
+  try{
+    const { data, error } = await supa.from("app_pricing_client")
+      .select("prices,updated_at")
+      .eq("id", "current")
+      .maybeSingle();
+    if(error){
+      // RLS or table-missing — silently skip; local pricing keeps working.
+      console.warn("Server pricing fetch skipped:", error.message);
+      return;
+    }
+    if(!data) return;  // no row yet
+    const serverPrices = data.prices || {};
+    const hasServerPricing = Object.keys(serverPrices).length > 0;
+
+    if(isAdmin() && !hasServerPricing && prices){
+      // First-time admin seeding: push local prices up so all future
+      // users get them. Idempotent — runs every load but ON CONFLICT
+      // means only the first one actually writes.
+      try{
+        await supa.from("app_pricing_client")
+          .update({ prices: prices, updated_at: new Date().toISOString(), updated_by: currentUser.id })
+          .eq("id", "current");
+        console.log("Seeded server client pricing from local admin prices.");
+      }catch(e){ console.warn("Server pricing seed failed:", e); }
+    } else if(!isAdmin() && hasServerPricing){
+      // Non-admin: server pricing IS the source of truth.
+      // Overlay server prices on top of our local ones so every line
+      // reflects the admin's current rates.
+      deepMerge(prices, serverPrices);
+      try{ if(typeof renderTotals === "function") renderTotals(); }catch(e){}
+    }
+
+    /* Phase 1b will add Realtime subscription here so non-admin
+       browsers silently auto-update when admin saves a change. For
+       now non-admins refresh on next page load / next sign-in. */
+  }catch(e){
+    console.warn("bootstrapServerPricing error:", e);
+  }
+}
+
+function teardownServerPricing(){
+  if(_pricingChannel && supa){
+    try{ supa.removeChannel(_pricingChannel); }catch(e){}
+    _pricingChannel = null;
+  }
+}
+
+function applyAuthGate(){
+  /* Phase 1a: no-op. Sign-in remains optional (existing behaviour).
+     Phase 1b will replace the PIN gate with an auth-required
+     lockout screen that surfaces accountLockoutReason() to the user.
+     Intentionally keeping the existing flow during the foundation
+     phase so deploys are low-risk. */
+}
+
+function applyFeatureGates(){
+  /* Phase 1a: no-op. Admin = all toolbar buttons visible (existing
+     behaviour). Phase 1b will hide buttons whose feature canUse()
+     returns false for the current user.
+
+     Implementation note for Phase 1b:
+       document.querySelectorAll("[data-feature]").forEach(el => {
+         el.style.display = canUse(el.dataset.feature) ? "" : "none";
+       });
+     Then add data-feature="invoicing" etc. to each toolbar button. */
 }
 
 function updateAuthUI(){
