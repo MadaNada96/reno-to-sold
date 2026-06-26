@@ -3121,7 +3121,6 @@
         <button data-feature="pricing_editor"  onclick="openSettings()">Pricing</button>
         <button data-feature="contractor_bids" onclick="openContractorBid()">Contractor Bid</button>
         <button id="authBtn" onclick="onAuthClick()">Sign in</button>
-        <button data-admin-only="true" onclick="lockSite()" title="Sign out of this site — re-prompts for the access code on next visit">Lock</button>
       </div>
     </div>
     <!-- Row 2: workflow buttons (New, Save, Saved, Import from PDF, Print/PDF, Email to Client) -->
@@ -7489,8 +7488,12 @@ function escapeHtml(s){ return (s||"").replace(/[&<>"']/g, c=>({"&":"&amp;","<":
    _openSettingsUnlocked()  — internal; opens the editor without checking.
                               Called only after a successful PIN entry. */
 function openSettings(){
-  if(!internalUnlocked){
-    openPinModal("pricing");
+  // Phase 1c: PIN gate removed. Pricing editor is gated by admin role.
+  // The Pricing button in the toolbar already has data-feature="pricing_editor"
+  // which hides it for non-admins, so this should only be reachable by admins.
+  // Defensive check anyway.
+  if(!isAdmin()){
+    flash("Admin access required.");
     return;
   }
   _openSettingsUnlocked();
@@ -12086,14 +12089,19 @@ function flash(msg){
   setTimeout(()=>t.remove(), 1800);
 }
 
-/* ---------- Internal Mode (PIN-gated, cost analysis) ----------
-   The required PIN hash lives in site-gate-config.js as
-   window.INTERNAL_ACCESS_HASH. Unlock state is runtime-only (no
-   localStorage), so every page refresh re-prompts. There is
-   intentionally no first-time-setup or reset path — the only way to
-   change the PIN is to update the hash in site-gate-config.js. */
-let internalUnlocked = false;
+/* ---------- Internal Mode (admin cost analysis view) ----------
+   Phase 1c: PIN gate retired. Internal Mode now auto-unlocks for any
+   user with role='admin' and is hidden entirely for everyone else.
+   This was previously a SECOND PIN on top of the site PIN — now that
+   Supabase auth + role-based access exists, the PIN is redundant.
+
+   internalUnlocked is now a derived getter — always returns true for
+   admins, false for everyone else. */
 let contractorPrices = null;
+Object.defineProperty(window, "internalUnlocked", {
+  get: () => typeof isAdmin === "function" && isAdmin(),
+  configurable: true
+});
 
 async function sha256(s){
   const buf = new TextEncoder().encode(s);
@@ -12102,8 +12110,15 @@ async function sha256(s){
 }
 
 function onLockClick(){
-  if(internalUnlocked){ openInternal(); }
-  else { openPinModal(); }
+  // Phase 1c: no more PIN. If you're an admin, internalUnlocked is true,
+  // and we go straight to the internal view. If you're not an admin, the
+  // floating lock icon is hidden entirely via applyFeatureGates, so this
+  // function shouldn't even be reachable. But just in case, gate it.
+  if(!isAdmin()){
+    flash("Admin access required.");
+    return;
+  }
+  openInternal();
 }
 
 // Tracks WHICH gated area triggered the PIN modal so the success path knows
