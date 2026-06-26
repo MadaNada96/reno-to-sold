@@ -15013,86 +15013,102 @@ function initSupabase(){
        override for exactly this scenario.
      - storageKey is intentionally left at default so existing user
        sessions don't get invalidated by the change. */
+  /* detectSessionInUrl: FALSE on purpose. With flowType:'pkce', the
+     built-in detector only looks for ?code= and silently drops the
+     #access_token=... fragment we get from admin-generated recovery
+     links. We handle BOTH formats ourselves below, in the right order. */
   supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: {
       autoRefreshToken: true,
       persistSession: true,
-      detectSessionInUrl: true,
+      detectSessionInUrl: false,
       flowType: 'pkce',
       storage: window.localStorage,
       lock: async (_name, _acquireTimeout, fn) => await fn()
     }
   });
 
-  /* RECOVERY / MAGIC LINK URL HANDLER
-     When a user clicks an admin-generated recovery or magic link, the
-     Supabase verify endpoint redirects to renotosold.homes with the
-     session tokens in the URL fragment:
-       #access_token=...&refresh_token=...&type=recovery
-
-     Our PKCE-configured client looks for `?code=` and doesn't always
-     pick up the fragment-based session. We manually parse the fragment,
-     call setSession, and clear the hash. This makes activation links
-     work even though we're on PKCE flow. */
-  (async () => {
+  /* Snapshot the URL hash BEFORE any other code can modify it. Then
+     clear it from the address bar so the tokens don't sit there.
+     We'll process the snapshot in the init flow below. */
+  const _capturedHash = window.location.hash || "";
+  const _hasFragmentTokens = /access_token=/.test(_capturedHash);
+  if(_hasFragmentTokens){
+    console.log("[auth] Captured URL fragment with auth tokens (len=" + _capturedHash.length + ")");
     try {
-      const hash = window.location.hash || "";
-      if(hash.length < 2) return;
-      const params = new URLSearchParams(hash.slice(1));
-      const accessToken  = params.get("access_token");
-      const refreshToken = params.get("refresh_token");
-      const linkType     = params.get("type") || "";
-      if(!accessToken || !refreshToken) return;
-      console.log("[auth] Detected URL-fragment session (type=" + linkType + ") — applying via setSession");
-      const { data, error } = await supa.auth.setSession({
-        access_token:  accessToken,
-        refresh_token: refreshToken
-      });
-      if(error){
-        console.error("[auth] setSession from URL fragment failed:", error.message);
-        return;
-      }
-      console.log("[auth] URL-fragment session applied successfully for " + (data && data.user && data.user.email));
-      // Clear the hash so the tokens don't sit in the URL bar / history
+      history.replaceState(null, "", window.location.pathname + window.location.search);
+    } catch(e){}
+  }
+
+  /* Init flow with proper sequencing:
+     1. If URL fragment had tokens → call setSession FIRST and wait
+     2. THEN call getSession() (which now sees the freshly-set session)
+     3. Proceed with normal sign-in flow
+     This eliminates the race condition we had with the fire-and-forget IIFE. */
+  const initT0 = Date.now();
+  (async () => {
+    /* Step 1: apply URL fragment session if present */
+    if(_hasFragmentTokens){
       try {
-        history.replaceState(null, "", window.location.pathname + window.location.search);
-      } catch(e){}
-      // Recovery flow → force the password setup modal, even if previously
-      // dismissed, because the user JUST clicked Activate Account from
-      // their invitation email.
-      if(linkType === "recovery"){
-        try { localStorage.removeItem("rts_pw_setup_dismissed"); } catch(e){}
+        const params = new URLSearchParams(_capturedHash.slice(1));
+        const accessToken  = params.get("access_token");
+        const refreshToken = params.get("refresh_token");
+        const linkType     = params.get("type") || "";
+        if(accessToken && refreshToken){
+          console.log("[auth] Applying URL-fragment session (type=" + linkType + ")");
+          const { data: sessionData, error: setSessErr } = await supa.auth.setSession({
+            access_token:  accessToken,
+            refresh_token: refreshToken
+          });
+          if(setSessErr){
+            console.error("[auth] setSession failed:", setSessErr.message || setSessErr);
+          } else {
+            console.log("[auth] URL-fragment session applied for " + (sessionData && sessionData.user && sessionData.user.email));
+            /* Recovery flow → force the password setup modal regardless
+               of past dismissals. The user JUST clicked Activate Account. */
+            if(linkType === "recovery"){
+              try { localStorage.removeItem("rts_pw_setup_dismissed"); } catch(e){}
+            }
+          }
+        } else {
+          console.warn("[auth] URL fragment had access_token marker but parameters were missing");
+        }
+      } catch(e){
+        console.warn("[auth] URL fragment handler threw:", e);
       }
-    } catch(e) {
-      console.warn("[auth] URL fragment handler threw:", e);
+    }
+
+    /* Step 2: read session (either from setSession above, or restored from storage) */
+    let session = null;
+    try {
+      const sessRes = await supa.auth.getSession();
+      session = sessRes && sessRes.data && sessRes.data.session;
+    } catch(e){
+      console.error("[auth] getSession threw:", e);
+    }
+
+    const elapsed = Date.now() - initT0;
+    console.log("[auth] initSupabase complete in " + elapsed + "ms · session=" + (session ? session.user.email : "none"));
+
+    /* Step 3: standard sign-in flow */
+    try {
+      if(session){
+        detectUserSwitch(session.user.id);   // clear localStorage if different user
+        setCurrentUser(session.user);
+        await fetchCurrentProfile();      // hydrate profile + features
+        await bootstrapServerPricing();   // pull global pricing + subscribe
+        applyAuthGate();                  // show login or lockout if needed
+        applyFeatureGates();              // hide UI for features the user doesn't have
+        // Background-sync after a tick so UI is responsive
+        setTimeout(() => bootstrapCloudSync(false), 250);
+      } else {
+        applyAuthGate();                  // no session → show login screen
+      }
+    } catch(err){
+      console.error("[auth] init flow threw:", err);
+      applyAuthGate();
     }
   })();
-
-  /* Resume any existing session. Diagnostic logging is on so we can
-     trace where time is spent. We deliberately do NOT auto-clear
-     localStorage or force a reload on slow init — that was causing
-     the auto-logout. If init is slow, just log it and let the rest
-     of the page handle it (profile cache hydration, etc). */
-  const initT0 = Date.now();
-  supa.auth.getSession().then(async ({ data: { session } }) => {
-    const elapsed = Date.now() - initT0;
-    console.log("[auth] initSupabase getSession completed in " + elapsed + "ms" + (elapsed > 3000 ? " (SLOW — investigate)" : ""));
-    if(session){
-      detectUserSwitch(session.user.id);   // clear localStorage if different user
-      setCurrentUser(session.user);
-      await fetchCurrentProfile();      // hydrate profile + features
-      await bootstrapServerPricing();   // pull global pricing + subscribe
-      applyAuthGate();                  // show login or lockout if needed
-      applyFeatureGates();              // hide UI for features the user doesn't have
-      // Background-sync after a tick so UI is responsive
-      setTimeout(() => bootstrapCloudSync(false), 250);
-    } else {
-      applyAuthGate();                  // no session → show login screen
-    }
-  }).catch((err) => {
-    console.error("[auth] initSupabase getSession threw:", err);
-    applyAuthGate();
-  });
   // Listen for sign-in / sign-out events
   supa.auth.onAuthStateChange(async (event, session) => {
     if((event === "SIGNED_IN" || event === "PASSWORD_RECOVERY") && session){
