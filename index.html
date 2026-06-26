@@ -14182,9 +14182,65 @@ async function notifyAdminOfSubmission(targetStatus, notes){
   }
   body += `\nReview it in the Submissions dashboard in your Reno to Sold admin panel.\n`;
 
-  // Use a tiny placeholder PDF — we're not attaching an estimate PDF, just notifying.
-  // (Email-estimate function requires pdfBase64. Future: build a real submission PDF.)
+  /* Generate the actual estimate PDF and attach it so admin can review
+     directly from the email. If PDF generation fails for any reason
+     (rare — usually a render error), fall back to the placeholder PNG
+     so the notification email still goes through. The submission has
+     already succeeded server-side; this email is the courtesy notify. */
   const tinyPng = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkAAIAAAoAAv/lxKUAAAAASUVORK5CYII=";
+  let pdfBase64 = tinyPng;
+  let filename  = "submission-notification.png";
+  try {
+    /* Build the estimate sheet (populates #estimateSheet with current
+       state). renderClientEstimate doesn't touch visible UI — just
+       fills in the hidden overlay's HTML. */
+    if(typeof renderClientEstimate === "function") renderClientEstimate();
+    const sheetEl = document.getElementById("estimateSheet");
+    if(sheetEl && typeof pdfFromNodeViaIframe === "function" && typeof blobToBase64 === "function"){
+      const addrSafe = (typeof sanitizeFilename === "function")
+        ? sanitizeFilename(state.propAddress || state.propName || "estimate")
+        : String(state.propAddress || state.propName || "estimate").replace(/[^a-z0-9\-_]/gi, "_");
+      const submissionFilename = `Submission-${addrSafe}.pdf`;
+      console.log("[admin-notif] Building estimate PDF for admin notification…");
+      const blob = await pdfFromNodeViaIframe({
+        sourceEl: sheetEl,
+        bodyClasses: "show-estimate pdf-export",
+        extraCss: `
+          .estimate-view { display:block !important; position:static !important; background:#fff !important; overflow:visible !important; width:760px !important; max-width:760px !important; margin:0 !important; padding:0 !important; }
+          .estimate-toolbar { display:none !important; }
+          .estimate-sheet { margin:0 !important; padding:0 !important; max-width:760px !important; width:760px !important; box-shadow:none !important; background:#fff !important; }
+          .es-category-head, .es-cat-total .v, .es-savings-card, .es-payments-table tr.pm-total td {
+            -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important;
+          }
+          .es-savings-card .es-sav-amount { text-shadow:none !important; }
+        `,
+        pdfOptions: {
+          margin: [0.45, 0.45, 0.45, 0.45],
+          filename: submissionFilename,
+          image:  { type: 'jpeg', quality: 0.98 },
+          pagebreak: {
+            mode:   ['css', 'legacy'],
+            before: ['.es-summary-page', '.es-disclaimer-page'],
+            avoid:  [
+              '.es-category-block', '.es-subblock',
+              '.es-totals-wrap', '.es-savings-card', '.es-payments-wrap',
+              '.es-summary-page',
+              '.es-disclaimer-page', '.es-disclaimer', '.es-signatures', '.es-sig'
+            ]
+          }
+        }
+      });
+      pdfBase64 = await blobToBase64(blob);
+      filename  = submissionFilename;
+      console.log("[admin-notif] PDF built (" + Math.round(blob.size/1024) + " KB)");
+    } else {
+      console.warn("[admin-notif] PDF helpers unavailable — falling back to placeholder attachment");
+    }
+  } catch(pdfErr) {
+    console.warn("[admin-notif] PDF generation failed — falling back to placeholder:", pdfErr && pdfErr.message ? pdfErr.message : pdfErr);
+    // Keep pdfBase64 and filename at their tinyPng/placeholder defaults
+  }
+
   try {
     // 60s hard timeout. This is fire-and-forget so we don't user-alert
     // on failure — just log. The submission itself already succeeded.
@@ -14195,14 +14251,15 @@ async function notifyAdminOfSubmission(targetStatus, notes){
         cc: [],
         subject: `New estimate submission — ${propTitle}`,
         body,
-        pdfBase64: tinyPng,
-        filename: "submission-notification.png"
+        pdfBase64,
+        filename
       }
     });
     const timeoutPromise = new Promise((_, reject) =>
       setTimeout(() => reject(new Error("Admin notification timed out after " + (ADMIN_NOTIF_TIMEOUT_MS/1000) + "s")), ADMIN_NOTIF_TIMEOUT_MS)
     );
     await Promise.race([invokePromise, timeoutPromise]);
+    console.log("[admin-notif] Notification sent to renotosold@gmail.com");
   } catch(e) {
     console.warn("Admin notification email failed:", e && e.message ? e.message : e);
   }
