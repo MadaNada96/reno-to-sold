@@ -13717,12 +13717,14 @@ function canUse(feature){
   if(currentProfile.role !== "admin" && currentProfile.subscription_expires_at){
     if(new Date(currentProfile.subscription_expires_at) < new Date()) return false;
   }
-  // Admin has everything
+  // Submit-for-review is AGENT-ONLY. Admins never submit — they
+  // review. This MUST come before the admin-gets-everything rule
+  // below, otherwise the toolbar Submit button leaks into admin view.
+  if(feature === "submit_for_review") return currentProfile.role === "agent";
+  // Admin has everything else
   if(currentProfile.role === "admin") return true;
   // Estimator is granted to everyone by default
   if(feature === "estimator") return true;
-  // Submit-for-review is granted to agents by default
-  if(feature === "submit_for_review") return currentProfile.role === "agent";
   // Admin-only features are NEVER granted to non-admins via feature flag
   if(feature === "pricing_editor" || feature === "user_management") return false;
   // Everything else respects the per-feature flag in the profile
