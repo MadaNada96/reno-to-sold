@@ -93,18 +93,33 @@
      #agentDiscountRequestBlock. CSS picks which one shows based on
      the body's role class.
 
-     DEFAULT (no class yet, before profile loads): admin block shows,
-       agent block hidden. Safe default for admins/anon.
-     body.role-agent: admin block hidden, agent block shown.
+     CRITICAL DEFAULT: BOTH blocks hidden until a role class confirms
+     who the user is. This prevents the admin block from ever leaking
+     to an agent — even if the profile fetch fails, times out, or
+     hangs forever. The cost: a brief invisible state (under a second)
+     while the profile loads. The benefit: zero possibility of admin
+     UI leak.
 
-     Using !important everywhere to prevent any inline style or other
-     CSS rule from overriding. */
+     body.role-admin OR body.role-staff: admin block shown
+     body.role-agent: agent block shown
+     No class yet (loading): neither shown (safe)
 
-  /* Agent block: hidden by default, visible only for agents */
+     !important everywhere to prevent any other CSS rule from overriding. */
+
+  /* DEFAULT: hide BOTH blocks until role is positively known */
+  #adminCustomDiscountWrap { display: none !important; }
   #agentDiscountRequestBlock { display: none !important; }
+
+  /* Admin / staff → show admin block */
+  body.role-admin #adminCustomDiscountWrap,
+  body.role-staff #adminCustomDiscountWrap { display: block !important; }
+
+  /* Agent → show agent block */
   body.role-agent #agentDiscountRequestBlock { display: flex !important; }
 
-  /* Admin block + all its inner controls: hidden for agents */
+  /* Belt-and-suspenders: explicitly hide the admin inner controls
+     for agents (covers the case where some other code path tries
+     to set inline display) */
   body.role-agent #adminCustomDiscountWrap,
   body.role-agent #sw-custom,
   body.role-agent #customDiscFields,
