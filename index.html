@@ -14255,6 +14255,263 @@ async function confirmSubmitForReview(targetStatus){
 
 /* Send a notification email to admin (renotosold@gmail.com) that an
    estimate has been submitted. Uses the email-estimate Edge Function. */
+/* ===== AGENT NOTIFICATION EMAILS (Slice D) =====
+   Sent to the agent when the admin makes a decision on their
+   submission. Two flows: estimate decisions (approve/request_changes/
+   reject) and discount-request decisions (approved/modified/rejected).
+   Both use the email-estimate Edge Function via invokeFunctionViaRest. */
+
+/* Branded HTML wrapper that matches the contractor-bid email style.
+   Takes an inner body + decision color and renders the full email. */
+function buildAgentNotificationHtml({ headerLabel, headerColor, title, intro, propertyBlock, noteBlock, ctaBlock, footerNote }){
+  return `<!DOCTYPE html>
+<html><body style="margin:0;padding:0;background:#f5f1e6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f5f1e6;padding:24px 12px;">
+<tr><td align="center">
+<table cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 4px 18px rgba(0,0,0,.08);">
+  <tr><td style="background:#0a0a0a;padding:24px 0;text-align:center;border-bottom:3px solid ${headerColor};">
+    <img src="https://renotosold.homes/logo.png" alt="Reno to Sold Inc." width="220" style="display:inline-block;height:auto;max-width:220px;max-height:60px;" />
+  </td></tr>
+  <tr><td style="padding:30px 34px 26px;color:#1a1a1a;font-size:14.5px;line-height:1.65;">
+    <p style="margin:0 0 6px;font-size:10.5px;letter-spacing:.20em;text-transform:uppercase;font-weight:800;color:${headerColor};">${headerLabel}</p>
+    <p style="margin:0 0 18px;font-size:20px;font-weight:800;color:#0a0a0a;letter-spacing:.02em;">${title}</p>
+    ${intro ? `<p style="margin:0 0 16px;">${intro}</p>` : ""}
+    ${propertyBlock || ""}
+    ${noteBlock || ""}
+    ${ctaBlock || ""}
+    ${footerNote ? `<p style="margin:20px 0 0;font-size:12.5px;color:#666;border-top:1px solid #e0dccf;padding-top:14px;">${footerNote}</p>` : ""}
+    <table cellpadding="0" cellspacing="0" border="0" width="100%" style="border-top:1px solid #e0dccf;margin-top:18px;">
+      <tr><td style="padding:18px 0 0;">
+        <p style="margin:0 0 3px;">Thanks,</p>
+        <p style="margin:0 0 3px;font-weight:700;font-size:15px;color:#0a0a0a;">Mohamed Nada</p>
+        <p style="margin:0 0 4px;font-size:11px;letter-spacing:.20em;font-weight:800;color:#a8853f;text-transform:uppercase;">RENO <span style="color:#d4af6a;">TO</span> SOLD INC.</p>
+        <p style="margin:0;font-size:13px;color:#555;">416-832-3779</p>
+      </td></tr>
+    </table>
+  </td></tr>
+  <tr><td style="background:#0a0a0a;padding:12px 22px;text-align:center;">
+    <p style="margin:0;font-size:10px;letter-spacing:.18em;color:#888;text-transform:uppercase;">Renovate for less. Sell for more.</p>
+  </td></tr>
+</table>
+</td></tr></table>
+</body></html>`;
+}
+
+/* Send a decision notification email to the agent. Fire-and-forget —
+   if it fails, we log and move on (the decision is already saved on
+   the server). Uses invokeFunctionViaRest so it bypasses the
+   supabase-js hang. */
+async function notifyAgentOfEstimateDecision({ action, row, note, decidedAt }){
+  if(!row) return;
+  const s = row.state || {};
+  const sub = s.submission || {};
+  const agentEmail = sub.submitted_by_email;
+  if(!agentEmail){
+    console.warn("[notify] No agent email on submission — skipping notification");
+    return;
+  }
+  const agentFirstName = (sub.submitted_by_name || "").split(/\s+/)[0] || "";
+  const propAddr = s.propAddress || s.propName || "your property";
+  const totals = sub.totals_at_submission || {};
+  const totalStr = "$" + Math.round(totals.total||0).toLocaleString("en-US");
+
+  // Per-action copy
+  const map = {
+    approve: {
+      subject: `Your estimate for ${propAddr} has been approved`,
+      headerLabel: "★ Approved",
+      headerColor: "#5fce86",
+      title: "Your estimate has been approved",
+      intro: `${agentFirstName ? "Hi " + escapeHtml(agentFirstName) + "," : "Hi,"} Reno to Sold has approved your renovation estimate. The numbers are finalized and you can now share the estimate with your client.`,
+      footerNote: "The estimate is locked from edits. Use the Print / PDF or Email to Client buttons in your dashboard to share it."
+    },
+    request_changes: {
+      subject: `Changes requested on your estimate for ${propAddr}`,
+      headerLabel: "⟳ Changes Requested",
+      headerColor: "#e8a46c",
+      title: "Reno to Sold has requested changes",
+      intro: `${agentFirstName ? "Hi " + escapeHtml(agentFirstName) + "," : "Hi,"} Reno to Sold has reviewed your estimate and needs some changes before approving it. See the note below for details. Once you make the changes, you can resubmit.`,
+      footerNote: "Sign in to your dashboard, open this estimate, make the requested changes, and click Submit for Review again."
+    },
+    reject: {
+      subject: `Your estimate for ${propAddr} was not approved`,
+      headerLabel: "✗ Not Approved",
+      headerColor: "#ff9090",
+      title: "Your estimate was not approved",
+      intro: `${agentFirstName ? "Hi " + escapeHtml(agentFirstName) + "," : "Hi,"} Reno to Sold has reviewed your estimate but won't be moving forward with it. See the note below for details. If you'd like to discuss, please get in touch with us directly.`,
+      footerNote: "Questions? Reply to this email or call us at 416-832-3779."
+    }
+  };
+  const cfg = map[action];
+  if(!cfg){ console.warn("[notify] Unknown action:", action); return; }
+
+  // Common property block
+  const propertyBlock = `
+    <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#fbf5e6;border-left:4px solid #d4af6a;border-radius:0 6px 6px 0;margin:0 0 18px;">
+      <tr><td style="padding:14px 22px;">
+        <p style="margin:0 0 4px;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;font-weight:800;color:#a8853f;">Submission</p>
+        <p style="margin:0 0 4px;font-size:14.5px;font-weight:700;color:#0a0a0a;">${escapeHtml(propAddr)}</p>
+        <p style="margin:0;font-size:13.5px;color:#555;">Total: <b style="color:#0a0a0a;">${totalStr}</b> (incl. HST)</p>
+      </td></tr>
+    </table>
+  `;
+
+  // Admin note (if any)
+  const noteBlock = note ? `
+    <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#fbf8ee;border-left:3px solid #d4af6a;border-radius:0 4px 4px 0;margin:0 0 18px;">
+      <tr><td style="padding:14px 18px;">
+        <p style="margin:0 0 6px;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;font-weight:800;color:#a8853f;">Note from Reno to Sold</p>
+        <p style="margin:0;font-size:13.5px;color:#1a1a1a;font-style:italic;">"${escapeHtml(note)}"</p>
+      </td></tr>
+    </table>
+  ` : "";
+
+  const html = buildAgentNotificationHtml({
+    headerLabel: cfg.headerLabel,
+    headerColor: cfg.headerColor,
+    title: cfg.title,
+    intro: cfg.intro,
+    propertyBlock: propertyBlock,
+    noteBlock: noteBlock,
+    footerNote: cfg.footerNote
+  });
+
+  const plainText = (
+    `Hi${agentFirstName ? " " + agentFirstName : ""},\n\n` +
+    cfg.title + ".\n\n" +
+    `Property: ${propAddr}\n` +
+    `Total: ${totalStr} (incl. HST)\n\n` +
+    (note ? `Note from Reno to Sold:\n"${note}"\n\n` : "") +
+    cfg.footerNote + "\n\n" +
+    `Thanks,\nMohamed Nada\nRENO TO SOLD INC.\n416-832-3779`
+  );
+
+  // Tiny PNG placeholder for the required pdfBase64 field
+  const tinyPng = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkAAIAAAoAAv/lxKUAAAAASUVORK5CYII=";
+
+  try {
+    await invokeFunctionViaRest("email-estimate", {
+      to: [agentEmail],
+      cc: [],
+      subject: cfg.subject,
+      body: plainText,
+      bodyHtml: html,
+      pdfBase64: tinyPng,
+      filename: "decision-notification.png"
+    });
+    console.log("[notify] Agent decision email sent to " + agentEmail);
+  } catch(e) {
+    console.warn("[notify] Failed to send decision email:", e && e.message);
+  }
+}
+
+/* Same idea, for discount-request decisions. */
+async function notifyAgentOfDiscountDecision({ row, drStatus, requested, decidedAmount, note }){
+  if(!row) return;
+  const s = row.state || {};
+  const sub = s.submission || {};
+  const agentEmail = sub.submitted_by_email;
+  if(!agentEmail){ console.warn("[notify] No agent email — skipping discount notification"); return; }
+  const agentFirstName = (sub.submitted_by_name || "").split(/\s+/)[0] || "";
+  const propAddr = s.propAddress || s.propName || "your property";
+  const requestedStr = "$" + Math.round(requested||0).toLocaleString("en-US");
+  const decidedStr = "$" + Math.round(decidedAmount||0).toLocaleString("en-US");
+  const isModified = (drStatus === "approved" && decidedAmount !== requested);
+
+  let cfg;
+  if(drStatus === "approved" && !isModified){
+    cfg = {
+      subject: `Your discount request for ${propAddr} was approved`,
+      headerLabel: "✓ Discount Approved",
+      headerColor: "#5fce86",
+      title: "Your discount request was approved",
+      intro: `${agentFirstName ? "Hi " + escapeHtml(agentFirstName) + "," : "Hi,"} Reno to Sold has approved the additional discount you requested for this property.`,
+      detailsBlock: `<p style="margin:0;font-size:14px;color:#0a0a0a;"><b>Approved discount:</b> ${decidedStr}</p>`,
+      footerNote: "The discount has been applied to the estimate total. Sign in to your dashboard to review."
+    };
+  } else if(drStatus === "approved" && isModified){
+    cfg = {
+      subject: `Reno to Sold proposed a different discount for ${propAddr}`,
+      headerLabel: "⚖ Discount Modified",
+      headerColor: "#e8a46c",
+      title: "Reno to Sold proposed a different discount",
+      intro: `${agentFirstName ? "Hi " + escapeHtml(agentFirstName) + "," : "Hi,"} Reno to Sold reviewed your discount request and approved a different amount than what you requested.`,
+      detailsBlock: `
+        <p style="margin:0 0 4px;font-size:13.5px;color:#555;">You requested: <b style="color:#0a0a0a;">${requestedStr}</b></p>
+        <p style="margin:0;font-size:14.5px;color:#0a0a0a;"><b>Approved discount:</b> ${decidedStr}</p>`,
+      footerNote: "The approved discount has been applied to the estimate total. Sign in to your dashboard to review."
+    };
+  } else {
+    cfg = {
+      subject: `Your discount request for ${propAddr} was not approved`,
+      headerLabel: "✗ Discount Not Approved",
+      headerColor: "#ff9090",
+      title: "Your discount request was not approved",
+      intro: `${agentFirstName ? "Hi " + escapeHtml(agentFirstName) + "," : "Hi,"} Reno to Sold reviewed your discount request but won't be granting an additional discount on this property.`,
+      detailsBlock: `<p style="margin:0;font-size:13.5px;color:#555;">You requested: <b style="color:#0a0a0a;">${requestedStr}</b></p>`,
+      footerNote: "The standard 10% listing discount still applies. Questions? Reply to this email."
+    };
+  }
+
+  const propertyBlock = `
+    <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#fbf5e6;border-left:4px solid #d4af6a;border-radius:0 6px 6px 0;margin:0 0 18px;">
+      <tr><td style="padding:14px 22px;">
+        <p style="margin:0 0 4px;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;font-weight:800;color:#a8853f;">Property</p>
+        <p style="margin:0 0 8px;font-size:14.5px;font-weight:700;color:#0a0a0a;">${escapeHtml(propAddr)}</p>
+        ${cfg.detailsBlock}
+      </td></tr>
+    </table>
+  `;
+
+  const noteBlock = note ? `
+    <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#fbf8ee;border-left:3px solid #d4af6a;border-radius:0 4px 4px 0;margin:0 0 18px;">
+      <tr><td style="padding:14px 18px;">
+        <p style="margin:0 0 6px;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;font-weight:800;color:#a8853f;">Note from Reno to Sold</p>
+        <p style="margin:0;font-size:13.5px;color:#1a1a1a;font-style:italic;">"${escapeHtml(note)}"</p>
+      </td></tr>
+    </table>
+  ` : "";
+
+  const html = buildAgentNotificationHtml({
+    headerLabel: cfg.headerLabel,
+    headerColor: cfg.headerColor,
+    title: cfg.title,
+    intro: cfg.intro,
+    propertyBlock: propertyBlock,
+    noteBlock: noteBlock,
+    footerNote: cfg.footerNote
+  });
+
+  const plainText = (
+    `Hi${agentFirstName ? " " + agentFirstName : ""},\n\n` +
+    cfg.title + ".\n\n" +
+    `Property: ${propAddr}\n` +
+    `You requested: ${requestedStr}\n` +
+    (drStatus === "approved" ? `Approved discount: ${decidedStr}\n` : "") +
+    "\n" +
+    (note ? `Note from Reno to Sold:\n"${note}"\n\n` : "") +
+    cfg.footerNote + "\n\n" +
+    `Thanks,\nMohamed Nada\nRENO TO SOLD INC.\n416-832-3779`
+  );
+
+  const tinyPng = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkAAIAAAoAAv/lxKUAAAAASUVORK5CYII=";
+
+  try {
+    await invokeFunctionViaRest("email-estimate", {
+      to: [agentEmail],
+      cc: [],
+      subject: cfg.subject,
+      body: plainText,
+      bodyHtml: html,
+      pdfBase64: tinyPng,
+      filename: "discount-decision.png"
+    });
+    console.log("[notify] Agent discount-decision email sent to " + agentEmail);
+  } catch(e) {
+    console.warn("[notify] Failed to send discount-decision email:", e && e.message);
+  }
+}
+
 async function notifyAdminOfSubmission(targetStatus, notes){
   if(!supa) return;
   const t = state.submission && state.submission.totals_at_submission;
@@ -16968,10 +17225,11 @@ async function confirmDiscountDecision(){
   statusEl.textContent = "Writing decision to cloud…";
 
   try {
-    const { error } = await supa.from("estimates")
-      .update({ state: newState, updated_at: new Date().toISOString() })
-      .eq("id", estimateId);
-    if(error) throw error;
+    // Bypass supa.from to avoid the supabase-js hang
+    await dbUpdate("estimates",
+      { id: estimateId },
+      { state: newState, updated_at: new Date().toISOString() }
+    );
 
     // Update local cache so detail view reflects immediately
     row.state = newState;
@@ -16979,6 +17237,16 @@ async function confirmDiscountDecision(){
     statusEl.style.color = "#5fce86";
     statusEl.textContent = "✓ Discount decision saved.";
     if(btn) btn.textContent = "Saved ✓";
+
+    /* Slice D: notify the agent of the discount decision. Fire-and-
+       forget — the decision is already saved server-side. */
+    notifyAgentOfDiscountDecision({
+      row: row,
+      drStatus: newDrStatus,
+      requested: oldDr.amount || 0,
+      decidedAmount: decidedAmount,
+      note: note
+    }).catch(e => console.warn("[notify] discount email failed:", e && e.message));
 
     setTimeout(() => {
       closeDiscountDecisionModal();
@@ -17055,10 +17323,11 @@ async function confirmSubmissionDecision(){
 
   try {
     // Update the cloud row directly. Admin RLS allows this.
-    const { error } = await supa.from("estimates")
-      .update({ state: newState, updated_at: new Date().toISOString() })
-      .eq("id", estimateId);
-    if(error) throw error;
+    // Bypass supa.from to avoid the supabase-js hang.
+    await dbUpdate("estimates",
+      { id: estimateId },
+      { state: newState, updated_at: new Date().toISOString() }
+    );
 
     // Update local cache so the UI reflects immediately
     row.state = newState;
@@ -17066,6 +17335,15 @@ async function confirmSubmissionDecision(){
     statusEl.style.color = "#5fce86";
     statusEl.textContent = "✓ Decision saved.";
     if(btn) btn.textContent = "Saved ✓";
+
+    /* Slice D: notify the agent by email. Fire-and-forget — if it
+       fails the decision is still saved server-side. */
+    notifyAgentOfEstimateDecision({
+      action: action,
+      row: row,
+      note: note,
+      decidedAt: newState.admin_review && newState.admin_review.decided_at
+    }).catch(e => console.warn("[notify] decision email failed:", e && e.message));
 
     // Refresh the detail view + queue
     currentSubmissionDetail = row;
