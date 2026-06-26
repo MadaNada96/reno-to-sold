@@ -12257,7 +12257,13 @@ async function sendContractorBidEnvelope({ recipients, contractor, bidLink, subj
       cc: (ccSelf && currentUser && currentUser.email) ? [currentUser.email] : [],
       subject, body: plainBody, bodyHtml, pdfBase64, filename
     };
-    const { data, error } = await supa.functions.invoke('email-estimate', { body: payload });
+    // 60s hard timeout so the contractor email never hangs forever
+    const CONTRACTOR_EMAIL_TIMEOUT_MS = 60000;
+    const invokePromise = supa.functions.invoke('email-estimate', { body: payload });
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Contractor email send timed out after " + (CONTRACTOR_EMAIL_TIMEOUT_MS/1000) + "s — Edge Function may be slow or down. Please try again.")), CONTRACTOR_EMAIL_TIMEOUT_MS)
+    );
+    const { data, error } = await Promise.race([invokePromise, timeoutPromise]);
     if(error) return { ok:false, err: error.message || "Edge Function error" };
     if(data && data.error) return { ok:false, err: data.error };
     return { ok:true };
@@ -14180,7 +14186,10 @@ async function notifyAdminOfSubmission(targetStatus, notes){
   // (Email-estimate function requires pdfBase64. Future: build a real submission PDF.)
   const tinyPng = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkAAIAAAoAAv/lxKUAAAAASUVORK5CYII=";
   try {
-    await supa.functions.invoke("email-estimate", {
+    // 60s hard timeout. This is fire-and-forget so we don't user-alert
+    // on failure — just log. The submission itself already succeeded.
+    const ADMIN_NOTIF_TIMEOUT_MS = 60000;
+    const invokePromise = supa.functions.invoke("email-estimate", {
       body: {
         to: ["renotosold@gmail.com"],
         cc: [],
@@ -14190,8 +14199,12 @@ async function notifyAdminOfSubmission(targetStatus, notes){
         filename: "submission-notification.png"
       }
     });
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Admin notification timed out after " + (ADMIN_NOTIF_TIMEOUT_MS/1000) + "s")), ADMIN_NOTIF_TIMEOUT_MS)
+    );
+    await Promise.race([invokePromise, timeoutPromise]);
   } catch(e) {
-    console.warn("Admin notification email failed:", e);
+    console.warn("Admin notification email failed:", e && e.message ? e.message : e);
   }
 }
 
@@ -17457,10 +17470,13 @@ async function runEmailHealthCheck(){
   const restoreLabel = btn && btn.tagName === "BUTTON" ? btn.textContent : null;
   if(btn && btn.tagName === "BUTTON"){ btn.disabled = true; btn.textContent = "Pinging…"; }
   try{
-    // ---- Step 1: ping ----
-    const { data: pingData, error: pingErr } = await supa.functions.invoke(
-      'email-estimate', { body: { action: "ping" } }
+    // ---- Step 1: ping ---- (15s timeout — ping should return in <1s normally)
+    const PING_TIMEOUT_MS = 15000;
+    const pingPromise = supa.functions.invoke('email-estimate', { body: { action: "ping" } });
+    const pingTimeout = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Ping timed out after " + (PING_TIMEOUT_MS/1000) + "s — Edge Function isn't responding.")), PING_TIMEOUT_MS)
     );
+    const { data: pingData, error: pingErr } = await Promise.race([pingPromise, pingTimeout]);
     if(pingErr) throw pingErr;
     if(pingData && pingData.error) throw new Error(pingData.error);
     if(!pingData || !pingData.ok)  throw new Error("Ping returned no ok flag");
@@ -17490,7 +17506,13 @@ async function runEmailHealthCheck(){
       pdfBase64: tinyAttachment,
       filename:  "email-pipeline-test.png"
     };
-    const { data, error } = await supa.functions.invoke('email-estimate', { body: payload });
+    // 60s hard timeout on the health-check test send
+    const HEALTHCHECK_TIMEOUT_MS = 60000;
+    const invokePromiseHC = supa.functions.invoke('email-estimate', { body: payload });
+    const timeoutPromiseHC = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Health-check test send timed out after " + (HEALTHCHECK_TIMEOUT_MS/1000) + "s — Edge Function may be slow.")), HEALTHCHECK_TIMEOUT_MS)
+    );
+    const { data, error } = await Promise.race([invokePromiseHC, timeoutPromiseHC]);
     if(error)              throw error;
     if(data && data.error) throw new Error(data.error);
 
@@ -17562,7 +17584,13 @@ async function sendInvoiceEmail(){
       cc: (bccSelf && currentUser && currentUser.email) ? [currentUser.email] : [],
       subject, body, pdfBase64, filename
     };
-    const { data, error } = await supa.functions.invoke('email-estimate', { body: payload });
+    // 60s hard timeout on the invoice email send
+    const INVOICE_EMAIL_TIMEOUT_MS = 60000;
+    const invokePromiseInv = supa.functions.invoke('email-estimate', { body: payload });
+    const timeoutPromiseInv = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Invoice email send timed out after " + (INVOICE_EMAIL_TIMEOUT_MS/1000) + "s — Edge Function may be slow or down. Please try again.")), INVOICE_EMAIL_TIMEOUT_MS)
+    );
+    const { data, error } = await Promise.race([invokePromiseInv, timeoutPromiseInv]);
     if(error)            throw new Error(error.message || "Edge Function error");
     if(data && data.error) throw new Error(data.error);
 
