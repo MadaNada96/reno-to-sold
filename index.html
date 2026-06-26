@@ -16113,6 +16113,146 @@ function closeSubmissionDetail(){
   currentSubmissionBids = null;
 }
 
+/* ===== SUBMISSION REVIEW MODE =====
+   When admin clicks "Send to Contractors" on a submission, we need to
+   load the submission's frozen snapshot into the global state so the
+   existing contractor bid flow can pick it up. But we don't want to
+   permanently overwrite the admin's own work-in-progress estimate.
+
+   Pattern:
+   1. Stash current state + prices in stashedAdminState
+   2. Swap in submission's snapshot
+   3. Show a persistent banner the admin can click to return
+   4. Open the contractor bid flow as normal
+   5. On banner click, restore stashed state + re-open submission detail
+      (which refetches and shows any new bids that were just sent)
+*/
+let stashedAdminState = null;  // { state, prices, fromSubmissionId, savedEstimateId }
+
+function sendBidForSubmission(estimateId){
+  const row = submissionsList.find(r => r.id === estimateId);
+  if(!row) return alert("Submission not found — try refreshing.");
+  const sub = row.state && row.state.submission;
+  if(!sub || !sub.state_snapshot || !sub.pricing_snapshot){
+    return alert("This submission predates snapshot capture — can't load it for contractor bid.");
+  }
+  if(stashedAdminState){
+    if(!confirm("You're already reviewing another submission. Switch to this one?")) return;
+    // Discard the previous stash — banner click later will only restore
+    // from the latest stashedAdminState, which is fine.
+  }
+
+  // Stash current globals BEFORE swapping
+  stashedAdminState = {
+    state: state,
+    prices: prices,
+    savedEstimateId: state && state._id,
+    fromSubmissionId: estimateId
+  };
+
+  // Swap in the submission's snapshot
+  state = JSON.parse(JSON.stringify(sub.state_snapshot));
+  prices = JSON.parse(JSON.stringify(sub.pricing_snapshot));
+
+  // Close the detail modal so the contractor bid overlay can take focus
+  closeSubmissionDetail();
+
+  // Show the review-mode banner so admin can return easily
+  showSubmissionReviewBanner(row);
+
+  // Re-render the main estimator so the loaded snapshot is what
+  // the contractor bid flow sees
+  try { if(typeof renderAll === "function") renderAll(); } catch(e){}
+
+  // Open the existing contractor bid overlay
+  if(typeof openContractorBid === "function"){
+    openContractorBid();
+  } else {
+    alert("Contractor bid feature isn't loaded — refresh the page and try again.");
+  }
+}
+
+function showSubmissionReviewBanner(row){
+  let banner = document.getElementById("subReviewBanner");
+  if(!banner){
+    banner = document.createElement("div");
+    banner.id = "subReviewBanner";
+    document.body.appendChild(banner);
+  }
+  const s = row.state || {};
+  const sub = s.submission || {};
+  const agentName = sub.submitted_by_name || sub.submitted_by_email || "agent";
+  const propAddr = s.propAddress || s.propName || "—";
+  banner.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:10000;" +
+    "background:linear-gradient(180deg,#2a2010 0%,#1a1408 100%);border-bottom:1px solid var(--gold-deep);" +
+    "padding:8px 16px;display:flex;align-items:center;justify-content:space-between;gap:14px;" +
+    "color:#e8c989;font-size:12.5px;box-shadow:0 2px 12px rgba(0,0,0,.4);";
+  banner.innerHTML = `
+    <div style="flex:1;min-width:0;">
+      📋 <b style="color:var(--gold-bright);">Reviewing submission:</b>
+      <span style="margin-left:6px;">${escapeHtml(agentName)} · ${escapeHtml(propAddr)}</span>
+    </div>
+    <button type="button" onclick="exitSubmissionReview()"
+      style="flex-shrink:0;background:rgba(212,175,106,.10);border:1px solid #d4af6a;color:#e8c989;
+             border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;
+             letter-spacing:.10em;text-transform:uppercase;cursor:pointer;">
+      ← Done · Return to Submission
+    </button>
+  `;
+  // Push the page down so the banner doesn't overlap content
+  document.body.style.paddingTop = (banner.offsetHeight || 44) + "px";
+}
+
+function hideSubmissionReviewBanner(){
+  const banner = document.getElementById("subReviewBanner");
+  if(banner) banner.remove();
+  document.body.style.paddingTop = "";
+}
+
+function exitSubmissionReview(){
+  if(!stashedAdminState){
+    hideSubmissionReviewBanner();
+    return;
+  }
+  const subId = stashedAdminState.fromSubmissionId;
+  // Restore stashed globals
+  state = stashedAdminState.state;
+  prices = stashedAdminState.prices;
+  stashedAdminState = null;
+  hideSubmissionReviewBanner();
+  // Close the contractor bid overlay if it's open
+  try { if(typeof closeContractorBid === "function") closeContractorBid(); } catch(e){}
+  // Re-render the estimator with the admin's original state
+  try { if(typeof renderAll === "function") renderAll(); } catch(e){}
+  // Re-open the submission detail so admin sees the refreshed bids list
+  if(subId){
+    // Reload the submissions list first so any new bids show
+    loadSubmissions();
+    setTimeout(() => openSubmissionDetail(subId), 300);
+  }
+}
+
+/* Manually refresh the bids list for the currently-open submission.
+   Bound to the ↻ Refresh button in the bids section. */
+function refreshSubmissionBidsList(){
+  if(!currentSubmissionDetail) return;
+  currentSubmissionBids = null;  // back to "Loading…" state
+  renderSubmissionDetail();
+  const row = currentSubmissionDetail;
+  fetchSubmissionBids(row).then(bids => {
+    if(currentSubmissionDetail && currentSubmissionDetail.id === row.id){
+      currentSubmissionBids = bids;
+      renderSubmissionDetail();
+    }
+  }).catch(e => {
+    console.warn("[submissions] bid refresh failed:", e && e.message);
+    if(currentSubmissionDetail && currentSubmissionDetail.id === row.id){
+      currentSubmissionBids = [];
+      renderSubmissionDetail();
+    }
+  });
+}
+
 /* Fetch contractor_bids that match the submission's address. Uses
    restFetch to bypass the supabase-js hang. The match is by project
    key (street-level address normalization) — same logic the existing
@@ -16320,7 +16460,7 @@ function renderSubmissionDetail(){
       } else if(currentSubmissionBids.length === 0){
         bidsHtml = `<div style="padding:14px;color:var(--muted);font-size:12.5px;">
           No contractor bids on file for this property yet.
-          <div style="margin-top:4px;font-size:11px;opacity:.8;">Use the contractor bid flow to send this estimate to contractors before approving. (Send button coming in next push.)</div>
+          <div style="margin-top:4px;font-size:11px;opacity:.8;">Click "Send to Contractors" below to dispatch this estimate for bidding before approving.</div>
         </div>`;
       } else {
         const fmt = (n) => "$" + Math.round(n||0).toLocaleString("en-US");
@@ -16372,10 +16512,32 @@ function renderSubmissionDetail(){
           </div>
         `;
       }
+      // Action buttons row: Send to Contractors + Refresh
+      const sendDisabled = !(sub.state_snapshot && sub.pricing_snapshot);
+      const actionsHtml = `
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+          <button type="button"
+            onclick="sendBidForSubmission('${escapeHtml(row.id)}')"
+            ${sendDisabled ? "disabled title='This submission predates snapshot capture — can\\'t load for bid.'" : ""}
+            style="background:linear-gradient(180deg,#2a2010,#1a1408);color:#e8c989;border:1px solid #d4af6a;
+                   border-radius:6px;padding:9px 16px;font-size:11px;font-weight:700;
+                   letter-spacing:.10em;text-transform:uppercase;cursor:pointer;">
+            ▸ Send to Contractors
+          </button>
+          <button type="button"
+            onclick="refreshSubmissionBidsList()"
+            style="background:transparent;color:var(--muted);border:1px solid var(--line-strong);
+                   border-radius:6px;padding:9px 14px;font-size:11px;font-weight:600;
+                   letter-spacing:.08em;text-transform:uppercase;cursor:pointer;">
+            ↻ Refresh
+          </button>
+        </div>
+      `;
       return `
         <div class="sd-section">
           <div class="sd-label">CONTRACTOR BIDS</div>
           ${bidsHtml}
+          ${actionsHtml}
         </div>
       `;
     })()}
