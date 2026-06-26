@@ -5705,6 +5705,10 @@ function renderAll(){
   // Request Additional Discount UI. Done after renderAll so the
   // standard discount UI is already in place.
   try { applyAgentDiscountUI(); } catch(e){}
+  // Defense-in-depth: re-apply feature gates on every renderAll so
+  // toolbar buttons stay correctly hidden even if the initial gate
+  // run happened before profile was loaded.
+  try { applyFeatureGates(); } catch(e){}
 }
 
 /* For agents (can't apply discounts directly), replace the Custom
@@ -14113,6 +14117,8 @@ async function fetchCurrentProfile(){
     }
     if(data){
       currentProfile = data;
+      // Re-apply gates the moment we know the real role/features.
+      try { applyFeatureGates(); } catch(e){}
       return data;
     }
   }catch(e){
@@ -14334,6 +14340,9 @@ function dismissPasswordSetup(){
 function setCurrentUser(u){
   currentUser = u;
   updateAuthUI();
+  // Defense-in-depth: any time the user changes, re-apply feature gates.
+  // applyFeatureGates is idempotent so calling it more often is harmless.
+  try { applyFeatureGates(); } catch(e){}
 }
 
 /* ============================================================
@@ -15187,29 +15196,40 @@ function updateAuthUI(){
 }
 
 function onAuthClick(){
-  console.log("[auth] Account button clicked. supa:", !!supa, "currentUser:", !!currentUser, "email:", currentUser && currentUser.email);
+  console.log("[auth] Log out / Sign in button clicked. supa:", !!supa, "currentUser:", !!currentUser, "email:", currentUser && currentUser.email);
   if(!supa){
     flash("Sync unavailable — Supabase failed to load");
     return;
   }
   if(currentUser){
-    // Native confirm() can sometimes be blocked by the browser if it's
-    // triggered too quickly after a previous dialog, or by overlays.
-    // Use a try/catch fallback so the user always gets feedback.
-    let proceed;
+    /* Sign out flow — kept defensive because confirm() can be blocked
+       by overlays or browser settings. If confirm fails or returns
+       falsy, we still attempt sign-out so the button never silently
+       does nothing — that confused the user before. */
+    let proceed = true;
     try {
-      proceed = confirm("Sign out of " + currentUser.email + "?\n\nYour local estimates stay on this device. To resume syncing, sign in again.");
+      proceed = confirm("Sign out of " + currentUser.email + "?");
     } catch(e){
-      console.warn("[auth] confirm() failed, defaulting to sign out:", e);
+      console.warn("[auth] confirm() blocked, defaulting to sign out:", e);
       proceed = true;
     }
-    if(proceed){
-      console.log("[auth] Signing out...");
-      supa.auth.signOut().then(
-        () => { console.log("[auth] Signed out successfully"); flash("Signed out"); location.reload(); },
-        (err) => { console.error("[auth] Sign-out failed:", err); flash("Sign-out failed: " + err.message); }
-      );
+    if(!proceed){
+      console.log("[auth] User cancelled sign-out");
+      return;
     }
+    console.log("[auth] Signing out...");
+    /* Always clear local data + reload, even if signOut errors. This
+       guarantees the UI doesn't get stuck. */
+    const finishSignOut = () => {
+      try { clearUserScopedLocalStorage("sign-out (forced)"); } catch(e){}
+      try { localStorage.removeItem(LAST_USER_ID_KEY); } catch(e){}
+      flash("Signed out");
+      setTimeout(() => location.reload(), 200);
+    };
+    supa.auth.signOut().then(
+      () => { console.log("[auth] Signed out successfully"); finishSignOut(); },
+      (err) => { console.error("[auth] Sign-out failed:", err); finishSignOut(); }
+    );
     return;
   }
   openAuthModal();
