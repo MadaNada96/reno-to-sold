@@ -3134,6 +3134,7 @@
       </button>
       <button onclick="openClientEstimate()">Print / PDF</button>
       <button onclick="openEmailEstimateModal()">Email to Client</button>
+      <button data-feature="submit_for_review" id="submitForReviewBtn" onclick="openSubmitForReviewModal()" title="Submit this estimate to Reno to Sold for final review and approval" class="primary">Submit for Review</button>
       <button data-feature="expense_tracker" onclick="openExpenseTracker()" title="Track renovation expenses & profit for this estimate">Expense Tracker</button>
       <button data-feature="invoicing"       onclick="openInvoicing()" title="Issue invoices on the project payment schedule (10/40/40/10 — or 10/40/20/20/10 when a kitchen reno is part of the scope)">Invoicing</button>
       <input type="file" id="pdfImportInput" accept="application/pdf,.pdf" style="display:none;" onchange="onPdfFileChosen(event)">
@@ -3744,6 +3745,33 @@
   </div>
 </div>
 
+<!-- ===== Submit for Review modal =====
+     Agent confirmation: shows totals + any discount request +
+     warning that submission locks editing. -->
+<div class="modal-bg" id="submitForReviewModal" onclick="if(event.target===this)closeSubmitForReviewModal()">
+  <div class="modal" style="max-width:600px;">
+    <h3>
+      <span>Submit Estimate for Review</span>
+      <button class="ghost" onclick="closeSubmitForReviewModal()">Close</button>
+    </h3>
+    <div class="modal-body" id="submitForReviewBody"></div>
+  </div>
+</div>
+
+<!-- ===== Discount Request modal =====
+     Replaces the Custom Discount toggle for agents. Lets them ask the
+     admin for a $ discount with a written justification. The request
+     travels with the submitted estimate. -->
+<div class="modal-bg" id="discountRequestModal" onclick="if(event.target===this)closeDiscountRequestModal()">
+  <div class="modal" style="max-width:540px;">
+    <h3>
+      <span>Request Additional Discount</span>
+      <button class="ghost" onclick="closeDiscountRequestModal()">Close</button>
+    </h3>
+    <div class="modal-body" id="discountRequestBody"></div>
+  </div>
+</div>
+
 <!-- Invoice detail modal — opens when the user clicks on a milestone card
      or an existing invoice row. Lets the user edit the amount, dates,
      notes, mark sent/paid/void, download PDF. -->
@@ -4230,6 +4258,33 @@ function freshState(){
     propName: "",
     propAddress: "",
     propSqft: "",
+    // ---- Phase 2 submission workflow fields ----
+    // status: draft | submitted | priced | client_approved | approved
+    //         | request_changes | rejected
+    // submission tracks who submitted + when + the frozen snapshot of
+    // pricing + state at submission time (so review numbers don't drift).
+    status: "draft",
+    submission: null,
+    /* submission shape (set on submit):
+        { submitted_at, submitted_by_email, submitted_by_name,
+          state_snapshot, pricing_snapshot,
+          totals_at_submission: {labour, material, subtotal, hst, total} } */
+    // Discount Request — for AGENTS who want a discount beyond the 10%
+    // listing. Stored on the estimate so it travels with submission.
+    // Admin approves/rejects/modifies during review. Until then,
+    // status="pending" and the discount is NOT applied to totals.
+    discount_request: null,
+    /* discount_request shape:
+        { amount, justification,
+          status: "pending" | "approved" | "rejected",
+          decided_amount,    // admin may approve a different amount
+          decided_by, decided_at, decided_note } */
+    // Admin's review trail — what they did and when
+    admin_review: null,
+    /* admin_review shape:
+        { reviewer_id, reviewer_email,
+          action: "approve" | "request_changes" | "reject",
+          note, decided_at } */
     // Sellers — supports any number; sellers[0] is always present.
     // Legacy sellerName/sellerPhone/sellerEmail are migrated into sellers[0]
     // on load (see migrateOldEstimate).
@@ -5643,6 +5698,75 @@ function renderAll(){
   renderDiscPlaceholder();
   renderCategories();
   renderTotals();
+  // Phase 2: status banner + lock for submitted estimates
+  try { renderEstimateStatusBanner(); } catch(e){}
+  try { applyEstimateLock(); } catch(e){}
+  // Phase 2: for agents, replace the Custom Discount toggle with the
+  // Request Additional Discount UI. Done after renderAll so the
+  // standard discount UI is already in place.
+  try { applyAgentDiscountUI(); } catch(e){}
+}
+
+/* For agents (can't apply discounts directly), replace the Custom
+   Discount toggle UI with a "Request Additional Discount" button.
+   For admins/staff, leave the existing toggle alone. */
+function applyAgentDiscountUI(){
+  const swCustomRow = document.getElementById("sw-custom");
+  if(!swCustomRow) return;
+  const toggleRow = swCustomRow.closest(".disc-toggle-row");
+  const fields = document.getElementById("customDiscFields");
+  // Look for / create the agent panel
+  let agentPanel = document.getElementById("agentDiscRequestPanel");
+  if(!isAgent()){
+    // Make sure standard toggle is visible, agent panel gone
+    if(toggleRow) toggleRow.style.display = "";
+    if(agentPanel) agentPanel.remove();
+    return;
+  }
+  // Agent view: hide standard toggle + the custom fields, show our panel
+  if(toggleRow) toggleRow.style.display = "none";
+  if(fields) fields.classList.add("hidden");
+  const dr = state.discount_request;
+  const drBlock = dr ? `
+    <div style="background:rgba(212,175,106,.06);border:1px solid var(--line);border-radius:6px;padding:10px 12px;margin-top:8px;font-size:12.5px;color:#cfcfcf;">
+      ${renderStatusPill(dr.status === "approved" ? "approved" : dr.status === "rejected" ? "rejected" : "submitted")}
+      <div style="margin-top:6px;">Requested <b style="color:#f5c878;">$${Math.round(dr.amount||0).toLocaleString("en-US")}</b> off</div>
+      ${dr.justification ? `<div style="color:var(--muted);font-size:11.5px;margin-top:4px;">"${escapeHtml(dr.justification)}"</div>` : ""}
+      ${dr.status === "approved" && dr.decided_amount !== undefined ? `<div style="margin-top:6px;color:#5fce86;">Approved at $${Math.round(dr.decided_amount).toLocaleString("en-US")}</div>` : ""}
+      ${dr.status === "rejected" && dr.decided_note ? `<div style="margin-top:6px;color:#ff9090;">${escapeHtml(dr.decided_note)}</div>` : ""}
+    </div>
+  ` : "";
+  const panelHtml = `
+    <div id="agentDiscRequestPanel" class="disc-toggle-row" style="flex-direction:column;align-items:stretch;gap:6px;cursor:default;">
+      <div style="display:flex;align-items:center;gap:14px;">
+        <div class="toggle-info" style="flex:1;">
+          <div class="cat-title">Additional Discount</div>
+          <div class="cat-sub">Beyond the 10% listing discount, additional discounts require Reno to Sold approval.</div>
+        </div>
+        <button onclick="openDiscountRequestModal()" ${isEstimateLocked() ? "disabled" : ""}
+          style="background:linear-gradient(180deg,#2a2010,#1a1408);color:#e8c989;border:1px solid #d4af6a;
+                 border-radius:6px;padding:9px 16px;font-size:11.5px;font-weight:700;
+                 letter-spacing:.10em;text-transform:uppercase;cursor:pointer;flex-shrink:0;">
+          ${dr ? "Edit Request" : "Request Discount"}
+        </button>
+      </div>
+      ${drBlock}
+    </div>
+  `;
+  if(agentPanel){
+    agentPanel.outerHTML = panelHtml;
+  } else {
+    // Insert after the listing-discount row
+    const listingRow = document.getElementById("sw-listing");
+    if(listingRow){
+      const listingRowEl = listingRow.closest(".disc-toggle-row");
+      if(listingRowEl){
+        const tmp = document.createElement("div");
+        tmp.innerHTML = panelHtml;
+        listingRowEl.parentNode.insertBefore(tmp.firstElementChild, listingRowEl.nextSibling);
+      }
+    }
+  }
 }
 
 /* ---------- Sellers (multiple) ---------- */
@@ -7462,11 +7586,17 @@ function renderSavedList(){
     const allCount = Array.isArray(e.state && e.state.sellers) ? e.state.sellers.length : (seller ? 1 : 0);
     const extra = allCount > 1 ? ` +${allCount-1} more` : "";
     const sellerLine = [seller + extra, phone, email].filter(Boolean).join(" · ");
+    // Phase 2: show status pill on saved estimates list
+    const estStatus = (e.state && e.state.status) || "draft";
+    const statusBlock = estStatus !== "draft"
+      ? `<div style="margin-top:6px;">${renderStatusPill(estStatus)}</div>`
+      : "";
     li.innerHTML = `
       <div class="info">
         <div class="name">${escapeHtml(e.name)}</div>
         ${sellerLine ? `<div class="when" style="color:var(--gold-bright);">${escapeHtml(sellerLine)}</div>` : ""}
         <div class="when">${new Date(e.savedAt).toLocaleString()}</div>
+        ${statusBlock}
       </div>
       <button onclick="loadEstimate('${e.id}')">Open</button>
       <button class="ghost danger" onclick="deleteEstimate('${e.id}')">Delete</button>
@@ -13611,6 +13741,336 @@ function canUse(feature){
   return !!(currentProfile.features && currentProfile.features[feature]);
 }
 function isAdmin(){ return !!(currentProfile && currentProfile.role === "admin" && !currentProfile.suspended); }
+
+/* ============================================================
+   PHASE 2 — Submission workflow helpers
+   ============================================================ */
+
+/* Returns true if the estimate is currently locked from editing.
+   Locked when status is anything OTHER than draft or request_changes
+   (i.e. once it's been submitted, it's frozen until admin sends back). */
+function isEstimateLocked(){
+  if(!state) return false;
+  const s = state.status || "draft";
+  // draft and request_changes are the only editable states
+  return s !== "draft" && s !== "request_changes";
+}
+
+/* Pretty label + color for a status pill. */
+function statusPillData(status){
+  const s = status || "draft";
+  const map = {
+    draft:            { label: "Draft",                    bg: "#1a1a1a", color: "#8a8579", border: "#3a3a42" },
+    submitted:        { label: "Submitted for Review",     bg: "#1e2533", color: "#8db4ff", border: "#4a6fb5" },
+    priced:           { label: "Priced — Client Approval", bg: "#332715", color: "#f5c878", border: "#c98e2a" },
+    client_approved:  { label: "Client Approved",          bg: "#0f2918", color: "#5fce86", border: "#2e7e4e" },
+    approved:         { label: "Approved",                 bg: "#0a3920", color: "#5fce86", border: "#2e7e4e" },
+    request_changes:  { label: "Changes Requested",        bg: "#3a2010", color: "#ff9966", border: "#cc7a3a" },
+    rejected:         { label: "Rejected",                 bg: "#2b1212", color: "#ff9090", border: "#8a2828" }
+  };
+  return map[s] || map.draft;
+}
+function renderStatusPill(status, opts){
+  const d = statusPillData(status);
+  const o = opts || {};
+  return `<span style="display:inline-block;padding:${o.large?"5px 12px":"3px 9px"};border-radius:999px;font-size:${o.large?"11px":"9.5px"};letter-spacing:.12em;text-transform:uppercase;font-weight:700;background:${d.bg};color:${d.color};border:1px solid ${d.border};">${d.label}</span>`;
+}
+
+/* Shows a banner at the top of the estimator when status !== draft.
+   Tells the user the estimate is locked + why. Updates on renderAll. */
+function renderEstimateStatusBanner(){
+  const existing = document.getElementById("estStatusBanner");
+  if(!state || !state.status || state.status === "draft"){
+    if(existing) existing.remove();
+    return;
+  }
+  const status = state.status;
+  const d = statusPillData(status);
+  let body = "";
+  if(status === "submitted"){
+    const sub = state.submission || {};
+    body = `Submitted ${sub.submitted_at ? "on " + new Date(sub.submitted_at).toLocaleDateString("en-CA") : ""}. Waiting for Reno to Sold review.`;
+  } else if(status === "priced"){
+    body = "Reno to Sold has priced the Miscellaneous items. Show the priced estimate to your client. Once they sign off, mark client-approved and resubmit.";
+  } else if(status === "client_approved"){
+    body = "Client has approved. Waiting for Reno to Sold final approval.";
+  } else if(status === "approved"){
+    const rev = state.admin_review || {};
+    body = `Approved ${rev.decided_at ? "on " + new Date(rev.decided_at).toLocaleDateString("en-CA") : ""}. Final contract numbers. You can still print/email the PDF for your client.`;
+  } else if(status === "request_changes"){
+    const rev = state.admin_review || {};
+    body = `Reno to Sold has requested changes${rev.note ? ': "' + rev.note + '"' : "."}  Edit the estimate and submit again.`;
+  } else if(status === "rejected"){
+    const rev = state.admin_review || {};
+    body = `Rejected${rev.note ? ': "' + rev.note + '"' : "."}  Contact Reno to Sold to discuss.`;
+  }
+
+  const html = `
+    <div id="estStatusBanner" style="background:${d.bg};border:1px solid ${d.border};border-radius:8px;padding:12px 16px;margin:0 0 14px;display:flex;align-items:center;gap:12px;">
+      <div style="flex-shrink:0;">${renderStatusPill(status, {large:true})}</div>
+      <div style="flex:1;color:#f5f1e6;font-size:12.5px;line-height:1.5;">${body}</div>
+    </div>
+  `;
+  // Insert at the top of the .app container, after the brandbar
+  const app = document.querySelector(".app");
+  const brandbar = app && app.querySelector(".brandbar");
+  if(!app) return;
+  if(existing) existing.remove();
+  const wrap = document.createElement("div");
+  wrap.innerHTML = html;
+  if(brandbar && brandbar.nextSibling){
+    app.insertBefore(wrap.firstElementChild, brandbar.nextSibling);
+  } else {
+    app.appendChild(wrap.firstElementChild);
+  }
+}
+
+/* Apply a visual disabled state to the entire .app when the estimate
+   is locked. Disables all inputs/buttons inside categories — leaves
+   the toolbar (so the user can still save/print/email/log out). */
+function applyEstimateLock(){
+  const cats = document.querySelectorAll(".cat");
+  cats.forEach(el => {
+    if(isEstimateLocked()){
+      el.style.pointerEvents = "none";
+      el.style.opacity = "0.65";
+    } else {
+      el.style.pointerEvents = "";
+      el.style.opacity = "";
+    }
+  });
+  // Also hide the Submit for Review button when not in a submittable state
+  const submitBtn = document.getElementById("submitForReviewBtn");
+  if(submitBtn){
+    const submittable = state && (state.status === "draft" || state.status === "request_changes" || state.status === "priced");
+    submitBtn.style.display = (canUse("submit_for_review") && submittable) ? "" : "none";
+    // Re-label based on state
+    if(state && state.status === "priced"){
+      submitBtn.textContent = "Resubmit — Client Approved";
+      submitBtn.title = "Confirm your client has approved this priced estimate and resubmit for final approval";
+    } else if(state && state.status === "request_changes"){
+      submitBtn.textContent = "Re-Submit for Review";
+      submitBtn.title = "After making the requested changes, resubmit for review";
+    } else {
+      submitBtn.textContent = "Submit for Review";
+      submitBtn.title = "Submit this estimate to Reno to Sold for final review and approval";
+    }
+  }
+}
+
+/* ===== Submit for Review modal ===== */
+function openSubmitForReviewModal(){
+  if(!canUse("submit_for_review")){ alert("Only agents can submit estimates for review."); return; }
+  if(!state || !state._id){ alert("Save the estimate first before submitting for review."); return; }
+  if(!state.propAddress && !state.propName){ alert("Add a property name or address before submitting."); return; }
+  // Determine the action based on current status
+  const isResubmit = state.status === "priced" || state.status === "request_changes";
+  const isClientApproved = state.status === "priced";
+  // Build the confirmation body
+  const t = (typeof computeTotals === "function") ? computeTotals() : null;
+  const fmt = (n) => "$" + Math.round(n||0).toLocaleString("en-US");
+  const dr = state.discount_request;
+  let drBlock = "";
+  if(dr && dr.status === "pending"){
+    drBlock = `
+      <div style="background:rgba(245,200,120,.08);border:1px solid #c98e2a;border-radius:8px;padding:12px 14px;margin:14px 0;">
+        <div style="font-size:11px;color:#f5c878;font-weight:700;letter-spacing:.12em;text-transform:uppercase;margin-bottom:6px;">Discount Request — Pending</div>
+        <div style="font-size:13px;color:#f5f1e6;line-height:1.5;">
+          Requesting <b style="color:#f5c878;">${fmt(dr.amount)}</b> off.<br>
+          <span style="color:#cfcfcf;font-size:12px;">Reason: ${escapeHtml(dr.justification || "—")}</span>
+        </div>
+      </div>`;
+  }
+
+  document.getElementById("submitForReviewBody").innerHTML = `
+    <p style="font-size:13px;line-height:1.6;color:#cfcfcf;">
+      ${isClientApproved
+        ? "Confirm that your client has approved this priced estimate. After resubmission, Reno to Sold will give final approval."
+        : isResubmit
+        ? "You've made the requested changes. Resubmit this estimate for Reno to Sold's review."
+        : "Submit this estimate to Reno to Sold for review and approval. Once submitted, the estimate is <b>locked</b> until reviewed — you won't be able to edit it."}
+    </p>
+    ${t ? `
+      <div style="background:#0a0a0e;border:1px solid var(--line-strong);border-radius:8px;padding:12px 14px;margin:14px 0;">
+        <div style="font-size:10.5px;color:var(--muted);letter-spacing:.14em;text-transform:uppercase;font-weight:700;margin-bottom:8px;">Submission Summary</div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;color:#cfcfcf;line-height:1.7;">
+          <div>Property</div><div style="text-align:right;color:#f5f1e6;font-weight:600;">${escapeHtml(state.propAddress || state.propName || "—")}</div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;color:#cfcfcf;line-height:1.7;">
+          <div>Subtotal</div><div style="text-align:right;color:#f5f1e6;font-variant-numeric:tabular-nums;">${fmt(t.subtotal||t.afterDiscount||(t.total/1.13))}</div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;color:#cfcfcf;line-height:1.7;">
+          <div>HST</div><div style="text-align:right;color:#f5f1e6;font-variant-numeric:tabular-nums;">${fmt(t.hst||0)}</div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:14px;color:#f5f1e6;font-weight:700;border-top:1px solid var(--line);padding-top:8px;margin-top:8px;">
+          <div>Total (incl. HST)</div><div style="text-align:right;color:var(--gold-bright);font-variant-numeric:tabular-nums;">${fmt(t.total||0)}</div>
+        </div>
+      </div>
+    ` : ""}
+    ${drBlock}
+    <textarea id="submitNotesInput" placeholder="Optional: any notes for Reno to Sold..." rows="3" style="width:100%;padding:10px 12px;background:#0a0a0e;border:1px solid var(--line-strong);color:#f5f1e6;border-radius:6px;font-size:13px;margin-bottom:14px;resize:vertical;"></textarea>
+    <div id="submitStatus" style="font-size:12.5px;min-height:18px;text-align:center;color:#ff9090;margin-bottom:10px;"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="ghost" onclick="closeSubmitForReviewModal()">Cancel</button>
+      <button class="primary" id="submitConfirmBtn" onclick="confirmSubmitForReview('${isClientApproved ? "client_approved" : "submitted"}')">
+        ${isClientApproved ? "Confirm Client Approval" : isResubmit ? "Resubmit" : "Submit for Review"}
+      </button>
+    </div>
+  `;
+  document.getElementById("submitForReviewModal").classList.add("show");
+}
+function closeSubmitForReviewModal(){
+  document.getElementById("submitForReviewModal").classList.remove("show");
+}
+
+async function confirmSubmitForReview(targetStatus){
+  const statusEl = document.getElementById("submitStatus");
+  const notes = (document.getElementById("submitNotesInput") || {}).value || "";
+  const btn = document.getElementById("submitConfirmBtn");
+  if(btn){ btn.disabled = true; btn.textContent = "Submitting..."; }
+  try {
+    // Snapshot pricing + state
+    const t = computeTotals();
+    state.status = targetStatus;
+    state.submission = {
+      submitted_at: new Date().toISOString(),
+      submitted_by_email: currentUser ? currentUser.email : "",
+      submitted_by_name: currentProfile ? (currentProfile.full_name || "") : "",
+      submitted_notes: notes,
+      pricing_snapshot: JSON.parse(JSON.stringify(prices)),
+      state_snapshot: JSON.parse(JSON.stringify(state)),  // snapshot includes status='submitted'
+      totals_at_submission: {
+        labour: t.labour, material: t.material,
+        subtotal: t.subtotal || (t.total / 1.13),
+        hst: t.hst || 0, total: t.total || 0
+      }
+    };
+    // Save (pushes to cloud automatically since signed in)
+    saveEstimate({ silent: true });
+    statusEl.style.color = "#5fce86";
+    statusEl.textContent = "✓ Submitted. Reno to Sold will review and respond.";
+    // Notify admin via email (fire and forget)
+    notifyAdminOfSubmission(targetStatus, notes).catch(e => console.warn("Admin notification failed:", e));
+    setTimeout(() => {
+      closeSubmitForReviewModal();
+      renderAll();
+    }, 1400);
+  } catch(e) {
+    console.error("Submission failed:", e);
+    statusEl.style.color = "#ff9090";
+    statusEl.textContent = "Failed: " + (e.message || String(e));
+    if(btn){ btn.disabled = false; btn.textContent = targetStatus === "client_approved" ? "Confirm Client Approval" : "Submit for Review"; }
+  }
+}
+
+/* Send a notification email to admin (renotosold@gmail.com) that an
+   estimate has been submitted. Uses the email-estimate Edge Function. */
+async function notifyAdminOfSubmission(targetStatus, notes){
+  if(!supa) return;
+  const t = state.submission && state.submission.totals_at_submission;
+  const fmt = (n) => "$" + Math.round(n||0).toLocaleString("en-US");
+  const propTitle = state.propAddress || state.propName || "—";
+  const agentName = (currentProfile && currentProfile.full_name) || (currentUser && currentUser.email) || "Unknown";
+  const agentBrokerage = (currentProfile && currentProfile.brokerage) || "";
+  const dr = state.discount_request;
+  const action = targetStatus === "client_approved" ? "client-approved (priced estimate)" : "submitted";
+
+  let body = `Estimate Submission — Reno to Sold\n\n`;
+  body += `Agent: ${agentName}${agentBrokerage ? ` (${agentBrokerage})` : ""}\n`;
+  body += `Property: ${propTitle}\n`;
+  body += `Action: ${action}\n`;
+  if(t){
+    body += `Total: ${fmt(t.total)} (incl. HST)\n`;
+  }
+  if(dr && dr.status === "pending"){
+    body += `\nDiscount Request: ${fmt(dr.amount)} off\n`;
+    body += `Justification: ${dr.justification || "—"}\n`;
+  }
+  if(notes){
+    body += `\nAgent notes: ${notes}\n`;
+  }
+  body += `\nReview it in the Submissions dashboard in your Reno to Sold admin panel.\n`;
+
+  // Use a tiny placeholder PDF — we're not attaching an estimate PDF, just notifying.
+  // (Email-estimate function requires pdfBase64. Future: build a real submission PDF.)
+  const tinyPng = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkAAIAAAoAAv/lxKUAAAAASUVORK5CYII=";
+  try {
+    await supa.functions.invoke("email-estimate", {
+      body: {
+        to: ["renotosold@gmail.com"],
+        cc: [],
+        subject: `New estimate submission — ${propTitle}`,
+        body,
+        pdfBase64: tinyPng,
+        filename: "submission-notification.png"
+      }
+    });
+  } catch(e) {
+    console.warn("Admin notification email failed:", e);
+  }
+}
+
+/* ===== Discount Request modal ===== */
+function openDiscountRequestModal(){
+  const existing = state.discount_request;
+  const isLocked = isEstimateLocked();
+  document.getElementById("discountRequestBody").innerHTML = `
+    <p style="font-size:13px;line-height:1.55;color:#cfcfcf;margin-bottom:14px;">
+      The 10% listing discount is yours to apply directly. For any additional discount, submit a request below — Reno to Sold will review it with the submitted estimate.
+    </p>
+    <label style="display:block;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:4px;">Discount Amount ($)</label>
+    <input type="number" id="drAmount" min="0" step="50" value="${existing ? existing.amount || "" : ""}" placeholder="500" ${isLocked ? "disabled" : ""}
+      style="width:100%;padding:10px 12px;background:#0a0a0e;border:1px solid var(--line-strong);color:#f5f1e6;border-radius:6px;font-size:13px;margin-bottom:14px;">
+    <label style="display:block;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:4px;">Justification</label>
+    <textarea id="drJustification" rows="4" placeholder="Why does this client warrant an extra discount? (repeat client, large scope, competitive bid situation, etc.)" ${isLocked ? "disabled" : ""}
+      style="width:100%;padding:10px 12px;background:#0a0a0e;border:1px solid var(--line-strong);color:#f5f1e6;border-radius:6px;font-size:13px;margin-bottom:14px;resize:vertical;">${existing ? escapeHtml(existing.justification || "") : ""}</textarea>
+    ${existing ? `
+      <div style="background:rgba(212,175,106,.06);border:1px solid var(--line);border-radius:6px;padding:10px 12px;margin-bottom:14px;">
+        <div style="font-size:10.5px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;font-weight:700;margin-bottom:4px;">Current Request</div>
+        <div style="font-size:13px;color:#f5f1e6;">
+          Status: ${renderStatusPill(existing.status === "approved" ? "approved" : existing.status === "rejected" ? "rejected" : "submitted")}<br>
+          ${existing.status === "approved" && existing.decided_amount !== undefined ? `Approved: <b style="color:#5fce86;">$${Math.round(existing.decided_amount).toLocaleString("en-US")}</b><br>` : ""}
+          ${existing.status === "rejected" && existing.decided_note ? `Reason: ${escapeHtml(existing.decided_note)}<br>` : ""}
+        </div>
+      </div>
+    ` : ""}
+    <div id="drStatus" style="font-size:12.5px;min-height:18px;text-align:center;color:#ff9090;margin-bottom:10px;"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      ${existing && !isLocked ? `<button class="ghost danger" onclick="clearDiscountRequest()" style="margin-right:auto;">Remove Request</button>` : ""}
+      <button class="ghost" onclick="closeDiscountRequestModal()">${isLocked ? "Close" : "Cancel"}</button>
+      ${!isLocked ? `<button class="primary" onclick="saveDiscountRequest()">${existing ? "Update Request" : "Submit Request"}</button>` : ""}
+    </div>
+  `;
+  document.getElementById("discountRequestModal").classList.add("show");
+}
+function closeDiscountRequestModal(){
+  document.getElementById("discountRequestModal").classList.remove("show");
+}
+function saveDiscountRequest(){
+  const amount = parseFloat(document.getElementById("drAmount").value);
+  const justification = (document.getElementById("drJustification").value || "").trim();
+  const statusEl = document.getElementById("drStatus");
+  if(!isFinite(amount) || amount <= 0){ statusEl.textContent = "Enter a valid dollar amount."; return; }
+  if(justification.length < 10){ statusEl.textContent = "Please provide a justification (at least a sentence)."; return; }
+  state.discount_request = {
+    amount: amount,
+    justification: justification,
+    status: "pending",
+    requested_at: new Date().toISOString(),
+    requested_by_email: currentUser ? currentUser.email : ""
+  };
+  saveEstimate({ silent: true });
+  closeDiscountRequestModal();
+  renderTotals();
+  if(typeof flash === "function") flash("Discount request saved. It'll be reviewed when you submit the estimate.");
+}
+function clearDiscountRequest(){
+  if(!confirm("Remove the discount request from this estimate?")) return;
+  state.discount_request = null;
+  saveEstimate({ silent: true });
+  closeDiscountRequestModal();
+  renderTotals();
+}
 function isAgent(){ return !!(currentProfile && currentProfile.role === "agent"); }
 function isStaff(){ return !!(currentProfile && currentProfile.role === "staff"); }
 
