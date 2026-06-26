@@ -3833,8 +3833,8 @@
 </div>
 
 <!-- Submission detail modal (Slice B). Opens when admin clicks a row.
-     Read-only display of the agent's frozen snapshot. Slice C will add
-     Approve / Request Changes / Reject decision buttons. -->
+     Slice C adds Approve / Request Changes / Reject decision buttons
+     at the bottom; clicking one opens #submissionDecisionModal. -->
 <div class="modal-bg" id="submissionDetailModal" onclick="if(event.target===this)closeSubmissionDetail()">
   <div class="modal" style="max-width:780px;">
     <h3>
@@ -3844,6 +3844,20 @@
     <div class="modal-body" id="submissionDetailBody">
       <div style="padding:20px;text-align:center;color:var(--muted);">Loading…</div>
     </div>
+  </div>
+</div>
+
+<!-- Decision modal (Slice C). Opens from the three Approve / Request
+     Changes / Reject buttons in the submission detail. Body is rendered
+     dynamically per action; submission writes back to Supabase and
+     refreshes the queue + detail view. -->
+<div class="modal-bg" id="submissionDecisionModal" onclick="if(event.target===this)closeSubmissionDecisionModal()">
+  <div class="modal" style="max-width:560px;">
+    <h3>
+      <span id="submissionDecisionTitle">Decision</span>
+      <button class="ghost" onclick="closeSubmissionDecisionModal()">Close</button>
+    </h3>
+    <div class="modal-body" id="submissionDecisionBody"></div>
   </div>
 </div>
 
@@ -16067,10 +16081,259 @@ function renderSubmissionDetail(){
       <div style="background:var(--panel-2);border:1px solid var(--line-strong);border-radius:8px;padding:10px 14px;margin-top:6px;">${catList}</div>
     </div>
 
-    <p style="color:var(--muted);font-size:11px;text-align:center;margin-top:20px;border-top:1px dashed var(--line);padding-top:12px;">
-      Approve / Request Changes / Reject buttons coming next drop.
-    </p>
+    ${(function(){
+      // Decision buttons — only show if the estimate is still in a
+      // reviewable state (submitted or client_approved). Once a decision
+      // has been made, the buttons are hidden and the previous decision
+      // shows up in the arHtml block above.
+      const REVIEWABLE = ["submitted", "client_approved"];
+      if(!REVIEWABLE.includes(status)){
+        return `<p style="color:var(--muted);font-size:11px;text-align:center;margin-top:20px;border-top:1px dashed var(--line);padding-top:12px;">
+          This submission has already been ${escapeHtml(status.replace(/_/g," "))}. No further action available.
+        </p>`;
+      }
+      return `
+        <div class="sd-section" style="margin-top:24px;padding-top:18px;border-top:1px solid var(--gold-deep);">
+          <div class="sd-label" style="margin-bottom:10px;">DECISION</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            <button type="button" onclick="openSubmissionDecisionModal('approve','${escapeHtml(row.id)}')"
+              style="flex:1;min-width:130px;background:linear-gradient(180deg,#1a3320,#0e1c12);color:#5fce86;border:1px solid #2e7e4e;
+                     border-radius:6px;padding:11px 18px;font-size:11.5px;font-weight:700;
+                     letter-spacing:.10em;text-transform:uppercase;cursor:pointer;">
+              ✓ Approve
+            </button>
+            <button type="button" onclick="openSubmissionDecisionModal('request_changes','${escapeHtml(row.id)}')"
+              style="flex:1;min-width:130px;background:linear-gradient(180deg,#2a2010,#1a1408);color:#e8a46c;border:1px solid #a06030;
+                     border-radius:6px;padding:11px 18px;font-size:11.5px;font-weight:700;
+                     letter-spacing:.10em;text-transform:uppercase;cursor:pointer;">
+              ⟳ Request Changes
+            </button>
+            <button type="button" onclick="openSubmissionDecisionModal('reject','${escapeHtml(row.id)}')"
+              style="flex:1;min-width:130px;background:linear-gradient(180deg,#2a1010,#1a0808);color:#ff9090;border:1px solid #8a2828;
+                     border-radius:6px;padding:11px 18px;font-size:11.5px;font-weight:700;
+                     letter-spacing:.10em;text-transform:uppercase;cursor:pointer;">
+              ✗ Reject
+            </button>
+          </div>
+        </div>`;
+    })()}
   `;
+}
+
+/* ===== SLICE C — DECISION ACTIONS =====
+   Three decision flows: approve, request_changes, reject. Each opens
+   a small modal that collects a note (required for changes/reject,
+   optional for approve) and an optional discount-request decision
+   (only shown when there's a pending one).
+
+   On submit: writes admin_review + status (+ discount_request decision)
+   back to Supabase. The agent's view updates via the existing Realtime
+   subscription. The detail modal re-renders to show the new state. */
+
+let currentDecisionContext = null; // { action, estimateId, row }
+
+function openSubmissionDecisionModal(action, estimateId){
+  const row = submissionsList.find(r => r.id === estimateId);
+  if(!row){ alert("Submission not found — try refreshing the queue."); return; }
+  currentDecisionContext = { action, estimateId, row };
+  const modal = document.getElementById("submissionDecisionModal");
+  if(modal) modal.classList.add("show");
+  renderSubmissionDecisionBody();
+}
+
+function closeSubmissionDecisionModal(){
+  const modal = document.getElementById("submissionDecisionModal");
+  if(modal) modal.classList.remove("show");
+  currentDecisionContext = null;
+}
+
+function renderSubmissionDecisionBody(){
+  const body = document.getElementById("submissionDecisionBody");
+  const titleEl = document.getElementById("submissionDecisionTitle");
+  if(!body || !currentDecisionContext) return;
+
+  const { action, row } = currentDecisionContext;
+  const s = row.state || {};
+  const sub = s.submission || {};
+  const dr = s.discount_request;
+  const totals = sub.totals_at_submission || {};
+  const propAddr = s.propAddress || s.propName || row.name || "—";
+  const agentName = sub.submitted_by_name || sub.submitted_by_email || "Unknown";
+
+  const actionMeta = {
+    approve:         { title: "Approve Submission",       color: "#5fce86", border: "#2e7e4e", noteRequired: false, noteLabel: "Optional note to agent", btnLabel: "Confirm Approval" },
+    request_changes: { title: "Request Changes",          color: "#e8a46c", border: "#a06030", noteRequired: true,  noteLabel: "What changes are needed? (required)", btnLabel: "Send Change Request" },
+    reject:          { title: "Reject Submission",        color: "#ff9090", border: "#8a2828", noteRequired: true,  noteLabel: "Why is this rejected? (required)",    btnLabel: "Confirm Rejection" }
+  };
+  const m = actionMeta[action];
+  if(titleEl) titleEl.textContent = m.title;
+
+  // Discount-request decision section — only when there's a pending one
+  let drBlock = "";
+  if(dr && dr.status === "pending"){
+    drBlock = `
+      <div style="background:rgba(245,200,120,.06);border:1px solid #c98e2a;border-radius:8px;padding:14px;margin:14px 0;">
+        <div style="font-size:10px;color:#f5c878;font-weight:700;letter-spacing:.14em;margin-bottom:8px;">DISCOUNT REQUEST DECISION</div>
+        <div style="color:var(--ink);font-size:13px;margin-bottom:10px;">
+          Agent requested <b style="color:#f5c878;">$${Math.round(dr.amount||0).toLocaleString("en-US")}</b> off.
+          ${dr.justification ? `<div style="color:var(--muted);font-size:12px;margin-top:4px;font-style:italic;">"${escapeHtml(dr.justification)}"</div>` : ""}
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">
+          <label style="font-size:11px;letter-spacing:.10em;text-transform:uppercase;color:var(--gold-bright);font-weight:700;">Your decision:</label>
+          <select id="drDecisionSelect" onchange="onDrDecisionChange()" style="background:#0a0a0e;border:1px solid var(--line-strong);color:var(--ink);border-radius:6px;padding:7px 10px;font-size:13px;">
+            <option value="approve_as_requested">Approve as requested ($${Math.round(dr.amount||0).toLocaleString("en-US")})</option>
+            <option value="approve_modified">Approve modified amount</option>
+            <option value="reject">Reject discount</option>
+          </select>
+        </div>
+        <div id="drModifiedAmountWrap" style="display:none;margin-top:8px;">
+          <label style="font-size:11px;color:var(--muted);">Modified amount ($):</label>
+          <input type="number" id="drModifiedAmount" min="0" step="0.01" placeholder="Enter amount in dollars"
+            style="display:block;width:100%;max-width:240px;background:#0a0a0e;border:1px solid var(--line-strong);color:var(--ink);border-radius:6px;padding:7px 10px;font-size:13px;margin-top:4px;">
+        </div>
+      </div>
+    `;
+  }
+
+  // For non-approve actions with a pending discount request, the discount
+  // is implicitly rejected — show a small note explaining this.
+  let drImplicitNote = "";
+  if(dr && dr.status === "pending" && action !== "approve"){
+    drImplicitNote = `
+      <div style="background:rgba(255,144,144,.06);border:1px solid #8a2828;border-radius:6px;padding:10px 12px;margin:10px 0;font-size:12px;color:#cfcfcf;">
+        Note: the pending discount request will be automatically <b style="color:#ff9090;">rejected</b> as part of this decision (admin can revisit if agent resubmits).
+      </div>
+    `;
+  }
+
+  body.innerHTML = `
+    <div style="background:var(--panel-2);border:1px solid ${m.border};border-radius:8px;padding:12px 14px;margin-bottom:14px;">
+      <div style="font-size:11px;color:${m.color};font-weight:700;letter-spacing:.10em;text-transform:uppercase;margin-bottom:4px;">${escapeHtml(m.title)}</div>
+      <div style="color:var(--ink);font-size:13px;line-height:1.5;">
+        <b>${escapeHtml(agentName)}</b> · ${escapeHtml(propAddr)} · <b style="color:var(--gold-bright);">$${Math.round(totals.total||0).toLocaleString("en-US")}</b>
+      </div>
+    </div>
+
+    ${action === "approve" ? drBlock : drImplicitNote}
+
+    <label style="display:block;font-size:11px;color:var(--gold-bright);font-weight:700;letter-spacing:.10em;text-transform:uppercase;margin-bottom:6px;">${m.noteLabel}</label>
+    <textarea id="decisionNoteInput" rows="4" placeholder="${escapeHtml(action==="approve" ? "Optional message — visible to the agent." : "Required — visible to the agent.")}"
+      style="width:100%;background:#0a0a0e;border:1px solid var(--line-strong);color:var(--ink);border-radius:6px;padding:9px 12px;font-size:13px;resize:vertical;"></textarea>
+
+    <div id="decisionStatusMsg" style="font-size:12.5px;margin-top:10px;min-height:18px;color:#ff9090;"></div>
+
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
+      <button class="ghost" onclick="closeSubmissionDecisionModal()">Cancel</button>
+      <button id="decisionConfirmBtn" type="button"
+        style="background:linear-gradient(180deg,${m.color === '#5fce86' ? '#1a3320,#0e1c12' : m.color === '#e8a46c' ? '#2a2010,#1a1408' : '#2a1010,#1a0808'});color:${m.color};border:1px solid ${m.border};
+               border-radius:6px;padding:10px 20px;font-size:12px;font-weight:700;
+               letter-spacing:.10em;text-transform:uppercase;cursor:pointer;"
+        onclick="confirmSubmissionDecision()">${escapeHtml(m.btnLabel)}</button>
+    </div>
+  `;
+}
+
+function onDrDecisionChange(){
+  const sel = document.getElementById("drDecisionSelect");
+  const wrap = document.getElementById("drModifiedAmountWrap");
+  if(sel && wrap){
+    wrap.style.display = sel.value === "approve_modified" ? "" : "none";
+  }
+}
+
+async function confirmSubmissionDecision(){
+  if(!currentDecisionContext) return;
+  const { action, estimateId, row } = currentDecisionContext;
+  const statusEl = document.getElementById("decisionStatusMsg");
+  const btn = document.getElementById("decisionConfirmBtn");
+  const noteEl = document.getElementById("decisionNoteInput");
+  const note = (noteEl && noteEl.value || "").trim();
+
+  const NOTE_REQUIRED = (action === "request_changes" || action === "reject");
+  if(NOTE_REQUIRED && note.length < 3){
+    statusEl.textContent = "Please provide a note explaining your decision.";
+    return;
+  }
+
+  // Compute discount-request decision
+  const oldState = row.state || {};
+  const oldDr = oldState.discount_request;
+  let drDecision = null; // { status, decided_amount, decided_note, decided_at, decided_by }
+  if(oldDr && oldDr.status === "pending"){
+    if(action === "approve"){
+      const sel = document.getElementById("drDecisionSelect");
+      const choice = sel ? sel.value : "approve_as_requested";
+      if(choice === "approve_as_requested"){
+        drDecision = { status: "approved", decided_amount: oldDr.amount };
+      } else if(choice === "approve_modified"){
+        const amtEl = document.getElementById("drModifiedAmount");
+        const amt = amtEl ? parseFloat(amtEl.value) : NaN;
+        if(!isFinite(amt) || amt < 0){
+          statusEl.textContent = "Enter a valid modified discount amount.";
+          return;
+        }
+        drDecision = { status: "approved", decided_amount: amt };
+      } else {
+        drDecision = { status: "rejected", decided_amount: 0 };
+      }
+    } else {
+      // changes_requested or reject → discount is implicitly rejected
+      drDecision = { status: "rejected", decided_amount: 0 };
+    }
+    drDecision.decided_note = note || null;
+    drDecision.decided_at = new Date().toISOString();
+    drDecision.decided_by = currentUser ? currentUser.email : null;
+  }
+
+  // Build new state
+  const newStatus = action === "approve" ? "approved"
+                  : action === "request_changes" ? "request_changes"
+                  : "rejected";
+  const newState = JSON.parse(JSON.stringify(oldState));
+  newState.status = newStatus;
+  newState.admin_review = {
+    reviewer_id: currentUser ? currentUser.id : null,
+    reviewer_email: currentUser ? currentUser.email : null,
+    action: action,
+    note: note || null,
+    decided_at: new Date().toISOString()
+  };
+  if(drDecision){
+    newState.discount_request = Object.assign({}, oldDr, drDecision);
+  }
+
+  if(btn){ btn.disabled = true; btn.textContent = "Saving…"; }
+  statusEl.style.color = "var(--muted)";
+  statusEl.textContent = "Writing decision to cloud…";
+
+  try {
+    // Update the cloud row directly. Admin RLS allows this.
+    const { error } = await supa.from("estimates")
+      .update({ state: newState, updated_at: new Date().toISOString() })
+      .eq("id", estimateId);
+    if(error) throw error;
+
+    // Update local cache so the UI reflects immediately
+    row.state = newState;
+
+    statusEl.style.color = "#5fce86";
+    statusEl.textContent = "✓ Decision saved.";
+    if(btn) btn.textContent = "Saved ✓";
+
+    // Refresh the detail view + queue
+    currentSubmissionDetail = row;
+    setTimeout(() => {
+      closeSubmissionDecisionModal();
+      renderSubmissionDetail();
+      renderSubmissionsList();
+      updateSubmissionsCountBadge();
+    }, 900);
+  } catch(e){
+    console.error("[submissions] Decision write failed:", e);
+    statusEl.style.color = "#ff9090";
+    statusEl.textContent = "Failed: " + (e && e.message ? e.message : String(e));
+    if(btn){ btn.disabled = false; btn.textContent = "Retry"; }
+  }
 }
 
 function applyFeatureGates(){
