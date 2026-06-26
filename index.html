@@ -30,21 +30,17 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
 <!-- ============================================================
-     SITE ACCESS GATE — config lives in site-gate-config.js so
-     edits to this file never wipe out your PIN setting. To change
-     or disable the PIN, edit site-gate-config.js (instructions
-     are in that file).
+     SITE PIN GATE — RETIRED in Phase 1c.
+     Replaced by Supabase auth (real per-user login). The PIN was
+     security theatre — bypassable via DevTools — and was blocking
+     invited agents who don't know the team PIN. The auth lockout
+     overlay (applyAuthGate) now handles "not signed in" cases.
+
+     Contractor bid-response mode is preserved below — it still
+     needs to hide the rest of the app when URL has ?bid=TOKEN
+     so contractors only see the bid response page.
      ============================================================ -->
-<script src="site-gate-config.js"></script>
-<style id="siteGateCriticalCss">
-  /* Critical inline CSS — hides EVERYTHING until the gate decides whether to
-     show the app or the lock screen, so there's no flash of either. */
-  html.site-gate-checking, html.site-gate-checking body { visibility:hidden; background:#0a0a0a; }
-  html.site-gate-locked   body > *:not(#siteGate) { display:none !important; }
-  html.site-gate-locked   body { background:#0a0a0a !important; visibility:visible !important; }
-  html.site-gate-locked   #siteGate { display:flex !important; }
-  /* When the gate is satisfied (or disabled) we leave it as `display:none` */
-  #siteGate { display:none; }
+<style id="bidResponseCriticalCss">
   /* Contractor bid-response mode — when URL has ?bid=TOKEN we hide the whole
      app and show ONLY the bid response surface. Contractors don't see the
      estimator, tracker, or anything else they shouldn't have access to. */
@@ -54,42 +50,16 @@
   #bidResponseView{ display:none; }
 </style>
 <script>
-// Apply the gate state BEFORE the body renders so nothing flashes.
+// Apply bid-response mode BEFORE the body renders so nothing flashes.
 (function(){
-  // If the URL has ?bid=TOKEN we're in contractor bid-response mode.
-  // Contractors don't need the team PIN — flip a class that the bid response
-  // CSS uses to hide everything except #bidResponseView, and bail out of the
-  // gate entirely. Token is stashed so the bid response JS can pick it up.
   try{
     const u = new URL(location.href);
     const bidTok = u.searchParams.get("bid");
     if(bidTok){
       window.__bidResponseToken = bidTok;
       document.documentElement.classList.add("bid-response-mode");
-      return;  // skip site gate
     }
   }catch(e){}
-  document.documentElement.classList.add("site-gate-checking");
-  const requiredHash = (window.SITE_ACCESS_HASH || "").trim();
-  if(!requiredHash){
-    // Gate disabled — let the app render normally.
-    document.documentElement.classList.remove("site-gate-checking");
-    return;
-  }
-  try{
-    const raw = localStorage.getItem(window.SITE_ACCESS_KEY);
-    if(raw){
-      const data = JSON.parse(raw);
-      if(data && data.hash === requiredHash && data.exp && data.exp > Date.now()){
-        // Still within unlock window — let the app render.
-        document.documentElement.classList.remove("site-gate-checking");
-        return;
-      }
-    }
-  }catch(e){}
-  // Otherwise — show the gate.
-  document.documentElement.classList.remove("site-gate-checking");
-  document.documentElement.classList.add("site-gate-locked");
 })();
 </script>
 <style>
@@ -3118,19 +3088,8 @@
 <body>
 <!-- Site Access Gate — only visible when html.site-gate-locked is set.
      The early-running script in <head> decides whether to add that class. -->
-<div id="siteGate" role="dialog" aria-label="Internal access only">
-  <div class="sg-card">
-    <img src="logo.png" alt="Reno to Sold" class="sg-logo" onerror="this.style.display='none'">
-    <div class="sg-title">Internal Access Only</div>
-    <div class="sg-sub">This site is for the Reno to Sold team. Enter the access code to continue.</div>
-    <form id="sgForm" onsubmit="event.preventDefault(); submitSiteAccess();">
-      <input type="password" id="sgInput" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Access code">
-      <button type="submit">Unlock</button>
-    </form>
-    <div id="sgMsg" class="sg-msg"></div>
-    <div class="sg-foot">Forgot the code? Contact Mohamed Nada.</div>
-  </div>
-</div>
+<!-- Site PIN gate HTML — RETIRED in Phase 1c. Replaced by Supabase auth. -->
+
 
 <!-- ============================================================
      Contractor Bid Response — public page for contractors who
@@ -8514,19 +8473,16 @@ async function submitSiteAccess(){
     if(inp){ inp.value = ""; inp.focus(); }
   }
 }
+/* Phase 1c: PIN gate is retired. lockSite() now just signs the user
+   out of Supabase (delegating to the same flow as the Account button).
+   The Lock button is still admin-only and serves as a quick "log out"
+   action. Agents use their Account button instead. */
 function lockSite(){
-  if(!confirm("Lock the site? You'll need to re-enter the access code to use it again on this browser.")) return;
-  try{ localStorage.removeItem(window.SITE_ACCESS_KEY); }catch(e){}
-  location.reload();
+  if(!supa){ flash("Not signed in."); return; }
+  if(!currentUser){ flash("Not signed in."); return; }
+  if(!confirm("Sign out of " + currentUser.email + "?")) return;
+  supa.auth.signOut().then(() => { location.reload(); });
 }
-
-// Auto-focus the PIN input if the gate is showing on load.
-document.addEventListener("DOMContentLoaded", () => {
-  if(document.documentElement.classList.contains("site-gate-locked")){
-    const inp = document.getElementById("sgInput");
-    if(inp) setTimeout(() => inp.focus(), 50);
-  }
-});
 
 /* ============================================================
    Client Estimate (professional Print/PDF) — data layer + render
