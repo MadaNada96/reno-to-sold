@@ -16183,30 +16183,30 @@ function showSubmissionReviewBanner(row){
   const sub = s.submission || {};
   const agentName = sub.submitted_by_name || sub.submitted_by_email || "agent";
   const propAddr = s.propAddress || s.propName || "—";
-  banner.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:10000;" +
-    "background:linear-gradient(180deg,#2a2010 0%,#1a1408 100%);border-bottom:1px solid var(--gold-deep);" +
-    "padding:8px 16px;display:flex;align-items:center;justify-content:space-between;gap:14px;" +
-    "color:#e8c989;font-size:12.5px;box-shadow:0 2px 12px rgba(0,0,0,.4);";
+  /* Banner anchored to BOTTOM of viewport so it doesn't conflict with
+     the contractor bid overlay's toolbar at the top of the screen.
+     z-index high enough to float above the contractor bid overlay. */
+  banner.style.cssText = "position:fixed;bottom:0;left:0;right:0;z-index:100000;" +
+    "background:linear-gradient(180deg,#1a1408 0%,#2a2010 100%);border-top:1px solid var(--gold-deep);" +
+    "padding:10px 18px;display:flex;align-items:center;justify-content:space-between;gap:14px;" +
+    "color:#e8c989;font-size:12.5px;box-shadow:0 -4px 16px rgba(0,0,0,.6);";
   banner.innerHTML = `
     <div style="flex:1;min-width:0;">
       📋 <b style="color:var(--gold-bright);">Reviewing submission:</b>
       <span style="margin-left:6px;">${escapeHtml(agentName)} · ${escapeHtml(propAddr)}</span>
     </div>
     <button type="button" onclick="exitSubmissionReview()"
-      style="flex-shrink:0;background:rgba(212,175,106,.10);border:1px solid #d4af6a;color:#e8c989;
-             border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;
+      style="flex-shrink:0;background:rgba(212,175,106,.12);border:1px solid #d4af6a;color:#e8c989;
+             border-radius:6px;padding:7px 16px;font-size:11px;font-weight:700;
              letter-spacing:.10em;text-transform:uppercase;cursor:pointer;">
       ← Done · Return to Submission
     </button>
   `;
-  // Push the page down so the banner doesn't overlap content
-  document.body.style.paddingTop = (banner.offsetHeight || 44) + "px";
 }
 
 function hideSubmissionReviewBanner(){
   const banner = document.getElementById("subReviewBanner");
   if(banner) banner.remove();
-  document.body.style.paddingTop = "";
 }
 
 function exitSubmissionReview(){
