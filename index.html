@@ -15691,6 +15691,120 @@ function unsubscribeFromSubmissions(){
   }
 }
 
+/* Generate and download a PDF of the submission, using the agent's
+   frozen snapshot. Strategy:
+     1. Save current state + prices
+     2. Swap to snapshot's state + prices
+     3. renderClientEstimate fills #estimateSheet with the snapshot
+     4. pdfFromNodeViaIframe generates the PDF blob
+     5. Trigger browser download
+     6. ALWAYS restore originals via try/finally + re-renderAll
+
+   The swap is risky if anything throws between steps 2 and 6, so the
+   finally block must restore state no matter what. We also wrap the
+   whole thing so the admin's current estimator session is unaffected. */
+async function downloadSubmissionPdf(estimateId){
+  const row = submissionsList.find(r => r.id === estimateId);
+  if(!row){
+    alert("Submission not found. Try refreshing the queue.");
+    return;
+  }
+  const sub = row.state && row.state.submission;
+  if(!sub || !sub.state_snapshot || !sub.pricing_snapshot){
+    alert("This submission predates snapshot capture — no PDF can be regenerated. Future submissions will include the full snapshot.");
+    return;
+  }
+
+  const btn = document.getElementById("downloadSubmissionPdfBtn");
+  const statusEl = document.getElementById("downloadSubmissionPdfStatus");
+  if(btn){ btn.disabled = true; btn.textContent = "Generating…"; }
+  if(statusEl){ statusEl.textContent = "Rendering estimate…"; statusEl.style.color = "var(--muted)"; }
+
+  // Capture current globals so we can restore them no matter what
+  const savedState  = state;
+  const savedPrices = prices;
+
+  try {
+    // Swap to snapshot. Deep-clone so any mutations don't affect the original.
+    state  = JSON.parse(JSON.stringify(sub.state_snapshot));
+    prices = JSON.parse(JSON.stringify(sub.pricing_snapshot));
+
+    // Render the estimate sheet using the swapped data
+    if(typeof renderClientEstimate !== "function"){
+      throw new Error("renderClientEstimate not available");
+    }
+    renderClientEstimate();
+
+    const sheetEl = document.getElementById("estimateSheet");
+    if(!sheetEl) throw new Error("Estimate sheet element missing");
+
+    if(statusEl) statusEl.textContent = "Building PDF…";
+    const addrSafe = (typeof sanitizeFilename === "function")
+      ? sanitizeFilename(state.propAddress || state.propName || "submission")
+      : String(state.propAddress || state.propName || "submission").replace(/[^a-z0-9\-_]/gi, "_");
+    const submittedDate = sub.submitted_at ? new Date(sub.submitted_at).toISOString().slice(0,10) : "";
+    const filename = `Submission-${addrSafe}${submittedDate ? "-" + submittedDate : ""}.pdf`;
+
+    const blob = await pdfFromNodeViaIframe({
+      sourceEl: sheetEl,
+      bodyClasses: "show-estimate pdf-export",
+      extraCss: `
+        .estimate-view { display:block !important; position:static !important; background:#fff !important; overflow:visible !important; width:760px !important; max-width:760px !important; margin:0 !important; padding:0 !important; }
+        .estimate-toolbar { display:none !important; }
+        .estimate-sheet { margin:0 !important; padding:0 !important; max-width:760px !important; width:760px !important; box-shadow:none !important; background:#fff !important; }
+        .es-category-head, .es-cat-total .v, .es-savings-card, .es-payments-table tr.pm-total td {
+          -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important;
+        }
+        .es-savings-card .es-sav-amount { text-shadow:none !important; }
+      `,
+      pdfOptions: {
+        margin: [0.45, 0.45, 0.45, 0.45],
+        filename,
+        image: { type: 'jpeg', quality: 0.98 },
+        pagebreak: {
+          mode:   ['css', 'legacy'],
+          before: ['.es-summary-page', '.es-disclaimer-page'],
+          avoid:  [
+            '.es-category-block', '.es-subblock',
+            '.es-totals-wrap', '.es-savings-card', '.es-payments-wrap',
+            '.es-summary-page',
+            '.es-disclaimer-page', '.es-disclaimer', '.es-signatures', '.es-sig'
+          ]
+        }
+      }
+    });
+
+    // Trigger browser download
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+
+    if(statusEl){
+      statusEl.textContent = "Downloaded · " + Math.round(blob.size/1024) + " KB";
+      statusEl.style.color = "#5fce86";
+    }
+  } catch(err){
+    console.error("[submissions] PDF download failed:", err);
+    if(statusEl){
+      statusEl.textContent = "Failed: " + (err && err.message ? err.message : String(err));
+      statusEl.style.color = "#ff9090";
+    }
+  } finally {
+    // CRITICAL: always restore the admin's actual current state + prices
+    state  = savedState;
+    prices = savedPrices;
+    // Re-render the main estimator UI so the admin's session is exactly
+    // as they left it (no flash of submission data on screen).
+    try { if(typeof renderAll === "function") renderAll(); } catch(e){}
+    if(btn){ btn.disabled = false; btn.textContent = "📄 Download Full PDF"; }
+  }
+}
+
 /* ===== SLICE B — SUBMISSION DETAIL MODAL =====
    Opens when admin clicks a row in the submissions queue. Shows the
    frozen snapshot read-only. Slice C will add decision buttons here. */
@@ -15856,6 +15970,24 @@ function renderSubmissionDetail(){
     <div class="sd-section">
       <div class="sd-label">STATUS</div>
       <div>${renderSubStatusPill(status)} <span style="margin-left:10px;color:var(--muted);font-size:11px;">Submitted ${dateStr}</span></div>
+    </div>
+
+    <!-- Actions row: Download Full PDF reconstructs the estimate from
+         the frozen snapshot. Disabled if the submission was created
+         before snapshot fields were added. -->
+    <div class="sd-section">
+      <div class="sd-label">REVIEW</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button id="downloadSubmissionPdfBtn" type="button"
+          onclick="downloadSubmissionPdf('${escapeHtml(row.id)}')"
+          ${(sub.state_snapshot && sub.pricing_snapshot) ? "" : "disabled title='This submission predates snapshot capture — no PDF available.'"}
+          style="background:linear-gradient(180deg,#2a2010,#1a1408);color:#e8c989;border:1px solid #d4af6a;
+                 border-radius:6px;padding:9px 18px;font-size:11.5px;font-weight:700;
+                 letter-spacing:.10em;text-transform:uppercase;cursor:pointer;">
+          📄 Download Full PDF
+        </button>
+        <span id="downloadSubmissionPdfStatus" style="color:var(--muted);font-size:12px;align-self:center;"></span>
+      </div>
     </div>
 
     ${notesHtml}
