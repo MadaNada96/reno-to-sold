@@ -14386,18 +14386,14 @@ async function notifyAgentOfEstimateDecision({ action, row, note, decidedAt }){
     `Thanks,\nMohamed Nada\nRENO TO SOLD INC.\n416-832-3779`
   );
 
-  // Tiny PNG placeholder for the required pdfBase64 field
-  const tinyPng = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkAAIAAAoAAv/lxKUAAAAASUVORK5CYII=";
-
   try {
+    // Notification email — no attachment. The branded body has all the info.
     await invokeFunctionViaRest("email-estimate", {
       to: [agentEmail],
       cc: [],
       subject: cfg.subject,
       body: plainText,
-      bodyHtml: html,
-      pdfBase64: tinyPng,
-      filename: "decision-notification.png"
+      bodyHtml: html
     });
     console.log("[notify] Agent decision email sent to " + agentEmail);
   } catch(e) {
@@ -14494,17 +14490,14 @@ async function notifyAgentOfDiscountDecision({ row, drStatus, requested, decided
     `Thanks,\nMohamed Nada\nRENO TO SOLD INC.\n416-832-3779`
   );
 
-  const tinyPng = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkAAIAAAoAAv/lxKUAAAAASUVORK5CYII=";
-
   try {
+    // Notification email — no attachment.
     await invokeFunctionViaRest("email-estimate", {
       to: [agentEmail],
       cc: [],
       subject: cfg.subject,
       body: plainText,
-      bodyHtml: html,
-      pdfBase64: tinyPng,
-      filename: "discount-decision.png"
+      bodyHtml: html
     });
     console.log("[notify] Agent discount-decision email sent to " + agentEmail);
   } catch(e) {
@@ -14540,12 +14533,10 @@ async function notifyAdminOfSubmission(targetStatus, notes){
 
   /* Generate the actual estimate PDF and attach it so admin can review
      directly from the email. If PDF generation fails for any reason
-     (rare — usually a render error), fall back to the placeholder PNG
-     so the notification email still goes through. The submission has
-     already succeeded server-side; this email is the courtesy notify. */
-  const tinyPng = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkAAIAAAoAAv/lxKUAAAAASUVORK5CYII=";
-  let pdfBase64 = tinyPng;
-  let filename  = "submission-notification.png";
+     (rare — usually a render error), send the email WITHOUT an
+     attachment — the body has the summary text anyway. */
+  let pdfBase64 = null;
+  let filename  = null;
   try {
     /* Build the estimate sheet (populates #estimateSheet with current
        state). renderClientEstimate doesn't touch visible UI — just
@@ -14590,24 +14581,28 @@ async function notifyAdminOfSubmission(targetStatus, notes){
       filename  = submissionFilename;
       console.log("[admin-notif] PDF built (" + Math.round(blob.size/1024) + " KB)");
     } else {
-      console.warn("[admin-notif] PDF helpers unavailable — falling back to placeholder attachment");
+      console.warn("[admin-notif] PDF helpers unavailable — sending without attachment");
     }
   } catch(pdfErr) {
-    console.warn("[admin-notif] PDF generation failed — falling back to placeholder:", pdfErr && pdfErr.message ? pdfErr.message : pdfErr);
-    // Keep pdfBase64 and filename at their tinyPng/placeholder defaults
+    console.warn("[admin-notif] PDF generation failed — sending without attachment:", pdfErr && pdfErr.message ? pdfErr.message : pdfErr);
+    // pdfBase64 stays null — email sends with no attachment
   }
 
   try {
     // 60s hard timeout. Uses invokeFunctionViaRest bypass.
+    // Attachment is optional — only included when PDF generation succeeded.
     const ADMIN_NOTIF_TIMEOUT_MS = 60000;
-    const invokePromise = invokeFunctionViaRest("email-estimate", {
+    const emailPayload = {
       to: ["renotosold@gmail.com"],
       cc: [],
       subject: `New estimate submission — ${propTitle}`,
-      body,
-      pdfBase64,
-      filename
-    });
+      body
+    };
+    if(pdfBase64 && filename){
+      emailPayload.pdfBase64 = pdfBase64;
+      emailPayload.filename = filename;
+    }
+    const invokePromise = invokeFunctionViaRest("email-estimate", emailPayload);
     const timeoutPromise = new Promise((_, reject) =>
       setTimeout(() => reject(new Error("Admin notification timed out after " + (ADMIN_NOTIF_TIMEOUT_MS/1000) + "s")), ADMIN_NOTIF_TIMEOUT_MS)
     );
