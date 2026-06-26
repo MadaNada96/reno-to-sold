@@ -3227,7 +3227,7 @@
   </div>
 
   <!-- Property info -->
-  <div class="panel">
+  <div class="panel" id="propertyInfoPanel">
     <h2>Property Info</h2>
     <div class="panel-body">
       <div class="grid grid-3">
@@ -14042,9 +14042,10 @@ function renderEstimateStatusBanner(){
    is locked. Disables all inputs/buttons inside categories — leaves
    the toolbar (so the user can still save/print/email/log out). */
 function applyEstimateLock(){
+  const locked = isEstimateLocked();
   const cats = document.querySelectorAll(".cat");
   cats.forEach(el => {
-    if(isEstimateLocked()){
+    if(locked){
       el.style.pointerEvents = "none";
       el.style.opacity = "0.65";
     } else {
@@ -14052,6 +14053,25 @@ function applyEstimateLock(){
       el.style.opacity = "";
     }
   });
+  /* Also lock the property info + seller contact section. Agent
+     shouldn't be able to change property sqft, address, or seller
+     names after submission — those fields define the estimate. */
+  const propPanel = document.getElementById("propertyInfoPanel");
+  if(propPanel){
+    propPanel.style.opacity = locked ? "0.65" : "";
+    // Disable each input/select/button inside individually so we can
+    // restore their normal state when unlocked.
+    const inputs = propPanel.querySelectorAll("input, select, textarea, button");
+    inputs.forEach(el => {
+      if(locked){
+        el.setAttribute("disabled", "disabled");
+        el.dataset.lockedByEstimate = "1";
+      } else if(el.dataset.lockedByEstimate === "1"){
+        el.removeAttribute("disabled");
+        delete el.dataset.lockedByEstimate;
+      }
+    });
+  }
   // Hide the Submit for Review button ONLY when the estimate is in a
   // state where submitting makes no sense (already with admin or
   // already decided). Everything else — draft, undefined status,
@@ -16375,6 +16395,164 @@ async function downloadSubmissionPdf(estimateId){
   }
 }
 
+/* ===== ADMIN ACTIONS — Delete + Reopen submissions =====
+   Both are destructive in nature (Delete removes the row entirely;
+   Reopen overwrites status). Each requires a confirm with context. */
+
+async function deleteSubmission(estimateId){
+  const row = submissionsList.find(r => r.id === estimateId);
+  if(!row){ alert("Submission not found — refresh the queue and try again."); return; }
+  const s = row.state || {};
+  const sub = s.submission || {};
+  const agentName = sub.submitted_by_name || sub.submitted_by_email || "this agent";
+  const propAddr = s.propAddress || s.propName || "this property";
+  /* Two-step confirm: a normal yes/no, then a typed-name confirmation
+     to prevent muscle-memory mistakes on the agent name. */
+  const firstOk = confirm(
+    "Delete submission?\n\n" +
+    "Property: " + propAddr + "\n" +
+    "Agent: " + agentName + "\n\n" +
+    "This removes the estimate from your queue AND from the agent's saved list permanently. It can't be undone."
+  );
+  if(!firstOk) return;
+  const typed = prompt("To confirm, type the agent's name exactly:\n  " + agentName);
+  if(typed == null) return; // cancelled
+  if(typed.trim().toLowerCase() !== agentName.trim().toLowerCase()){
+    alert("Agent name didn't match. Deletion cancelled.");
+    return;
+  }
+  try {
+    // dbDelete uses restFetch — bypasses the supabase-js hang
+    await dbDelete("estimates", { id: estimateId });
+    // Remove from local cache
+    const idx = submissionsList.findIndex(r => r.id === estimateId);
+    if(idx >= 0) submissionsList.splice(idx, 1);
+    // Refresh UI
+    closeSubmissionDetail();
+    renderSubmissionsList();
+    updateSubmissionsCountBadge();
+    if(typeof flash === "function") flash("Submission deleted");
+  } catch(e){
+    console.error("[submissions] Delete failed:", e);
+    alert("Couldn't delete: " + (e && e.message ? e.message : String(e)));
+  }
+}
+
+async function reopenSubmission(estimateId){
+  const row = submissionsList.find(r => r.id === estimateId);
+  if(!row){ alert("Submission not found — refresh the queue and try again."); return; }
+  const s = row.state || {};
+  const sub = s.submission || {};
+  const agentName = sub.submitted_by_name || sub.submitted_by_email || "the agent";
+  const propAddr = s.propAddress || s.propName || "this property";
+  const firstOk = confirm(
+    "Reopen this submission for the agent to edit?\n\n" +
+    "Property: " + propAddr + "\n" +
+    "Agent: " + agentName + "\n\n" +
+    "The estimate goes back to draft status. The agent will be able to make changes and resubmit. They'll get an email notification."
+  );
+  if(!firstOk) return;
+  const note = prompt("Optional note to the agent explaining what needs to change:\n(Leave blank to skip)") || "";
+
+  try {
+    // Build new state — reset status to draft + record this admin action
+    const newState = JSON.parse(JSON.stringify(s));
+    newState.status = "draft";
+    newState.admin_review = {
+      reviewer_id:    currentUser ? currentUser.id : null,
+      reviewer_email: currentUser ? currentUser.email : null,
+      action:         "reopened",
+      note:           note.trim() || null,
+      decided_at:     new Date().toISOString()
+    };
+    /* We intentionally keep submission and discount_request as-is so
+       the agent (and the audit trail) can still see what was reviewed.
+       When the agent resubmits, those fields get overwritten. */
+
+    await dbUpdate("estimates", { id: estimateId }, {
+      state: newState,
+      updated_at: new Date().toISOString()
+    });
+
+    // Update local cache so the UI reflects immediately
+    row.state = newState;
+
+    // Notify agent (fire-and-forget)
+    notifyAgentOfReopen({ row, note: note.trim() })
+      .catch(e => console.warn("[notify] reopen email failed:", e && e.message));
+
+    // Refresh UI
+    closeSubmissionDetail();
+    renderSubmissionsList();
+    updateSubmissionsCountBadge();
+    if(typeof flash === "function") flash("Submission reopened for the agent");
+  } catch(e){
+    console.error("[submissions] Reopen failed:", e);
+    alert("Couldn't reopen: " + (e && e.message ? e.message : String(e)));
+  }
+}
+
+/* Notification email for the Reopen action. Same template family as
+   the decision emails. */
+async function notifyAgentOfReopen({ row, note }){
+  if(!row) return;
+  const s = row.state || {};
+  const sub = s.submission || {};
+  const agentEmail = sub.submitted_by_email;
+  if(!agentEmail){ console.warn("[notify] No agent email — skipping reopen notification"); return; }
+  const agentFirstName = (sub.submitted_by_name || "").split(/\s+/)[0] || "";
+  const propAddr = s.propAddress || s.propName || "your property";
+
+  const propertyBlock = `
+    <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#fbf5e6;border-left:4px solid #d4af6a;border-radius:0 6px 6px 0;margin:0 0 18px;">
+      <tr><td style="padding:14px 22px;">
+        <p style="margin:0 0 4px;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;font-weight:800;color:#a8853f;">Property</p>
+        <p style="margin:0;font-size:14.5px;font-weight:700;color:#0a0a0a;">${escapeHtml(propAddr)}</p>
+      </td></tr>
+    </table>
+  `;
+  const noteBlock = note ? `
+    <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#fbf8ee;border-left:3px solid #d4af6a;border-radius:0 4px 4px 0;margin:0 0 18px;">
+      <tr><td style="padding:14px 18px;">
+        <p style="margin:0 0 6px;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;font-weight:800;color:#a8853f;">Note from Reno to Sold</p>
+        <p style="margin:0;font-size:13.5px;color:#1a1a1a;font-style:italic;">"${escapeHtml(note)}"</p>
+      </td></tr>
+    </table>
+  ` : "";
+
+  const html = buildAgentNotificationHtml({
+    headerLabel: "↩ Reopened for Edit",
+    headerColor: "#9ab8e0",
+    title: "Your submission has been reopened",
+    intro: `${agentFirstName ? "Hi " + escapeHtml(agentFirstName) + "," : "Hi,"} Reno to Sold has reopened your estimate so you can make changes. The estimate is back in draft status — open it in your dashboard, make the changes, then submit it for review again.`,
+    propertyBlock: propertyBlock,
+    noteBlock: noteBlock,
+    footerNote: "Sign in to your dashboard to open this estimate and make changes. Click Submit for Review when you're ready."
+  });
+
+  const plainText = (
+    `Hi${agentFirstName ? " " + agentFirstName : ""},\n\n` +
+    `Reno to Sold has reopened your estimate for changes.\n\n` +
+    `Property: ${propAddr}\n\n` +
+    (note ? `Note from Reno to Sold:\n"${note}"\n\n` : "") +
+    `Sign in to your dashboard, open the estimate, make the changes, and click Submit for Review.\n\n` +
+    `Thanks,\nMohamed Nada\nRENO TO SOLD INC.\n416-832-3779`
+  );
+
+  try {
+    await invokeFunctionViaRest("email-estimate", {
+      to: [agentEmail],
+      cc: [],
+      subject: `Your submission for ${propAddr} was reopened for edits`,
+      body: plainText,
+      bodyHtml: html
+    });
+    console.log("[notify] Reopen email sent to " + agentEmail);
+  } catch(e) {
+    console.warn("[notify] Failed to send reopen email:", e && e.message);
+  }
+}
+
 /* ===== SLICE B — SUBMISSION DETAIL MODAL =====
    Opens when admin clicks a row in the submissions queue. Shows the
    frozen snapshot read-only. Slice C will add decision buttons here. */
@@ -16779,9 +16957,9 @@ function renderSubmissionDetail(){
       <div>${renderSubStatusPill(status)} <span style="margin-left:10px;color:var(--muted);font-size:11px;">Submitted ${dateStr}</span></div>
     </div>
 
-    <!-- Actions row: Download Full PDF reconstructs the estimate from
-         the frozen snapshot. Disabled if the submission was created
-         before snapshot fields were added. -->
+    <!-- Actions row: Download Full PDF + Reopen for Edit + Delete Submission.
+         Reopen flips status back to draft so agent can revise and resubmit.
+         Delete is destructive — removes the row entirely. -->
     <div class="sd-section">
       <div class="sd-label">REVIEW</div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
@@ -16792,6 +16970,20 @@ function renderSubmissionDetail(){
                  border-radius:6px;padding:9px 18px;font-size:11.5px;font-weight:700;
                  letter-spacing:.10em;text-transform:uppercase;cursor:pointer;">
           📄 Download Full PDF
+        </button>
+        <button type="button"
+          onclick="reopenSubmission('${escapeHtml(row.id)}')"
+          style="background:linear-gradient(180deg,#1a2230,#0e1620);color:#9ab8e0;border:1px solid #4a6a90;
+                 border-radius:6px;padding:9px 18px;font-size:11.5px;font-weight:700;
+                 letter-spacing:.10em;text-transform:uppercase;cursor:pointer;">
+          ↩ Reopen for Edit
+        </button>
+        <button type="button"
+          onclick="deleteSubmission('${escapeHtml(row.id)}')"
+          style="background:linear-gradient(180deg,#2a1010,#1a0808);color:#ff9090;border:1px solid #8a2828;
+                 border-radius:6px;padding:9px 18px;font-size:11.5px;font-weight:700;
+                 letter-spacing:.10em;text-transform:uppercase;cursor:pointer;">
+          🗑 Delete Submission
         </button>
         <span id="downloadSubmissionPdfStatus" style="color:var(--muted);font-size:12px;align-self:center;"></span>
       </div>
