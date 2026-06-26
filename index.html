@@ -3161,7 +3161,7 @@
         <button data-feature="pricing_editor"  onclick="openSettings()">Pricing</button>
         <button data-feature="contractor_bids" onclick="openContractorBid()">Contractor Bid</button>
         <button id="authBtn" onclick="onAuthClick()">Sign in</button>
-        <button onclick="lockSite()" title="Sign out of this site — re-prompts for the access code on next visit">Lock</button>
+        <button data-admin-only="true" onclick="lockSite()" title="Sign out of this site — re-prompts for the access code on next visit">Lock</button>
       </div>
     </div>
     <!-- Row 2: workflow buttons (New, Save, Saved, Import from PDF, Print/PDF, Email to Client) -->
@@ -13995,22 +13995,29 @@ function applyAuthGate(){
 
 function applyFeatureGates(){
   /* Phase 1b: hide every element whose data-feature attribute isn't
-     enabled for the current user. Buttons without data-feature stay
-     visible to everyone (estimator essentials: New, Save, Saved,
-     Import-PDF, Print, Email-to-Client, the Sign-in toggle, the
-     authBtn / Account button).
+     enabled for the current user, plus any element with
+     data-admin-only="true" if the user isn't an admin.
+
+     Buttons without either attribute stay visible to everyone — that
+     includes the estimator essentials (New, Save, Saved, Import-PDF,
+     Print, Email-to-Client) and the Sign-in/Account button.
 
      Re-runs on every profile change. Idempotent. */
   try {
-    const els = document.querySelectorAll("[data-feature]");
-    els.forEach(el => {
+    // Per-feature gates
+    const featureEls = document.querySelectorAll("[data-feature]");
+    featureEls.forEach(el => {
       const feature = el.getAttribute("data-feature");
       el.style.display = canUse(feature) ? "" : "none";
     });
+    // Admin-only elements (the toolbar Lock button, future admin tools)
+    const adminEls = document.querySelectorAll("[data-admin-only=\"true\"]");
+    const userIsAdmin = isAdmin();
+    adminEls.forEach(el => { el.style.display = userIsAdmin ? "" : "none"; });
     // Also hide the floating "Internal Mode" lock icon for non-admins.
     // Internal Mode is a legacy admin-only gate; only admins ever need it.
-    const lockBtn = document.getElementById("openPinModalBtn");
-    if(lockBtn) lockBtn.style.display = isAdmin() ? "" : "none";
+    const internalLockBtn = document.getElementById("openPinModalBtn");
+    if(internalLockBtn) internalLockBtn.style.display = userIsAdmin ? "" : "none";
   } catch(e) {
     console.warn("applyFeatureGates error:", e);
   }
