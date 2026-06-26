@@ -15536,11 +15536,29 @@ function applyAuthGate(){
   }
 
   // Other lockout states (no_profile, suspended, expired) — show message + Sign out
-  const msgMap = {
-    no_profile: {
+  // Detect whether the user signed in via OAuth (Google) so we can give a
+  // more specific message — common mistake is picking the wrong Google
+  // account from the account chooser.
+  const signedInEmail = (currentUser && currentUser.email) || "";
+  const provider = (currentUser && currentUser.app_metadata && currentUser.app_metadata.provider) || "";
+  const isOAuth = provider && provider !== "email";
+
+  let noProfileMessage;
+  if(isOAuth){
+    noProfileMessage = {
+      title: "Wrong " + (provider === "google" ? "Google" : provider) + " account",
+      body:  `You signed in as <b>${escapeHtml(signedInEmail)}</b>, but this account isn't on the Reno to Sold access list. ` +
+             `Use the exact email address Reno to Sold sent your invitation to. If you weren't invited yet, contact Reno to Sold.`
+    };
+  } else {
+    noProfileMessage = {
       title: "Account not yet provisioned",
-      body:  "Your email isn't recognized as an active Reno to Sold account. Contact Reno to Sold to set up your access."
-    },
+      body:  `The email <b>${escapeHtml(signedInEmail || "")}</b> isn't recognized as an active Reno to Sold account. Contact Reno to Sold to set up your access.`
+    };
+  }
+
+  const msgMap = {
+    no_profile: noProfileMessage,
     suspended: {
       title: "Account suspended",
       body:  "Your account has been suspended. Contact Reno to Sold at renotosold@gmail.com to resolve."
@@ -15551,8 +15569,18 @@ function applyAuthGate(){
     }
   };
   const m = msgMap[reason];
+  // Tweaked Sign-out: also clear sb-* localStorage so the next attempt
+  // doesn't auto-resume the same wrong session. Without this, OAuth users
+  // sometimes get stuck re-landing on the lockout screen because the
+  // session token is still cached.
+  const signOutSnippet =
+    "(async () => {" +
+      "try { await supa.auth.signOut(); } catch(e){}" +
+      "try { for(let i=localStorage.length-1;i>=0;i--){const k=localStorage.key(i); if(k && /^sb-/.test(k)) localStorage.removeItem(k);} } catch(e){}" +
+      "setTimeout(() => location.reload(), 250);" +
+    "})();";
   overlay.innerHTML = `
-    <div style="max-width:460px;padding:36px 36px 32px;text-align:center;
+    <div style="max-width:480px;padding:36px 36px 32px;text-align:center;
                 background:linear-gradient(180deg,#1a1408,#0f0c06);
                 border:1px solid #c98e2a;border-radius:12px;
                 box-shadow:0 20px 60px rgba(0,0,0,.6);">
@@ -15560,11 +15588,11 @@ function applyAuthGate(){
            style="max-height:54px;margin-bottom:20px;display:block;margin-inline:auto;">
       <div style="font-size:20px;font-weight:800;letter-spacing:.04em;color:#d4af6a;margin-bottom:12px;">${m.title}</div>
       <div style="font-size:13.5px;line-height:1.55;color:#cfcfcf;margin-bottom:22px;">${m.body}</div>
-      <button onclick="supa && supa.auth.signOut(); setTimeout(()=>location.reload(),300);"
+      <button onclick='${signOutSnippet}'
         style="background:linear-gradient(180deg,#2a2010,#1a1408);color:#e8c989;
                border:1px solid #d4af6a;border-radius:6px;padding:10px 22px;
                font-size:12px;font-weight:700;letter-spacing:.10em;text-transform:uppercase;cursor:pointer;">
-        Sign out
+        Sign out &amp; try again
       </button>
       <div style="margin-top:24px;font-size:10.5px;color:#888;letter-spacing:.12em;text-transform:uppercase;">Reno to Sold Inc.</div>
     </div>
