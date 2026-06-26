@@ -14157,6 +14157,7 @@ function initSupabase(){
   // Resume any existing session
   supa.auth.getSession().then(async ({ data: { session } }) => {
     if(session){
+      detectUserSwitch(session.user.id);   // clear localStorage if different user
       setCurrentUser(session.user);
       await fetchCurrentProfile();      // hydrate profile + features
       await bootstrapServerPricing();   // pull global pricing + subscribe
@@ -14171,6 +14172,7 @@ function initSupabase(){
   // Listen for sign-in / sign-out events
   supa.auth.onAuthStateChange(async (event, session) => {
     if(event === "SIGNED_IN" && session){
+      detectUserSwitch(session.user.id);   // clear if different user just signed in
       setCurrentUser(session.user);
       await fetchCurrentProfile();
       await bootstrapServerPricing();
@@ -14184,6 +14186,12 @@ function initSupabase(){
       // forward. Skippable. Defined below.
       setTimeout(() => maybeShowPasswordSetupPrompt(), 600);
     } else if(event === "SIGNED_OUT"){
+      // CRITICAL: clear the previous user's locally-cached data so the
+      // next signed-in user (whoever that turns out to be) doesn't see
+      // it AND doesn't accidentally upload it to the cloud tagged with
+      // their own user_id. The cloud copy of the actual data is safe.
+      clearUserScopedLocalStorage("sign-out");
+      try { localStorage.removeItem(LAST_USER_ID_KEY); } catch(e){}
       setCurrentUser(null);
       currentProfile = null;
       teardownServerPricing();
@@ -14326,6 +14334,97 @@ function dismissPasswordSetup(){
 function setCurrentUser(u){
   currentUser = u;
   updateAuthUI();
+}
+
+/* ============================================================
+   CROSS-USER DATA LEAK PROTECTION
+   ============================================================
+   localStorage is per-BROWSER, not per-user. If two different
+   accounts sign in on the same browser (e.g. admin → agent for
+   testing, or two staff sharing a workstation), the previous
+   user's saved estimates / prices / tracker data are visible to
+   the new user — and worse, the cloud sync logic will silently
+   PUSH that data to the cloud tagged with the new user's id.
+
+   Fix: detect user switch by comparing current auth user.id to
+   the last-known id we persisted. If different, clear ALL
+   user-scoped localStorage keys before cloud sync runs.
+
+   Safe to clear: the data lives in Supabase, so the rightful
+   owner gets it back the moment they sign back in. localStorage
+   is just a fast cache, not the source of truth.
+   ============================================================ */
+
+const LAST_USER_ID_KEY = "rts_last_user_id";
+
+/* List of every localStorage key that contains USER-SCOPED data.
+   Adding a new key? Add it here too if it's not user-scoped, the
+   only consequence is it gets blown away on switch — usually fine.
+
+   Intentionally NOT cleared:
+     - rts_no_autorecover  — local debug toggle
+     - SITE_ACCESS_KEY     — legacy PIN gate (PIN retired anyway) */
+const USER_SCOPED_LOCAL_KEYS = [
+  // Estimator
+  "reno_estimates_v1",
+  "reno_prices_v2",
+  "reno_contractor_prices_v1",
+  "reno_invoice_counter_v1",
+  "reno_prices_updated_at_v1",
+  "reno_contractor_prices_updated_at_v1",
+  "reno_one_time_5pct_bump_v2",
+  "reno_one_time_1pct_bump_v3",
+  "reno_one_time_1pct_bump_v4",
+  "reno_contractor_field_cleanup_v1",
+  // Contractors address book + bids
+  "reno_contractors_v1",
+  "reno_received_bids_cache_v1",
+  // Expense Tracker (all known ET_* keys)
+  "et_projects_v1",
+  "et_categories_v1",
+  "et_expenses_v1",
+  // Auth UX preferences
+  "rts_pw_setup_dismissed",
+  "rts_pending_invoice_open"
+];
+
+function clearUserScopedLocalStorage(reason){
+  console.log("[auth] Clearing user-scoped localStorage (" + (reason || "unknown") + ")");
+  USER_SCOPED_LOCAL_KEYS.forEach(k => {
+    try { localStorage.removeItem(k); } catch(e){}
+  });
+  // Also clear any prefixed keys (et_, reno_) that we may have missed —
+  // belt-and-suspenders. Skip anti-recover flags.
+  try {
+    const skip = new Set(["rts_no_autorecover", "rts_autorecovered", LAST_USER_ID_KEY,
+                          "site_access_unlocked_v2" /* legacy PIN; harmless */]);
+    const toRemove = [];
+    for(let i = 0; i < localStorage.length; i++){
+      const k = localStorage.key(i);
+      if(!k || skip.has(k)) continue;
+      if(/^(reno_|et_|rts_)/i.test(k)) toRemove.push(k);
+    }
+    toRemove.forEach(k => { try { localStorage.removeItem(k); } catch(e){} });
+  } catch(e){}
+  // Reset in-memory state so the UI shows a clean slate
+  try {
+    if(typeof state !== "undefined") state = (typeof freshState === "function") ? freshState() : state;
+    if(typeof contractorPrices !== "undefined") contractorPrices = null;
+    if(typeof prices !== "undefined" && typeof loadPrices === "function") prices = loadPrices();
+  } catch(e){ console.warn("State reset error:", e); }
+}
+
+/* Compare new sign-in to last-known and clear if different. Call
+   BEFORE bootstrapCloudSync runs so we don't pollute the cloud. */
+function detectUserSwitch(newUserId){
+  if(!newUserId) return;
+  try {
+    const previous = localStorage.getItem(LAST_USER_ID_KEY);
+    if(previous && previous !== newUserId){
+      clearUserScopedLocalStorage("user switch: " + previous.slice(0,8) + "… → " + newUserId.slice(0,8) + "…");
+    }
+    localStorage.setItem(LAST_USER_ID_KEY, newUserId);
+  } catch(e){ console.warn("detectUserSwitch error:", e); }
 }
 
 /* ============================================================
