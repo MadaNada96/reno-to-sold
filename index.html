@@ -14600,15 +14600,25 @@ function initSupabase(){
      - flowType: 'pkce' — more reliable than the default implicit flow,
        avoids known race conditions during session restore.
      - storage: explicit localStorage so behavior is deterministic.
-     - storageKey is intentionally left at default (sb-<projectref>-auth-token)
-       so existing user sessions don't get invalidated by the change. */
+     - lock: NO-OP. supabase-js v2 uses navigator.locks internally to
+       coordinate auth state across tabs. This locking mechanism has
+       known deadlock bugs where the lock is acquired and never
+       released, causing EVERY subsequent supa.from(...).select(...)
+       call to hang forever — BEFORE issuing an HTTP request. Symptom
+       matches what we observed: Network tab shows no fetch attempts,
+       but our awaits never resolve. Passing a no-op lock skips the
+       deadlock-prone code path. supabase-js officially supports this
+       override for exactly this scenario.
+     - storageKey is intentionally left at default so existing user
+       sessions don't get invalidated by the change. */
   supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: {
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: true,
       flowType: 'pkce',
-      storage: window.localStorage
+      storage: window.localStorage,
+      lock: async (_name, _acquireTimeout, fn) => await fn()
     }
   });
 
