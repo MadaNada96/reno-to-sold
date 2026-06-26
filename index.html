@@ -15728,38 +15728,25 @@ async function loadSubmissions(){
   }
   body.innerHTML = `<div style="padding:20px;text-align:center;color:var(--muted);">Loading submissions…</div>`;
 
-  /* Two-stage defense:
-     1. Auth pre-check (5s) — if supa.auth.getSession() hangs, it means the
-        token refresh is stuck. We catch this BEFORE firing the query and
-        show a clearer error message + re-sign-in option.
-     2. Query timeout (15s) — covers the actual db query slowness case.
-     Differentiates "auth is broken" from "query is slow" instead of
-     lumping them together as a generic timeout. */
-  const AUTH_CHECK_TIMEOUT_MS = 5000;
+  /* Single-stage timeout. The earlier 2-stage auth pre-check was
+     calling supa.auth.getSession() which hits the broken supabase-js
+     code path. Since the actual query now uses plain fetch via
+     restFetch (which pulls the token directly from localStorage),
+     the auth pre-check is unnecessary AND was the bottleneck. */
   const LOAD_TIMEOUT_MS = 15000;
   const t0 = Date.now();
   let authFailed = false;
 
   try {
-    /* STAGE 1: auth pre-check. If the supabase client's auth state is
-       stale (token refresh hanging after a hard refresh), this races a
-       5s timeout. Failing here points clearly at the auth issue
-       instead of a generic "Supabase is slow". */
-    const authT0 = Date.now();
-    const sessPromise = supa.auth.getSession();
-    const sessTimeout = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Auth check timed out at " + (AUTH_CHECK_TIMEOUT_MS/1000) + "s")), AUTH_CHECK_TIMEOUT_MS)
-    );
-    try {
-      await Promise.race([sessPromise, sessTimeout]);
-      console.log("[submissions] Auth check OK in " + (Date.now() - authT0) + "ms");
-    } catch(authErr){
+    /* Quick token availability check — if no token is present, the
+       user is signed out, we can fail fast instead of waiting on a
+       remote call. */
+    if(!getStoredAuthToken()){
       authFailed = true;
-      console.warn("[submissions] Auth check failed:", authErr && authErr.message);
-      throw new Error("Session may be stale — try signing out and back in. (" + (authErr.message || "auth timeout") + ")");
+      throw new Error("Not signed in — please sign in to view submissions.");
     }
 
-    /* STAGE 2: actual query. ROOT-CAUSE WORKAROUND — supabase-js
+    /* Actual query. ROOT-CAUSE WORKAROUND — supabase-js
        internally hangs on these reads (diagnostic-proven), so we use
        plain fetch via restFetch. Filter draft estimates at DB level
        (most agents have many drafts in progress; cap at 100 rows for
