@@ -15051,7 +15051,7 @@ function initSupabase(){
   });
   // Listen for sign-in / sign-out events
   supa.auth.onAuthStateChange(async (event, session) => {
-    if(event === "SIGNED_IN" && session){
+    if((event === "SIGNED_IN" || event === "PASSWORD_RECOVERY") && session){
       detectUserSwitch(session.user.id);   // clear if different user just signed in
       setCurrentUser(session.user);
       await fetchCurrentProfile();
@@ -15060,10 +15060,15 @@ function initSupabase(){
       applyFeatureGates();
       flash("Signed in as " + session.user.email);
       bootstrapCloudSync(true);
-      // First-time password setup prompt: if the user signed in via
-      // magic link or OAuth and hasn't set a password yet, gently
-      // prompt them to set one so they can use email+password going
-      // forward. Skippable. Defined below.
+      /* First-time password setup prompt:
+         - PASSWORD_RECOVERY event = clicked the activation link from
+           the welcome email. Force the modal to show — they NEED to
+           set a password before continuing. Wipe any prior dismissal.
+         - SIGNED_IN via OAuth/magic-link = check user_metadata to see
+           if they've set a password already (skip if so). */
+      if(event === "PASSWORD_RECOVERY"){
+        try { localStorage.removeItem("rts_pw_setup_dismissed"); } catch(e){}
+      }
       setTimeout(() => maybeShowPasswordSetupPrompt(), 600);
     } else if(event === "SIGNED_OUT"){
       // CRITICAL: clear the previous user's locally-cached data so the
