@@ -11147,19 +11147,32 @@ function cloudRowToContractor(row){
 async function upsertCloudContractor(c){
   if(!currentUser || !supa || !c || !c.id) return;
   try{
-    const { data: existing } = await supa.from("estimates")
-      .select("id")
+    /* CRITICAL BUG FIX: use a regular select that returns ALL matching
+       rows (sorted newest-first), then update the newest and DELETE
+       any duplicates. The previous .maybeSingle() approach silently
+       errored when duplicates existed, causing the code to INSERT a
+       new row — runaway duplication on every save. */
+    const { data: rows, error: selErr } = await supa.from("estimates")
+      .select("id, updated_at")
       .eq("user_id", currentUser.id)
       .eq("client_id", c.id)
       .eq("type", "contractor")
-      .maybeSingle();
+      .order("updated_at", { ascending: false });
+    if(selErr) throw selErr;
+
     const payload = contractorToCloudRow(c);
-    if(existing){
-      const { error } = await supa.from("estimates").update(payload).eq("id", existing.id);
-      if(error) throw error;
-    } else {
+    if(!rows || rows.length === 0){
       const { error } = await supa.from("estimates").insert(payload);
       if(error) throw error;
+    } else {
+      const { error } = await supa.from("estimates").update(payload).eq("id", rows[0].id);
+      if(error) throw error;
+      // Self-heal: if there are stray duplicates, clean them up now
+      if(rows.length > 1){
+        const dupeIds = rows.slice(1).map(r => r.id);
+        console.warn("[contractors] Cleaning up " + dupeIds.length + " duplicate cloud rows for contractor " + c.id);
+        await supa.from("estimates").delete().in("id", dupeIds);
+      }
     }
   }catch(e){ console.error("Contractor cloud upsert failed:", e); }
 }
@@ -16190,19 +16203,29 @@ function localToCloud(e){
 async function upsertCloudEstimate(entry){
   if(!currentUser || !supa) return;
   try{
-    const { data: existing } = await supa.from("estimates")
-      .select("id")
+    /* Same critical fix as upsertCloudContractor: .maybeSingle()
+       silently errors when duplicates exist, causing INSERT instead of
+       UPDATE. Use ordered select + self-healing duplicate cleanup. */
+    const { data: rows, error: selErr } = await supa.from("estimates")
+      .select("id, updated_at")
       .eq("user_id", currentUser.id)
       .eq("client_id", entry.id)
       .eq("type", "estimate")
-      .maybeSingle();
+      .order("updated_at", { ascending: false });
+    if(selErr) throw selErr;
+
     const payload = localToCloud(entry);
-    if(existing){
-      const { error } = await supa.from("estimates").update(payload).eq("id", existing.id);
-      if(error) throw error;
-    } else {
+    if(!rows || rows.length === 0){
       const { error } = await supa.from("estimates").insert(payload);
       if(error) throw error;
+    } else {
+      const { error } = await supa.from("estimates").update(payload).eq("id", rows[0].id);
+      if(error) throw error;
+      if(rows.length > 1){
+        const dupeIds = rows.slice(1).map(r => r.id);
+        console.warn("[estimates] Cleaning up " + dupeIds.length + " duplicate cloud rows for estimate " + entry.id);
+        await supa.from("estimates").delete().in("id", dupeIds);
+      }
     }
   }catch(e){
     console.error("Cloud upsert failed:", e);
@@ -18808,19 +18831,29 @@ function localProjToCloud(p){
 async function upsertCloudProject(p){
   if(!cloudReady() || !p || !p.id) return;
   try{
-    const { data: existing } = await cloudCtx.supa.from("estimates")
-      .select("id")
+    /* Same critical fix as upsertCloudEstimate: .maybeSingle() silently
+       errored on duplicates, causing exponential row growth. Use an
+       ordered select + self-healing dedupe. */
+    const { data: rows, error: selErr } = await cloudCtx.supa.from("estimates")
+      .select("id, updated_at")
       .eq("user_id", cloudCtx.user.id)
       .eq("client_id", p.id)
       .eq("type", "tracker")
-      .maybeSingle();
+      .order("updated_at", { ascending: false });
+    if(selErr) throw selErr;
+
     const payload = localProjToCloud(p);
-    if(existing){
-      const { error } = await cloudCtx.supa.from("estimates").update(payload).eq("id", existing.id);
-      if(error) throw error;
-    } else {
+    if(!rows || rows.length === 0){
       const { error } = await cloudCtx.supa.from("estimates").insert(payload);
       if(error) throw error;
+    } else {
+      const { error } = await cloudCtx.supa.from("estimates").update(payload).eq("id", rows[0].id);
+      if(error) throw error;
+      if(rows.length > 1){
+        const dupeIds = rows.slice(1).map(r => r.id);
+        console.warn("[tracker] Cleaning up " + dupeIds.length + " duplicate cloud rows for project " + p.id);
+        await cloudCtx.supa.from("estimates").delete().in("id", dupeIds);
+      }
     }
   }catch(e){ console.error("Tracker cloud upsert failed:", e); }
 }
@@ -18836,12 +18869,14 @@ async function deleteCloudProject(clientId){
 async function upsertCloudCustomCategories(){
   if(!cloudReady()) return;
   try{
-    const { data: existing } = await cloudCtx.supa.from("estimates")
-      .select("id")
+    /* Same critical fix as the other upserts. */
+    const { data: rows, error: selErr } = await cloudCtx.supa.from("estimates")
+      .select("id, updated_at")
       .eq("user_id", cloudCtx.user.id)
       .eq("client_id", CUSTOM_CATS_CLIENT_ID)
       .eq("type", "tracker_meta")
-      .maybeSingle();
+      .order("updated_at", { ascending: false });
+    if(selErr) throw selErr;
     const payload = {
       user_id: cloudCtx.user.id,
       client_id: CUSTOM_CATS_CLIENT_ID,
@@ -18850,10 +18885,15 @@ async function upsertCloudCustomCategories(){
       state: { categories: DB.customCategories || [] },
       updated_at: new Date().toISOString()
     };
-    if(existing){
-      await cloudCtx.supa.from("estimates").update(payload).eq("id", existing.id);
-    } else {
+    if(!rows || rows.length === 0){
       await cloudCtx.supa.from("estimates").insert(payload);
+    } else {
+      await cloudCtx.supa.from("estimates").update(payload).eq("id", rows[0].id);
+      if(rows.length > 1){
+        const dupeIds = rows.slice(1).map(r => r.id);
+        console.warn("[tracker_meta] Cleaning up " + dupeIds.length + " duplicate custom-categories rows");
+        await cloudCtx.supa.from("estimates").delete().in("id", dupeIds);
+      }
     }
   }catch(e){ console.error("Custom categories cloud upsert failed:", e); }
 }
