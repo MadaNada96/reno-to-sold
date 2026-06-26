@@ -15248,6 +15248,14 @@ function applyFeatureGates(){
     // Internal Mode is a legacy admin-only gate; only admins ever need it.
     const internalLockBtn = document.getElementById("openPinModalBtn");
     if(internalLockBtn) internalLockBtn.style.display = userIsAdmin ? "" : "none";
+    /* CRITICAL: also re-run the agent-discount UI injector here.
+       applyFeatureGates() is the canonical "role just resolved" hook,
+       so this is the right place to inject the agent panel. Without
+       this call the panel only gets a shot during initial renderAll —
+       which often runs BEFORE the profile loads, so isAgent() is false
+       and the panel is never injected. With this call, the moment the
+       profile resolves and we know we're an agent, the panel appears. */
+    try { applyAgentDiscountUI(); } catch(e){ console.warn("applyAgentDiscountUI error:", e); }
   } catch(e) {
     console.warn("applyFeatureGates error:", e);
   }
@@ -15291,17 +15299,34 @@ function onAuthClick(){
       return;
     }
     console.log("[auth] Signing out...");
-    /* Always clear local data + reload, even if signOut errors. This
-       guarantees the UI doesn't get stuck. */
-    const finishSignOut = () => {
+    /* Always clear local data + reload, even if signOut errors OR
+       hangs forever. After deploys the in-memory supa client can be
+       holding a stale WebSocket and signOut() never resolves —
+       we force a teardown after 3 seconds no matter what. */
+    let alreadyFinished = false;
+    const finishSignOut = (reason) => {
+      if(alreadyFinished) return;
+      alreadyFinished = true;
+      console.log("[auth] Finishing sign-out:", reason);
       try { clearUserScopedLocalStorage("sign-out (forced)"); } catch(e){}
       try { localStorage.removeItem(LAST_USER_ID_KEY); } catch(e){}
+      /* Belt-and-suspenders: also clear the Supabase auth token directly
+         from localStorage so we know we're truly signed out even if the
+         client never confirmed. */
+      try {
+        for(let i = localStorage.length - 1; i >= 0; i--){
+          const k = localStorage.key(i);
+          if(k && /^sb-.*-auth-token/i.test(k)) localStorage.removeItem(k);
+        }
+      } catch(e){}
       flash("Signed out");
       setTimeout(() => location.reload(), 200);
     };
+    // 3-second timeout — never let the user wait longer than this
+    const hardTimeout = setTimeout(() => finishSignOut("3s timeout"), 3000);
     supa.auth.signOut().then(
-      () => { console.log("[auth] Signed out successfully"); finishSignOut(); },
-      (err) => { console.error("[auth] Sign-out failed:", err); finishSignOut(); }
+      () => { clearTimeout(hardTimeout); console.log("[auth] Signed out successfully"); finishSignOut("normal completion"); },
+      (err) => { clearTimeout(hardTimeout); console.error("[auth] Sign-out failed:", err); finishSignOut("error: " + (err && err.message)); }
     );
     return;
   }
