@@ -14242,18 +14242,73 @@ function accountLockoutReason(){
   return "";
 }
 
-/* Fetches the profile row for the current authenticated user.
-   On success → sets currentProfile + returns it.
-   On failure → leaves currentProfile=null + returns null.
-   The Mo-fallback (email match) handles the bootstrap case where
-   his profile doesn't exist yet on first deploy.
+/* ============================================================
+   PROFILE CACHING — bulletproof against Supabase slowness
+   ============================================================
 
-   Includes a 3-second timeout — if the Supabase query hangs (network
-   issue, RLS recursion, anything), we give up and proceed to the
-   fallback path. This guarantees an admin email in the fallback list
-   gets full access even when the database is misbehaving. */
+   The profile fetch is the most critical synchronous-feeling call
+   in the auth flow. If it's slow or fails, the user's role can't be
+   determined and ALL role-gated UI (Submit for Review, Users,
+   Submissions, etc.) disappears. This caused the bug where the
+   Submit button vanished after a refresh when Supabase took >20s
+   to return.
+
+   Strategy: cache the profile in localStorage after each successful
+   fetch. On page load, hydrate currentProfile from cache IMMEDIATELY,
+   apply gates so UI renders correctly, then do the fresh fetch in
+   the background. If the fresh fetch fails, the cached profile keeps
+   the user functional. The cache key has the `rts_` prefix so it's
+   auto-cleared on sign-out / user-switch.
+*/
+const PROFILE_CACHE_KEY = "rts_profile_cache_v1";
+
+function loadCachedProfile(userId){
+  if(!userId) return null;
+  try {
+    const raw = localStorage.getItem(PROFILE_CACHE_KEY);
+    if(!raw) return null;
+    const entry = JSON.parse(raw);
+    if(!entry || !entry.profile || entry.profile.id !== userId) return null;
+    return entry.profile;
+  } catch(e){ return null; }
+}
+
+function saveCachedProfile(profile){
+  if(!profile || !profile.id) return;
+  try {
+    localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({
+      cached_at: Date.now(),
+      profile: profile
+    }));
+  } catch(e){}
+}
+
+/* Fetches the profile row for the current authenticated user.
+
+   Flow:
+   1. Hydrate currentProfile from localStorage cache (instant) and
+      apply feature gates — the UI is already correct.
+   2. Run the fresh fetch with 8s → retry 12s timeouts.
+   3. On success: update currentProfile + cache + re-apply gates.
+   4. On failure: if we have a cached profile, KEEP it. User stays
+      functional. Only fall through to admin-fallback if neither
+      cache nor fresh fetch produced a profile.
+   5. The Mo-fallback (email match) is final safety net for first-
+      ever sign-in before the cache exists. */
 async function fetchCurrentProfile(){
   if(!supa || !currentUser){ currentProfile = null; return null; }
+
+  /* STEP 1: instant cache hydration. If we cached a profile from a
+     previous session, use it RIGHT NOW so the UI renders correctly
+     while we wait for the fresh fetch. */
+  const cached = loadCachedProfile(currentUser.id);
+  let hydratedFromCache = false;
+  if(cached){
+    console.log("[auth] Hydrated profile from cache (role: " + cached.role + ") — fresh fetch starting in background");
+    currentProfile = cached;
+    hydratedFromCache = true;
+    try { applyFeatureGates(); } catch(e){}
+  }
 
   /* Helper: single attempt with a timeout. 8 seconds is generous —
      normal Supabase profile reads take 50-300ms. Anything past 8s
@@ -14292,16 +14347,26 @@ async function fetchCurrentProfile(){
 
     if(error){
       console.warn("[auth] Profile fetch final error:", error.message);
-      // RLS rejection, timeout, etc — fall through to fallback
+      // RLS rejection, timeout, etc — fall through to cache or fallback
     }
     if(data){
+      // FRESH FETCH SUCCEEDED — update everything + cache for next time
       currentProfile = data;
-      // Re-apply gates the moment we know the real role/features.
+      saveCachedProfile(data);
       try { applyFeatureGates(); } catch(e){}
       return data;
     }
+
+    /* Fresh fetch failed (timeout or no row). If we hydrated from
+       cache earlier, keep that — user stays functional. If not,
+       fall through to the admin-email fallback below. */
+    if(hydratedFromCache){
+      console.warn("[auth] Fresh profile fetch failed — keeping cached profile (role: " + cached.role + "). Cache may be stale; user will get fresh data next time Supabase responds.");
+      return cached;
+    }
   }catch(e){
     console.warn("[auth] Profile fetch threw:", e);
+    if(hydratedFromCache){ return cached; }
   }
   /* Bootstrap fallback: if no profile row exists but this email is
      in the admin-fallback list, treat as admin so they can't lock
@@ -14573,7 +14638,10 @@ const USER_SCOPED_LOCAL_KEYS = [
   "et_expenses_v1",
   // Auth UX preferences
   "rts_pw_setup_dismissed",
-  "rts_pending_invoice_open"
+  "rts_pending_invoice_open",
+  // Profile cache — fail-safe fallback when Supabase profile fetch
+  // is slow or down. Cleared on sign-out automatically.
+  "rts_profile_cache_v1"
 ];
 
 function clearUserScopedLocalStorage(reason){
