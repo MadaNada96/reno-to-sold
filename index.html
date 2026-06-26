@@ -88,6 +88,18 @@
   body{background:radial-gradient(ellipse at top,#161616 0%,#0a0a0a 60%) fixed;}
   .app{max-width:1100px;margin:0 auto;padding:24px;}
 
+  /* ===== ROLE-BASED CSS GATES =====
+     body.role-agent → user is an agent. CSS rules below permanently
+     hide admin-only UI for agents (the custom-discount toggle + its
+     percentage/flat-amount fields). Using CSS with !important so no
+     inline style override and no flash of admin UI possible. */
+  body.role-agent #adminCustomDiscountWrap,
+  body.role-agent #sw-custom,
+  body.role-agent #customDiscFields,
+  body.role-agent #discCustomType,
+  body.role-agent #discCustomValue,
+  body.role-agent #discCustomNote { display: none !important; }
+
   /* Brand bar */
   .brandbar{background:#000;border:1px solid var(--line-strong);border-radius:14px;padding:22px 28px;margin-bottom:18px;box-shadow:var(--shadow);position:relative;overflow:hidden;}
 
@@ -3245,31 +3257,37 @@
         </div>
       </div>
 
-      <div class="disc-toggle-row">
-        <input type="checkbox" class="switch-input" id="sw-custom" onchange="setCustomDiscountEnabled(this.checked)">
-        <label for="sw-custom" class="switch"></label>
-        <div class="toggle-info">
-          <div class="cat-title">Custom Discount</div>
-          <div class="cat-sub">Add an additional flat or % discount (e.g. repeat client, package deal)</div>
+      <!-- ADMIN-ONLY Custom Discount UI. Hidden entirely for agents via
+           body.role-agent CSS rule (bulletproof — applies before any JS
+           runs, so there's no flash of admin-only controls). Agents see
+           the agent-discount-request panel instead, inserted by JS. -->
+      <div id="adminCustomDiscountWrap" class="admin-only-discount">
+        <div class="disc-toggle-row">
+          <input type="checkbox" class="switch-input" id="sw-custom" onchange="setCustomDiscountEnabled(this.checked)">
+          <label for="sw-custom" class="switch"></label>
+          <div class="toggle-info">
+            <div class="cat-title">Custom Discount</div>
+            <div class="cat-sub">Add an additional flat or % discount (e.g. repeat client, package deal)</div>
+          </div>
         </div>
-      </div>
 
-      <div id="customDiscFields" class="hidden" style="margin-top:14px;">
-        <div class="grid grid-3">
-          <div>
-            <label>Type</label>
-            <select id="discCustomType" onchange="state.discount.customType=this.value;renderDiscPlaceholder();renderTotals()">
-              <option value="percent">Percentage (%)</option>
-              <option value="amount">Flat amount ($)</option>
-            </select>
-          </div>
-          <div>
-            <label>Amount</label>
-            <input type="number" id="discCustomValue" min="0" step="0.5" placeholder="0" oninput="state.discount.customValue=this.value;renderTotals()">
-          </div>
-          <div>
-            <label>Note (shown on quote)</label>
-            <input type="text" id="discCustomNote" placeholder="e.g. Repeat client, package deal" oninput="state.discount.customNote=this.value;renderTotals()">
+        <div id="customDiscFields" class="hidden" style="margin-top:14px;">
+          <div class="grid grid-3">
+            <div>
+              <label>Type</label>
+              <select id="discCustomType" onchange="state.discount.customType=this.value;renderDiscPlaceholder();renderTotals()">
+                <option value="percent">Percentage (%)</option>
+                <option value="amount">Flat amount ($)</option>
+              </select>
+            </div>
+            <div>
+              <label>Amount</label>
+              <input type="number" id="discCustomValue" min="0" step="0.5" placeholder="0" oninput="state.discount.customValue=this.value;renderTotals()">
+            </div>
+            <div>
+              <label>Note (shown on quote)</label>
+              <input type="text" id="discCustomNote" placeholder="e.g. Repeat client, package deal" oninput="state.discount.customNote=this.value;renderTotals()">
+            </div>
           </div>
         </div>
       </div>
@@ -15206,6 +15224,16 @@ function applyFeatureGates(){
 
      Re-runs on every profile change. Idempotent. */
   try {
+    /* Role-based body class — drives CSS rules that hide admin-only
+       UI for agents (custom discount toggle/fields, etc.). Belt-and-
+       suspenders with the per-feature display:none below. */
+    const body = document.body;
+    if(body){
+      body.classList.toggle("role-admin", isAdmin());
+      body.classList.toggle("role-agent", isAgent());
+      body.classList.toggle("role-staff", isStaff());
+      body.classList.toggle("role-anon",  !currentProfile);
+    }
     // Per-feature gates
     const featureEls = document.querySelectorAll("[data-feature]");
     featureEls.forEach(el => {
