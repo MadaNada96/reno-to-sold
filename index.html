@@ -3157,6 +3157,9 @@
            per the signed-in user's role + features (see applyFeatureGates). -->
       <div class="toolbar no-print">
         <button data-admin-only="true" onclick="openUsersModal()" title="Create, edit, suspend, or delete user accounts (admin only)">Users</button>
+        <button data-admin-only="true" onclick="openSubmissionsModal()" title="Review estimates submitted by agents (admin only)">
+          Submissions<span id="submissionsCountBadge" style="display:none;margin-left:6px;background:#c98e2a;color:#0a0a0a;border-radius:10px;padding:1px 7px;font-size:10px;font-weight:700;"></span>
+        </button>
         <button data-feature="pricing_editor"  onclick="openSettings()">Pricing</button>
         <button data-feature="contractor_bids" onclick="openContractorBid()">Contractor Bid</button>
         <button id="authBtn" onclick="onAuthClick()">Sign in</button>
@@ -3805,6 +3808,25 @@
       <button class="ghost" onclick="closeUserFormModal()">Close</button>
     </h3>
     <div class="modal-body" id="userFormBody"></div>
+  </div>
+</div>
+
+<!-- ============= SUBMISSIONS DASHBOARD (admin only) =============
+     Lists all estimates with a non-draft status. Phase 2 Drop 2 Slice A:
+     read-only view + live Realtime sync. Click rows do nothing yet
+     (Slice B will add detail view + decision actions). -->
+<div class="modal-bg" id="submissionsModal" onclick="if(event.target===this)closeSubmissionsModal()">
+  <div class="modal" style="max-width:1100px;">
+    <h3>
+      <span>Submissions</span>
+      <span class="small-stack">
+        <button class="ghost" onclick="loadSubmissions()" title="Reload the list">↻ Refresh</button>
+        <button class="ghost" onclick="closeSubmissionsModal()">Close</button>
+      </span>
+    </h3>
+    <div class="modal-body" id="submissionsModalBody">
+      <div style="padding:20px;text-align:center;color:var(--muted);">Loading submissions…</div>
+    </div>
   </div>
 </div>
 
@@ -15236,6 +15258,190 @@ async function deleteUserConfirm(userId, email){
     setTimeout(() => { closeUserFormModal(); refreshUsersList(); }, 900);
   } catch(e) {
     statusEl.innerHTML = `<span style="color:#ff7676;">Failed: ${escapeHtml(e.message || String(e))}</span>`;
+  }
+}
+
+/* ============================================================
+   PHASE 2 DROP 2 — SUBMISSIONS DASHBOARD (admin only)
+   ============================================================
+
+   Slice A (current): read-only submissions queue. Admin clicks
+   "Submissions" in the toolbar → modal opens listing all estimates
+   that have been submitted by agents. Realtime subscription pushes
+   new submissions in automatically.
+
+   Slices B/C/D coming next:
+   - B: click row → detail view of frozen submission snapshot
+   - C: Approve / Request Changes / Reject decision buttons
+   - D: branded email to agent when a decision is made
+*/
+
+let submissionsList = [];                // cached rows
+let submissionsRealtimeChannel = null;   // Realtime subscription handle
+
+function openSubmissionsModal(){
+  if(!isAdmin()){
+    alert("Admin access required.");
+    return;
+  }
+  const modal = document.getElementById("submissionsModal");
+  if(modal) modal.classList.add("show");
+  loadSubmissions();
+  subscribeToSubmissions();
+}
+
+function closeSubmissionsModal(){
+  const modal = document.getElementById("submissionsModal");
+  if(modal) modal.classList.remove("show");
+  unsubscribeFromSubmissions();
+}
+
+async function loadSubmissions(){
+  const body = document.getElementById("submissionsModalBody");
+  if(!body) return;
+  if(!supa){
+    body.innerHTML = `<div style="padding:20px;text-align:center;color:var(--muted);">Supabase not initialized — sign in first.</div>`;
+    return;
+  }
+  body.innerHTML = `<div style="padding:20px;text-align:center;color:var(--muted);">Loading submissions…</div>`;
+
+  try {
+    /* Simple, reliable query: fetch all type=estimate rows ordered
+       by last update, filter for non-draft + has submission in JS.
+       RLS lets admin see ALL rows (user_id = auth.uid() OR is_admin()).
+       Cap at 500 rows for safety — way more than we expect in the
+       near term, but keeps the query bounded. */
+    const { data, error } = await supa.from("estimates")
+      .select("id,user_id,client_id,name,state,updated_at")
+      .eq("type", "estimate")
+      .order("updated_at", { ascending: false })
+      .limit(500);
+
+    if(error) throw error;
+
+    submissionsList = (data || []).filter(r => {
+      const status = r.state && r.state.status;
+      // Include anything with a non-draft status AND a submission snapshot
+      return status && status !== "draft" && r.state.submission;
+    });
+
+    renderSubmissionsList();
+    updateSubmissionsCountBadge();
+  } catch(e) {
+    console.error("loadSubmissions failed:", e);
+    body.innerHTML = `<div style="padding:20px;text-align:center;color:#ff9090;">Failed to load: ${escapeHtml(e.message || String(e))}</div>`;
+  }
+}
+
+function renderSubmissionsList(){
+  const body = document.getElementById("submissionsModalBody");
+  if(!body) return;
+
+  if(!submissionsList.length){
+    body.innerHTML = `<div style="padding:30px 20px;text-align:center;color:var(--muted);">
+      <div style="font-size:13px;margin-bottom:6px;">No submissions yet.</div>
+      <div style="font-size:11px;">When an agent submits an estimate for your review, it will appear here.</div>
+    </div>`;
+    return;
+  }
+
+  const rows = submissionsList.map(r => {
+    const s = r.state || {};
+    const sub = s.submission || {};
+    const status = s.status || "draft";
+    const agentName = sub.submitted_by_name || sub.submitted_by_email || "Unknown agent";
+    const agentEmail = sub.submitted_by_email || "";
+    const propAddr = s.propAddress || s.propName || r.name || "—";
+    const total = (sub.totals_at_submission && sub.totals_at_submission.total) || 0;
+    const submittedAt = sub.submitted_at ? new Date(sub.submitted_at) : new Date(r.updated_at);
+    const dateStr = submittedAt.toLocaleDateString("en-US", {month:"short",day:"numeric",year:"numeric"})
+                    + " · " + submittedAt.toLocaleTimeString("en-US", {hour:"numeric",minute:"2-digit"});
+    const drFlag = (s.discount_request && s.discount_request.status === "pending") ?
+      `<span style="color:#f5c878;font-size:10px;margin-left:6px;font-weight:700;">⏳ DISC REQ</span>` : "";
+
+    return `
+      <tr style="border-bottom:1px solid var(--line);">
+        <td style="padding:11px 12px;vertical-align:top;">
+          <div style="color:var(--ink);font-weight:600;">${escapeHtml(agentName)}</div>
+          ${agentEmail ? `<div style="color:var(--muted);font-size:11px;">${escapeHtml(agentEmail)}</div>` : ""}
+        </td>
+        <td style="padding:11px 12px;vertical-align:top;color:#e8c989;">${escapeHtml(propAddr)}</td>
+        <td style="padding:11px 12px;vertical-align:top;text-align:right;color:var(--ink);font-weight:600;">$${Math.round(total).toLocaleString("en-US")}</td>
+        <td style="padding:11px 12px;vertical-align:top;color:var(--muted);font-size:11px;">${dateStr}</td>
+        <td style="padding:11px 12px;vertical-align:top;">${renderSubStatusPill(status)}${drFlag}</td>
+      </tr>
+    `;
+  }).join("");
+
+  body.innerHTML = `
+    <table style="width:100%;border-collapse:collapse;">
+      <thead>
+        <tr style="background:rgba(212,175,106,.08);border-bottom:1px solid var(--gold-deep);">
+          <th style="padding:10px 12px;text-align:left;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold-bright);font-weight:700;">Agent</th>
+          <th style="padding:10px 12px;text-align:left;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold-bright);font-weight:700;">Property</th>
+          <th style="padding:10px 12px;text-align:right;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold-bright);font-weight:700;">Total</th>
+          <th style="padding:10px 12px;text-align:left;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold-bright);font-weight:700;">Submitted</th>
+          <th style="padding:10px 12px;text-align:left;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold-bright);font-weight:700;">Status</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <p style="margin-top:14px;color:var(--muted);font-size:11px;text-align:center;">
+      ${submissionsList.length} ${submissionsList.length === 1 ? "submission" : "submissions"} total.
+      Click-through review and decision actions coming in the next drop.
+    </p>
+  `;
+}
+
+function renderSubStatusPill(status){
+  const map = {
+    "submitted":         { label: "PENDING REVIEW",    bg: "rgba(245,200,120,.15)", border: "#c98e2a", color: "#f5c878" },
+    "client_approved":   { label: "CLIENT-APPROVED",   bg: "rgba(95,206,134,.10)",  border: "#2e7e4e", color: "#5fce86" },
+    "approved":          { label: "APPROVED",          bg: "rgba(95,206,134,.15)",  border: "#2e7e4e", color: "#5fce86" },
+    "changes_requested": { label: "CHANGES REQUESTED", bg: "rgba(232,164,108,.10)", border: "#a06030", color: "#e8a46c" },
+    "rejected":          { label: "REJECTED",          bg: "rgba(255,144,144,.10)", border: "#8a2828", color: "#ff9090" }
+  };
+  const m = map[status] || { label: String(status||"unknown").toUpperCase(), bg: "rgba(255,255,255,.04)", border: "var(--line-strong)", color: "var(--muted)" };
+  return `<span style="display:inline-block;background:${m.bg};border:1px solid ${m.border};color:${m.color};font-size:9.5px;font-weight:700;letter-spacing:.12em;padding:3px 8px;border-radius:4px;">${m.label}</span>`;
+}
+
+function updateSubmissionsCountBadge(){
+  const badge = document.getElementById("submissionsCountBadge");
+  if(!badge) return;
+  const pendingCount = submissionsList.filter(r => {
+    const s = r.state && r.state.status;
+    return s === "submitted" || s === "client_approved";
+  }).length;
+  if(pendingCount > 0){
+    badge.textContent = String(pendingCount);
+    badge.style.display = "inline-block";
+  } else {
+    badge.style.display = "none";
+  }
+}
+
+function subscribeToSubmissions(){
+  if(!supa || submissionsRealtimeChannel) return;
+  try {
+    submissionsRealtimeChannel = supa.channel("submissions-feed")
+      .on("postgres_changes",
+          { event: "*", schema: "public", table: "estimates" },
+          () => { loadSubmissions(); })
+      .subscribe((status) => {
+        // Status: SUBSCRIBED | CHANNEL_ERROR | TIMED_OUT | CLOSED
+        if(status === "CHANNEL_ERROR" || status === "TIMED_OUT"){
+          console.warn("Submissions Realtime status:", status);
+        }
+      });
+  } catch(e) {
+    console.warn("Submissions realtime subscribe failed:", e);
+  }
+}
+
+function unsubscribeFromSubmissions(){
+  if(submissionsRealtimeChannel){
+    try { supa.removeChannel(submissionsRealtimeChannel); } catch(e){}
+    submissionsRealtimeChannel = null;
   }
 }
 
