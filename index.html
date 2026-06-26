@@ -13703,6 +13703,11 @@ function initSupabase(){
       applyFeatureGates();
       flash("Signed in as " + session.user.email);
       bootstrapCloudSync(true);
+      // First-time password setup prompt: if the user signed in via
+      // magic link or OAuth and hasn't set a password yet, gently
+      // prompt them to set one so they can use email+password going
+      // forward. Skippable. Defined below.
+      setTimeout(() => maybeShowPasswordSetupPrompt(), 600);
     } else if(event === "SIGNED_OUT"){
       setCurrentUser(null);
       currentProfile = null;
@@ -13711,6 +13716,136 @@ function initSupabase(){
       flash("Signed out");
     }
   });
+}
+
+/* ===== First-time password setup prompt =====
+   Shown ONCE after a user signs in via magic link or OAuth and they
+   don't have a password set on their account. Uses user_metadata.
+   password_set flag to track. They can skip and keep using magic links,
+   but the prompt nudges them to set one for easier future sign-ins. */
+function maybeShowPasswordSetupPrompt(){
+  if(!currentUser) return;
+  // Skip if they've already set a password (we track this in user_metadata)
+  const meta = currentUser.user_metadata || {};
+  if(meta.password_set === true) return;
+  // Skip if they've explicitly dismissed it before (localStorage)
+  try { if(localStorage.getItem("rts_pw_setup_dismissed") === "1") return; } catch(e){}
+  // Skip if there's an existing modal showing
+  if(document.getElementById("pwSetupModal")) return;
+
+  const modal = document.createElement("div");
+  modal.id = "pwSetupModal";
+  modal.style.cssText =
+    "position:fixed;inset:0;z-index:9998;background:rgba(10,10,10,.85);" +
+    "display:flex;align-items:center;justify-content:center;padding:20px;" +
+    "font-family:'Montserrat',sans-serif;backdrop-filter:blur(6px);";
+  modal.innerHTML = `
+    <div style="max-width:440px;width:100%;padding:32px 28px;
+                background:linear-gradient(180deg,#1a1408,#0f0c06);
+                border:1px solid #c98e2a;border-radius:12px;
+                box-shadow:0 20px 60px rgba(0,0,0,.6);color:#e8c989;">
+      <div style="font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#a8853f;margin-bottom:8px;text-align:center;">Welcome!</div>
+      <div style="font-size:18px;font-weight:800;color:#d4af6a;text-align:center;margin-bottom:14px;letter-spacing:.04em;">
+        Set a password for next time
+      </div>
+      <div style="font-size:13px;color:#cfcfcf;line-height:1.55;margin-bottom:18px;text-align:center;">
+        You're signed in. Set a password now so you can sign in directly with email + password going forward (no link required).
+      </div>
+      <form onsubmit="event.preventDefault(); submitPasswordSetup();" style="display:flex;flex-direction:column;gap:10px;">
+        <input type="password" id="pwSetupNew" placeholder="New password" autocomplete="new-password"
+          oninput="updatePasswordChecklist()"
+          style="padding:11px 13px;background:#0a0a0a;border:1px solid #3a3a42;color:#f5f1e6;border-radius:6px;font-size:13px;">
+        <input type="password" id="pwSetupConfirm" placeholder="Confirm password" autocomplete="new-password"
+          oninput="updatePasswordChecklist()"
+          style="padding:11px 13px;background:#0a0a0a;border:1px solid #3a3a42;color:#f5f1e6;border-radius:6px;font-size:13px;">
+
+        <!-- Persistent password requirements with live validation -->
+        <div id="pwSetupChecklist" style="background:rgba(212,175,106,.06);border:1px solid rgba(212,175,106,.20);border-radius:6px;padding:10px 12px;font-size:11.5px;color:#cfcfcf;line-height:1.7;">
+          <div style="font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#a8853f;font-weight:700;margin-bottom:6px;">Password Requirements</div>
+          <div id="pwReqLength"  style="color:#888;">○ At least 8 characters</div>
+          <div id="pwReqMatch"   style="color:#888;">○ Both fields match</div>
+        </div>
+
+        <button type="submit" id="pwSetupBtn"
+          style="margin-top:6px;padding:12px;background:linear-gradient(180deg,#d4af6a,#a8853f);color:#0a0a0a;
+                 border:none;border-radius:6px;font-size:12.5px;font-weight:800;
+                 letter-spacing:.12em;text-transform:uppercase;cursor:pointer;">
+          Set Password
+        </button>
+      </form>
+      <div id="pwSetupMsg" style="margin-top:10px;font-size:12px;min-height:18px;text-align:center;color:#ff9090;"></div>
+      <div style="text-align:center;margin-top:14px;">
+        <a href="#" onclick="event.preventDefault(); dismissPasswordSetup();"
+          style="color:#888;font-size:11.5px;text-decoration:none;">
+          Skip for now — keep using sign-in links
+        </a>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  setTimeout(() => { const e = document.getElementById("pwSetupNew"); if(e) e.focus(); }, 80);
+}
+
+/* Live-update the password requirements checklist as the user types. */
+function updatePasswordChecklist(){
+  const pw1 = (document.getElementById("pwSetupNew") || {}).value || "";
+  const pw2 = (document.getElementById("pwSetupConfirm") || {}).value || "";
+  const lenOk = pw1.length >= 8;
+  // "match" only meaningful once they've started typing in the confirm field
+  const matchOk = pw2.length > 0 && pw1 === pw2;
+  const setRow = (id, ok, neutral, label) => {
+    const el = document.getElementById(id); if(!el) return;
+    if(neutral){
+      el.style.color = "#888";
+      el.textContent = "○ " + label;
+    } else if(ok){
+      el.style.color = "#5fce86";
+      el.textContent = "✓ " + label;
+    } else {
+      el.style.color = "#ff9090";
+      el.textContent = "✗ " + label;
+    }
+  };
+  // Length row — neutral while empty, validate once they start typing
+  setRow("pwReqLength", lenOk, pw1.length === 0, "At least 8 characters");
+  // Match row — neutral until they've started filling the confirm field
+  setRow("pwReqMatch",  matchOk, pw2.length === 0, "Both fields match");
+}
+
+async function submitPasswordSetup(){
+  const pw1 = document.getElementById("pwSetupNew").value || "";
+  const pw2 = document.getElementById("pwSetupConfirm").value || "";
+  const msgEl = document.getElementById("pwSetupMsg");
+  const setMsg = (m, ok) => { msgEl.textContent = m; msgEl.style.color = ok ? "#5fce86" : "#ff9090"; };
+  if(pw1.length < 8){ setMsg("Password must be at least 8 characters."); return; }
+  if(pw1 !== pw2){ setMsg("Passwords don't match."); return; }
+  const btn = document.getElementById("pwSetupBtn");
+  if(btn){ btn.disabled = true; btn.textContent = "Setting…"; }
+  try {
+    const { data, error } = await supa.auth.updateUser({
+      password: pw1,
+      data: { password_set: true }
+    });
+    if(error) throw error;
+    // Refresh currentUser reference (its metadata changed)
+    if(data && data.user) setCurrentUser(data.user);
+    setMsg("Password set ✓ You can use email + password from now on.", true);
+    setTimeout(() => {
+      const m = document.getElementById("pwSetupModal");
+      if(m) m.remove();
+    }, 1200);
+  } catch(e) {
+    console.error("Password setup failed:", e);
+    setMsg("Failed: " + (e.message || "unknown error"));
+    if(btn){ btn.disabled = false; btn.textContent = "Set Password"; }
+  }
+}
+
+function dismissPasswordSetup(){
+  try { localStorage.setItem("rts_pw_setup_dismissed", "1"); } catch(e){}
+  const m = document.getElementById("pwSetupModal");
+  if(m) m.remove();
+  flash("OK — you can set a password later via Account settings.");
 }
 
 function setCurrentUser(u){
@@ -13897,18 +14032,17 @@ function teardownServerPricing(){
 }
 
 function applyAuthGate(){
-  /* Phase 1b: show a full-screen lockout overlay when the user
-     doesn't have a usable account. Four states it handles:
-       not_signed_in → instructs to click Sign In in the toolbar
-       no_profile    → "Your account hasn't been provisioned yet.
-                        Contact Reno to Sold."
-       suspended     → "Your account is suspended."
-       expired       → "Your subscription has expired. Contact
-                        Reno to Sold to renew."
-     If reason is empty (user is good) → hide the overlay.
+  /* Phase 1c: full-screen auth gate that BECOMES the login screen when
+     the user is not signed in. Replaces the legacy PIN gate.
 
-     This SUPPLEMENTS the existing site PIN gate; the PIN still
-     works as it does today. Phase 1c will retire the PIN.        */
+     Four states it handles:
+       not_signed_in → renders a real email+password login form +
+                       Google OAuth button + magic link + forgot password
+       no_profile    → "Your account hasn't been provisioned yet"
+       suspended     → "Your account is suspended"
+       expired       → "Your subscription has expired"
+
+     If reason is empty (user is good) → hide the overlay.        */
   const reason = accountLockoutReason();
   let overlay = document.getElementById("authLockoutOverlay");
   if(!reason){
@@ -13921,64 +14055,199 @@ function applyAuthGate(){
     overlay.style.cssText =
       "position:fixed;inset:0;z-index:9999;background:rgba(10,10,10,.96);" +
       "display:flex;align-items:center;justify-content:center;" +
-      "font-family:'Montserrat',sans-serif;color:#e8c989;backdrop-filter:blur(8px);";
+      "font-family:'Montserrat',sans-serif;color:#e8c989;backdrop-filter:blur(8px);" +
+      "overflow-y:auto;padding:20px;";
     document.body.appendChild(overlay);
   }
+  overlay.style.display = "flex";
+
+  if(reason === "not_signed_in"){
+    overlay.innerHTML = renderLoginForm();
+    setTimeout(() => {
+      const e = document.getElementById("loginEmail");
+      if(e) e.focus();
+    }, 80);
+    return;
+  }
+
+  // Other lockout states (no_profile, suspended, expired) — show message + Sign out
   const msgMap = {
-    not_signed_in: {
-      title: "Sign in to continue",
-      body:  "Click the <b>Sign in</b> button in the toolbar at the top of the page and enter your email to receive a sign-in link.",
-      cta:   "Click Sign In →"
-    },
     no_profile: {
       title: "Account not yet provisioned",
-      body:  "Your email isn't recognized as an active Reno to Sold account. Contact Reno to Sold to set up your access.",
-      cta:   "Sign out and try a different email"
+      body:  "Your email isn't recognized as an active Reno to Sold account. Contact Reno to Sold to set up your access."
     },
     suspended: {
       title: "Account suspended",
-      body:  "Your account has been suspended. Contact Reno to Sold at renotosold@gmail.com to resolve.",
-      cta:   "Sign out"
+      body:  "Your account has been suspended. Contact Reno to Sold at renotosold@gmail.com to resolve."
     },
     expired: {
       title: "Subscription expired",
-      body:  "Your annual subscription has ended. Contact Reno to Sold at renotosold@gmail.com to renew.",
-      cta:   "Sign out"
+      body:  "Your annual subscription has ended. Contact Reno to Sold at renotosold@gmail.com to renew."
     }
   };
-  const m = msgMap[reason] || msgMap.not_signed_in;
-  overlay.style.display = "flex";
+  const m = msgMap[reason];
   overlay.innerHTML = `
-    <div style="max-width:480px;padding:36px 36px 32px;text-align:center;
+    <div style="max-width:460px;padding:36px 36px 32px;text-align:center;
                 background:linear-gradient(180deg,#1a1408,#0f0c06);
                 border:1px solid #c98e2a;border-radius:12px;
                 box-shadow:0 20px 60px rgba(0,0,0,.6);">
       <img src="RENO_to_SOLD_logo_only.png" alt="Reno to Sold"
            style="max-height:54px;margin-bottom:20px;display:block;margin-inline:auto;">
-      <div style="font-size:20px;font-weight:800;letter-spacing:.04em;color:#d4af6a;margin-bottom:12px;">
-        ${m.title}
+      <div style="font-size:20px;font-weight:800;letter-spacing:.04em;color:#d4af6a;margin-bottom:12px;">${m.title}</div>
+      <div style="font-size:13.5px;line-height:1.55;color:#cfcfcf;margin-bottom:22px;">${m.body}</div>
+      <button onclick="supa && supa.auth.signOut(); setTimeout(()=>location.reload(),300);"
+        style="background:linear-gradient(180deg,#2a2010,#1a1408);color:#e8c989;
+               border:1px solid #d4af6a;border-radius:6px;padding:10px 22px;
+               font-size:12px;font-weight:700;letter-spacing:.10em;text-transform:uppercase;cursor:pointer;">
+        Sign out
+      </button>
+      <div style="margin-top:24px;font-size:10.5px;color:#888;letter-spacing:.12em;text-transform:uppercase;">Reno to Sold Inc.</div>
+    </div>
+  `;
+}
+
+/* Render the email/password login form HTML.
+   Used inside the auth lockout overlay when reason === 'not_signed_in'.
+   Wired up to: loginWithPassword, loginWithGoogle, loginWithMagicLink,
+   forgotPassword (all defined below). */
+function renderLoginForm(){
+  return `
+    <div style="max-width:420px;width:100%;padding:36px 32px 28px;
+                background:linear-gradient(180deg,#1a1408,#0f0c06);
+                border:1px solid #c98e2a;border-radius:12px;
+                box-shadow:0 20px 60px rgba(0,0,0,.6);">
+      <img src="RENO_to_SOLD_logo_only.png" alt="Reno to Sold"
+           style="max-height:54px;margin-bottom:18px;display:block;margin-inline:auto;">
+      <div style="font-size:18px;font-weight:800;letter-spacing:.06em;color:#d4af6a;text-align:center;margin-bottom:6px;text-transform:uppercase;">Sign in</div>
+      <div style="font-size:12px;color:#cfcfcf;text-align:center;margin-bottom:22px;line-height:1.5;">
+        Enter the email and password for your<br>Reno to Sold account.
       </div>
-      <div style="font-size:13.5px;line-height:1.55;color:#cfcfcf;margin-bottom:22px;">
-        ${m.body}
+      <form onsubmit="event.preventDefault(); loginWithPassword();" style="display:flex;flex-direction:column;gap:10px;">
+        <input type="email" id="loginEmail" placeholder="your@email.com" autocomplete="username"
+          style="padding:11px 13px;background:#0a0a0a;border:1px solid #3a3a42;color:#f5f1e6;border-radius:6px;font-size:13.5px;">
+        <input type="password" id="loginPassword" placeholder="Password" autocomplete="current-password"
+          style="padding:11px 13px;background:#0a0a0a;border:1px solid #3a3a42;color:#f5f1e6;border-radius:6px;font-size:13.5px;">
+        <button type="submit" id="loginSubmitBtn"
+          style="margin-top:6px;padding:12px;background:linear-gradient(180deg,#d4af6a,#a8853f);color:#0a0a0a;
+                 border:none;border-radius:6px;font-size:12.5px;font-weight:800;
+                 letter-spacing:.12em;text-transform:uppercase;cursor:pointer;">
+          Sign In
+        </button>
+      </form>
+      <div id="loginMsg" style="margin-top:10px;font-size:12px;min-height:18px;text-align:center;color:#ff9090;"></div>
+
+      <div style="display:flex;align-items:center;gap:10px;margin:18px 0 14px;color:#666;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;">
+        <span style="flex:1;height:1px;background:#3a3a42;"></span>
+        OR
+        <span style="flex:1;height:1px;background:#3a3a42;"></span>
       </div>
-      ${reason === "not_signed_in"
-        ? `<button onclick="document.getElementById('authLockoutOverlay').style.display='none'; openAuthModal();"
-              style="background:linear-gradient(180deg,#2a2010,#1a1408);color:#e8c989;
-                     border:1px solid #d4af6a;border-radius:6px;padding:11px 26px;
-                     font-size:12.5px;font-weight:700;letter-spacing:.10em;text-transform:uppercase;cursor:pointer;">
-              Sign in
-           </button>`
-        : `<button onclick="supa && supa.auth.signOut(); setTimeout(()=>location.reload(),300);"
-              style="background:linear-gradient(180deg,#2a2010,#1a1408);color:#e8c989;
-                     border:1px solid #d4af6a;border-radius:6px;padding:10px 22px;
-                     font-size:12px;font-weight:700;letter-spacing:.10em;text-transform:uppercase;cursor:pointer;">
-              ${m.cta}
-           </button>`}
-      <div style="margin-top:24px;font-size:10.5px;color:#888;letter-spacing:.12em;text-transform:uppercase;">
+
+      <button onclick="loginWithGoogle()"
+        style="width:100%;padding:11px 13px;background:#fff;color:#1a1a1a;border:none;border-radius:6px;
+               font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;">
+        <svg width="18" height="18" viewBox="0 0 48 48" style="flex-shrink:0;">
+          <path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/>
+          <path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/>
+          <path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/>
+          <path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/>
+        </svg>
+        Sign in with Google
+      </button>
+
+      <div style="display:flex;flex-direction:column;gap:6px;margin-top:18px;text-align:center;font-size:11.5px;">
+        <a href="#" onclick="event.preventDefault(); loginWithMagicLink();"
+          style="color:#a8853f;text-decoration:none;">
+          Email me a one-time sign-in link
+        </a>
+        <a href="#" onclick="event.preventDefault(); forgotPassword();"
+          style="color:#666;text-decoration:none;font-size:11px;">
+          Forgot your password?
+        </a>
+      </div>
+
+      <div style="margin-top:22px;padding-top:16px;border-top:1px solid #2a2a30;text-align:center;font-size:10px;color:#888;letter-spacing:.12em;text-transform:uppercase;">
         Reno to Sold Inc.
       </div>
     </div>
   `;
+}
+
+/* ===== Login actions ===== */
+function setLoginMsg(msg, isOk){
+  const el = document.getElementById("loginMsg");
+  if(!el) return;
+  el.textContent = msg || "";
+  el.style.color = isOk ? "#5fce86" : "#ff9090";
+}
+
+async function loginWithPassword(){
+  const email = (document.getElementById("loginEmail").value || "").trim();
+  const password = document.getElementById("loginPassword").value || "";
+  if(!email){ setLoginMsg("Enter your email."); return; }
+  if(!password){ setLoginMsg("Enter your password."); return; }
+  const btn = document.getElementById("loginSubmitBtn");
+  if(btn){ btn.disabled = true; btn.textContent = "Signing in…"; }
+  try {
+    const { data, error } = await supa.auth.signInWithPassword({ email, password });
+    if(error) throw error;
+    setLoginMsg("Signed in ✓", true);
+    // The SIGNED_IN event handler in initSupabase will refresh UI + hide overlay.
+  } catch(e) {
+    console.error("Password sign-in failed:", e);
+    let msg = e.message || "Sign-in failed.";
+    if(/invalid login credentials/i.test(msg)) msg = "Wrong email or password. Try again or use 'Email me a one-time link'.";
+    setLoginMsg(msg);
+    if(btn){ btn.disabled = false; btn.textContent = "Sign In"; }
+  }
+}
+
+async function loginWithGoogle(){
+  try {
+    const { data, error } = await supa.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: window.location.href.split("#")[0].split("?")[0] }
+    });
+    if(error) throw error;
+    // Browser redirects to Google → back to our app on success
+  } catch(e) {
+    console.error("Google sign-in failed:", e);
+    setLoginMsg("Google sign-in failed: " + (e.message || "unknown error"));
+  }
+}
+
+async function loginWithMagicLink(){
+  const email = (document.getElementById("loginEmail").value || "").trim();
+  if(!email){ setLoginMsg("Enter your email above first, then click this link."); return; }
+  try {
+    const { error } = await supa.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: window.location.href.split("#")[0].split("?")[0] }
+    });
+    if(error) throw error;
+    setLoginMsg("Sign-in link sent to " + email + " ✓ Check your inbox.", true);
+  } catch(e) {
+    console.error("Magic link failed:", e);
+    setLoginMsg("Magic link failed: " + (e.message || "unknown error"));
+  }
+}
+
+async function forgotPassword(){
+  const email = (document.getElementById("loginEmail").value || "").trim();
+  if(!email){ setLoginMsg("Enter your email above first, then click 'Forgot password?'"); return; }
+  try {
+    // Call our admin-users Edge Function to send a BRANDED reset email
+    // (action='reset_password' — auth-free since we use email to identify).
+    setLoginMsg("Sending reset email…", true);
+    const { data, error } = await supa.functions.invoke("admin-users", {
+      body: { action: "reset_password_request", email }
+    });
+    if(error) throw error;
+    if(data && data.error) throw new Error(data.error);
+    setLoginMsg("Password reset link sent to " + email + " ✓ Check your inbox.", true);
+  } catch(e) {
+    console.error("Password reset failed:", e);
+    setLoginMsg("Reset failed: " + (e.message || "unknown error") + ". You can still use 'Email me a one-time sign-in link' instead.");
+  }
 }
 
 /* ============================================================
@@ -14331,16 +14600,15 @@ function applyFeatureGates(){
 function updateAuthUI(){
   const btn = document.getElementById("authBtn");
   if(!btn) return;
-  // Keep the button visually neutral regardless of signed-in state — the gold
-  // "primary" highlight was over-emphasising it next to the other toolbar
-  // buttons. Title attribute still surfaces the account context on hover.
   btn.classList.remove("primary");
   if(currentUser){
-    btn.textContent = "Account";
-    btn.title = "Signed in as " + currentUser.email + " — tap to sign out";
+    // Phase 1c: "Log out" is clearer than "Account" — single-purpose action,
+    // and matches the user's mental model of how every other web app works.
+    btn.textContent = "Log out";
+    btn.title = "Signed in as " + currentUser.email + " — tap to log out";
   } else {
     btn.textContent = "Sign in";
-    btn.title = "Sync your estimates across devices";
+    btn.title = "Sign in to your account";
   }
 }
 
