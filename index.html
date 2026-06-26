@@ -3861,6 +3861,20 @@
   </div>
 </div>
 
+<!-- Discount-request decision modal — completely independent of the
+     estimate decision. Lets admin approve as-requested, propose a
+     different amount, or reject the discount request. Writes only to
+     state.discount_request. -->
+<div class="modal-bg" id="discountDecisionModal" onclick="if(event.target===this)closeDiscountDecisionModal()">
+  <div class="modal" style="max-width:520px;">
+    <h3>
+      <span>Discount Request Decision</span>
+      <button class="ghost" onclick="closeDiscountDecisionModal()">Close</button>
+    </h3>
+    <div class="modal-body" id="discountDecisionBody"></div>
+  </div>
+</div>
+
 <!-- ===== Submit for Review modal =====
      Agent confirmation: shows totals + any discount request +
      warning that submission locks editing. -->
@@ -15969,6 +15983,7 @@ function renderSubmissionDetail(){
     };
     const m = drMap[dr.status] || drMap.pending;
     const decided = (dr.decided_amount !== undefined && dr.decided_amount !== null && dr.decided_amount !== dr.amount);
+    const isPendingDr = dr.status === "pending";
     drHtml = `
       <div class="sd-section">
         <div class="sd-label">DISCOUNT REQUEST</div>
@@ -15980,6 +15995,15 @@ function renderSubmissionDetail(){
           </div>
           ${dr.justification ? `<div style="color:var(--muted);font-size:12px;margin-top:6px;font-style:italic;">"${escapeHtml(dr.justification)}"</div>` : ""}
           ${dr.decided_note ? `<div style="color:var(--muted);font-size:11.5px;margin-top:6px;border-top:1px dashed var(--line);padding-top:6px;"><b>Decision note:</b> ${escapeHtml(dr.decided_note)}</div>` : ""}
+          ${isPendingDr ? `
+            <div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);">
+              <button type="button" onclick="openDiscountDecisionModal('${escapeHtml(row.id)}')"
+                style="background:linear-gradient(180deg,#2a2010,#1a1408);color:#e8c989;border:1px solid #d4af6a;
+                       border-radius:6px;padding:8px 16px;font-size:11px;font-weight:700;
+                       letter-spacing:.10em;text-transform:uppercase;cursor:pointer;">
+                ▸ Decide on Discount Request
+              </button>
+            </div>` : ""}
         </div>
       </div>
     `;
@@ -16168,40 +16192,14 @@ function renderSubmissionDecisionBody(){
   const m = actionMeta[action];
   if(titleEl) titleEl.textContent = m.title;
 
-  // Discount-request decision section — only when there's a pending one
-  let drBlock = "";
+  // Heads-up if the discount request is still pending — the admin should
+  // handle that separately via the "Decide on Discount Request" button on
+  // the detail view. The estimate decision is strictly about the estimate.
+  let drPendingHint = "";
   if(dr && dr.status === "pending"){
-    drBlock = `
-      <div style="background:rgba(245,200,120,.06);border:1px solid #c98e2a;border-radius:8px;padding:14px;margin:14px 0;">
-        <div style="font-size:10px;color:#f5c878;font-weight:700;letter-spacing:.14em;margin-bottom:8px;">DISCOUNT REQUEST DECISION</div>
-        <div style="color:var(--ink);font-size:13px;margin-bottom:10px;">
-          Agent requested <b style="color:#f5c878;">$${Math.round(dr.amount||0).toLocaleString("en-US")}</b> off.
-          ${dr.justification ? `<div style="color:var(--muted);font-size:12px;margin-top:4px;font-style:italic;">"${escapeHtml(dr.justification)}"</div>` : ""}
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">
-          <label style="font-size:11px;letter-spacing:.10em;text-transform:uppercase;color:var(--gold-bright);font-weight:700;">Your decision:</label>
-          <select id="drDecisionSelect" onchange="onDrDecisionChange()" style="background:#0a0a0e;border:1px solid var(--line-strong);color:var(--ink);border-radius:6px;padding:7px 10px;font-size:13px;">
-            <option value="approve_as_requested">Approve as requested ($${Math.round(dr.amount||0).toLocaleString("en-US")})</option>
-            <option value="approve_modified">Approve modified amount</option>
-            <option value="reject">Reject discount</option>
-          </select>
-        </div>
-        <div id="drModifiedAmountWrap" style="display:none;margin-top:8px;">
-          <label style="font-size:11px;color:var(--muted);">Modified amount ($):</label>
-          <input type="number" id="drModifiedAmount" min="0" step="0.01" placeholder="Enter amount in dollars"
-            style="display:block;width:100%;max-width:240px;background:#0a0a0e;border:1px solid var(--line-strong);color:var(--ink);border-radius:6px;padding:7px 10px;font-size:13px;margin-top:4px;">
-        </div>
-      </div>
-    `;
-  }
-
-  // For non-approve actions with a pending discount request, the discount
-  // is implicitly rejected — show a small note explaining this.
-  let drImplicitNote = "";
-  if(dr && dr.status === "pending" && action !== "approve"){
-    drImplicitNote = `
-      <div style="background:rgba(255,144,144,.06);border:1px solid #8a2828;border-radius:6px;padding:10px 12px;margin:10px 0;font-size:12px;color:#cfcfcf;">
-        Note: the pending discount request will be automatically <b style="color:#ff9090;">rejected</b> as part of this decision (admin can revisit if agent resubmits).
+    drPendingHint = `
+      <div style="background:rgba(245,200,120,.06);border:1px solid #c98e2a;border-radius:6px;padding:10px 12px;margin:10px 0;font-size:12px;color:#cfcfcf;">
+        Heads-up: there's a pending discount request on this submission. It is decided <b>separately</b> — use the "Decide on Discount Request" button on the detail view. Your decision here applies only to the estimate.
       </div>
     `;
   }
@@ -16214,7 +16212,7 @@ function renderSubmissionDecisionBody(){
       </div>
     </div>
 
-    ${action === "approve" ? drBlock : drImplicitNote}
+    ${drPendingHint}
 
     <label style="display:block;font-size:11px;color:var(--gold-bright);font-weight:700;letter-spacing:.10em;text-transform:uppercase;margin-bottom:6px;">${m.noteLabel}</label>
     <textarea id="decisionNoteInput" rows="4" placeholder="${escapeHtml(action==="approve" ? "Optional message — visible to the agent." : "Required — visible to the agent.")}"
@@ -16233,11 +16231,180 @@ function renderSubmissionDecisionBody(){
   `;
 }
 
-function onDrDecisionChange(){
-  const sel = document.getElementById("drDecisionSelect");
-  const wrap = document.getElementById("drModifiedAmountWrap");
-  if(sel && wrap){
-    wrap.style.display = sel.value === "approve_modified" ? "" : "none";
+/* ===== DISCOUNT REQUEST DECISION (independent of estimate decision) =====
+   Opens from the "Decide on Discount Request" button on the detail
+   view. Writes ONLY to state.discount_request, never touches
+   state.status or state.admin_review. Three options:
+     - Approve as requested (amount = original request)
+     - Propose new amount (admin enters a different number)
+     - Reject (set to 0) */
+
+let currentDiscountContext = null; // { estimateId, row }
+
+function openDiscountDecisionModal(estimateId){
+  const row = submissionsList.find(r => r.id === estimateId);
+  if(!row){ alert("Submission not found — try refreshing the queue."); return; }
+  const dr = row.state && row.state.discount_request;
+  if(!dr || dr.status !== "pending"){
+    alert("This discount request is no longer pending.");
+    return;
+  }
+  currentDiscountContext = { estimateId, row };
+  const modal = document.getElementById("discountDecisionModal");
+  if(modal) modal.classList.add("show");
+  renderDiscountDecisionBody();
+}
+
+function closeDiscountDecisionModal(){
+  const modal = document.getElementById("discountDecisionModal");
+  if(modal) modal.classList.remove("show");
+  currentDiscountContext = null;
+}
+
+function renderDiscountDecisionBody(){
+  const body = document.getElementById("discountDecisionBody");
+  if(!body || !currentDiscountContext) return;
+  const { row } = currentDiscountContext;
+  const s = row.state || {};
+  const dr = s.discount_request || {};
+  const sub = s.submission || {};
+  const agentName = sub.submitted_by_name || sub.submitted_by_email || "Unknown agent";
+  const propAddr = s.propAddress || s.propName || row.name || "—";
+  const reqAmt = Math.round(dr.amount||0);
+
+  body.innerHTML = `
+    <div style="background:var(--panel-2);border:1px solid #c98e2a;border-radius:8px;padding:12px 14px;margin-bottom:14px;">
+      <div style="font-size:11px;color:#f5c878;font-weight:700;letter-spacing:.10em;text-transform:uppercase;margin-bottom:4px;">Pending Discount Request</div>
+      <div style="color:var(--ink);font-size:13px;line-height:1.5;margin-bottom:6px;">
+        <b>${escapeHtml(agentName)}</b> · ${escapeHtml(propAddr)}
+      </div>
+      <div style="color:var(--ink);font-size:14px;">
+        Requested: <b style="color:#f5c878;">$${reqAmt.toLocaleString("en-US")}</b> off
+      </div>
+      ${dr.justification ? `<div style="color:var(--muted);font-size:12px;margin-top:6px;font-style:italic;">"${escapeHtml(dr.justification)}"</div>` : ""}
+    </div>
+
+    <label style="display:block;font-size:11px;color:var(--gold-bright);font-weight:700;letter-spacing:.10em;text-transform:uppercase;margin-bottom:8px;">Your Decision</label>
+    <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px;">
+      <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#0a0a0e;border:1px solid var(--line-strong);border-radius:6px;cursor:pointer;">
+        <input type="radio" name="dr_choice" value="approve_as_requested" checked onchange="onDiscountChoiceChange()">
+        <span style="color:#5fce86;font-weight:600;">Approve as requested</span>
+        <span style="color:var(--muted);font-size:12px;">— $${reqAmt.toLocaleString("en-US")} off</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#0a0a0e;border:1px solid var(--line-strong);border-radius:6px;cursor:pointer;">
+        <input type="radio" name="dr_choice" value="propose_modified" onchange="onDiscountChoiceChange()">
+        <span style="color:#f5c878;font-weight:600;">Propose new discount</span>
+        <span style="color:var(--muted);font-size:12px;">— admin sets the amount</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#0a0a0e;border:1px solid var(--line-strong);border-radius:6px;cursor:pointer;">
+        <input type="radio" name="dr_choice" value="reject" onchange="onDiscountChoiceChange()">
+        <span style="color:#ff9090;font-weight:600;">Reject</span>
+        <span style="color:var(--muted);font-size:12px;">— no discount applied</span>
+      </label>
+    </div>
+
+    <div id="drProposedAmountWrap" style="display:none;margin-bottom:12px;">
+      <label style="display:block;font-size:11px;color:var(--gold-bright);font-weight:700;letter-spacing:.10em;text-transform:uppercase;margin-bottom:6px;">Proposed Amount ($)</label>
+      <input type="number" id="drProposedAmount" min="0" step="0.01" placeholder="Enter amount in dollars"
+        style="width:100%;max-width:240px;background:#0a0a0e;border:1px solid var(--line-strong);color:var(--ink);border-radius:6px;padding:9px 12px;font-size:14px;">
+    </div>
+
+    <label style="display:block;font-size:11px;color:var(--gold-bright);font-weight:700;letter-spacing:.10em;text-transform:uppercase;margin-bottom:6px;">Note to agent (optional)</label>
+    <textarea id="drDecisionNote" rows="3" placeholder="Why this decision? Visible to the agent."
+      style="width:100%;background:#0a0a0e;border:1px solid var(--line-strong);color:var(--ink);border-radius:6px;padding:9px 12px;font-size:13px;resize:vertical;"></textarea>
+
+    <div id="drDecisionStatusMsg" style="font-size:12.5px;margin-top:10px;min-height:18px;color:#ff9090;"></div>
+
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
+      <button class="ghost" onclick="closeDiscountDecisionModal()">Cancel</button>
+      <button id="drDecisionConfirmBtn" class="primary" onclick="confirmDiscountDecision()">Save Decision</button>
+    </div>
+  `;
+}
+
+function onDiscountChoiceChange(){
+  const radios = document.querySelectorAll('input[name="dr_choice"]');
+  let choice = "approve_as_requested";
+  radios.forEach(r => { if(r.checked) choice = r.value; });
+  const wrap = document.getElementById("drProposedAmountWrap");
+  if(wrap) wrap.style.display = (choice === "propose_modified") ? "" : "none";
+}
+
+async function confirmDiscountDecision(){
+  if(!currentDiscountContext) return;
+  const { estimateId, row } = currentDiscountContext;
+  const statusEl = document.getElementById("drDecisionStatusMsg");
+  const btn = document.getElementById("drDecisionConfirmBtn");
+
+  // Pull the radio choice
+  let choice = "approve_as_requested";
+  document.querySelectorAll('input[name="dr_choice"]').forEach(r => { if(r.checked) choice = r.value; });
+
+  const oldState = row.state || {};
+  const oldDr = oldState.discount_request || {};
+
+  // Compute decided amount + status
+  let decidedAmount = 0;
+  let newDrStatus = "rejected";
+  if(choice === "approve_as_requested"){
+    newDrStatus  = "approved";
+    decidedAmount = oldDr.amount || 0;
+  } else if(choice === "propose_modified"){
+    const amtEl = document.getElementById("drProposedAmount");
+    const amt = amtEl ? parseFloat(amtEl.value) : NaN;
+    if(!isFinite(amt) || amt < 0){
+      statusEl.textContent = "Enter a valid amount (0 or higher).";
+      return;
+    }
+    newDrStatus = "approved";
+    decidedAmount = amt;
+  } else {
+    newDrStatus = "rejected";
+    decidedAmount = 0;
+  }
+
+  const noteEl = document.getElementById("drDecisionNote");
+  const note = (noteEl && noteEl.value || "").trim();
+
+  // Build new state — TOUCHES ONLY discount_request, never status or admin_review
+  const newState = JSON.parse(JSON.stringify(oldState));
+  newState.discount_request = Object.assign({}, oldDr, {
+    status:         newDrStatus,
+    decided_amount: decidedAmount,
+    decided_note:   note || null,
+    decided_at:     new Date().toISOString(),
+    decided_by:     currentUser ? currentUser.email : null
+  });
+
+  if(btn){ btn.disabled = true; btn.textContent = "Saving…"; }
+  statusEl.style.color = "var(--muted)";
+  statusEl.textContent = "Writing decision to cloud…";
+
+  try {
+    const { error } = await supa.from("estimates")
+      .update({ state: newState, updated_at: new Date().toISOString() })
+      .eq("id", estimateId);
+    if(error) throw error;
+
+    // Update local cache so detail view reflects immediately
+    row.state = newState;
+
+    statusEl.style.color = "#5fce86";
+    statusEl.textContent = "✓ Discount decision saved.";
+    if(btn) btn.textContent = "Saved ✓";
+
+    setTimeout(() => {
+      closeDiscountDecisionModal();
+      // Re-render the detail view to show the new discount status
+      currentSubmissionDetail = row;
+      renderSubmissionDetail();
+      renderSubmissionsList();
+    }, 900);
+  } catch(e){
+    console.error("[submissions] Discount decision write failed:", e);
+    statusEl.style.color = "#ff9090";
+    statusEl.textContent = "Failed: " + (e && e.message ? e.message : String(e));
+    if(btn){ btn.disabled = false; btn.textContent = "Retry"; }
   }
 }
 
@@ -16255,37 +16422,9 @@ async function confirmSubmissionDecision(){
     return;
   }
 
-  // Compute discount-request decision
+  // Estimate decision touches state.status + state.admin_review ONLY.
+  // The discount request is decided separately via openDiscountDecisionModal.
   const oldState = row.state || {};
-  const oldDr = oldState.discount_request;
-  let drDecision = null; // { status, decided_amount, decided_note, decided_at, decided_by }
-  if(oldDr && oldDr.status === "pending"){
-    if(action === "approve"){
-      const sel = document.getElementById("drDecisionSelect");
-      const choice = sel ? sel.value : "approve_as_requested";
-      if(choice === "approve_as_requested"){
-        drDecision = { status: "approved", decided_amount: oldDr.amount };
-      } else if(choice === "approve_modified"){
-        const amtEl = document.getElementById("drModifiedAmount");
-        const amt = amtEl ? parseFloat(amtEl.value) : NaN;
-        if(!isFinite(amt) || amt < 0){
-          statusEl.textContent = "Enter a valid modified discount amount.";
-          return;
-        }
-        drDecision = { status: "approved", decided_amount: amt };
-      } else {
-        drDecision = { status: "rejected", decided_amount: 0 };
-      }
-    } else {
-      // changes_requested or reject → discount is implicitly rejected
-      drDecision = { status: "rejected", decided_amount: 0 };
-    }
-    drDecision.decided_note = note || null;
-    drDecision.decided_at = new Date().toISOString();
-    drDecision.decided_by = currentUser ? currentUser.email : null;
-  }
-
-  // Build new state
   const newStatus = action === "approve" ? "approved"
                   : action === "request_changes" ? "request_changes"
                   : "rejected";
@@ -16298,9 +16437,6 @@ async function confirmSubmissionDecision(){
     note: note || null,
     decided_at: new Date().toISOString()
   };
-  if(drDecision){
-    newState.discount_request = Object.assign({}, oldDr, drDecision);
-  }
 
   if(btn){ btn.disabled = true; btn.textContent = "Saving…"; }
   statusEl.style.color = "var(--muted)";
