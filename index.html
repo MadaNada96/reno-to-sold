@@ -13992,6 +13992,18 @@ function renderEstimateStatusBanner(){
     if(existing) existing.remove();
     return;
   }
+  /* Banner is agent-facing only — informs the agent about their
+     submission's status. Admins have the Submissions dashboard for
+     this information and don't need it in the estimator. Hiding it
+     for admins also prevents confusing leakage when an admin has the
+     agent's submission snapshot loaded (e.g. during contractor-bid
+     review). */
+  try {
+    if(typeof isAdmin === "function" && isAdmin()){
+      if(existing) existing.remove();
+      return;
+    }
+  } catch(e){}
   const status = state.status;
   const d = statusPillData(status);
   let body = "";
