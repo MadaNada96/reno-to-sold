@@ -11639,15 +11639,14 @@ async function loadReceivedBids(){
   }
   document.getElementById("rbList").innerHTML = "<div class='rb-empty'>Loading...</div>";
   try{
-    const { data, error } = await supa.from("contractor_bids")
-      .select("*")
-      .eq("user_id", currentUser.id)
-      .order("created_at", { ascending:false });
-    if(error) throw error;
-    _receivedBidsCache = data || [];
+    // Bypass supa.from to avoid the supabase-js hang. Use restFetch.
+    const path = "contractor_bids?user_id=eq." + encodeURIComponent(currentUser.id) +
+      "&order=created_at.desc&limit=500";
+    const data = await restFetch(path);
+    _receivedBidsCache = Array.isArray(data) ? data : [];
     renderReceivedBidsList();
   }catch(e){
-    document.getElementById("rbList").innerHTML = "<div class='rb-empty'>Couldn't load bids: " + escapeHtml(e.message) + "</div>";
+    document.getElementById("rbList").innerHTML = "<div class='rb-empty'>Couldn't load bids: " + escapeHtml(e.message || String(e)) + "</div>";
   }
 }
 function renderReceivedBidsList(){
@@ -11999,42 +11998,40 @@ function renderRevisionSnapshot(snap, cats){
 async function acceptReceivedBid(token){
   if(!confirm("Accept this bid? The contractor's link will become read-only and they can no longer revise.")) return;
   try{
-    const { error } = await supa.from("contractor_bids")
-      .update({ status:"accepted", accepted_at: new Date().toISOString() })
-      .eq("user_id", currentUser.id)
-      .eq("bid_token", token);
-    if(error) throw error;
+    // dbUpdate uses restFetch — bypasses the supabase-js hang
+    await dbUpdate("contractor_bids",
+      { user_id: currentUser.id, bid_token: token },
+      { status: "accepted", accepted_at: new Date().toISOString() }
+    );
     flash("Bid accepted");
     await loadReceivedBids();
     setReceivedBidsTab("accepted");
     setTimeout(() => expandReceivedBid(token), 100);
-  }catch(e){ alert("Couldn't accept: " + e.message); }
+  }catch(e){ alert("Couldn't accept: " + (e.message || e)); }
 }
 async function reopenReceivedBid(token){
   if(!confirm("Reopen this bid for revision? The contractor's link will become editable again.")) return;
   try{
-    const { error } = await supa.from("contractor_bids")
-      .update({ status:"submitted", accepted_at:null })
-      .eq("user_id", currentUser.id)
-      .eq("bid_token", token);
-    if(error) throw error;
+    await dbUpdate("contractor_bids",
+      { user_id: currentUser.id, bid_token: token },
+      { status: "submitted", accepted_at: null }
+    );
     flash("Bid reopened");
     await loadReceivedBids();
     setReceivedBidsTab("submitted");
     setTimeout(() => expandReceivedBid(token), 100);
-  }catch(e){ alert("Couldn't reopen: " + e.message); }
+  }catch(e){ alert("Couldn't reopen: " + (e.message || e)); }
 }
 async function cancelReceivedBid(token){
   if(!confirm("Cancel this bid request? The contractor's link will become read-only. This keeps the record visible in your Bids list — use Delete to remove it entirely.")) return;
   try{
-    const { error } = await supa.from("contractor_bids")
-      .update({ status:"cancelled" })
-      .eq("user_id", currentUser.id)
-      .eq("bid_token", token);
-    if(error) throw error;
+    await dbUpdate("contractor_bids",
+      { user_id: currentUser.id, bid_token: token },
+      { status: "cancelled" }
+    );
     flash("Bid cancelled");
     await loadReceivedBids();
-  }catch(e){ alert("Couldn't cancel: " + e.message); }
+  }catch(e){ alert("Couldn't cancel: " + (e.message || e)); }
 }
 /* Permanently removes the bid row. The contractor's link becomes invalid
    (the Edge Function returns "Bid not found" once the row is gone). */
@@ -12043,14 +12040,10 @@ async function deleteReceivedBid(token){
   const who = bid ? (bid.contractor_company || bid.sent_to_email || "this contractor") : "this contractor";
   if(!confirm(`Permanently delete this bid from ${who}? The contractor's link will stop working immediately. This cannot be undone.`)) return;
   try{
-    const { error } = await supa.from("contractor_bids")
-      .delete()
-      .eq("user_id", currentUser.id)
-      .eq("bid_token", token);
-    if(error) throw error;
+    await dbDelete("contractor_bids", { user_id: currentUser.id, bid_token: token });
     flash("Bid deleted");
     await loadReceivedBids();
-  }catch(e){ alert("Couldn't delete: " + e.message); }
+  }catch(e){ alert("Couldn't delete: " + (e.message || e)); }
 }
 
 /* Build the scope_data JSON that gets stored on the bid record and rendered
