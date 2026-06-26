@@ -15690,13 +15690,22 @@ async function loadSubmissions(){
       throw new Error("Session may be stale — try signing out and back in. (" + (authErr.message || "auth timeout") + ")");
     }
 
-    /* STAGE 2: actual query. Same defensive pattern as before — cap at
-       500 rows, filter status != draft in JS. */
+    /* STAGE 2: actual query. PERFORMANCE FIX — filter draft estimates
+       at the DB level (most agents have many drafts in progress; we
+       don't need them in the admin queue). Cap at 100 rows since
+       realistic admin volume is well under that. Together this is the
+       difference between potentially shipping 25MB of state JSONB and
+       shipping just the rows you actually need.
+
+       The .not("state->>status","is",null) clause also excludes any
+       legacy rows without a status field. */
     const queryPromise = supa.from("estimates")
       .select("id,user_id,client_id,name,state,updated_at")
       .eq("type", "estimate")
+      .not("state->>status", "is", null)
+      .neq("state->>status", "draft")
       .order("updated_at", { ascending: false })
-      .limit(500);
+      .limit(100);
     const timeoutPromise = new Promise((_, reject) =>
       setTimeout(() => reject(new Error("Loading timed out after " + (LOAD_TIMEOUT_MS/1000) + "s — Supabase may be slow. Try Refresh.")), LOAD_TIMEOUT_MS)
     );
