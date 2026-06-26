@@ -5713,39 +5713,90 @@ function renderAll(){
 
 /* For agents (can't apply discounts directly), replace the Custom
    Discount toggle UI with a "Request Additional Discount" button.
-   For admins/staff, leave the existing toggle alone. */
+   For admins/staff, leave the existing toggle alone.
+
+   Aggressively hides ALL the % / flat-$ / note elements so there's
+   no leak of admin-only controls into the agent view. */
 function applyAgentDiscountUI(){
   const swCustomRow = document.getElementById("sw-custom");
-  if(!swCustomRow) return;
-  const toggleRow = swCustomRow.closest(".disc-toggle-row");
   const fields = document.getElementById("customDiscFields");
-  // Look for / create the agent panel
+  const toggleRow = swCustomRow ? swCustomRow.closest(".disc-toggle-row") : null;
+
   let agentPanel = document.getElementById("agentDiscRequestPanel");
   if(!isAgent()){
-    // Make sure standard toggle is visible, agent panel gone
+    // Restore standard UI for admin/staff
     if(toggleRow) toggleRow.style.display = "";
+    if(fields){
+      // Standard CSS controls visibility based on the toggle state —
+      // don't force-hide here, let the standard render handle it.
+    }
     if(agentPanel) agentPanel.remove();
     return;
   }
-  // Agent view: hide standard toggle + the custom fields, show our panel
-  if(toggleRow) toggleRow.style.display = "none";
-  if(fields) fields.classList.add("hidden");
+
+  /* Agent view — bulletproof hiding of the original custom-discount
+     UI. We hide BOTH the toggle row AND the inner fields (Type drop-down
+     with %/$ options, Amount, Note) so there's no way for an agent
+     to even see those controls, let alone interact with them. */
+  if(toggleRow){
+    toggleRow.style.display = "none";
+  }
+  if(fields){
+    fields.style.display = "none";
+    fields.classList.add("hidden");
+  }
+  // Also defensively reset any saved custom-discount state on the
+  // agent's local — they can't apply one, period.
+  try {
+    if(state.discount){
+      state.discount.customEnabled = false;
+      state.discount.customValue = "";
+      state.discount.customType = "percent";
+      state.discount.customNote = "";
+    }
+  } catch(e){}
+
   const dr = state.discount_request;
-  const drBlock = dr ? `
-    <div style="background:rgba(212,175,106,.06);border:1px solid var(--line);border-radius:6px;padding:10px 12px;margin-top:8px;font-size:12.5px;color:#cfcfcf;">
-      ${renderStatusPill(dr.status === "approved" ? "approved" : dr.status === "rejected" ? "rejected" : "submitted")}
-      <div style="margin-top:6px;">Requested <b style="color:#f5c878;">$${Math.round(dr.amount||0).toLocaleString("en-US")}</b> off</div>
-      ${dr.justification ? `<div style="color:var(--muted);font-size:11.5px;margin-top:4px;">"${escapeHtml(dr.justification)}"</div>` : ""}
-      ${dr.status === "approved" && dr.decided_amount !== undefined ? `<div style="margin-top:6px;color:#5fce86;">Approved at $${Math.round(dr.decided_amount).toLocaleString("en-US")}</div>` : ""}
-      ${dr.status === "rejected" && dr.decided_note ? `<div style="margin-top:6px;color:#ff9090;">${escapeHtml(dr.decided_note)}</div>` : ""}
-    </div>
-  ` : "";
+  const isPending = dr && dr.status === "pending";
+  const isApproved = dr && dr.status === "approved";
+  const isRejected = dr && dr.status === "rejected";
+
+  // Status block under the button
+  let drBlock = "";
+  if(dr){
+    if(isPending){
+      drBlock = `
+        <div style="background:rgba(245,200,120,.08);border:1px solid #c98e2a;border-radius:6px;padding:10px 12px;margin-top:8px;font-size:12.5px;color:#cfcfcf;">
+          <div style="font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#f5c878;font-weight:700;margin-bottom:6px;">
+            ⏳ Pending Approval — Not Applied to Total
+          </div>
+          <div>Requested <b style="color:#f5c878;">$${Math.round(dr.amount||0).toLocaleString("en-US")}</b> off</div>
+          ${dr.justification ? `<div style="color:var(--muted);font-size:11.5px;margin-top:4px;font-style:italic;">"${escapeHtml(dr.justification)}"</div>` : ""}
+          <div style="margin-top:8px;font-size:11px;color:var(--muted);">This request will be reviewed when you submit the estimate. The discount is NOT included in the total below until Reno to Sold approves it.</div>
+        </div>`;
+    } else if(isApproved){
+      drBlock = `
+        <div style="background:rgba(95,206,134,.08);border:1px solid #2e7e4e;border-radius:6px;padding:10px 12px;margin-top:8px;font-size:12.5px;color:#cfcfcf;">
+          <div style="font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#5fce86;font-weight:700;margin-bottom:6px;">✓ Approved by Reno to Sold</div>
+          <div>Discount applied: <b style="color:#5fce86;">$${Math.round(dr.decided_amount !== undefined ? dr.decided_amount : dr.amount).toLocaleString("en-US")}</b></div>
+          ${(dr.decided_amount !== undefined && dr.decided_amount !== dr.amount) ? `<div style="font-size:11px;color:var(--muted);margin-top:4px;">(Requested $${Math.round(dr.amount).toLocaleString("en-US")})</div>` : ""}
+        </div>`;
+    } else if(isRejected){
+      drBlock = `
+        <div style="background:rgba(255,144,144,.08);border:1px solid #8a2828;border-radius:6px;padding:10px 12px;margin-top:8px;font-size:12.5px;color:#cfcfcf;">
+          <div style="font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#ff9090;font-weight:700;margin-bottom:6px;">✗ Not Approved</div>
+          <div>Requested $${Math.round(dr.amount||0).toLocaleString("en-US")}</div>
+          ${dr.decided_note ? `<div style="color:var(--muted);font-size:11.5px;margin-top:4px;font-style:italic;">"${escapeHtml(dr.decided_note)}"</div>` : ""}
+        </div>`;
+    }
+  }
+
   const panelHtml = `
     <div id="agentDiscRequestPanel" class="disc-toggle-row" style="flex-direction:column;align-items:stretch;gap:6px;cursor:default;">
       <div style="display:flex;align-items:center;gap:14px;">
         <div class="toggle-info" style="flex:1;">
           <div class="cat-title">Additional Discount</div>
-          <div class="cat-sub">Beyond the 10% listing discount, additional discounts require Reno to Sold approval.</div>
+          <div class="cat-sub">Flat $ off, beyond the 10% listing discount. <b style="color:#f5c878;">Requires Reno to Sold approval before it applies to your client's total.</b></div>
         </div>
         <button onclick="openDiscountRequestModal()" ${isEstimateLocked() ? "disabled" : ""}
           style="background:linear-gradient(180deg,#2a2010,#1a1408);color:#e8c989;border:1px solid #d4af6a;
@@ -14005,8 +14056,16 @@ function openDiscountRequestModal(){
   const existing = state.discount_request;
   const isLocked = isEstimateLocked();
   document.getElementById("discountRequestBody").innerHTML = `
-    <p style="font-size:13px;line-height:1.55;color:#cfcfcf;margin-bottom:14px;">
-      The 10% listing discount is yours to apply directly. For any additional discount, submit a request below — Reno to Sold will review it with the submitted estimate.
+    <div style="background:rgba(245,200,120,.10);border:1px solid #c98e2a;border-radius:8px;padding:12px 14px;margin-bottom:16px;">
+      <div style="font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:#f5c878;font-weight:700;margin-bottom:6px;">
+        ⏳ Pending Approval — Not Guaranteed
+      </div>
+      <div style="font-size:12.5px;color:#cfcfcf;line-height:1.55;">
+        Submitting this is a <b>request</b>, not a discount applied. Reno to Sold reviews every request along with the submitted estimate and may approve, modify the amount, or decline. The discount will <b style="color:#f5c878;">NOT</b> appear on your client's estimate total until approved.
+      </div>
+    </div>
+    <p style="font-size:12.5px;line-height:1.55;color:#cfcfcf;margin-bottom:14px;">
+      The 10% listing discount is yours to apply directly. This form is for <b>additional flat $ discounts</b> beyond the listing discount.
     </p>
     <label style="display:block;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:4px;">Discount Amount ($)</label>
     <input type="number" id="drAmount" min="0" step="50" value="${existing ? existing.amount || "" : ""}" placeholder="500" ${isLocked ? "disabled" : ""}
