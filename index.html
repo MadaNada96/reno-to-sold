@@ -11061,7 +11061,18 @@ async function sendEstimateEmail(){
       filename
     };
 
-    const { data, error } = await supa.functions.invoke('email-estimate', { body: payload });
+    /* 60-second hard timeout. Normal sends take 5-15 seconds even for
+       2MB PDFs. Past 60s something is genuinely wrong (Edge Function
+       cold start, Resend down, Supabase hang) and we should surface
+       a clear error rather than block the UI indefinitely. */
+    const EMAIL_SEND_TIMEOUT_MS = 60000;
+    const t0 = Date.now();
+    const invokePromise = supa.functions.invoke('email-estimate', { body: payload });
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Email send timed out after " + (EMAIL_SEND_TIMEOUT_MS/1000) + "s — Edge Function may be slow or down. Please try again. If this keeps happening, contact support.")), EMAIL_SEND_TIMEOUT_MS)
+    );
+    const { data, error } = await Promise.race([invokePromise, timeoutPromise]);
+    console.log("[email] Send completed in " + (Date.now()-t0) + "ms");
     if(error){
       throw new Error(error.message || "Edge Function error");
     }
