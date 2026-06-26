@@ -14478,6 +14478,55 @@ function saveCachedProfile(profile){
   } catch(e){}
 }
 
+/* ===== restFetch: plain-fetch helper for PostgREST =====
+   Diagnostic proved supabase-js's internal fetch wrapper hangs on
+   some queries (Network tab showed no requests being made, while plain
+   fetch to the same endpoint completed in 358ms). This helper does
+   the same job as supa.from(...).select(...) but bypasses supabase-js
+   entirely. Uses the access token from localStorage so it doesn't
+   depend on supa.auth.getSession either.
+
+   path:  "profiles?id=eq.UUID&select=*"  (no leading slash)
+   opts:  { single: true, headers: {...}, method, body } */
+function getStoredAuthToken(){
+  try {
+    const ref = (SUPABASE_URL.match(/https?:\/\/([^.]+)\./) || [])[1];
+    if(!ref) return null;
+    const stored = JSON.parse(localStorage.getItem("sb-" + ref + "-auth-token") || "{}");
+    return stored && stored.access_token || null;
+  } catch(e){ return null; }
+}
+
+async function restFetch(path, opts){
+  opts = opts || {};
+  const token = getStoredAuthToken();
+  const headers = Object.assign({
+    "apikey": SUPABASE_ANON_KEY,
+    "Content-Type": "application/json"
+  }, opts.headers || {});
+  if(token) headers["Authorization"] = "Bearer " + token;
+  if(opts.single) headers["Accept"] = "application/vnd.pgrst.object+json";
+  const url = SUPABASE_URL.replace(/\/$/, "") + "/rest/v1/" + path.replace(/^\//, "");
+  const init = {
+    method: opts.method || "GET",
+    headers: headers
+  };
+  if(opts.body) init.body = typeof opts.body === "string" ? opts.body : JSON.stringify(opts.body);
+  const r = await fetch(url, init);
+  const text = await r.text();
+  let data = null;
+  if(text){
+    try { data = JSON.parse(text); } catch(e){ data = text; }
+  }
+  if(!r.ok){
+    const msg = (data && data.message) || (data && data.error) || text || ("HTTP " + r.status);
+    const err = new Error(msg);
+    err.status = r.status;
+    throw err;
+  }
+  return data;
+}
+
 /* Fetches the profile row for the current authenticated user.
 
    Flow:
@@ -14508,13 +14557,23 @@ async function fetchCurrentProfile(){
   /* Helper: single attempt with a timeout. 8 seconds is generous —
      normal Supabase profile reads take 50-300ms. Anything past 8s
      means something is genuinely broken (cold start, network outage,
-     Supabase incident) and we should bail and retry. */
+     Supabase incident) and we should bail and retry.
+
+     ROOT-CAUSE WORKAROUND: uses plain fetch via restFetch helper
+     instead of supa.from(...).select(...). The supabase-js library
+     hangs internally on profile queries after page refresh — proven
+     by diagnostic where plain fetch returns in 358ms while the
+     library call times out at 8s. */
   const attemptFetch = async (timeoutMs, attemptLabel) => {
     const t0 = Date.now();
-    const queryPromise = supa.from("profiles")
-      .select("id,email,full_name,brokerage,phone,role,features,subscription_starts_at,subscription_expires_at,suspended")
-      .eq("id", currentUser.id)
-      .maybeSingle();
+    const selectCols = "id,email,full_name,brokerage,phone,role,features,subscription_starts_at,subscription_expires_at,suspended";
+    const queryPromise = restFetch("profiles?id=eq." + encodeURIComponent(currentUser.id) + "&select=" + selectCols, { single: true })
+      .then(data => ({ data: data, error: null }))
+      .catch(err => {
+        // 406 means "no row matched single-row expectation" — treat as no row
+        if(err && err.status === 406) return { data: null, error: null };
+        return { data: null, error: { message: (err && err.message) || "fetch error" } };
+      });
     const timeoutPromise = new Promise((resolve) =>
       setTimeout(() => resolve({ data: null, error: { message: "client-side timeout (" + timeoutMs + "ms)" } }), timeoutMs)
     );
@@ -15700,22 +15759,28 @@ async function loadSubmissions(){
       throw new Error("Session may be stale — try signing out and back in. (" + (authErr.message || "auth timeout") + ")");
     }
 
-    /* STAGE 2: actual query. PERFORMANCE FIX — filter draft estimates
-       at the DB level (most agents have many drafts in progress; we
-       don't need them in the admin queue). Cap at 100 rows since
-       realistic admin volume is well under that. Together this is the
-       difference between potentially shipping 25MB of state JSONB and
-       shipping just the rows you actually need.
+    /* STAGE 2: actual query. ROOT-CAUSE WORKAROUND — supabase-js
+       internally hangs on these reads (diagnostic-proven), so we use
+       plain fetch via restFetch. Filter draft estimates at DB level
+       (most agents have many drafts in progress; cap at 100 rows for
+       realistic admin volume).
 
-       The .not("state->>status","is",null) clause also excludes any
-       legacy rows without a status field. */
-    const queryPromise = supa.from("estimates")
-      .select("id,user_id,client_id,name,state,updated_at")
-      .eq("type", "estimate")
-      .not("state->>status", "is", null)
-      .neq("state->>status", "draft")
-      .order("updated_at", { ascending: false })
-      .limit(100);
+       The PostgREST URL syntax:
+         type=eq.estimate     → WHERE type = 'estimate'
+         state->>status=neq.draft → WHERE state->>'status' != 'draft'
+         state->>status=not.is.null → WHERE state->>'status' IS NOT NULL
+         order=updated_at.desc → ORDER BY updated_at DESC
+         limit=100             → LIMIT 100 */
+    const path = "estimates?" +
+      "select=" + encodeURIComponent("id,user_id,client_id,name,state,updated_at") +
+      "&type=eq.estimate" +
+      "&" + encodeURIComponent("state->>status") + "=not.is.null" +
+      "&" + encodeURIComponent("state->>status") + "=neq.draft" +
+      "&order=updated_at.desc" +
+      "&limit=100";
+    const queryPromise = restFetch(path)
+      .then(rows => ({ data: rows, error: null }))
+      .catch(err => ({ data: null, error: { message: (err && err.message) || "fetch error" } }));
     const timeoutPromise = new Promise((_, reject) =>
       setTimeout(() => reject(new Error("Loading timed out after " + (LOAD_TIMEOUT_MS/1000) + "s — Supabase may be slow. Try Refresh.")), LOAD_TIMEOUT_MS)
     );
