@@ -15633,20 +15633,39 @@ async function loadSubmissions(){
   }
   body.innerHTML = `<div style="padding:20px;text-align:center;color:var(--muted);">Loading submissions…</div>`;
 
-  /* 15s hard timeout. Normal admin queries return in 200-800ms. Past
-     15s something is broken (Supabase cold start, stale WebSocket,
-     network issue) and we should surface a retry option rather than
-     leave the user staring at the spinner forever. Same defensive
-     pattern as the profile fetch and email send timeouts. */
+  /* Two-stage defense:
+     1. Auth pre-check (5s) — if supa.auth.getSession() hangs, it means the
+        token refresh is stuck. We catch this BEFORE firing the query and
+        show a clearer error message + re-sign-in option.
+     2. Query timeout (15s) — covers the actual db query slowness case.
+     Differentiates "auth is broken" from "query is slow" instead of
+     lumping them together as a generic timeout. */
+  const AUTH_CHECK_TIMEOUT_MS = 5000;
   const LOAD_TIMEOUT_MS = 15000;
   const t0 = Date.now();
+  let authFailed = false;
 
   try {
-    /* Simple, reliable query: fetch all type=estimate rows ordered
-       by last update, filter for non-draft + has submission in JS.
-       RLS lets admin see ALL rows (user_id = auth.uid() OR is_admin()).
-       Cap at 500 rows for safety — way more than we expect in the
-       near term, but keeps the query bounded. */
+    /* STAGE 1: auth pre-check. If the supabase client's auth state is
+       stale (token refresh hanging after a hard refresh), this races a
+       5s timeout. Failing here points clearly at the auth issue
+       instead of a generic "Supabase is slow". */
+    const authT0 = Date.now();
+    const sessPromise = supa.auth.getSession();
+    const sessTimeout = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Auth check timed out at " + (AUTH_CHECK_TIMEOUT_MS/1000) + "s")), AUTH_CHECK_TIMEOUT_MS)
+    );
+    try {
+      await Promise.race([sessPromise, sessTimeout]);
+      console.log("[submissions] Auth check OK in " + (Date.now() - authT0) + "ms");
+    } catch(authErr){
+      authFailed = true;
+      console.warn("[submissions] Auth check failed:", authErr && authErr.message);
+      throw new Error("Session may be stale — try signing out and back in. (" + (authErr.message || "auth timeout") + ")");
+    }
+
+    /* STAGE 2: actual query. Same defensive pattern as before — cap at
+       500 rows, filter status != draft in JS. */
     const queryPromise = supa.from("estimates")
       .select("id,user_id,client_id,name,state,updated_at")
       .eq("type", "estimate")
@@ -15673,18 +15692,36 @@ async function loadSubmissions(){
     const elapsed = Date.now() - t0;
     console.error("[submissions] loadSubmissions failed after " + elapsed + "ms:", e);
     const errMsg = (e && e.message) ? e.message : String(e);
+    // Different action buttons depending on the failure type
+    const actionHtml = authFailed
+      ? `<button type="button" onclick="loadSubmissions()"
+            style="background:linear-gradient(180deg,#2a2010,#1a1408);color:#e8c989;border:1px solid #d4af6a;
+                   border-radius:6px;padding:9px 18px;font-size:11.5px;font-weight:700;
+                   letter-spacing:.10em;text-transform:uppercase;cursor:pointer;margin-right:8px;">
+            ↻ Retry
+          </button>
+          <button type="button" onclick="onAuthClick()"
+            style="background:linear-gradient(180deg,#2a1010,#1a0808);color:#ff9090;border:1px solid #8a2828;
+                   border-radius:6px;padding:9px 18px;font-size:11.5px;font-weight:700;
+                   letter-spacing:.10em;text-transform:uppercase;cursor:pointer;">
+            ⟲ Sign out & back in
+          </button>`
+      : `<button type="button" onclick="loadSubmissions()"
+            style="background:linear-gradient(180deg,#2a2010,#1a1408);color:#e8c989;border:1px solid #d4af6a;
+                   border-radius:6px;padding:9px 18px;font-size:11.5px;font-weight:700;
+                   letter-spacing:.10em;text-transform:uppercase;cursor:pointer;">
+            ↻ Retry
+          </button>`;
+    const helperText = authFailed
+      ? "The auth session check timed out — usually a stale token after a refresh. Signing out and back in resets the auth state."
+      : "If this keeps failing, try a hard refresh (Cmd+Shift+R) to reset the Supabase client.";
     body.innerHTML = `
       <div style="padding:24px 20px;text-align:center;">
-        <div style="color:#ff9090;font-size:13px;margin-bottom:12px;">Failed to load submissions.</div>
+        <div style="color:#ff9090;font-size:13px;margin-bottom:12px;">${authFailed ? "Auth check failed." : "Failed to load submissions."}</div>
         <div style="color:var(--muted);font-size:11.5px;margin-bottom:18px;line-height:1.5;">${escapeHtml(errMsg)}</div>
-        <button type="button" onclick="loadSubmissions()"
-          style="background:linear-gradient(180deg,#2a2010,#1a1408);color:#e8c989;border:1px solid #d4af6a;
-                 border-radius:6px;padding:9px 18px;font-size:11.5px;font-weight:700;
-                 letter-spacing:.10em;text-transform:uppercase;cursor:pointer;">
-          ↻ Retry
-        </button>
-        <div style="color:var(--muted);font-size:10.5px;margin-top:14px;opacity:.7;">
-          If this keeps failing, try a hard refresh (Cmd+Shift+R) to reset the Supabase client.
+        ${actionHtml}
+        <div style="color:var(--muted);font-size:10.5px;margin-top:14px;opacity:.7;line-height:1.5;">
+          ${escapeHtml(helperText)}
         </div>
       </div>
     `;
