@@ -15064,10 +15064,14 @@ function initSupabase(){
             console.error("[auth] setSession failed:", setSessErr.message || setSessErr);
           } else {
             console.log("[auth] URL-fragment session applied for " + (sessionData && sessionData.user && sessionData.user.email));
-            /* Recovery flow → force the password setup modal regardless
-               of past dismissals. The user JUST clicked Activate Account. */
+            /* Recovery flow → force the password setup modal to appear
+               on this session, regardless of past dismissals OR the
+               password_set metadata flag. The user JUST clicked
+               Activate Account, so they need a password. */
             if(linkType === "recovery"){
               try { localStorage.removeItem("rts_pw_setup_dismissed"); } catch(e){}
+              try { sessionStorage.setItem("rts_force_pw_setup", "1"); } catch(e){}
+              console.log("[auth] Force-pw-setup flag set for recovery flow");
             }
           }
         } else {
@@ -15153,13 +15157,28 @@ function initSupabase(){
    but the prompt nudges them to set one for easier future sign-ins. */
 function maybeShowPasswordSetupPrompt(){
   if(!currentUser) return;
+  /* Force flag: set when the URL fragment was a recovery link, meaning
+     the user JUST clicked Activate Account. In that case we must show
+     the modal regardless of password_set or any prior dismissal. */
+  let force = false;
+  try { force = (sessionStorage.getItem("rts_force_pw_setup") === "1"); } catch(e){}
+  if(force){
+    console.log("[auth] Password setup modal: forced by recovery flow");
+  }
   // Skip if they've already set a password (we track this in user_metadata)
   const meta = currentUser.user_metadata || {};
-  if(meta.password_set === true) return;
+  if(!force && meta.password_set === true) return;
   // Skip if they've explicitly dismissed it before (localStorage)
-  try { if(localStorage.getItem("rts_pw_setup_dismissed") === "1") return; } catch(e){}
+  if(!force){
+    try { if(localStorage.getItem("rts_pw_setup_dismissed") === "1") return; } catch(e){}
+  }
   // Skip if there's an existing modal showing
   if(document.getElementById("pwSetupModal")) return;
+  /* The force flag is consumed when the modal opens. Even if they
+     dismiss the modal right away, they won't be re-prompted on the
+     next page load — but they will if they click Activate Account
+     again from another email. */
+  try { sessionStorage.removeItem("rts_force_pw_setup"); } catch(e){}
 
   const modal = document.createElement("div");
   modal.id = "pwSetupModal";
