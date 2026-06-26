@@ -3812,9 +3812,11 @@
 </div>
 
 <!-- ============= SUBMISSIONS DASHBOARD (admin only) =============
-     Lists all estimates with a non-draft status. Phase 2 Drop 2 Slice A:
-     read-only view + live Realtime sync. Click rows do nothing yet
-     (Slice B will add detail view + decision actions). -->
+     Lists all estimates with a non-draft status. Phase 2 Drop 2:
+     - Slice A: read-only view + live Realtime sync
+     - Slice B (current): click row → submission detail modal
+     - Slice C: Approve / Request Changes / Reject buttons
+     - Slice D: email notifications to agent -->
 <div class="modal-bg" id="submissionsModal" onclick="if(event.target===this)closeSubmissionsModal()">
   <div class="modal" style="max-width:1100px;">
     <h3>
@@ -3826,6 +3828,21 @@
     </h3>
     <div class="modal-body" id="submissionsModalBody">
       <div style="padding:20px;text-align:center;color:var(--muted);">Loading submissions…</div>
+    </div>
+  </div>
+</div>
+
+<!-- Submission detail modal (Slice B). Opens when admin clicks a row.
+     Read-only display of the agent's frozen snapshot. Slice C will add
+     Approve / Request Changes / Reject decision buttons. -->
+<div class="modal-bg" id="submissionDetailModal" onclick="if(event.target===this)closeSubmissionDetail()">
+  <div class="modal" style="max-width:780px;">
+    <h3>
+      <span>Submission Detail</span>
+      <button class="ghost" onclick="closeSubmissionDetail()">Close</button>
+    </h3>
+    <div class="modal-body" id="submissionDetailBody">
+      <div style="padding:20px;text-align:center;color:var(--muted);">Loading…</div>
     </div>
   </div>
 </div>
@@ -13970,23 +13987,67 @@ function openSubmitForReviewModal(){
         ? "You've made the requested changes. Resubmit this estimate for Reno to Sold's review."
         : "Submit this estimate to Reno to Sold for review and approval. Once submitted, the estimate is <b>locked</b> until reviewed — you won't be able to edit it."}
     </p>
-    ${t ? `
-      <div style="background:#0a0a0e;border:1px solid var(--line-strong);border-radius:8px;padding:12px 14px;margin:14px 0;">
-        <div style="font-size:10.5px;color:var(--muted);letter-spacing:.14em;text-transform:uppercase;font-weight:700;margin-bottom:8px;">Submission Summary</div>
-        <div style="display:flex;justify-content:space-between;font-size:13px;color:#cfcfcf;line-height:1.7;">
-          <div>Property</div><div style="text-align:right;color:#f5f1e6;font-weight:600;">${escapeHtml(state.propAddress || state.propName || "—")}</div>
+    ${t ? (() => {
+      // Build a rich submission summary mirroring the on-screen
+      // Estimate Total card. Show labour/material split, listing
+      // discount (with %), after-discount, HST (13%), and the final
+      // total. Conditional rows for the discount lines.
+      const listingPct = (prices && prices.listingDiscount && prices.listingDiscount.percent) || 0;
+      const hasListingDisc = (t.listingDisc || 0) > 0.5;
+      const hasCustomDisc  = (t.customDisc  || 0) > 0.5;
+      const hasAnyDisc     = hasListingDisc || hasCustomDisc;
+      const propTitle = escapeHtml(state.propAddress || state.propName || "—");
+      return `
+      <div style="background:#0a0a0e;border:1px solid var(--gold-deep);border-radius:10px;padding:16px 18px;margin:14px 0;box-shadow:var(--gold-glow);">
+        <!-- Hero total + labour/material breakdown -->
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--line-strong);">
+          <div style="flex:1;min-width:180px;">
+            <div style="font-size:10px;color:var(--muted);letter-spacing:.14em;text-transform:uppercase;font-weight:700;">Estimate Total</div>
+            <div style="font-size:26px;color:var(--gold-bright);font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1;margin-top:4px;">${fmt(t.total||0)}</div>
+            <div style="font-size:12px;color:#f5f1e6;font-weight:600;margin-top:3px;">${propTitle}</div>
+          </div>
+          <div style="display:flex;gap:12px;align-items:center;font-size:12px;">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span style="display:inline-block;width:10px;height:10px;background:var(--labour);border-radius:2px;"></span>
+              <span style="color:var(--muted);">Labour</span>
+              <span style="color:var(--labour);font-weight:700;font-variant-numeric:tabular-nums;">${fmt(t.labour||0)}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span style="display:inline-block;width:10px;height:10px;background:var(--material);border-radius:2px;"></span>
+              <span style="color:var(--muted);">Material</span>
+              <span style="color:var(--material);font-weight:700;font-variant-numeric:tabular-nums;">${fmt(t.material||0)}</span>
+            </div>
+          </div>
         </div>
-        <div style="display:flex;justify-content:space-between;font-size:13px;color:#cfcfcf;line-height:1.7;">
-          <div>Subtotal</div><div style="text-align:right;color:#f5f1e6;font-variant-numeric:tabular-nums;">${fmt(t.subtotal||t.afterDiscount||(t.total/1.13))}</div>
+        <!-- Line-by-line breakdown -->
+        <div style="display:flex;justify-content:space-between;font-size:12.5px;color:#cfcfcf;line-height:1.9;letter-spacing:.04em;text-transform:uppercase;">
+          <div>Subtotal</div><div style="text-align:right;color:#f5f1e6;font-variant-numeric:tabular-nums;text-transform:none;">${fmt(t.subtotal||0)}</div>
         </div>
-        <div style="display:flex;justify-content:space-between;font-size:13px;color:#cfcfcf;line-height:1.7;">
-          <div>HST</div><div style="text-align:right;color:#f5f1e6;font-variant-numeric:tabular-nums;">${fmt(t.hst||0)}</div>
+        ${hasListingDisc ? `
+          <div style="display:flex;justify-content:space-between;font-size:12.5px;color:#cfcfcf;line-height:1.9;letter-spacing:.04em;text-transform:uppercase;">
+            <div>Listing Discount <span style="color:var(--muted);text-transform:none;letter-spacing:0;">(${Math.round(listingPct)}%)</span></div>
+            <div style="text-align:right;color:#ff9090;font-variant-numeric:tabular-nums;text-transform:none;">−${fmt(t.listingDisc||0)}</div>
+          </div>` : ""}
+        ${hasCustomDisc ? `
+          <div style="display:flex;justify-content:space-between;font-size:12.5px;color:#cfcfcf;line-height:1.9;letter-spacing:.04em;text-transform:uppercase;">
+            <div>Custom Discount</div>
+            <div style="text-align:right;color:#ff9090;font-variant-numeric:tabular-nums;text-transform:none;">−${fmt(t.customDisc||0)}</div>
+          </div>` : ""}
+        ${hasAnyDisc ? `
+          <div style="display:flex;justify-content:space-between;font-size:12.5px;color:#cfcfcf;line-height:1.9;letter-spacing:.04em;text-transform:uppercase;">
+            <div>After Discount</div>
+            <div style="text-align:right;color:#f5f1e6;font-variant-numeric:tabular-nums;text-transform:none;">${fmt(t.afterDisc||0)}</div>
+          </div>` : ""}
+        <div style="display:flex;justify-content:space-between;font-size:12.5px;color:#cfcfcf;line-height:1.9;letter-spacing:.04em;text-transform:uppercase;">
+          <div>HST <span style="color:var(--muted);text-transform:none;letter-spacing:0;">(13%)</span></div>
+          <div style="text-align:right;color:#f5f1e6;font-variant-numeric:tabular-nums;text-transform:none;">${fmt(t.hst||0)}</div>
         </div>
-        <div style="display:flex;justify-content:space-between;font-size:14px;color:#f5f1e6;font-weight:700;border-top:1px solid var(--line);padding-top:8px;margin-top:8px;">
-          <div>Total (incl. HST)</div><div style="text-align:right;color:var(--gold-bright);font-variant-numeric:tabular-nums;">${fmt(t.total||0)}</div>
+        <div style="display:flex;justify-content:space-between;font-size:15px;font-weight:700;border-top:1px solid var(--gold-deep);padding-top:10px;margin-top:8px;letter-spacing:.06em;text-transform:uppercase;">
+          <div style="color:var(--gold-bright);">Total</div>
+          <div style="text-align:right;color:var(--gold-bright);font-variant-numeric:tabular-nums;text-transform:none;letter-spacing:0;">${fmt(t.total||0)}</div>
         </div>
       </div>
-    ` : ""}
+    `;})() : ""}
     ${drBlock}
     <textarea id="submitNotesInput" placeholder="Optional: any notes for Reno to Sold..." rows="3" style="width:100%;padding:10px 12px;background:#0a0a0e;border:1px solid var(--line-strong);color:#f5f1e6;border-radius:6px;font-size:13px;margin-bottom:14px;resize:vertical;"></textarea>
     <div id="submitStatus" style="font-size:12.5px;min-height:18px;text-align:center;color:#ff9090;margin-bottom:10px;"></div>
@@ -15360,7 +15421,10 @@ function renderSubmissionsList(){
       `<span style="color:#f5c878;font-size:10px;margin-left:6px;font-weight:700;">⏳ DISC REQ</span>` : "";
 
     return `
-      <tr style="border-bottom:1px solid var(--line);">
+      <tr class="sub-row" data-estimate-id="${escapeHtml(r.id)}" style="border-bottom:1px solid var(--line);cursor:pointer;transition:background .12s;"
+          onmouseover="this.style.background='rgba(212,175,106,.06)'"
+          onmouseout="this.style.background='transparent'"
+          onclick="openSubmissionDetail('${escapeHtml(r.id)}')">
         <td style="padding:11px 12px;vertical-align:top;">
           <div style="color:var(--ink);font-weight:600;">${escapeHtml(agentName)}</div>
           ${agentEmail ? `<div style="color:var(--muted);font-size:11px;">${escapeHtml(agentEmail)}</div>` : ""}
@@ -15388,7 +15452,7 @@ function renderSubmissionsList(){
     </table>
     <p style="margin-top:14px;color:var(--muted);font-size:11px;text-align:center;">
       ${submissionsList.length} ${submissionsList.length === 1 ? "submission" : "submissions"} total.
-      Click-through review and decision actions coming in the next drop.
+      Click a row to view details. Decision actions coming next drop.
     </p>
   `;
 }
@@ -15443,6 +15507,199 @@ function unsubscribeFromSubmissions(){
     try { supa.removeChannel(submissionsRealtimeChannel); } catch(e){}
     submissionsRealtimeChannel = null;
   }
+}
+
+/* ===== SLICE B — SUBMISSION DETAIL MODAL =====
+   Opens when admin clicks a row in the submissions queue. Shows the
+   frozen snapshot read-only. Slice C will add decision buttons here. */
+
+let currentSubmissionDetail = null;   // the row currently being viewed
+
+// Friendly labels for state.enabled keys
+const SUBMISSION_CATEGORY_LABELS = {
+  painting:      "Painting",
+  doorsTrims:    "Doors & Trims",
+  flooring:      "Flooring",
+  tiling:        "Tiling",
+  kitchen:       "Kitchen",
+  bathroom:      "Bathroom",
+  potlights:     "Potlights",
+  wallRemoval:   "Wall Removal",
+  miscellaneous: "Miscellaneous"
+};
+
+function openSubmissionDetail(estimateId){
+  const row = submissionsList.find(r => r.id === estimateId);
+  if(!row){
+    alert("Submission not found — try refreshing the queue.");
+    return;
+  }
+  currentSubmissionDetail = row;
+  const modal = document.getElementById("submissionDetailModal");
+  if(modal) modal.classList.add("show");
+  renderSubmissionDetail();
+}
+
+function closeSubmissionDetail(){
+  const modal = document.getElementById("submissionDetailModal");
+  if(modal) modal.classList.remove("show");
+  currentSubmissionDetail = null;
+}
+
+function renderSubmissionDetail(){
+  const body = document.getElementById("submissionDetailBody");
+  if(!body || !currentSubmissionDetail) return;
+
+  const row = currentSubmissionDetail;
+  const s = row.state || {};
+  const sub = s.submission || {};
+  const status = s.status || "draft";
+  const totals = sub.totals_at_submission || {};
+  const dr = s.discount_request;
+
+  // Agent + brokerage info (brokerage may live in companyInfo)
+  const agentName = sub.submitted_by_name || sub.submitted_by_email || "Unknown agent";
+  const agentEmail = sub.submitted_by_email || "";
+  const brokerage = (s.companyInfo && s.companyInfo.brokerage) || "";
+
+  // Property + sellers
+  const propAddr = s.propAddress || s.propName || row.name || "—";
+  const propSqft = s.propSqft || "";
+  const sellers = Array.isArray(s.sellers)
+    ? s.sellers.filter(x => x && x.name).map(x => x.name).join(", ")
+    : "";
+
+  // Submission timing
+  const submittedAt = sub.submitted_at ? new Date(sub.submitted_at) : new Date(row.updated_at);
+  const dateStr = submittedAt.toLocaleString("en-US", { month:"short", day:"numeric", year:"numeric", hour:"numeric", minute:"2-digit" });
+
+  // Category list (state.enabled is { painting:true, flooring:false, ... })
+  const enabled = s.enabled || {};
+  const enabledKeys = Object.keys(enabled).filter(k => enabled[k]);
+  let catList;
+  if(enabledKeys.length){
+    catList = enabledKeys.map(k => {
+      const label = SUBMISSION_CATEGORY_LABELS[k] || k;
+      // For bathroom: show count if it's an array
+      let detail = "";
+      if(k === "bathroom" && Array.isArray(s.bathrooms)){
+        const n = s.bathrooms.length;
+        if(n) detail = ` <span style="color:var(--muted);">(${n} bathroom${n===1?"":"s"})</span>`;
+      }
+      return `<div style="padding:5px 0;color:var(--ink);font-size:13px;">✓ ${label}${detail}</div>`;
+    }).join("");
+  } else {
+    catList = `<div style="color:var(--muted);font-style:italic;">No categories enabled</div>`;
+  }
+
+  // Discount request block
+  let drHtml = "";
+  if(dr){
+    const drMap = {
+      pending:  { color: "#f5c878", label: "⏳ PENDING DECISION", bg: "rgba(245,200,120,.06)", border: "#c98e2a" },
+      approved: { color: "#5fce86", label: "✓ APPROVED",          bg: "rgba(95,206,134,.06)",  border: "#2e7e4e" },
+      rejected: { color: "#ff9090", label: "✗ NOT APPROVED",      bg: "rgba(255,144,144,.06)", border: "#8a2828" }
+    };
+    const m = drMap[dr.status] || drMap.pending;
+    const decided = (dr.decided_amount !== undefined && dr.decided_amount !== null && dr.decided_amount !== dr.amount);
+    drHtml = `
+      <div class="sd-section">
+        <div class="sd-label">DISCOUNT REQUEST</div>
+        <div style="background:${m.bg};border:1px solid ${m.border};border-radius:8px;padding:12px 14px;margin-top:6px;">
+          <div style="color:${m.color};font-size:10px;font-weight:700;letter-spacing:.14em;margin-bottom:6px;">${m.label}</div>
+          <div style="color:var(--ink);font-size:14px;font-weight:600;">
+            $${Math.round(dr.amount||0).toLocaleString("en-US")} off requested
+            ${decided ? `<span style="color:var(--muted);font-weight:400;font-size:12px;"> · approved at $${Math.round(dr.decided_amount).toLocaleString("en-US")}</span>` : ""}
+          </div>
+          ${dr.justification ? `<div style="color:var(--muted);font-size:12px;margin-top:6px;font-style:italic;">"${escapeHtml(dr.justification)}"</div>` : ""}
+          ${dr.decided_note ? `<div style="color:var(--muted);font-size:11.5px;margin-top:6px;border-top:1px dashed var(--line);padding-top:6px;"><b>Decision note:</b> ${escapeHtml(dr.decided_note)}</div>` : ""}
+        </div>
+      </div>
+    `;
+  }
+
+  // Agent notes block
+  let notesHtml = "";
+  if(sub.submitted_notes){
+    notesHtml = `
+      <div class="sd-section">
+        <div class="sd-label">AGENT NOTES</div>
+        <div style="background:var(--panel-2);border:1px solid var(--line-strong);border-radius:8px;padding:10px 14px;margin-top:6px;color:var(--ink);font-size:13px;font-style:italic;">
+          "${escapeHtml(sub.submitted_notes)}"
+        </div>
+      </div>
+    `;
+  }
+
+  // Admin review block (if a decision was previously made)
+  let arHtml = "";
+  if(s.admin_review){
+    const ar = s.admin_review;
+    const decidedAt = ar.decided_at ? new Date(ar.decided_at).toLocaleString("en-US", {month:"short",day:"numeric",year:"numeric",hour:"numeric",minute:"2-digit"}) : "";
+    arHtml = `
+      <div class="sd-section">
+        <div class="sd-label">PREVIOUS ADMIN DECISION</div>
+        <div style="background:var(--panel-2);border:1px solid var(--line-strong);border-radius:8px;padding:10px 14px;margin-top:6px;">
+          <div style="color:var(--ink);font-size:13px;font-weight:600;">Action: ${escapeHtml((ar.action||"—").toUpperCase().replace(/_/g," "))}</div>
+          ${ar.reviewer_email ? `<div style="color:var(--muted);font-size:11px;margin-top:3px;">By ${escapeHtml(ar.reviewer_email)}${decidedAt ? " · " + decidedAt : ""}</div>` : ""}
+          ${ar.note ? `<div style="color:var(--ink);font-size:12.5px;margin-top:6px;font-style:italic;">"${escapeHtml(ar.note)}"</div>` : ""}
+        </div>
+      </div>
+    `;
+  }
+
+  body.innerHTML = `
+    <style>
+      .sd-section { margin-bottom:18px; }
+      .sd-label { font-size:10px; letter-spacing:.16em; text-transform:uppercase; color:var(--gold-bright); font-weight:700; margin-bottom:6px; }
+      .sd-line { display:flex; justify-content:space-between; align-items:baseline; padding:5px 0; font-size:14px; color:var(--ink); }
+      .sd-line.total { border-top:1px solid var(--gold-deep); margin-top:8px; padding-top:10px; font-weight:700; color:var(--gold-bright); font-size:16px; }
+      .sd-line .sd-num { font-variant-numeric:tabular-nums; }
+    </style>
+
+    <div class="sd-section">
+      <div class="sd-label">AGENT</div>
+      <div style="color:var(--ink);font-size:15px;font-weight:600;">${escapeHtml(agentName)}</div>
+      ${agentEmail ? `<div style="color:var(--muted);font-size:12px;">${escapeHtml(agentEmail)}</div>` : ""}
+      ${brokerage ? `<div style="color:var(--muted);font-size:12px;">${escapeHtml(brokerage)}</div>` : ""}
+    </div>
+
+    <div class="sd-section">
+      <div class="sd-label">PROPERTY</div>
+      <div style="color:#e8c989;font-size:14px;font-weight:600;">${escapeHtml(propAddr)}</div>
+      ${propSqft ? `<div style="color:var(--muted);font-size:12px;margin-top:2px;">${escapeHtml(String(propSqft))} sqft</div>` : ""}
+      ${sellers ? `<div style="color:var(--muted);font-size:12px;margin-top:2px;">Sellers: ${escapeHtml(sellers)}</div>` : ""}
+    </div>
+
+    <div class="sd-section">
+      <div class="sd-label">STATUS</div>
+      <div>${renderSubStatusPill(status)} <span style="margin-left:10px;color:var(--muted);font-size:11px;">Submitted ${dateStr}</span></div>
+    </div>
+
+    ${notesHtml}
+    ${drHtml}
+    ${arHtml}
+
+    <div class="sd-section">
+      <div class="sd-label">TOTALS (frozen at submission)</div>
+      <div style="background:var(--panel-2);border:1px solid var(--line-strong);border-radius:8px;padding:12px 16px;margin-top:6px;">
+        <div class="sd-line"><span>Labour</span><span class="sd-num">$${Math.round(totals.labour||0).toLocaleString("en-US")}</span></div>
+        <div class="sd-line"><span>Material</span><span class="sd-num">$${Math.round(totals.material||0).toLocaleString("en-US")}</span></div>
+        <div class="sd-line"><span>Subtotal</span><span class="sd-num">$${Math.round(totals.subtotal||0).toLocaleString("en-US")}</span></div>
+        <div class="sd-line"><span>HST (13%)</span><span class="sd-num">$${Math.round(totals.hst||0).toLocaleString("en-US")}</span></div>
+        <div class="sd-line total"><span>TOTAL</span><span class="sd-num">$${Math.round(totals.total||0).toLocaleString("en-US")}</span></div>
+      </div>
+    </div>
+
+    <div class="sd-section">
+      <div class="sd-label">CATEGORIES INCLUDED</div>
+      <div style="background:var(--panel-2);border:1px solid var(--line-strong);border-radius:8px;padding:10px 14px;margin-top:6px;">${catList}</div>
+    </div>
+
+    <p style="color:var(--muted);font-size:11px;text-align:center;margin-top:20px;border-top:1px dashed var(--line);padding-top:12px;">
+      Approve / Request Changes / Reject buttons coming next drop.
+    </p>
+  `;
 }
 
 function applyFeatureGates(){
