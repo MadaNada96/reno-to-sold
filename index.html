@@ -13936,10 +13936,17 @@ function applyEstimateLock(){
       el.style.opacity = "";
     }
   });
-  // Also hide the Submit for Review button when not in a submittable state
+  // Hide the Submit for Review button ONLY when the estimate is in a
+  // state where submitting makes no sense (already with admin or
+  // already decided). Everything else — draft, undefined status,
+  // legacy estimates with no status field at all, future statuses —
+  // shows the button. This inverted rule is deliberately fail-safe:
+  // any unknown/missing status defaults to "you can submit this."
   const submitBtn = document.getElementById("submitForReviewBtn");
   if(submitBtn){
-    const submittable = state && (state.status === "draft" || state.status === "request_changes" || state.status === "priced");
+    const NON_SUBMITTABLE_STATUSES = ["submitted", "client_approved", "approved", "rejected"];
+    const currentStatus = (state && state.status) || "draft";
+    const submittable = !NON_SUBMITTABLE_STATUSES.includes(currentStatus);
     submitBtn.style.display = (canUse("submit_for_review") && submittable) ? "" : "none";
     // Re-label based on state
     if(state && state.status === "priced"){
