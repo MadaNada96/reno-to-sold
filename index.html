@@ -13978,6 +13978,24 @@ function openSubmitForReviewModal(){
   if(!canUse("submit_for_review")){ alert("Only agents can submit estimates for review."); return; }
   if(!state || !state._id){ alert("Save the estimate first before submitting for review."); return; }
   if(!state.propAddress && !state.propName){ alert("Add a property name or address before submitting."); return; }
+
+  /* Hard guard: if the estimate is already in a non-submittable state,
+     refuse to open the modal. This is defense-in-depth — applyEstimateLock
+     should have hidden the button already, but if anything sneaks
+     through (button visible after a slow render, keyboard shortcut,
+     bookmarklet, etc.), this is the second wall. */
+  const NON_SUBMITTABLE = ["submitted", "client_approved", "approved", "rejected"];
+  if(state.status && NON_SUBMITTABLE.includes(state.status)){
+    const friendly = {
+      submitted:        "submitted and is waiting for Reno to Sold review",
+      client_approved:  "marked client-approved and is waiting for final review",
+      approved:         "approved — no further action needed",
+      rejected:         "rejected — please contact Reno to Sold to discuss"
+    }[state.status] || ("in status: " + state.status);
+    alert("This estimate has already been " + friendly + ". You can't submit it again from here.");
+    return;
+  }
+
   // Determine the action based on current status
   const isResubmit = state.status === "priced" || state.status === "request_changes";
   const isClientApproved = state.status === "priced";
@@ -14106,6 +14124,14 @@ async function confirmSubmitForReview(targetStatus){
     };
     // Save (pushes to cloud automatically since signed in)
     saveEstimate({ silent: true });
+    /* Immediately hide the Submit button and lock the estimate so the
+       user can't double-click or refresh-and-resubmit within the 1.4s
+       success-message window. applyEstimateLock checks state.status and
+       hides the button when it's a non-submittable status. Without this
+       synchronous call, the button stays visible until renderAll fires
+       below, leaving a window where a fast user could resubmit. */
+    try { applyEstimateLock(); } catch(e){}
+    try { renderEstimateStatusBanner(); } catch(e){}
     statusEl.style.color = "#5fce86";
     statusEl.textContent = "✓ Submitted. Reno to Sold will review and respond.";
     // Notify admin via email (fire and forget)
