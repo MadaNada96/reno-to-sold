@@ -16059,6 +16059,12 @@ async function downloadSubmissionPdf(estimateId){
    frozen snapshot read-only. Slice C will add decision buttons here. */
 
 let currentSubmissionDetail = null;   // the row currently being viewed
+let currentSubmissionBids = null;     // contractor_bids[] for the open submission (null = not loaded yet)
+
+/* Default profit margin target for admin's contractor-bid review.
+   Used to color-code each bid's margin in the submission detail.
+   Above target = green, below = amber/red. */
+const PROFIT_MARGIN_TARGET_PCT = 20;
 
 // Friendly labels for state.enabled keys
 const SUBMISSION_CATEGORY_LABELS = {
@@ -16080,15 +16086,48 @@ function openSubmissionDetail(estimateId){
     return;
   }
   currentSubmissionDetail = row;
+  currentSubmissionBids = null;  // reset; will load below
   const modal = document.getElementById("submissionDetailModal");
   if(modal) modal.classList.add("show");
   renderSubmissionDetail();
+  // Fire-and-forget: load contractor bids matching this submission's address.
+  fetchSubmissionBids(row).then(bids => {
+    // Only update if the user is still viewing this same row
+    if(currentSubmissionDetail && currentSubmissionDetail.id === row.id){
+      currentSubmissionBids = bids;
+      renderSubmissionDetail();
+    }
+  }).catch(e => {
+    console.warn("[submissions] bid fetch failed:", e && e.message);
+    if(currentSubmissionDetail && currentSubmissionDetail.id === row.id){
+      currentSubmissionBids = [];  // mark as loaded (empty)
+      renderSubmissionDetail();
+    }
+  });
 }
 
 function closeSubmissionDetail(){
   const modal = document.getElementById("submissionDetailModal");
   if(modal) modal.classList.remove("show");
   currentSubmissionDetail = null;
+  currentSubmissionBids = null;
+}
+
+/* Fetch contractor_bids that match the submission's address. Uses
+   restFetch to bypass the supabase-js hang. The match is by project
+   key (street-level address normalization) — same logic the existing
+   Bids view uses. */
+async function fetchSubmissionBids(row){
+  if(!row || !currentUser) return [];
+  const s = row.state || {};
+  const targetKey = projectKeyForAddr(s.propAddress, s.propName);
+  if(!targetKey) return []; // no address to match against
+  const path = "contractor_bids?user_id=eq." + encodeURIComponent(currentUser.id) +
+    "&order=created_at.desc&limit=200";
+  const all = await restFetch(path);
+  if(!Array.isArray(all)) return [];
+  // Match by project key, same as the Bids view
+  return all.filter(b => projectKeyForAddr(b.property_address, b.property_name) === targetKey);
 }
 
 function renderSubmissionDetail(){
@@ -16268,6 +16307,78 @@ function renderSubmissionDetail(){
       <div class="sd-label">CATEGORIES INCLUDED</div>
       <div style="background:var(--panel-2);border:1px solid var(--line-strong);border-radius:8px;padding:10px 14px;margin-top:6px;">${catList}</div>
     </div>
+
+    ${(function(){
+      /* CONTRACTOR BIDS section — shows all contractor bids matching
+         this submission's address. Profit margin = (subtotal - bid) /
+         subtotal; colored against the target % to flag below-target
+         bids at a glance. Phase 2 Drop 3 Push 1: read-only. */
+      const subtotal = totals.subtotal || (totals.total ? totals.total / 1.13 : 0);
+      let bidsHtml;
+      if(currentSubmissionBids === null){
+        bidsHtml = `<div style="padding:14px;text-align:center;color:var(--muted);font-size:12px;">Loading contractor bids…</div>`;
+      } else if(currentSubmissionBids.length === 0){
+        bidsHtml = `<div style="padding:14px;color:var(--muted);font-size:12.5px;">
+          No contractor bids on file for this property yet.
+          <div style="margin-top:4px;font-size:11px;opacity:.8;">Use the contractor bid flow to send this estimate to contractors before approving. (Send button coming in next push.)</div>
+        </div>`;
+      } else {
+        const fmt = (n) => "$" + Math.round(n||0).toLocaleString("en-US");
+        const rows = currentSubmissionBids.map(b => {
+          const sub = (b.submitted_data && b.submitted_data.bid_summary) || {};
+          const total = (typeof sub.total_bid === "number") ? sub.total_bid : rbParseMoney(sub.total_bid);
+          const co = b.contractor_company || b.sent_to_email || "Unknown contractor";
+          const status = b.status || "—";
+          const statusColor = status === "submitted" ? "#5fce86" : status === "accepted" ? "#5fce86" : status === "pending" ? "#f5c878" : "#cfcfcf";
+          let marginCell = `<span style="color:var(--muted);">—</span>`;
+          if(total != null && subtotal > 0 && status !== "pending"){
+            const profit = subtotal - total;
+            const marginPct = (profit / subtotal) * 100;
+            const aboveTarget = marginPct >= PROFIT_MARGIN_TARGET_PCT;
+            const color = aboveTarget ? "#5fce86" : (marginPct >= 0 ? "#e8a46c" : "#ff9090");
+            marginCell = `<span style="color:${color};font-weight:600;">${marginPct.toFixed(1)}%</span>
+              <div style="color:var(--muted);font-size:10.5px;">${fmt(profit)} profit</div>`;
+          }
+          const totalCell = (total != null && status !== "pending") ? fmt(total) : (status === "pending" ? `<span style="color:var(--muted);font-size:11px;">awaiting</span>` : `<span style="color:var(--muted);">—</span>`);
+          return `
+            <tr style="border-bottom:1px solid var(--line);">
+              <td style="padding:8px 10px;vertical-align:top;color:var(--ink);font-size:13px;">${escapeHtml(co)}</td>
+              <td style="padding:8px 10px;vertical-align:top;text-align:right;color:var(--ink);font-size:13px;font-variant-numeric:tabular-nums;">${totalCell}</td>
+              <td style="padding:8px 10px;vertical-align:top;text-align:right;font-size:13px;">${marginCell}</td>
+              <td style="padding:8px 10px;vertical-align:top;text-align:center;">
+                <span style="font-size:9.5px;font-weight:700;letter-spacing:.12em;color:${statusColor};text-transform:uppercase;">${escapeHtml(status)}</span>
+              </td>
+            </tr>
+          `;
+        }).join("");
+        bidsHtml = `
+          <div style="background:var(--panel-2);border:1px solid var(--line-strong);border-radius:8px;padding:0;margin-top:6px;overflow:hidden;">
+            <table style="width:100%;border-collapse:collapse;">
+              <thead>
+                <tr style="background:rgba(212,175,106,.06);">
+                  <th style="padding:7px 10px;text-align:left;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold-bright);font-weight:700;">Contractor</th>
+                  <th style="padding:7px 10px;text-align:right;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold-bright);font-weight:700;">Bid Total</th>
+                  <th style="padding:7px 10px;text-align:right;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold-bright);font-weight:700;">Margin</th>
+                  <th style="padding:7px 10px;text-align:center;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold-bright);font-weight:700;">Status</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+          <div style="margin-top:6px;font-size:10.5px;color:var(--muted);">
+            Margin target: <b style="color:var(--gold-bright);">${PROFIT_MARGIN_TARGET_PCT}%</b>.
+            Bids at or above target shown in green; below target in amber/red.
+            Margin = (estimate subtotal − contractor bid) ÷ estimate subtotal.
+          </div>
+        `;
+      }
+      return `
+        <div class="sd-section">
+          <div class="sd-label">CONTRACTOR BIDS</div>
+          ${bidsHtml}
+        </div>
+      `;
+    })()}
 
     ${(function(){
       // Decision buttons — only show if the estimate is still in a
