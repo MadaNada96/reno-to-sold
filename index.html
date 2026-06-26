@@ -89,10 +89,22 @@
   .app{max-width:1100px;margin:0 auto;padding:24px;}
 
   /* ===== ROLE-BASED CSS GATES =====
-     body.role-agent → user is an agent. CSS rules below permanently
-     hide admin-only UI for agents (the custom-discount toggle + its
-     percentage/flat-amount fields). Using CSS with !important so no
-     inline style override and no flash of admin UI possible. */
+     Two blocks live in the static HTML: #adminCustomDiscountWrap and
+     #agentDiscountRequestBlock. CSS picks which one shows based on
+     the body's role class.
+
+     DEFAULT (no class yet, before profile loads): admin block shows,
+       agent block hidden. Safe default for admins/anon.
+     body.role-agent: admin block hidden, agent block shown.
+
+     Using !important everywhere to prevent any inline style or other
+     CSS rule from overriding. */
+
+  /* Agent block: hidden by default, visible only for agents */
+  #agentDiscountRequestBlock { display: none !important; }
+  body.role-agent #agentDiscountRequestBlock { display: flex !important; }
+
+  /* Admin block + all its inner controls: hidden for agents */
   body.role-agent #adminCustomDiscountWrap,
   body.role-agent #sw-custom,
   body.role-agent #customDiscFields,
@@ -3258,9 +3270,8 @@
       </div>
 
       <!-- ADMIN-ONLY Custom Discount UI. Hidden entirely for agents via
-           body.role-agent CSS rule (bulletproof — applies before any JS
-           runs, so there's no flash of admin-only controls). Agents see
-           the agent-discount-request panel instead, inserted by JS. -->
+           body.role-agent CSS rule. Admins/staff see this; agents see
+           #agentDiscountRequestBlock below instead. -->
       <div id="adminCustomDiscountWrap" class="admin-only-discount">
         <div class="disc-toggle-row">
           <input type="checkbox" class="switch-input" id="sw-custom" onchange="setCustomDiscountEnabled(this.checked)">
@@ -3290,6 +3301,25 @@
             </div>
           </div>
         </div>
+      </div>
+
+      <!-- AGENT-ONLY discount request block. Hidden by default; shown
+           only when body has role-agent class. Static HTML so it's
+           guaranteed to render — no JS injection race condition. -->
+      <div id="agentDiscountRequestBlock" class="disc-toggle-row" style="flex-direction:column;align-items:stretch;gap:6px;cursor:default;">
+        <div style="display:flex;align-items:center;gap:14px;">
+          <div class="toggle-info" style="flex:1;">
+            <div class="cat-title">Additional Discount</div>
+            <div class="cat-sub">Flat $ off, beyond the 10% listing discount. <b style="color:#f5c878;">Requires Reno to Sold approval before it applies to your client's total.</b></div>
+          </div>
+          <button id="agentRequestDiscountBtn" type="button" onclick="openDiscountRequestModal()"
+            style="background:linear-gradient(180deg,#2a2010,#1a1408);color:#e8c989;border:1px solid #d4af6a;
+                   border-radius:6px;padding:9px 16px;font-size:11.5px;font-weight:700;
+                   letter-spacing:.10em;text-transform:uppercase;cursor:pointer;flex-shrink:0;">
+            Request Discount
+          </button>
+        </div>
+        <div id="agentDrStatusBlock"></div>
       </div>
 
       <p class="footnote" style="margin-top:14px;">Discounts apply to the subtotal <i>before</i> HST. Listing &amp; custom discounts stack if both are turned on.</p>
@@ -5729,44 +5759,16 @@ function renderAll(){
   try { applyFeatureGates(); } catch(e){}
 }
 
-/* For agents (can't apply discounts directly), replace the Custom
-   Discount toggle UI with a "Request Additional Discount" button.
-   For admins/staff, leave the existing toggle alone.
-
-   Aggressively hides ALL the % / flat-$ / note elements so there's
-   no leak of admin-only controls into the agent view. */
+/* For agents: keep state.discount.custom* zeroed (they can't apply
+   one directly) and update the static #agentDiscountRequestBlock with
+   the current request status. CSS controls VISIBILITY of admin vs.
+   agent blocks — this function only updates the dynamic CONTENTS of
+   the agent block. Zero injection, zero race conditions. */
 function applyAgentDiscountUI(){
-  const swCustomRow = document.getElementById("sw-custom");
-  const fields = document.getElementById("customDiscFields");
-  const toggleRow = swCustomRow ? swCustomRow.closest(".disc-toggle-row") : null;
-
-  let agentPanel = document.getElementById("agentDiscRequestPanel");
-  if(!isAgent()){
-    // Restore standard UI for admin/staff
-    if(toggleRow) toggleRow.style.display = "";
-    if(fields){
-      // Standard CSS controls visibility based on the toggle state —
-      // don't force-hide here, let the standard render handle it.
-    }
-    if(agentPanel) agentPanel.remove();
-    return;
-  }
-
-  /* Agent view — bulletproof hiding of the original custom-discount
-     UI. We hide BOTH the toggle row AND the inner fields (Type drop-down
-     with %/$ options, Amount, Note) so there's no way for an agent
-     to even see those controls, let alone interact with them. */
-  if(toggleRow){
-    toggleRow.style.display = "none";
-  }
-  if(fields){
-    fields.style.display = "none";
-    fields.classList.add("hidden");
-  }
-  // Also defensively reset any saved custom-discount state on the
-  // agent's local — they can't apply one, period.
+  // Defensive: agents can never have a custom discount applied locally.
+  // Their only path to one is through the discount-request workflow.
   try {
-    if(state.discount){
+    if(isAgent() && state && state.discount){
       state.discount.customEnabled = false;
       state.discount.customValue = "";
       state.discount.customType = "percent";
@@ -5774,71 +5776,53 @@ function applyAgentDiscountUI(){
     }
   } catch(e){}
 
-  const dr = state.discount_request;
-  const isPending = dr && dr.status === "pending";
-  const isApproved = dr && dr.status === "approved";
-  const isRejected = dr && dr.status === "rejected";
+  if(!isAgent()) return;
 
-  // Status block under the button
-  let drBlock = "";
-  if(dr){
-    if(isPending){
-      drBlock = `
-        <div style="background:rgba(245,200,120,.08);border:1px solid #c98e2a;border-radius:6px;padding:10px 12px;margin-top:8px;font-size:12.5px;color:#cfcfcf;">
-          <div style="font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#f5c878;font-weight:700;margin-bottom:6px;">
-            ⏳ Pending Approval — Not Applied to Total
-          </div>
-          <div>Requested <b style="color:#f5c878;">$${Math.round(dr.amount||0).toLocaleString("en-US")}</b> off</div>
-          ${dr.justification ? `<div style="color:var(--muted);font-size:11.5px;margin-top:4px;font-style:italic;">"${escapeHtml(dr.justification)}"</div>` : ""}
-          <div style="margin-top:8px;font-size:11px;color:var(--muted);">This request will be reviewed when you submit the estimate. The discount is NOT included in the total below until Reno to Sold approves it.</div>
-        </div>`;
-    } else if(isApproved){
-      drBlock = `
-        <div style="background:rgba(95,206,134,.08);border:1px solid #2e7e4e;border-radius:6px;padding:10px 12px;margin-top:8px;font-size:12.5px;color:#cfcfcf;">
-          <div style="font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#5fce86;font-weight:700;margin-bottom:6px;">✓ Approved by Reno to Sold</div>
-          <div>Discount applied: <b style="color:#5fce86;">$${Math.round(dr.decided_amount !== undefined ? dr.decided_amount : dr.amount).toLocaleString("en-US")}</b></div>
-          ${(dr.decided_amount !== undefined && dr.decided_amount !== dr.amount) ? `<div style="font-size:11px;color:var(--muted);margin-top:4px;">(Requested $${Math.round(dr.amount).toLocaleString("en-US")})</div>` : ""}
-        </div>`;
-    } else if(isRejected){
-      drBlock = `
-        <div style="background:rgba(255,144,144,.08);border:1px solid #8a2828;border-radius:6px;padding:10px 12px;margin-top:8px;font-size:12.5px;color:#cfcfcf;">
-          <div style="font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#ff9090;font-weight:700;margin-bottom:6px;">✗ Not Approved</div>
-          <div>Requested $${Math.round(dr.amount||0).toLocaleString("en-US")}</div>
-          ${dr.decided_note ? `<div style="color:var(--muted);font-size:11.5px;margin-top:4px;font-style:italic;">"${escapeHtml(dr.decided_note)}"</div>` : ""}
-        </div>`;
-    }
+  const dr = state.discount_request;
+  const btn = document.getElementById("agentRequestDiscountBtn");
+  const statusBlock = document.getElementById("agentDrStatusBlock");
+
+  if(btn){
+    btn.textContent = dr ? "Edit Request" : "Request Discount";
+    try { btn.disabled = isEstimateLocked(); } catch(e) { btn.disabled = false; }
   }
 
-  const panelHtml = `
-    <div id="agentDiscRequestPanel" class="disc-toggle-row" style="flex-direction:column;align-items:stretch;gap:6px;cursor:default;">
-      <div style="display:flex;align-items:center;gap:14px;">
-        <div class="toggle-info" style="flex:1;">
-          <div class="cat-title">Additional Discount</div>
-          <div class="cat-sub">Flat $ off, beyond the 10% listing discount. <b style="color:#f5c878;">Requires Reno to Sold approval before it applies to your client's total.</b></div>
+  if(!statusBlock) return;
+  if(!dr){
+    statusBlock.innerHTML = "";
+    return;
+  }
+
+  const isPending  = dr.status === "pending";
+  const isApproved = dr.status === "approved";
+  const isRejected = dr.status === "rejected";
+
+  if(isPending){
+    statusBlock.innerHTML = `
+      <div style="background:rgba(245,200,120,.08);border:1px solid #c98e2a;border-radius:6px;padding:10px 12px;margin-top:8px;font-size:12.5px;color:#cfcfcf;">
+        <div style="font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#f5c878;font-weight:700;margin-bottom:6px;">
+          ⏳ Pending Approval — Not Applied to Total
         </div>
-        <button onclick="openDiscountRequestModal()" ${isEstimateLocked() ? "disabled" : ""}
-          style="background:linear-gradient(180deg,#2a2010,#1a1408);color:#e8c989;border:1px solid #d4af6a;
-                 border-radius:6px;padding:9px 16px;font-size:11.5px;font-weight:700;
-                 letter-spacing:.10em;text-transform:uppercase;cursor:pointer;flex-shrink:0;">
-          ${dr ? "Edit Request" : "Request Discount"}
-        </button>
-      </div>
-      ${drBlock}
-    </div>
-  `;
-  if(agentPanel){
-    agentPanel.outerHTML = panelHtml;
+        <div>Requested <b style="color:#f5c878;">$${Math.round(dr.amount||0).toLocaleString("en-US")}</b> off</div>
+        ${dr.justification ? `<div style="color:var(--muted);font-size:11.5px;margin-top:4px;font-style:italic;">"${escapeHtml(dr.justification)}"</div>` : ""}
+        <div style="margin-top:8px;font-size:11px;color:var(--muted);">This request will be reviewed when you submit the estimate. The discount is NOT included in the total below until Reno to Sold approves it.</div>
+      </div>`;
+  } else if(isApproved){
+    statusBlock.innerHTML = `
+      <div style="background:rgba(95,206,134,.08);border:1px solid #2e7e4e;border-radius:6px;padding:10px 12px;margin-top:8px;font-size:12.5px;color:#cfcfcf;">
+        <div style="font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#5fce86;font-weight:700;margin-bottom:6px;">✓ Approved by Reno to Sold</div>
+        <div>Discount applied: <b style="color:#5fce86;">$${Math.round(dr.decided_amount !== undefined ? dr.decided_amount : dr.amount).toLocaleString("en-US")}</b></div>
+        ${(dr.decided_amount !== undefined && dr.decided_amount !== dr.amount) ? `<div style="font-size:11px;color:var(--muted);margin-top:4px;">(Requested $${Math.round(dr.amount).toLocaleString("en-US")})</div>` : ""}
+      </div>`;
+  } else if(isRejected){
+    statusBlock.innerHTML = `
+      <div style="background:rgba(255,144,144,.08);border:1px solid #8a2828;border-radius:6px;padding:10px 12px;margin-top:8px;font-size:12.5px;color:#cfcfcf;">
+        <div style="font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#ff9090;font-weight:700;margin-bottom:6px;">✗ Not Approved</div>
+        <div>Requested $${Math.round(dr.amount||0).toLocaleString("en-US")}</div>
+        ${dr.decided_note ? `<div style="color:var(--muted);font-size:11.5px;margin-top:4px;font-style:italic;">"${escapeHtml(dr.decided_note)}"</div>` : ""}
+      </div>`;
   } else {
-    // Insert after the listing-discount row
-    const listingRow = document.getElementById("sw-listing");
-    if(listingRow){
-      const listingRowEl = listingRow.closest(".disc-toggle-row");
-      if(listingRowEl){
-        const tmp = document.createElement("div");
-        tmp.innerHTML = panelHtml;
-        listingRowEl.parentNode.insertBefore(tmp.firstElementChild, listingRowEl.nextSibling);
-      }
-    }
+    statusBlock.innerHTML = "";
   }
 }
 
