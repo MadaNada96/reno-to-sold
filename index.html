@@ -13672,6 +13672,11 @@ async function fetchCurrentProfile(){
     };
     console.warn("Profile bootstrap fallback in use for " + currentUser.email +
                  " — run the Phase 1 SQL migration to create the real profile row.");
+    /* Self-healing for the stale-session gotcha: if the fallback was
+       triggered by a TIMEOUT (not by a missing profile), it means the
+       client's session is stuck. We auto-recover by clearing storage
+       and reloading. Runs at most once per page load. */
+    autoRecoverStaleSession();
     return currentProfile;
   }
   currentProfile = null;
@@ -13723,6 +13728,55 @@ function initSupabase(){
 function setCurrentUser(u){
   currentUser = u;
   updateAuthUI();
+}
+
+/* ============================================================
+   Stale-session auto-recovery
+   ============================================================
+   The Supabase JS client persists its session token in localStorage.
+   After a frontend redeploy (especially when we add new subscriptions
+   or change the auth flow), the existing token in an open tab can
+   end up in a deadlocked state where queries hang forever.
+
+   Symptom: fetchCurrentProfile() times out → bootstrap fallback
+   triggers → currentProfile is the in-memory admin object, not the
+   real one from the DB.
+
+   Fix: clear all storage + cookies + reload. The user signs in fresh
+   on the next page load and the session is healthy.
+
+   Runs at most once per page load (guard via sessionStorage). Skips
+   if we've already recovered in this page session, OR if the user
+   manually disabled it via `localStorage.rts_no_autorecover = "1"`. */
+function autoRecoverStaleSession(){
+  try {
+    if(localStorage.getItem("rts_no_autorecover") === "1") return;
+    if(sessionStorage.getItem("rts_autorecovered") === "1") return;
+    sessionStorage.setItem("rts_autorecovered", "1");
+    console.warn("Stale Supabase session detected. Auto-recovering in 4 seconds…");
+    console.warn("To disable auto-recovery: localStorage.rts_no_autorecover = '1'");
+    setTimeout(() => {
+      try {
+        // Preserve the autorecover flag in sessionStorage so the reload
+        // doesn't loop forever if recovery itself fails.
+        const wasRecovered = sessionStorage.getItem("rts_autorecovered");
+        localStorage.clear();
+        sessionStorage.clear();
+        if(wasRecovered) sessionStorage.setItem("rts_autorecovered", wasRecovered);
+        // Clear all cookies for this origin
+        document.cookie.split(";").forEach(c => {
+          const eq = c.indexOf("=");
+          const name = eq > -1 ? c.substr(0, eq).replace(/^ +/, "") : c.replace(/^ +/, "");
+          document.cookie = name + "=;expires=" + new Date().toUTCString() + ";path=/";
+        });
+        location.reload();
+      } catch(e) {
+        console.error("Auto-recovery failed:", e);
+      }
+    }, 4000);
+  } catch(e) {
+    console.warn("autoRecoverStaleSession error:", e);
+  }
 }
 
 /* ============================================================
@@ -13920,7 +13974,7 @@ function applyAuthGate(){
         ${m.body}
       </div>
       ${reason === "not_signed_in"
-        ? `<button onclick="openAuthModal()"
+        ? `<button onclick="document.getElementById('authLockoutOverlay').style.display='none'; openAuthModal();"
               style="background:linear-gradient(180deg,#2a2010,#1a1408);color:#e8c989;
                      border:1px solid #d4af6a;border-radius:6px;padding:11px 26px;
                      font-size:12.5px;font-weight:700;letter-spacing:.10em;text-transform:uppercase;cursor:pointer;">
