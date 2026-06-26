@@ -17755,28 +17755,30 @@ function localToCloud(e){
 async function upsertCloudEstimate(entry){
   if(!currentUser || !supa) return;
   try{
-    /* Same critical fix as upsertCloudContractor: .maybeSingle()
-       silently errors when duplicates exist, causing INSERT instead of
-       UPDATE. Use ordered select + self-healing duplicate cleanup. */
-    const { data: rows, error: selErr } = await supa.from("estimates")
-      .select("id, updated_at")
-      .eq("user_id", currentUser.id)
-      .eq("client_id", entry.id)
-      .eq("type", "estimate")
-      .order("updated_at", { ascending: false });
-    if(selErr) throw selErr;
+    /* Bypasses supa.from() which hangs on the supabase-js code path.
+       Uses restFetch for the select and dbInsert/dbUpdate/dbDelete for
+       the writes. Same self-healing duplicate-cleanup logic. */
+    const queryPath = "estimates?" +
+      "select=id,updated_at" +
+      "&user_id=eq." + encodeURIComponent(currentUser.id) +
+      "&client_id=eq." + encodeURIComponent(entry.id) +
+      "&type=eq.estimate" +
+      "&order=updated_at.desc";
+    const rows = await restFetch(queryPath);
 
     const payload = localToCloud(entry);
-    if(!rows || rows.length === 0){
-      const { error } = await supa.from("estimates").insert(payload);
-      if(error) throw error;
+    if(!Array.isArray(rows) || rows.length === 0){
+      await dbInsert("estimates", payload, { prefer: "return=minimal" });
     } else {
-      const { error } = await supa.from("estimates").update(payload).eq("id", rows[0].id);
-      if(error) throw error;
+      // Update the most recent one. Pass id filter to dbUpdate by row PK.
+      await dbUpdate("estimates", { id: rows[0].id }, payload);
       if(rows.length > 1){
         const dupeIds = rows.slice(1).map(r => r.id);
         console.warn("[estimates] Cleaning up " + dupeIds.length + " duplicate cloud rows for estimate " + entry.id);
-        await supa.from("estimates").delete().in("id", dupeIds);
+        // dbDelete only supports single filter values, so loop. Small N.
+        for(const dupeId of dupeIds){
+          try { await dbDelete("estimates", { id: dupeId }); } catch(e){}
+        }
       }
     }
   }catch(e){
@@ -17787,10 +17789,15 @@ async function upsertCloudEstimate(entry){
 async function deleteCloudEstimate(clientId){
   if(!currentUser || !supa) return;
   try{
-    await supa.from("estimates").delete()
-      .eq("user_id", currentUser.id)
-      .eq("client_id", clientId)
-      .eq("type", "estimate");
+    /* Bypass supa.from. Compose the URL with both filters since
+       dbDelete's filter param uses AND semantics anyway. */
+    await restFetch(
+      "estimates?" +
+      "user_id=eq." + encodeURIComponent(currentUser.id) +
+      "&client_id=eq." + encodeURIComponent(clientId) +
+      "&type=eq.estimate",
+      { method: "DELETE", headers: { "Prefer": "return=minimal" } }
+    );
   }catch(e){
     console.error("Cloud delete failed:", e);
   }
