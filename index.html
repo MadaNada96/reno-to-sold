@@ -15633,17 +15633,31 @@ async function loadSubmissions(){
   }
   body.innerHTML = `<div style="padding:20px;text-align:center;color:var(--muted);">Loading submissions…</div>`;
 
+  /* 15s hard timeout. Normal admin queries return in 200-800ms. Past
+     15s something is broken (Supabase cold start, stale WebSocket,
+     network issue) and we should surface a retry option rather than
+     leave the user staring at the spinner forever. Same defensive
+     pattern as the profile fetch and email send timeouts. */
+  const LOAD_TIMEOUT_MS = 15000;
+  const t0 = Date.now();
+
   try {
     /* Simple, reliable query: fetch all type=estimate rows ordered
        by last update, filter for non-draft + has submission in JS.
        RLS lets admin see ALL rows (user_id = auth.uid() OR is_admin()).
        Cap at 500 rows for safety — way more than we expect in the
        near term, but keeps the query bounded. */
-    const { data, error } = await supa.from("estimates")
+    const queryPromise = supa.from("estimates")
       .select("id,user_id,client_id,name,state,updated_at")
       .eq("type", "estimate")
       .order("updated_at", { ascending: false })
       .limit(500);
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Loading timed out after " + (LOAD_TIMEOUT_MS/1000) + "s — Supabase may be slow. Try Refresh.")), LOAD_TIMEOUT_MS)
+    );
+    const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
+    const elapsed = Date.now() - t0;
+    console.log("[submissions] loadSubmissions completed in " + elapsed + "ms");
 
     if(error) throw error;
 
@@ -15656,8 +15670,24 @@ async function loadSubmissions(){
     renderSubmissionsList();
     updateSubmissionsCountBadge();
   } catch(e) {
-    console.error("loadSubmissions failed:", e);
-    body.innerHTML = `<div style="padding:20px;text-align:center;color:#ff9090;">Failed to load: ${escapeHtml(e.message || String(e))}</div>`;
+    const elapsed = Date.now() - t0;
+    console.error("[submissions] loadSubmissions failed after " + elapsed + "ms:", e);
+    const errMsg = (e && e.message) ? e.message : String(e);
+    body.innerHTML = `
+      <div style="padding:24px 20px;text-align:center;">
+        <div style="color:#ff9090;font-size:13px;margin-bottom:12px;">Failed to load submissions.</div>
+        <div style="color:var(--muted);font-size:11.5px;margin-bottom:18px;line-height:1.5;">${escapeHtml(errMsg)}</div>
+        <button type="button" onclick="loadSubmissions()"
+          style="background:linear-gradient(180deg,#2a2010,#1a1408);color:#e8c989;border:1px solid #d4af6a;
+                 border-radius:6px;padding:9px 18px;font-size:11.5px;font-weight:700;
+                 letter-spacing:.10em;text-transform:uppercase;cursor:pointer;">
+          ↻ Retry
+        </button>
+        <div style="color:var(--muted);font-size:10.5px;margin-top:14px;opacity:.7;">
+          If this keeps failing, try a hard refresh (Cmd+Shift+R) to reset the Supabase client.
+        </div>
+      </div>
+    `;
   }
 }
 
