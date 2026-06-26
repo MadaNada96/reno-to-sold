@@ -11085,28 +11085,12 @@ async function pullCloudContractors(showMigratePrompt){
     .eq("type", "contractor");
   if(error){ console.error("Contractor pull failed:", error); return; }
 
-  const cloudById = {};
-  (cloud || []).forEach(r => { if(r.client_id) cloudById[r.client_id] = r; });
-  const localById = {};
-  localList.forEach(c => { localById[c.id] = c; });
-
-  const merged = [];
-  const ids = new Set([...Object.keys(cloudById), ...Object.keys(localById)]);
-  for(const id of ids){
-    const c = cloudById[id], l = localById[id];
-    if(c && l){
-      const cT = new Date(c.updated_at).getTime();
-      const lT = l.updatedAt || 0;
-      if(lT > cT){ await upsertCloudContractor(l); merged.push(l); }
-      else        { merged.push(cloudRowToContractor(c)); }
-    } else if(c){
-      merged.push(cloudRowToContractor(c));
-    } else if(l){
-      if(!l.updatedAt) l.updatedAt = Date.now();
-      await upsertCloudContractor(l);
-      merged.push(l);
-    }
-  }
+  /* SECURITY HARDENING — cloud is source of truth for contractors.
+     Same fix as the main estimates list: never auto-push local-only
+     contractors on bootstrap. Closes cross-user data leak. */
+  const merged = (cloud || [])
+    .filter(r => r.client_id)
+    .map(r => cloudRowToContractor(r));
   saveContractors(merged);
 
   // Refresh any visible contractor UI so cloud data shows immediately
@@ -15453,33 +15437,36 @@ async function bootstrapCloudSync(showMigratePrompt){
     .eq("type", "estimate");
   if(error){ console.error(error); return; }
 
-  const cloudById = {};
-  (cloud || []).forEach(r => { if(r.client_id) cloudById[r.client_id] = r; });
-  const localById = {};
-  localList.forEach(e => { localById[e.id] = e; });
+  /* ============================================================
+     SECURITY HARDENING — multi-tenant data isolation
+     ============================================================
+     Cloud is the SINGLE source of truth. We REPLACE localStorage
+     with whatever the cloud has, never merge-and-push. This closes
+     the leak where:
+       1. User A saves estimates → localStorage has them
+       2. User A signs out (or browser is shared)
+       3. User B signs in
+       4. Old bootstrapCloudSync saw User A's local estimates not in
+          User B's cloud → AUTO-PUSHED them up tagged as User B's
+       5. User B inherited User A's data permanently
 
-  const merged = [];
-  const ids = new Set([...Object.keys(cloudById), ...Object.keys(localById)]);
-  for(const id of ids){
-    const c = cloudById[id], l = localById[id];
-    if(c && l){
-      const cT = new Date(c.updated_at).getTime();
-      const lT = new Date(l.savedAt).getTime();
-      if(lT > cT){
-        await upsertCloudEstimate(l);
-        merged.push(l);
-      } else {
-        merged.push(cloudToLocal(c));
-      }
-    } else if(c){
-      merged.push(cloudToLocal(c));
-    } else if(l){
-      await upsertCloudEstimate(l);
-      merged.push(l);
-    }
-  }
-  merged.sort((a,b) => new Date(b.savedAt) - new Date(a.savedAt));
-  persistSavedList(merged);
+     With the new logic, even if localStorage has stale residue from
+     User A, signing in as User B just REPLACES it with User B's cloud
+     data. Local-only estimates (not in cloud) are DISCARDED, not
+     pushed. The only way an estimate makes it to the cloud is via an
+     explicit save action by the rightful owner.
+
+     Side-effect: if a user is offline and creates an estimate that
+     never reached the cloud, signing out + signing in wipes it.
+     That's an acceptable trade-off for the security guarantee. The
+     save action already pushes to cloud immediately, so this only
+     affects sessions that explicitly never synced.
+     ============================================================ */
+  const cloudList = (cloud || [])
+    .filter(r => r.client_id)
+    .map(r => cloudToLocal(r));
+  cloudList.sort((a,b) => new Date(b.savedAt) - new Date(a.savedAt));
+  persistSavedList(cloudList);
   // Refresh UI if the saved list modal is open
   if(document.getElementById("savedModal").classList.contains("show")){
     renderSavedList();
@@ -17969,29 +17956,12 @@ async function bootstrapCloudSync(ctx, showMigratePrompt){
   const cloudProjects = (cloudRows||[]).filter(r => r.type === "tracker");
   const metaRow = (cloudRows||[]).find(r => r.type === "tracker_meta" && r.client_id === CUSTOM_CATS_CLIENT_ID);
 
-  // Merge projects — newer-by-updated_at wins per client_id.
-  const cloudById = {};
-  cloudProjects.forEach(r => { if(r.client_id) cloudById[r.client_id] = r; });
-  const localById = {};
-  (DB.projects||[]).forEach(p => { localById[p.id] = p; });
-
-  const merged = [];
-  const ids = new Set([...Object.keys(cloudById), ...Object.keys(localById)]);
-  for(const id of ids){
-    const c = cloudById[id], l = localById[id];
-    if(c && l){
-      const cT = new Date(c.updated_at).getTime();
-      const lT = l.updatedAt || 0;
-      if(lT > cT){ await upsertCloudProject(l); merged.push(l); }
-      else        { merged.push(cloudProjToLocal(c)); }
-    } else if(c){
-      merged.push(cloudProjToLocal(c));
-    } else if(l){
-      await upsertCloudProject(l);
-      merged.push(l);
-    }
-  }
-  DB.projects = merged;
+  /* SECURITY HARDENING — cloud is source of truth for tracker projects.
+     Same fix as the main estimates list: never auto-push local-only
+     projects on bootstrap. Closes the cross-user data leak. */
+  DB.projects = cloudProjects
+    .filter(r => r.client_id)
+    .map(r => cloudProjToLocal(r));
 
   // Merge customCategories (union of cloud + local, case-insensitive dedup,
   // excluding anything already in the standard set). Push back if local had
