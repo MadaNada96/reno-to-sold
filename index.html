@@ -14596,40 +14596,31 @@ function initSupabase(){
     console.warn("Supabase JS not loaded — cloud sync disabled.");
     return;
   }
-  /* ROOT-CAUSE FIX for the post-refresh auth-hang issue:
-     - flowType: 'pkce' avoids the implicit-flow deadlock seen in v2.x
-       when restoring a session from localStorage on page refresh.
-     - storage: explicit localStorage ensures supabase-js doesn't pick
-       a different fallback at runtime.
-     - storageKey: namespaced so this app's auth never collides with
-       any other Supabase project on the same domain. */
+  /* Auth config:
+     - flowType: 'pkce' — more reliable than the default implicit flow,
+       avoids known race conditions during session restore.
+     - storage: explicit localStorage so behavior is deterministic.
+     - storageKey is intentionally left at default (sb-<projectref>-auth-token)
+       so existing user sessions don't get invalidated by the change. */
   supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: {
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: true,
       flowType: 'pkce',
-      storage: window.localStorage,
-      storageKey: 'sb-renotosold-auth'
+      storage: window.localStorage
     }
   });
 
-  /* Init-time guard: if the supabase-js client deadlocks during
-     session restore (which is the underlying cause of every "stuck
-     loading" we've seen post-refresh), detect it within 8s and
-     auto-recover by clearing the stale auth keys + reloading.
-
-     This converts the user-visible bug ("nothing loads after refresh")
-     into an invisible 8-second self-heal ("page reloads once, then
-     works"). No manual intervention required. */
+  /* Resume any existing session. Diagnostic logging is on so we can
+     trace where time is spent. We deliberately do NOT auto-clear
+     localStorage or force a reload on slow init — that was causing
+     the auto-logout. If init is slow, just log it and let the rest
+     of the page handle it (profile cache hydration, etc). */
   const initT0 = Date.now();
-  const sessionPromise = supa.auth.getSession();
-  const initTimeoutPromise = new Promise((_, reject) =>
-    setTimeout(() => reject(new Error("supabase init getSession timed out at 8s (likely token-refresh deadlock)")), 8000)
-  );
-  Promise.race([sessionPromise, initTimeoutPromise]).then(async ({ data: { session } }) => {
+  supa.auth.getSession().then(async ({ data: { session } }) => {
     const elapsed = Date.now() - initT0;
-    console.log("[auth] initSupabase getSession completed in " + elapsed + "ms");
+    console.log("[auth] initSupabase getSession completed in " + elapsed + "ms" + (elapsed > 3000 ? " (SLOW — investigate)" : ""));
     if(session){
       detectUserSwitch(session.user.id);   // clear localStorage if different user
       setCurrentUser(session.user);
@@ -14643,34 +14634,9 @@ function initSupabase(){
       applyAuthGate();                  // no session → show login screen
     }
   }).catch((err) => {
-    /* Self-recovery: clear stale auth keys, reload once. Use sessionStorage
-       to prevent an infinite reload loop — after 2 failed auto-recoveries,
-       fall through to manual sign-in. */
-    console.error("[auth] initSupabase FAILED:", err && err.message);
-    const RECOVER_KEY = "rts_auth_init_recover_count";
-    const count = parseInt(sessionStorage.getItem(RECOVER_KEY) || "0", 10);
-    if(count < 2){
-      sessionStorage.setItem(RECOVER_KEY, String(count + 1));
-      console.warn("[auth] Auto-recovering (attempt " + (count+1) + "/2): clearing stale sb-* keys and reloading");
-      try {
-        for(let i = localStorage.length - 1; i >= 0; i--){
-          const k = localStorage.key(i);
-          if(k && /^sb-/.test(k)) localStorage.removeItem(k);
-        }
-      } catch(e){}
-      setTimeout(() => location.reload(), 100);
-    } else {
-      // Two auto-recoveries failed — fall back to manual sign-in
-      sessionStorage.removeItem(RECOVER_KEY);
-      console.error("[auth] Auto-recovery exhausted; showing sign-in screen");
-      applyAuthGate();
-    }
+    console.error("[auth] initSupabase getSession threw:", err);
+    applyAuthGate();
   });
-
-  /* Clear the recovery counter once a session validates normally. */
-  Promise.race([sessionPromise, initTimeoutPromise]).then(({ data: { session } }) => {
-    if(session) sessionStorage.removeItem("rts_auth_init_recover_count");
-  }).catch(()=>{});
   // Listen for sign-in / sign-out events
   supa.auth.onAuthStateChange(async (event, session) => {
     if(event === "SIGNED_IN" && session){
