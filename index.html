@@ -15105,6 +15105,40 @@ function initSupabase(){
         applyFeatureGates();              // hide UI for features the user doesn't have
         // Background-sync after a tick so UI is responsive
         setTimeout(() => bootstrapCloudSync(false), 250);
+
+        /* RECOVERY-FLOW BACKSTOP: don't rely on the onAuthStateChange
+           listener to fire setTimeout(maybeShowPasswordSetupPrompt) —
+           explicitly trigger it here if recovery was detected. The
+           listener and this both call the same function; whichever
+           runs first will open the modal, the second will no-op
+           because the modal already exists. */
+        let isRecoveryFlow = false;
+        try { isRecoveryFlow = sessionStorage.getItem("rts_force_pw_setup") === "1"; } catch(e){}
+        if(isRecoveryFlow){
+          /* Show a visible banner at the TOP of the page so the user
+             knows what's happening even without DevTools. The banner
+             auto-removes after 8 seconds. */
+          try {
+            const banner = document.createElement("div");
+            banner.id = "rtsRecoveryBanner";
+            banner.style.cssText =
+              "position:fixed;top:0;left:0;right:0;z-index:99999;" +
+              "background:linear-gradient(180deg,#2a2010 0%,#1a1408 100%);" +
+              "border-bottom:2px solid #d4af6a;padding:12px 20px;text-align:center;" +
+              "color:#e8c989;font-size:13px;font-weight:600;" +
+              "font-family:-apple-system,'Segoe UI',Roboto,sans-serif;" +
+              "box-shadow:0 4px 16px rgba(0,0,0,.5);";
+            banner.textContent = "✓ Account activated. Please set a password in the prompt below.";
+            document.body.appendChild(banner);
+            setTimeout(() => { try { banner.remove(); } catch(e){} }, 8000);
+          } catch(e){}
+          // Trigger the password modal directly (don't wait on the listener)
+          setTimeout(() => {
+            try { maybeShowPasswordSetupPrompt(); } catch(e){
+              console.error("[auth] maybeShowPasswordSetupPrompt threw:", e);
+            }
+          }, 400);
+        }
       } else {
         applyAuthGate();                  // no session → show login screen
       }
