@@ -14044,8 +14044,27 @@ let _userListCache = [];
 
 async function callAdminUsersFunc(payload){
   if(!supa || !currentUser){ throw new Error("Not signed in"); }
-  const { data, error } = await supa.functions.invoke("admin-users", { body: payload });
-  if(error) throw new Error(error.message || "Edge Function error");
+  // 10-second client-side timeout so hangs surface as clear errors
+  // instead of spinning forever. The most common cause is the
+  // admin-users Edge Function not being deployed yet.
+  const invokePromise = supa.functions.invoke("admin-users", { body: payload });
+  const timeoutPromise = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error(
+      "Request timed out after 10 seconds. " +
+      "The 'admin-users' Edge Function may not be deployed yet. " +
+      "Go to Supabase dashboard → Edge Functions and deploy it. " +
+      "See USER_MANAGEMENT_DEPLOYMENT.md for instructions."
+    )), 10000)
+  );
+  const { data, error } = await Promise.race([invokePromise, timeoutPromise]);
+  if(error){
+    // Supabase returns a specific error when the function doesn't exist
+    const msg = (error.message || "").toLowerCase();
+    if(msg.includes("not found") || msg.includes("404") || msg.includes("function does not exist")){
+      throw new Error("'admin-users' Edge Function is not deployed. Deploy it via Supabase dashboard → Edge Functions.");
+    }
+    throw new Error(error.message || "Edge Function error");
+  }
   if(data && data.error) throw new Error(data.error);
   return data;
 }
@@ -14370,10 +14389,28 @@ function updateAuthUI(){
 }
 
 function onAuthClick(){
-  if(!supa){ flash("Sync unavailable — Supabase failed to load"); return; }
+  console.log("[auth] Account button clicked. supa:", !!supa, "currentUser:", !!currentUser, "email:", currentUser && currentUser.email);
+  if(!supa){
+    flash("Sync unavailable — Supabase failed to load");
+    return;
+  }
   if(currentUser){
-    if(confirm("Sign out of " + currentUser.email + "?\n\nYour local estimates stay on this device. To resume syncing, sign in again.")){
-      supa.auth.signOut();
+    // Native confirm() can sometimes be blocked by the browser if it's
+    // triggered too quickly after a previous dialog, or by overlays.
+    // Use a try/catch fallback so the user always gets feedback.
+    let proceed;
+    try {
+      proceed = confirm("Sign out of " + currentUser.email + "?\n\nYour local estimates stay on this device. To resume syncing, sign in again.");
+    } catch(e){
+      console.warn("[auth] confirm() failed, defaulting to sign out:", e);
+      proceed = true;
+    }
+    if(proceed){
+      console.log("[auth] Signing out...");
+      supa.auth.signOut().then(
+        () => { console.log("[auth] Signed out successfully"); flash("Signed out"); location.reload(); },
+        (err) => { console.error("[auth] Sign-out failed:", err); flash("Sign-out failed: " + err.message); }
+      );
     }
     return;
   }
