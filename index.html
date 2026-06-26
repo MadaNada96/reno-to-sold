@@ -3158,6 +3158,7 @@
       <!-- Row 1: admin / account buttons. data-feature attrs gate visibility
            per the signed-in user's role + features (see applyFeatureGates). -->
       <div class="toolbar no-print">
+        <button data-admin-only="true" onclick="openUsersModal()" title="Create, edit, suspend, or delete user accounts (admin only)">Users</button>
         <button data-feature="pricing_editor"  onclick="openSettings()">Pricing</button>
         <button data-feature="contractor_bids" onclick="openContractorBid()">Contractor Bid</button>
         <button id="authBtn" onclick="onAuthClick()">Sign in</button>
@@ -3751,6 +3752,37 @@
       </span>
     </h3>
     <div class="modal-body" id="invoicingBody"></div>
+  </div>
+</div>
+
+<!-- ===== Admin User Management Modal =====
+     One-click agent onboarding. List, invite, edit, delete users
+     without ever touching SQL. All actions go through the
+     admin-users Edge Function which verifies admin role via JWT.
+     Visible only to admins (data-admin-only on the toolbar button). -->
+<div class="modal-bg" id="usersModal" onclick="if(event.target===this)closeUsersModal()">
+  <div class="modal" style="max-width:1080px;">
+    <h3>
+      <span>Manage Users</span>
+      <span class="small-stack">
+        <button class="primary" onclick="openInviteUserForm()">+ Invite New User</button>
+        <button class="ghost" onclick="closeUsersModal()">Close</button>
+      </span>
+    </h3>
+    <div class="modal-body" id="usersModalBody">
+      <div style="padding:20px;text-align:center;color:var(--muted);">Loading users…</div>
+    </div>
+  </div>
+</div>
+
+<!-- Invite / Edit User form modal -->
+<div class="modal-bg" id="userFormModal" onclick="if(event.target===this)closeUserFormModal()">
+  <div class="modal" style="max-width:620px;">
+    <h3>
+      <span id="userFormHeading">Invite User</span>
+      <button class="ghost" onclick="closeUserFormModal()">Close</button>
+    </h3>
+    <div class="modal-body" id="userFormBody"></div>
   </div>
 </div>
 
@@ -13991,6 +14023,304 @@ function applyAuthGate(){
       </div>
     </div>
   `;
+}
+
+/* ============================================================
+   ADMIN — User Management
+   ============================================================
+   The Manage Users modal lets the admin invite, edit, suspend, and
+   delete user accounts. All operations go through the admin-users
+   Edge Function which verifies admin role server-side via JWT.
+
+   Workflow:
+     openUsersModal()      → fetches user list + renders table
+     openInviteUserForm()  → shows the invite form
+     submitInviteUser()    → calls Edge Function action='invite'
+     openEditUserForm(id)  → shows edit form for one user
+     submitEditUser(id)    → calls Edge Function action='update'
+     deleteUser(id)        → confirms + calls Edge Function action='delete'
+   ============================================================ */
+let _userListCache = [];
+
+async function callAdminUsersFunc(payload){
+  if(!supa || !currentUser){ throw new Error("Not signed in"); }
+  const { data, error } = await supa.functions.invoke("admin-users", { body: payload });
+  if(error) throw new Error(error.message || "Edge Function error");
+  if(data && data.error) throw new Error(data.error);
+  return data;
+}
+
+function openUsersModal(){
+  if(!isAdmin()){ alert("Admin access required."); return; }
+  document.getElementById("usersModal").classList.add("show");
+  refreshUsersList();
+}
+function closeUsersModal(){ document.getElementById("usersModal").classList.remove("show"); }
+
+async function refreshUsersList(){
+  const body = document.getElementById("usersModalBody");
+  body.innerHTML = `<div style="padding:20px;text-align:center;color:var(--muted);">Loading users…</div>`;
+  try {
+    const r = await callAdminUsersFunc({ action: "list" });
+    _userListCache = r.users || [];
+    renderUsersTable();
+  } catch(e) {
+    body.innerHTML = `<div style="padding:20px;color:#ff9090;text-align:center;">
+      Failed to load users: ${escapeHtml(e.message || String(e))}
+      <div style="margin-top:14px;font-size:11px;color:var(--muted);">
+        Make sure the admin-users Edge Function is deployed:<br>
+        <code style="background:#0a0a0a;padding:2px 6px;border-radius:4px;">supabase functions deploy admin-users</code>
+      </div>
+    </div>`;
+  }
+}
+
+function renderUsersTable(){
+  const body = document.getElementById("usersModalBody");
+  if(_userListCache.length === 0){
+    body.innerHTML = `<div style="padding:20px;text-align:center;color:var(--muted);">No users yet. Click "+ Invite New User" to add one.</div>`;
+    return;
+  }
+  const fmtDate = (iso) => {
+    if(!iso) return "—";
+    try { return new Date(iso).toLocaleDateString("en-CA"); } catch { return iso.slice(0,10); }
+  };
+  const fmtExpiry = (iso, role) => {
+    if(role === "admin" || !iso) return `<span style="color:var(--muted);">never</span>`;
+    const d = new Date(iso);
+    const now = new Date();
+    const days = Math.ceil((d - now) / 86400000);
+    const color = days < 0 ? "#ff7676" : days < 30 ? "#f5c878" : "var(--gold-bright)";
+    const label = days < 0 ? `expired ${-days}d ago` : `${days}d left`;
+    return `<span style="color:${color};">${fmtDate(iso)}</span><br><span style="font-size:10px;color:var(--muted);">${label}</span>`;
+  };
+  const roleColors = { admin:"#5fce86", staff:"#8db4ff", agent:"#d4af6a" };
+  const rows = _userListCache.map(u => `
+    <tr onclick="openEditUserForm('${escapeHtmlAttr(u.id)}')" style="cursor:pointer;">
+      <td>
+        <div style="font-weight:600;">${escapeHtml(u.full_name || "(no name)")}</div>
+        <div style="font-size:11px;color:var(--muted);">${escapeHtml(u.email)}</div>
+      </td>
+      <td><span style="display:inline-block;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;background:rgba(212,175,106,.15);color:${roleColors[u.role]||"#888"};border:1px solid ${roleColors[u.role]||"#444"};">${escapeHtml(u.role)}</span></td>
+      <td style="font-size:11.5px;">${fmtExpiry(u.subscription_expires_at, u.role)}</td>
+      <td style="font-size:11.5px;color:var(--muted);">${u.last_sign_in_at ? fmtDate(u.last_sign_in_at) : "never"}</td>
+      <td>${u.suspended ? `<span style="color:#ff7676;font-weight:700;">SUSPENDED</span>` : `<span style="color:#5fce86;">active</span>`}</td>
+    </tr>
+  `).join("");
+  body.innerHTML = `
+    <div style="overflow-x:auto;">
+      <table class="inv-list-table" style="width:100%;">
+        <thead>
+          <tr>
+            <th>Name / Email</th>
+            <th>Role</th>
+            <th>Subscription</th>
+            <th>Last Sign In</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div style="margin-top:14px;padding:10px;background:rgba(212,175,106,.06);border:1px solid var(--line);border-radius:6px;font-size:11.5px;color:var(--muted);">
+      Click any row to edit that user's role, features, subscription, or suspend them.
+    </div>
+  `;
+}
+
+function openInviteUserForm(){
+  renderUserForm(null);
+  document.getElementById("userFormModal").classList.add("show");
+}
+function openEditUserForm(userId){
+  const u = _userListCache.find(x => x.id === userId);
+  if(!u){ alert("User not found"); return; }
+  renderUserForm(u);
+  document.getElementById("userFormModal").classList.add("show");
+}
+function closeUserFormModal(){ document.getElementById("userFormModal").classList.remove("show"); }
+
+function renderUserForm(existing){
+  const isEdit = !!existing;
+  const u = existing || {
+    email:"", full_name:"", brokerage:"", phone:"",
+    role:"agent", features:{},
+    subscription_expires_at: defaultExpiry1Year(),
+    suspended: false
+  };
+  // Default 1-year expiry for new agents
+  function defaultExpiry1Year(){
+    const d = new Date(); d.setFullYear(d.getFullYear()+1);
+    return d.toISOString().slice(0,10);
+  }
+  const features = u.features || {};
+  document.getElementById("userFormHeading").textContent = isEdit ? "Edit User" : "Invite New User";
+  const body = document.getElementById("userFormBody");
+  body.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+      <div>
+        <label style="display:block;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:4px;">Email *</label>
+        <input type="email" id="uf_email" value="${escapeHtmlAttr(u.email)}" ${isEdit ? "readonly" : ""} placeholder="agent@example.com" style="width:100%;padding:9px 11px;${isEdit?"background:#1a1a1a;color:var(--muted);":""}">
+      </div>
+      <div>
+        <label style="display:block;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:4px;">Full Name *</label>
+        <input type="text" id="uf_name" value="${escapeHtmlAttr(u.full_name)}" placeholder="Jane Smith" style="width:100%;padding:9px 11px;">
+      </div>
+      <div>
+        <label style="display:block;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:4px;">Brokerage</label>
+        <input type="text" id="uf_brokerage" value="${escapeHtmlAttr(u.brokerage||"")}" placeholder="RE/MAX West Realty" style="width:100%;padding:9px 11px;">
+      </div>
+      <div>
+        <label style="display:block;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:4px;">Phone</label>
+        <input type="tel" id="uf_phone" value="${escapeHtmlAttr(u.phone||"")}" placeholder="(416) 555-1234" style="width:100%;padding:9px 11px;">
+      </div>
+      <div>
+        <label style="display:block;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:4px;">Role *</label>
+        <select id="uf_role" onchange="renderUserFormFeatures(this.value)" style="width:100%;padding:9px 11px;">
+          <option value="agent"  ${u.role==="agent"?"selected":""}>Agent</option>
+          <option value="staff"  ${u.role==="staff"?"selected":""}>Staff</option>
+          <option value="admin"  ${u.role==="admin"?"selected":""}>Admin</option>
+        </select>
+      </div>
+      <div>
+        <label style="display:block;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:4px;">Subscription Expires</label>
+        <input type="date" id="uf_expires" value="${(u.subscription_expires_at||"").slice(0,10)}" style="width:100%;padding:9px 11px;">
+        <div style="font-size:10.5px;color:var(--muted);margin-top:4px;">Leave blank = never. Defaults to 1 year out for new agents.</div>
+      </div>
+    </div>
+
+    <div style="margin-top:18px;padding:14px;background:#0a0a0e;border:1px solid var(--line);border-radius:8px;">
+      <div style="font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold-bright);font-weight:700;margin-bottom:8px;">Optional Features (in addition to Estimator)</div>
+      <div id="uf_features" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        ${renderFeatureCheckboxes(features, u.role)}
+      </div>
+      <div style="font-size:10.5px;color:var(--muted);margin-top:8px;">Admins get ALL features automatically. Agents always get Estimator + Submit-for-Review. Use these toggles to grant Staff extra access.</div>
+    </div>
+
+    ${isEdit ? `
+      <label style="display:flex;align-items:center;gap:8px;margin-top:14px;font-size:13px;cursor:pointer;">
+        <input type="checkbox" id="uf_suspended" ${u.suspended?"checked":""}>
+        <span>Suspended (account immediately locked out)</span>
+      </label>
+    ` : ""}
+
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;${isEdit?"":""}">
+      ${isEdit ? `
+        <button class="ghost danger" onclick="deleteUserConfirm('${escapeHtmlAttr(u.id)}', '${escapeHtmlAttr(u.email)}')" style="margin-right:auto;">Delete</button>
+      ` : ""}
+      <button class="ghost" onclick="closeUserFormModal()">Cancel</button>
+      <button class="primary" onclick="${isEdit ? `submitEditUser('${escapeHtmlAttr(u.id)}')` : "submitInviteUser()"}">${isEdit ? "Save Changes" : "Send Invite"}</button>
+    </div>
+    <div id="uf_status" style="margin-top:12px;font-size:12px;"></div>
+  `;
+  renderUserFormFeatures(u.role);
+}
+
+function renderFeatureCheckboxes(features, role){
+  const list = [
+    { key:"expense_tracker",  label:"Expense Tracker" },
+    { key:"invoicing",         label:"Invoicing" },
+    { key:"contractor_bids",   label:"Contractor Bids" },
+    { key:"pricing_editor",    label:"Pricing Editor (admins only — see below)" }
+  ];
+  return list.map(f => {
+    const adminOnlyNote = f.key === "pricing_editor";
+    const checked = !!features[f.key];
+    return `
+      <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer;padding:6px;border-radius:4px;${adminOnlyNote?"opacity:0.5;":""}">
+        <input type="checkbox" id="uf_feat_${f.key}" ${checked?"checked":""} ${adminOnlyNote?"disabled":""}>
+        <span>${f.label}</span>
+      </label>
+    `;
+  }).join("");
+}
+function renderUserFormFeatures(role){
+  // When role = admin, all features are implicitly granted — disable checkboxes
+  const checkboxes = document.querySelectorAll("#uf_features input[type=checkbox]");
+  checkboxes.forEach(cb => {
+    if(role === "admin"){
+      cb.checked = true;
+      cb.disabled = true;
+    } else {
+      // Re-enable for non-admin, but pricing_editor stays disabled (admin-only)
+      const isPricing = cb.id === "uf_feat_pricing_editor";
+      cb.disabled = isPricing;
+      if(isPricing) cb.checked = false;
+    }
+  });
+}
+
+function collectUserFormData(){
+  const role = document.getElementById("uf_role").value;
+  const features = {};
+  ["expense_tracker","invoicing","contractor_bids","pricing_editor"].forEach(k => {
+    const cb = document.getElementById("uf_feat_"+k);
+    if(cb) features[k] = cb.checked;
+  });
+  // Agents always get estimator + submit-for-review
+  features.estimator = true;
+  features.submit_for_review = (role === "agent");
+  const expDate = document.getElementById("uf_expires").value;
+  return {
+    email:      document.getElementById("uf_email").value.trim().toLowerCase(),
+    full_name:  document.getElementById("uf_name").value.trim(),
+    brokerage:  document.getElementById("uf_brokerage").value.trim(),
+    phone:      document.getElementById("uf_phone").value.trim(),
+    role,
+    features,
+    subscription_expires_at: expDate ? new Date(expDate + "T23:59:59").toISOString() : null
+  };
+}
+
+async function submitInviteUser(){
+  const data = collectUserFormData();
+  const statusEl = document.getElementById("uf_status");
+  if(!data.email || !data.email.includes("@")){ statusEl.innerHTML = `<span style="color:#ff7676;">Valid email is required.</span>`; return; }
+  if(!data.full_name){ statusEl.innerHTML = `<span style="color:#ff7676;">Full name is required.</span>`; return; }
+  statusEl.innerHTML = `<span style="color:var(--gold-bright);">Sending invite to ${escapeHtml(data.email)}…</span>`;
+  try {
+    const r = await callAdminUsersFunc({ action:"invite", ...data });
+    statusEl.innerHTML = `<span style="color:#5fce86;">✓ Invite sent. ${escapeHtml(data.email)} will receive a magic-link email.</span>`;
+    setTimeout(() => { closeUserFormModal(); refreshUsersList(); }, 1500);
+  } catch(e) {
+    statusEl.innerHTML = `<span style="color:#ff7676;">Failed: ${escapeHtml(e.message || String(e))}</span>`;
+  }
+}
+
+async function submitEditUser(userId){
+  const data = collectUserFormData();
+  const statusEl = document.getElementById("uf_status");
+  const suspendedEl = document.getElementById("uf_suspended");
+  const updates = {
+    full_name: data.full_name,
+    brokerage: data.brokerage,
+    phone:     data.phone,
+    role:      data.role,
+    features:  data.features,
+    subscription_expires_at: data.subscription_expires_at,
+    suspended: !!(suspendedEl && suspendedEl.checked)
+  };
+  statusEl.innerHTML = `<span style="color:var(--gold-bright);">Saving…</span>`;
+  try {
+    await callAdminUsersFunc({ action:"update", user_id: userId, updates });
+    statusEl.innerHTML = `<span style="color:#5fce86;">✓ Saved.</span>`;
+    setTimeout(() => { closeUserFormModal(); refreshUsersList(); }, 900);
+  } catch(e) {
+    statusEl.innerHTML = `<span style="color:#ff7676;">Failed: ${escapeHtml(e.message || String(e))}</span>`;
+  }
+}
+
+async function deleteUserConfirm(userId, email){
+  if(!confirm(`Permanently delete ${email}?\n\nThis removes their account AND profile. All their estimates are kept (RLS just orphans them).\n\nThis cannot be undone.`)) return;
+  const statusEl = document.getElementById("uf_status");
+  statusEl.innerHTML = `<span style="color:var(--gold-bright);">Deleting…</span>`;
+  try {
+    await callAdminUsersFunc({ action:"delete", user_id: userId });
+    statusEl.innerHTML = `<span style="color:#5fce86;">✓ Deleted.</span>`;
+    setTimeout(() => { closeUserFormModal(); refreshUsersList(); }, 900);
+  } catch(e) {
+    statusEl.innerHTML = `<span style="color:#ff7676;">Failed: ${escapeHtml(e.message || String(e))}</span>`;
+  }
 }
 
 function applyFeatureGates(){
