@@ -16135,6 +16135,54 @@ let currentSubmissionBids = null;     // contractor_bids[] for the open submissi
    Above target = green, below = amber/red. */
 const PROFIT_MARGIN_TARGET_PCT = 20;
 
+/* Evaluate the bid situation for an approve decision. Returns
+   { status, message, bestMargin } where status is one of:
+     - 'no_bids'        : currentSubmissionBids is empty or not loaded
+     - 'pending_only'   : bids exist but none have been submitted yet
+     - 'below_target'   : best submitted bid yields margin below target
+     - 'ok'             : best submitted bid meets or exceeds target
+   Used by the approve modal to warn the admin (without blocking)
+   when they're about to approve without contractor validation. */
+function evaluateBidProfit(bidsList, subtotal){
+  if(!Array.isArray(bidsList) || bidsList.length === 0){
+    return {
+      status: "no_bids",
+      message: "No contractor bids have been received for this property yet."
+    };
+  }
+  // Only count bids with an actual amount (submitted or accepted)
+  const submitted = bidsList.filter(b => {
+    const sub = b.submitted_data && b.submitted_data.bid_summary;
+    if(!sub) return false;
+    const total = (typeof sub.total_bid === "number") ? sub.total_bid : rbParseMoney(sub.total_bid);
+    return (total != null && total > 0) && (b.status === "submitted" || b.status === "accepted");
+  });
+  if(submitted.length === 0){
+    return {
+      status: "pending_only",
+      message: "Bids have been sent but no contractor has submitted a price yet."
+    };
+  }
+  const margins = submitted.map(b => {
+    const sub = b.submitted_data.bid_summary;
+    const total = (typeof sub.total_bid === "number") ? sub.total_bid : rbParseMoney(sub.total_bid);
+    return ((subtotal - total) / subtotal) * 100;
+  });
+  const bestMargin = Math.max.apply(null, margins);
+  if(bestMargin >= PROFIT_MARGIN_TARGET_PCT){
+    return {
+      status: "ok",
+      bestMargin: bestMargin,
+      message: "Best contractor bid yields " + bestMargin.toFixed(1) + "% margin — above " + PROFIT_MARGIN_TARGET_PCT + "% target."
+    };
+  }
+  return {
+    status: "below_target",
+    bestMargin: bestMargin,
+    message: "Best contractor bid yields " + bestMargin.toFixed(1) + "% margin — below your " + PROFIT_MARGIN_TARGET_PCT + "% target."
+  };
+}
+
 // Friendly labels for state.enabled keys
 const SUBMISSION_CATEGORY_LABELS = {
   painting:      "Painting",
@@ -16710,6 +16758,38 @@ function renderSubmissionDecisionBody(){
     `;
   }
 
+  /* Profit-margin warning — only shows on Approve. Admin can still
+     proceed (per agreed UX: warn, don't block) but gets a clear
+     heads-up if approving without contractor validation. */
+  let bidWarningHtml = "";
+  let bidWarningStatus = null;
+  if(action === "approve"){
+    const subtotal = totals.subtotal || (totals.total ? totals.total / 1.13 : 0);
+    const evalResult = evaluateBidProfit(currentSubmissionBids, subtotal);
+    bidWarningStatus = evalResult.status;
+    if(evalResult.status === "ok"){
+      bidWarningHtml = `
+        <div style="background:rgba(95,206,134,.06);border:1px solid #2e7e4e;border-radius:6px;padding:10px 12px;margin:10px 0;font-size:12.5px;color:#cfcfcf;">
+          <b style="color:#5fce86;">✓ Profit-margin check passed.</b> ${escapeHtml(evalResult.message)}
+        </div>
+      `;
+    } else {
+      const color = evalResult.status === "no_bids" ? "#ff9090" : "#e8a46c";
+      const border = evalResult.status === "no_bids" ? "#8a2828" : "#a06030";
+      const bg = evalResult.status === "no_bids" ? "rgba(255,144,144,.06)" : "rgba(232,164,108,.06)";
+      const headline = evalResult.status === "no_bids" ? "⚠ No contractor validation."
+                     : evalResult.status === "pending_only" ? "⚠ Bids still pending."
+                     : "⚠ Below margin target.";
+      bidWarningHtml = `
+        <div style="background:${bg};border:1px solid ${border};border-radius:6px;padding:11px 13px;margin:10px 0;font-size:12.5px;color:#cfcfcf;line-height:1.5;">
+          <div style="color:${color};font-weight:700;letter-spacing:.06em;margin-bottom:4px;">${headline}</div>
+          ${escapeHtml(evalResult.message)}
+          <div style="font-size:11px;color:var(--muted);margin-top:6px;opacity:.9;">You can still approve — but consider whether contractor pricing has been verified before locking the estimate.</div>
+        </div>
+      `;
+    }
+  }
+
   body.innerHTML = `
     <div style="background:var(--panel-2);border:1px solid ${m.border};border-radius:8px;padding:12px 14px;margin-bottom:14px;">
       <div style="font-size:11px;color:${m.color};font-weight:700;letter-spacing:.10em;text-transform:uppercase;margin-bottom:4px;">${escapeHtml(m.title)}</div>
@@ -16719,6 +16799,7 @@ function renderSubmissionDecisionBody(){
     </div>
 
     ${drPendingHint}
+    ${bidWarningHtml}
 
     <label style="display:block;font-size:11px;color:var(--gold-bright);font-weight:700;letter-spacing:.10em;text-transform:uppercase;margin-bottom:6px;">${m.noteLabel}</label>
     <textarea id="decisionNoteInput" rows="4" placeholder="${escapeHtml(action==="approve" ? "Optional message — visible to the agent." : "Required — visible to the agent.")}"
@@ -16926,6 +17007,30 @@ async function confirmSubmissionDecision(){
   if(NOTE_REQUIRED && note.length < 3){
     statusEl.textContent = "Please provide a note explaining your decision.";
     return;
+  }
+
+  /* Extra confirmation for Approve when there's a profit-margin warning.
+     Per agreed UX: warn, don't block — so the admin can still proceed
+     after acknowledging. Reduces accidental approval without contractor
+     validation. */
+  if(action === "approve"){
+    const s = row.state || {};
+    const sub = s.submission || {};
+    const totals = sub.totals_at_submission || {};
+    const subtotal = totals.subtotal || (totals.total ? totals.total / 1.13 : 0);
+    const evalResult = evaluateBidProfit(currentSubmissionBids, subtotal);
+    if(evalResult.status !== "ok"){
+      const promptMsg = evalResult.status === "no_bids"
+        ? "No contractor bids on file. Are you sure you want to approve this estimate without contractor validation?"
+        : evalResult.status === "pending_only"
+        ? "Bids were sent but no contractor has submitted pricing yet. Approve anyway?"
+        : "Best bid yields " + evalResult.bestMargin.toFixed(1) + "% margin — below your " + PROFIT_MARGIN_TARGET_PCT + "% target. Approve anyway?";
+      if(!confirm(promptMsg)){
+        statusEl.style.color = "var(--muted)";
+        statusEl.textContent = "Approval cancelled.";
+        return;
+      }
+    }
   }
 
   // Estimate decision touches state.status + state.admin_review ONLY.
