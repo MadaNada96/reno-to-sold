@@ -9303,12 +9303,18 @@ function buildEstimateLineItems(){
         const lL = qty * (entry.labour || 0), lM = qty * (entry.material || 0);
         return { labour:lL, material:lM, total: lL + lM };
       };
-      // Base cabinetry
+      // Base cabinetry — include per-run breakdown in subdesc so the
+      // contractor sees individual run dimensions, not just the total.
       if(d.baseLF > 0 && p.base && p.base[k.tier]){
         const r = pricedRow(d.baseLF, p.base[k.tier]);
+        const runParts = [];
+        if(d.run1 > 0) runParts.push(`Run #1: ${d.run1} LF`);
+        if(d.run2 > 0) runParts.push(`Run #2: ${d.run2} LF`);
+        if(d.run3 > 0) runParts.push(`Run #3: ${d.run3} LF`);
+        const runsLbl = runParts.length ? ` Runs: ${runParts.join(", ")} (total ${d.baseLF} LF).` : "";
         rows.push({
           desc: `${prefix}Kitchen base — ${layoutLbl}`,
-          subdesc: `${tierLbl}. Cabinets, sink, faucet, plumbing adjustments, install, all hardware. Standard 24″ lower / 12″ upper cabinet depth.`,
+          subdesc: `${tierLbl}. Cabinets, sink, faucet, plumbing adjustments, install, all hardware. Standard 24″ lower / 12″ upper cabinet depth.${runsLbl}`,
           qty: d.baseLF, unit: "LF",
           ...r
         });
@@ -9951,22 +9957,60 @@ function buildEstimateSummary(){
       const d = deriveKitchen(k);
       const ctTier   = kitchenCounterTierLabel(k.counterTier);
       const baseTier = kitchenBaseTierLabel(k.tier);
-      b.push(`Tier: <b>${baseTier}</b> · Layout: <b>${k.layout === "U" ? "U-shape" : "L-shape"}</b> · Total cabinet length: <b>${d.baseLF || '?'} LF</b>`);
+
+      // Tier + layout summary
+      b.push(`Tier: <b>${baseTier}</b> · Layout: <b>${k.layout === "U" ? "U-shape (3 runs)" : "L-shape (2 runs)"}</b>`);
+
+      // Cabinet RUNS — explicit per-run breakdown so the client can verify
+      // each section's dimensions, not just the total LF.
+      const runs = [];
+      if(d.run1 > 0) runs.push(`Run #1: <b>${d.run1} LF</b>`);
+      if(d.run2 > 0) runs.push(`Run #2: <b>${d.run2} LF</b>`);
+      if(d.run3 > 0) runs.push(`Run #3: <b>${d.run3} LF</b>`);
+      if(runs.length){
+        b.push(`Cabinet runs — ${runs.join(" · ")} <span style="opacity:.7">(Total: ${d.baseLF} LF)</span>`);
+      } else {
+        b.push(`Total cabinet length: <b>${d.baseLF || '?'} LF</b>`);
+      }
       b.push("Cabinets, sink, faucet, plumbing adjustments &amp; all hardware (24″ lower / 12″ upper cabinet depth)");
+
+      // Countertop with sqft contributors so the client sees where the area comes from
       if(k.counter){
-        const ovNote = d.islandOverhangSqft ? `, ${d.islandOverhangFt} ft countertop overhang (${d.islandOverhangSqft} sqft)` : "";
-        const wfNote = d.waterfallSqft ? `, waterfall (${d.waterfallEnds} end${d.waterfallEnds>1?"s":""}, ${d.waterfallSqft} sqft) included` : "";
-        b.push(`Countertop — ${ctTier}, ${d.counterSqft || '?'} sqft${ovNote}${wfNote}`);
+        const parts = [];
+        if(d.baseCounterSqft)     parts.push(`base cabinets ${d.baseCounterSqft} sqft`);
+        if(d.islandCounterSqft)   parts.push(`island top ${d.islandCounterSqft} sqft`);
+        if(d.overhangCounterSqft) parts.push(`overhang ${d.overhangCounterSqft} sqft`);
+        if(d.waterfallSqft)       parts.push(`waterfall ${d.waterfallSqft} sqft`);
+        if(d.matchBacksplashSqft) parts.push(`backsplash ${d.matchBacksplashSqft} sqft`);
+        if(d.counterExtra)        parts.push(`extras ${d.counterExtra} sqft`);
+        const partsLbl = parts.length ? ` <span style="opacity:.7">(${parts.join(" + ")})</span>` : "";
+        b.push(`Countertop — <b>${ctTier}</b>, ${d.counterSqft || '?'} sqft${partsLbl}`);
       }
+
+      // Backsplash — only show countertop tier when the material is "same as
+      // countertop"; for tile, it's irrelevant (was previously incorrectly
+      // including "(countertop tier: Standard Quartz)" on tile backsplash too).
       if(k.backsplash){
-        const matLbl = (k.backsplashMaterial === "match") ? `same material as countertop (${ctTier})` : `Tile (countertop tier: ${ctTier})`;
-        b.push(`Backsplash — ${matLbl}, ${d.backsplashSqft || '?'} sqft (18″ standard height${d.backsplashExtra ? ` + ${d.backsplashExtra} sqft for taller areas` : ""})`);
+        const isMatch = (k.backsplashMaterial === "match");
+        const matLbl  = isMatch ? `Same material as countertop (${ctTier})` : `Tile`;
+        const extraNote = d.backsplashExtra ? ` + ${d.backsplashExtra} sqft for taller areas` : "";
+        b.push(`Backsplash — <b>${matLbl}</b>, ${d.backsplashSqft || '?'} sqft (18″ standard height${extraNote})`);
       }
+
+      // Island — dimensions + top sqft + overhang + waterfall as separate lines
       if(k.island){
-        const ovBullet = d.islandOverhangFt ? `, ${d.islandOverhangFt} ft countertop overhang` : "";
-        b.push(`Island — ${d.islandLenFt || '?'}′ × ${d.islandWidFt || '?'}′ (${k.tier === "custom" ? "custom" : "semi-custom"} build)${ovBullet}`);
+        const buildType = k.tier === "custom" ? "custom" : "semi-custom";
+        b.push(`Island — <b>${d.islandLenFt || '?'}′ × ${d.islandWidFt || '?'}′</b> (${buildType} build), ${d.islandTopSqft || '?'} sqft top`);
+        if(d.islandOverhangFt > 0){
+          b.push(`Island countertop overhang — ${d.islandOverhangFt}′ projection (${d.islandOverhangSqft} sqft, included in countertop above)`);
+        }
+        if(d.waterfallEnds > 0){
+          b.push(`Waterfall — ${d.waterfallEnds} end${d.waterfallEnds>1?"s":""} (${d.waterfallSqft} sqft, included in countertop above)`);
+        }
       }
+
       if(k.undercabLighting) b.push(`Under-cabinet LED lighting — ${d.baseLF || '?'} LF (strip + driver)`);
+
       return b;
     };
     if(hasBasementKitchen){
