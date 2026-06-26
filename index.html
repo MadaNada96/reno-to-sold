@@ -15024,6 +15024,50 @@ function initSupabase(){
     }
   });
 
+  /* RECOVERY / MAGIC LINK URL HANDLER
+     When a user clicks an admin-generated recovery or magic link, the
+     Supabase verify endpoint redirects to renotosold.homes with the
+     session tokens in the URL fragment:
+       #access_token=...&refresh_token=...&type=recovery
+
+     Our PKCE-configured client looks for `?code=` and doesn't always
+     pick up the fragment-based session. We manually parse the fragment,
+     call setSession, and clear the hash. This makes activation links
+     work even though we're on PKCE flow. */
+  (async () => {
+    try {
+      const hash = window.location.hash || "";
+      if(hash.length < 2) return;
+      const params = new URLSearchParams(hash.slice(1));
+      const accessToken  = params.get("access_token");
+      const refreshToken = params.get("refresh_token");
+      const linkType     = params.get("type") || "";
+      if(!accessToken || !refreshToken) return;
+      console.log("[auth] Detected URL-fragment session (type=" + linkType + ") — applying via setSession");
+      const { data, error } = await supa.auth.setSession({
+        access_token:  accessToken,
+        refresh_token: refreshToken
+      });
+      if(error){
+        console.error("[auth] setSession from URL fragment failed:", error.message);
+        return;
+      }
+      console.log("[auth] URL-fragment session applied successfully for " + (data && data.user && data.user.email));
+      // Clear the hash so the tokens don't sit in the URL bar / history
+      try {
+        history.replaceState(null, "", window.location.pathname + window.location.search);
+      } catch(e){}
+      // Recovery flow → force the password setup modal, even if previously
+      // dismissed, because the user JUST clicked Activate Account from
+      // their invitation email.
+      if(linkType === "recovery"){
+        try { localStorage.removeItem("rts_pw_setup_dismissed"); } catch(e){}
+      }
+    } catch(e) {
+      console.warn("[auth] URL fragment handler threw:", e);
+    }
+  })();
+
   /* Resume any existing session. Diagnostic logging is on so we can
      trace where time is spent. We deliberately do NOT auto-clear
      localStorage or force a reload on slow init — that was causing
