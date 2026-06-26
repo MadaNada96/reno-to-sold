@@ -14164,17 +14164,44 @@ function accountLockoutReason(){
    gets full access even when the database is misbehaving. */
 async function fetchCurrentProfile(){
   if(!supa || !currentUser){ currentProfile = null; return null; }
-  try{
+
+  /* Helper: single attempt with a timeout. 8 seconds is generous —
+     normal Supabase profile reads take 50-300ms. Anything past 8s
+     means something is genuinely broken (cold start, network outage,
+     Supabase incident) and we should bail and retry. */
+  const attemptFetch = async (timeoutMs, attemptLabel) => {
+    const t0 = Date.now();
     const queryPromise = supa.from("profiles")
       .select("id,email,full_name,brokerage,phone,role,features,subscription_starts_at,subscription_expires_at,suspended")
       .eq("id", currentUser.id)
       .maybeSingle();
     const timeoutPromise = new Promise((resolve) =>
-      setTimeout(() => resolve({ data: null, error: { message: "client-side 3s timeout" } }), 3000)
+      setTimeout(() => resolve({ data: null, error: { message: "client-side timeout (" + timeoutMs + "ms)" } }), timeoutMs)
     );
-    const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
+    const result = await Promise.race([queryPromise, timeoutPromise]);
+    const elapsed = Date.now() - t0;
+    console.log("[auth] Profile fetch " + attemptLabel + " took " + elapsed + "ms — " +
+                (result.data ? "found profile (role: " + result.data.role + ")" :
+                 result.error ? "error: " + result.error.message :
+                 "no profile row (data null, no error)"));
+    return result;
+  };
+
+  try{
+    // First attempt: 8 seconds
+    let { data, error } = await attemptFetch(8000, "attempt 1");
+
+    // If timed out on attempt 1, give it ONE more try with a longer
+    // window. Sometimes Supabase has a cold start and the second
+    // attempt is fast. We don't retry on actual errors (RLS reject,
+    // network failure) — just on timeouts.
+    if(!data && error && /timeout/.test(error.message)){
+      console.warn("[auth] Profile fetch timed out — retrying once with 12s window");
+      ({ data, error } = await attemptFetch(12000, "attempt 2 (retry)"));
+    }
+
     if(error){
-      console.warn("Profile fetch:", error.message);
+      console.warn("[auth] Profile fetch final error:", error.message);
       // RLS rejection, timeout, etc — fall through to fallback
     }
     if(data){
@@ -14184,7 +14211,7 @@ async function fetchCurrentProfile(){
       return data;
     }
   }catch(e){
-    console.warn("Profile fetch error:", e);
+    console.warn("[auth] Profile fetch threw:", e);
   }
   /* Bootstrap fallback: if no profile row exists but this email is
      in the admin-fallback list, treat as admin so they can't lock
