@@ -3155,10 +3155,11 @@
         <img src="RENO_to_SOLD_logo_only.png" alt="Reno to Sold" class="logo-img">
         <img src="updated-logo-trans.png" alt="Reno to Sold &mdash; Renovate for less. Sell for more. Fully managed from start to sold." class="logo-img-print">
       </a>
-      <!-- Row 1: admin / account buttons -->
+      <!-- Row 1: admin / account buttons. data-feature attrs gate visibility
+           per the signed-in user's role + features (see applyFeatureGates). -->
       <div class="toolbar no-print">
-        <button onclick="openSettings()">Pricing</button>
-        <button onclick="openContractorBid()">Contractor Bid</button>
+        <button data-feature="pricing_editor"  onclick="openSettings()">Pricing</button>
+        <button data-feature="contractor_bids" onclick="openContractorBid()">Contractor Bid</button>
         <button id="authBtn" onclick="onAuthClick()">Sign in</button>
         <button onclick="lockSite()" title="Sign out of this site — re-prompts for the access code on next visit">Lock</button>
       </div>
@@ -3174,8 +3175,8 @@
       </button>
       <button onclick="openClientEstimate()">Print / PDF</button>
       <button onclick="openEmailEstimateModal()">Email to Client</button>
-      <button onclick="openExpenseTracker()" title="Track renovation expenses & profit for this estimate">Expense Tracker</button>
-      <button onclick="openInvoicing()" title="Issue invoices on the project payment schedule (10/40/40/10 — or 10/40/20/20/10 when a kitchen reno is part of the scope)">Invoicing</button>
+      <button data-feature="expense_tracker" onclick="openExpenseTracker()" title="Track renovation expenses & profit for this estimate">Expense Tracker</button>
+      <button data-feature="invoicing"       onclick="openInvoicing()" title="Issue invoices on the project payment schedule (10/40/40/10 — or 10/40/20/20/10 when a kitchen reno is part of the scope)">Invoicing</button>
       <input type="file" id="pdfImportInput" accept="application/pdf,.pdf" style="display:none;" onchange="onPdfFileChosen(event)">
     </div>
   </div>
@@ -4671,7 +4672,13 @@ function savePrices(){
   localStorage.setItem("reno_prices_v2", JSON.stringify(prices));
   // Stamp the local edit so bootstrapCloudSync can tell who's newer.
   localStorage.setItem(PRICES_TS_KEY, new Date().toISOString());
-  if(currentUser && supa){ cloudPushPrices("client"); }
+  if(currentUser && supa){
+    cloudPushPrices("client");
+    // Phase 1b: admin writes propagate to the GLOBAL pricing table
+    // so every other signed-in user (agents, staff) gets the update
+    // immediately via Realtime. Fire-and-forget — no need to await.
+    try { pushServerPricing("client"); } catch(e){}
+  }
 }
 function resetPricing(){
   // Same gate as setPrice — bail if the editor isn't unlocked.
@@ -6709,8 +6716,8 @@ function renderMiscItem(it, i, internal){
           ${pillToggle("misc-unit-"+i, it.unit || "ea", unitOpts, "state.miscellaneous.items["+i+"].unit=this.value")}
         </div>
         <div>
-          <label>$/unit</label>
-          <input type="number" min="0" step="any" value="${escapeHtmlAttr(it.clientRate||'')}" placeholder="0.00" oninput="state.miscellaneous.items[${i}].clientRate=this.value;updateMiscItemTotal(${i})">
+          <label>$/unit${isAdmin() ? "" : ` <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;font-size:10.5px;">&mdash; Reno to Sold prices on review</span>`}</label>
+          <input type="${isAdmin() ? "number" : "text"}" ${isAdmin() ? `min="0" step="any"` : "readonly"} value="${escapeHtmlAttr(it.clientRate||'')}" placeholder="${isAdmin() ? "0.00" : "TBD"}" ${isAdmin() ? `oninput="state.miscellaneous.items[${i}].clientRate=this.value;updateMiscItemTotal(${i})"` : `style="background:#1a1a1a;color:var(--muted);cursor:not-allowed;"`} title="${isAdmin() ? "" : "Pricing for Miscellaneous items is set by Reno to Sold during review."}">
         </div>
         <div>
           <label>Line total <span style="color:var(--muted);font-weight:400;">(auto)</span></label>
@@ -12421,7 +12428,14 @@ function saveContractorPrices(){
   localStorage.setItem("reno_contractor_prices_v1", JSON.stringify(contractorPrices));
   // Stamp the local edit so bootstrapCloudSync can tell who's newer.
   localStorage.setItem(CONTRACTOR_PRICES_TS_KEY, new Date().toISOString());
-  if(currentUser && supa){ cloudPushPrices("contractor"); }
+  if(currentUser && supa){
+    cloudPushPrices("contractor");
+    // Phase 1b: contractor prices are admin-only (RLS-protected) but
+    // we still push them to the GLOBAL contractor pricing table so a
+    // second admin (e.g. realestatenada + renotosold) sees consistent
+    // margin data across their browsers.
+    try { pushServerPricing("contractor"); } catch(e){}
+  }
 }
 function resetContractorPricing(){
   if(!confirm("Reset all contractor rates to 70% of client defaults?")) return;
@@ -13768,11 +13782,68 @@ async function bootstrapServerPricing(){
       try{ if(typeof renderTotals === "function") renderTotals(); }catch(e){}
     }
 
-    /* Phase 1b will add Realtime subscription here so non-admin
-       browsers silently auto-update when admin saves a change. For
-       now non-admins refresh on next page load / next sign-in. */
+    /* Realtime subscription: silently auto-refresh local prices in
+       EVERY open browser whenever the admin updates pricing in
+       the server table. Mo confirmed (Phase 2 prep) he wants silent
+       auto-refresh — no banner. The trade-off: numbers may tick
+       under the agent's nose during a client meeting if admin saves
+       a change at that moment.
+
+       We only set up the subscription if it's not already in place. */
+    if(!_pricingChannel){
+      try {
+        _pricingChannel = supa.channel("app_pricing_client_changes")
+          .on("postgres_changes",
+            { event: "UPDATE", schema: "public", table: "app_pricing_client" },
+            (payload) => {
+              try {
+                const newPrices = (payload.new && payload.new.prices) || {};
+                if(Object.keys(newPrices).length === 0) return;
+                // Don't echo back our own write into our own state. The
+                // updated_by field tells us who wrote this version.
+                if(payload.new && payload.new.updated_by === (currentUser && currentUser.id)) return;
+                // Overlay onto local prices + persist as the new local cache.
+                deepMerge(prices, newPrices);
+                try{ localStorage.setItem("reno_prices_v2", JSON.stringify(prices)); }catch(e){}
+                try{ if(typeof renderTotals === "function") renderTotals(); }catch(e){}
+                try{ if(typeof renderAll === "function") renderAll(); }catch(e){}
+                console.log("Server pricing refreshed via Realtime.");
+              } catch(e) {
+                console.warn("Realtime pricing handler error:", e);
+              }
+            }
+          )
+          .subscribe();
+      } catch(e) {
+        console.warn("Realtime subscription failed:", e);
+      }
+    }
   }catch(e){
     console.warn("bootstrapServerPricing error:", e);
+  }
+}
+
+/* Push current local pricing UP to the server table. Admin-only.
+   Called by savePrices() / saveContractorPrices() when isAdmin() is
+   true, so every admin edit propagates to all signed-in users.
+   Non-admins never call this (they only ever read from server).
+   Safe to call when offline / not signed in — exits early.       */
+async function pushServerPricing(which){
+  if(!supa || !currentUser || !isAdmin()) return;
+  try {
+    const now = new Date().toISOString();
+    if(which === "client" || which === "both"){
+      await supa.from("app_pricing_client")
+        .update({ prices: prices, updated_at: now, updated_by: currentUser.id })
+        .eq("id", "current");
+    }
+    if((which === "contractor" || which === "both") && typeof contractorPrices !== "undefined" && contractorPrices){
+      await supa.from("app_pricing_contractor")
+        .update({ prices: contractorPrices, updated_at: now, updated_by: currentUser.id })
+        .eq("id", "current");
+    }
+  } catch(e) {
+    console.warn("pushServerPricing failed:", e);
   }
 }
 
@@ -13784,23 +13855,111 @@ function teardownServerPricing(){
 }
 
 function applyAuthGate(){
-  /* Phase 1a: no-op. Sign-in remains optional (existing behaviour).
-     Phase 1b will replace the PIN gate with an auth-required
-     lockout screen that surfaces accountLockoutReason() to the user.
-     Intentionally keeping the existing flow during the foundation
-     phase so deploys are low-risk. */
+  /* Phase 1b: show a full-screen lockout overlay when the user
+     doesn't have a usable account. Four states it handles:
+       not_signed_in → instructs to click Sign In in the toolbar
+       no_profile    → "Your account hasn't been provisioned yet.
+                        Contact Reno to Sold."
+       suspended     → "Your account is suspended."
+       expired       → "Your subscription has expired. Contact
+                        Reno to Sold to renew."
+     If reason is empty (user is good) → hide the overlay.
+
+     This SUPPLEMENTS the existing site PIN gate; the PIN still
+     works as it does today. Phase 1c will retire the PIN.        */
+  const reason = accountLockoutReason();
+  let overlay = document.getElementById("authLockoutOverlay");
+  if(!reason){
+    if(overlay) overlay.style.display = "none";
+    return;
+  }
+  if(!overlay){
+    overlay = document.createElement("div");
+    overlay.id = "authLockoutOverlay";
+    overlay.style.cssText =
+      "position:fixed;inset:0;z-index:9999;background:rgba(10,10,10,.96);" +
+      "display:flex;align-items:center;justify-content:center;" +
+      "font-family:'Montserrat',sans-serif;color:#e8c989;backdrop-filter:blur(8px);";
+    document.body.appendChild(overlay);
+  }
+  const msgMap = {
+    not_signed_in: {
+      title: "Sign in to continue",
+      body:  "Click the <b>Sign in</b> button in the toolbar at the top of the page and enter your email to receive a sign-in link.",
+      cta:   "Click Sign In →"
+    },
+    no_profile: {
+      title: "Account not yet provisioned",
+      body:  "Your email isn't recognized as an active Reno to Sold account. Contact Reno to Sold to set up your access.",
+      cta:   "Sign out and try a different email"
+    },
+    suspended: {
+      title: "Account suspended",
+      body:  "Your account has been suspended. Contact Reno to Sold at renotosold@gmail.com to resolve.",
+      cta:   "Sign out"
+    },
+    expired: {
+      title: "Subscription expired",
+      body:  "Your annual subscription has ended. Contact Reno to Sold at renotosold@gmail.com to renew.",
+      cta:   "Sign out"
+    }
+  };
+  const m = msgMap[reason] || msgMap.not_signed_in;
+  overlay.style.display = "flex";
+  overlay.innerHTML = `
+    <div style="max-width:480px;padding:36px 36px 32px;text-align:center;
+                background:linear-gradient(180deg,#1a1408,#0f0c06);
+                border:1px solid #c98e2a;border-radius:12px;
+                box-shadow:0 20px 60px rgba(0,0,0,.6);">
+      <img src="RENO_to_SOLD_logo_only.png" alt="Reno to Sold"
+           style="max-height:54px;margin-bottom:20px;display:block;margin-inline:auto;">
+      <div style="font-size:20px;font-weight:800;letter-spacing:.04em;color:#d4af6a;margin-bottom:12px;">
+        ${m.title}
+      </div>
+      <div style="font-size:13.5px;line-height:1.55;color:#cfcfcf;margin-bottom:22px;">
+        ${m.body}
+      </div>
+      ${reason === "not_signed_in"
+        ? `<button onclick="openAuthModal()"
+              style="background:linear-gradient(180deg,#2a2010,#1a1408);color:#e8c989;
+                     border:1px solid #d4af6a;border-radius:6px;padding:11px 26px;
+                     font-size:12.5px;font-weight:700;letter-spacing:.10em;text-transform:uppercase;cursor:pointer;">
+              Sign in
+           </button>`
+        : `<button onclick="supa && supa.auth.signOut(); setTimeout(()=>location.reload(),300);"
+              style="background:linear-gradient(180deg,#2a2010,#1a1408);color:#e8c989;
+                     border:1px solid #d4af6a;border-radius:6px;padding:10px 22px;
+                     font-size:12px;font-weight:700;letter-spacing:.10em;text-transform:uppercase;cursor:pointer;">
+              ${m.cta}
+           </button>`}
+      <div style="margin-top:24px;font-size:10.5px;color:#888;letter-spacing:.12em;text-transform:uppercase;">
+        Reno to Sold Inc.
+      </div>
+    </div>
+  `;
 }
 
 function applyFeatureGates(){
-  /* Phase 1a: no-op. Admin = all toolbar buttons visible (existing
-     behaviour). Phase 1b will hide buttons whose feature canUse()
-     returns false for the current user.
+  /* Phase 1b: hide every element whose data-feature attribute isn't
+     enabled for the current user. Buttons without data-feature stay
+     visible to everyone (estimator essentials: New, Save, Saved,
+     Import-PDF, Print, Email-to-Client, the Sign-in toggle, the
+     authBtn / Account button).
 
-     Implementation note for Phase 1b:
-       document.querySelectorAll("[data-feature]").forEach(el => {
-         el.style.display = canUse(el.dataset.feature) ? "" : "none";
-       });
-     Then add data-feature="invoicing" etc. to each toolbar button. */
+     Re-runs on every profile change. Idempotent. */
+  try {
+    const els = document.querySelectorAll("[data-feature]");
+    els.forEach(el => {
+      const feature = el.getAttribute("data-feature");
+      el.style.display = canUse(feature) ? "" : "none";
+    });
+    // Also hide the floating "Internal Mode" lock icon for non-admins.
+    // Internal Mode is a legacy admin-only gate; only admins ever need it.
+    const lockBtn = document.getElementById("openPinModalBtn");
+    if(lockBtn) lockBtn.style.display = isAdmin() ? "" : "none";
+  } catch(e) {
+    console.warn("applyFeatureGates error:", e);
+  }
 }
 
 function updateAuthUI(){
