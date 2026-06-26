@@ -12186,8 +12186,14 @@ async function sendContractorBidEmail(){
         scope_data:         scopeData,
         status:             "pending"
       };
-      const { error: insertErr } = await supa.from("contractor_bids").insert(insertPayload);
-      if(insertErr){ results.push({ ok:false, label:env.emails.join(", "), err:insertErr.message }); continue; }
+      // Bypass supa.from to avoid the supabase-js hang. dbInsert uses
+      // restFetch → plain fetch → reliable.
+      try {
+        await dbInsert("contractor_bids", insertPayload, { prefer: "return=minimal" });
+      } catch(insertErr){
+        results.push({ ok:false, label:env.emails.join(", "), err: insertErr.message || String(insertErr) });
+        continue;
+      }
 
       const bidLink = `${location.origin}${location.pathname}?bid=${bid_token}`;
       const { ok, err } = await sendContractorBidEnvelope({
@@ -14522,6 +14528,38 @@ async function restFetch(path, opts){
     throw err;
   }
   return data;
+}
+
+/* ===== CRUD helpers — bypass supabase-js for write operations =====
+   supa.from("X").insert/update/delete also hangs on the same broken
+   code path. Use these helpers (built on restFetch) instead. */
+async function dbInsert(table, row, opts){
+  // Returns the inserted row by default. Pass { prefer: "return=minimal" }
+  // for fire-and-forget inserts where the returned row isn't needed.
+  return restFetch(table, {
+    method: "POST",
+    body: row,
+    headers: { "Prefer": (opts && opts.prefer) || "return=representation" },
+    single: !!(opts && opts.single)
+  });
+}
+async function dbUpdate(table, filter, changes, opts){
+  // filter is an object like { id: "abc", type: "tracker" } → translated to PostgREST filters
+  const queryStr = Object.entries(filter || {})
+    .map(([k,v]) => `${encodeURIComponent(k)}=eq.${encodeURIComponent(v)}`).join("&");
+  return restFetch(table + (queryStr ? "?" + queryStr : ""), {
+    method: "PATCH",
+    body: changes,
+    headers: { "Prefer": (opts && opts.prefer) || "return=representation" }
+  });
+}
+async function dbDelete(table, filter){
+  const queryStr = Object.entries(filter || {})
+    .map(([k,v]) => `${encodeURIComponent(k)}=eq.${encodeURIComponent(v)}`).join("&");
+  return restFetch(table + (queryStr ? "?" + queryStr : ""), {
+    method: "DELETE",
+    headers: { "Prefer": "return=minimal" }
+  });
 }
 
 /* Invoke a Supabase Edge Function via plain fetch — bypasses
