@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Reno to Sold &mdash; Trim Calculator</title>
+<meta name="description" content="Door & window trim linear-foot calculator with waste and 2026 GTA client pricing.">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<meta name="theme-color" content="#0a0a0a">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Cormorant+Garamond:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0a0a; --panel:#15151a; --panel-2:#1c1c22;
+    --ink:#f5f1e6; --ink-strong:#ffffff; --muted:#8a8579;
+    --line:#2a2a30; --line-strong:#3a3a42;
+    --gold:#d4af6a; --gold-bright:#e8c989; --gold-deep:#a8853f;
+    --gold-grad:linear-gradient(135deg,#e8c989 0%,#d4af6a 45%,#a8853f 100%);
+    --danger:#e26d6d;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.5);
+    --gold-glow:0 0 0 1px rgba(212,175,106,.25), 0 6px 20px rgba(212,175,106,.08);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;font-family:'Montserrat',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);letter-spacing:.01em;}
+  body{background:radial-gradient(ellipse at top,#161616 0%,#0a0a0a 60%) fixed;}
+  .app{max-width:1000px;margin:0 auto;padding:24px;}
+
+  /* ===== Brand header ===== */
+  .brandbar{background:#000;border:1px solid var(--line-strong);border-radius:14px;padding:22px 28px;margin-bottom:16px;box-shadow:var(--shadow);position:relative;overflow:hidden;}
+  .brandbar::before{content:"";position:absolute;inset:0;background:linear-gradient(120deg,transparent 40%,rgba(212,175,106,.04) 60%,transparent 80%);pointer-events:none;}
+  .brandbar-row{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;position:relative;}
+  .logo{display:flex;align-items:center;flex:1;min-width:0;}
+  .logo-img{display:block;width:100%;max-width:420px;height:auto;max-height:110px;object-fit:contain;object-position:left center;}
+  .logo-fallback{font-weight:900;font-size:30px;letter-spacing:.04em;color:var(--ink-strong);}
+  .logo-fallback .to{font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:600;color:var(--gold);}
+  .logo-fallback .sold{color:var(--gold);}
+  .brand-sub{text-align:right;}
+  .brand-sub .tag{font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--gold-deep);font-weight:700;}
+  .brand-sub .ttl{font-size:13px;color:var(--muted);margin-top:3px;}
+
+  .brand-tagline{text-align:center;font-family:'Cormorant Garamond',serif;margin:0 0 20px;line-height:1.15;}
+  .brand-tagline .bt-line{display:block;font-size:26px;color:var(--ink);}
+  .brand-tagline .bt-sub{font-size:20px;margin-top:2px;}
+  .brand-tagline .bt-accent{color:var(--gold-bright);font-weight:600;}
+
+  /* ===== Panels ===== */
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);margin-bottom:16px;}
+  .panel h2{font-size:12px;margin:0;padding:14px 20px;border-bottom:1px solid var(--line);font-weight:700;display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--gold-bright);text-transform:uppercase;letter-spacing:.18em;}
+  .panel-body{padding:18px 20px;}
+
+  label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:6px;font-weight:600;}
+  input[type="text"],input[type="number"]{width:100%;padding:10px 12px;border:1px solid var(--line-strong);border-radius:8px;font:inherit;background:#0d0d11;color:var(--ink);font-size:14px;}
+  input[type="number"]:focus,input[type="text"]:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 2px rgba(212,175,106,.15);}
+  button{font:inherit;cursor:pointer;border:1px solid var(--line-strong);background:transparent;color:var(--ink);padding:9px 16px;border-radius:8px;transition:all .15s;font-weight:500;font-size:13px;letter-spacing:.03em;}
+  button:hover{border-color:var(--line-strong);background:#232328;}
+  .btn-gold{background:var(--gold-grad);color:#1a1405;border:1px solid var(--gold);font-weight:700;}
+  .btn-gold:hover{filter:brightness(1.06);background:var(--gold-grad);}
+
+  /* ===== Type toggle (segmented) ===== */
+  .seg{display:inline-flex;background:var(--panel-2);border:1px solid var(--line-strong);border-radius:10px;padding:3px;gap:2px;width:100%;}
+  .seg button{flex:1;border:none;background:transparent;color:var(--muted);font-weight:700;font-size:13px;padding:11px;border-radius:8px;text-transform:uppercase;letter-spacing:.08em;}
+  .seg button.on{background:var(--gold-grad);color:#1a1405;}
+
+  /* ===== Pill toggle group ===== */
+  .ptg{display:flex;flex-wrap:wrap;gap:8px;}
+  .ptg button{border:1px solid var(--line-strong);background:var(--panel-2);color:var(--muted);font-weight:700;font-size:13px;padding:9px 16px;border-radius:999px;letter-spacing:.04em;}
+  .ptg button:hover{border-color:var(--gold-deep);color:var(--ink);background:var(--panel-2);}
+  .ptg button.on{background:var(--gold-grad);color:#1a1405;border-color:var(--gold);}
+
+  .input-row{display:grid;grid-template-columns:1.2fr 1fr 1fr auto;gap:12px;align-items:end;}
+  .input-row .add-wrap{display:flex;}
+  .input-row .add-wrap button{width:100%;white-space:nowrap;}
+  .hint{font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5;}
+
+  /* ===== Item list ===== */
+  .items{display:flex;flex-direction:column;gap:8px;}
+  .item{display:grid;grid-template-columns:auto 1fr auto auto;gap:14px;align-items:center;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;}
+  .item .ticon{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;background:rgba(212,175,106,.12);border:1px solid rgba(212,175,106,.3);}
+  .item .imeta{min-width:0;}
+  .item .iname{font-weight:700;font-size:14px;}
+  .item .idim{font-size:12px;color:var(--muted);margin-top:2px;}
+  .item .ilf{text-align:right;font-weight:700;font-size:14px;color:var(--gold-bright);font-variant-numeric:tabular-nums;}
+  .item .ilf small{display:block;color:var(--muted);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;}
+  .item .del{border:1px solid var(--line-strong);background:transparent;color:var(--muted);width:30px;height:30px;border-radius:7px;padding:0;font-size:15px;line-height:1;}
+  .item .del:hover{border-color:var(--danger);color:var(--danger);}
+  .empty{text-align:center;color:var(--muted);font-size:13px;padding:24px 0;}
+
+  .pill{display:inline-block;font-size:10px;padding:3px 9px;border-radius:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;}
+  .pill-d{background:rgba(212,175,106,.18);color:var(--gold-bright);border:1px solid rgba(212,175,106,.35);}
+  .pill-w{background:rgba(245,241,230,.08);color:var(--ink);border:1px solid rgba(245,241,230,.2);}
+
+  /* ===== Totals ===== */
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .stat{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:14px;}
+  .stat .s-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:600;}
+  .stat .s-val{font-size:22px;font-weight:800;margin-top:4px;font-variant-numeric:tabular-nums;}
+  .stat .s-val small{font-size:12px;font-weight:600;color:var(--muted);}
+
+  .totrow{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px dashed var(--line);}
+  .totrow:last-child{border-bottom:none;}
+  .totrow .v{font-variant-numeric:tabular-nums;font-weight:700;}
+  .order-box{background:linear-gradient(135deg,rgba(212,175,106,.14),rgba(212,175,106,.05));border:1px solid rgba(212,175,106,.4);border-radius:12px;padding:18px 20px;margin-top:4px;}
+  .order-box .big{font-size:34px;font-weight:900;color:var(--gold-bright);font-variant-numeric:tabular-nums;line-height:1;}
+  .order-box .big small{font-size:15px;color:var(--ink);font-weight:600;}
+  .order-box .sub{font-size:12px;color:var(--muted);margin-top:6px;}
+
+  .quote-grand{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:14px 0 4px;border-top:2px solid var(--line-strong);margin-top:6px;}
+  .quote-grand .lbl{font-size:13px;text-transform:uppercase;letter-spacing:.12em;color:var(--ink);font-weight:700;}
+  .quote-grand .v{font-size:26px;font-weight:900;color:var(--gold-bright);font-variant-numeric:tabular-nums;}
+  .range{font-size:12px;color:var(--muted);text-align:right;margin-top:2px;}
+
+  /* settings row */
+  .set-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .switch-row{display:flex;align-items:center;gap:10px;justify-content:space-between;}
+  .switch{position:relative;width:40px;height:22px;background:#3a3a42;border-radius:22px;transition:.2s;flex-shrink:0;cursor:pointer;display:inline-block;}
+  .switch::after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;background:#fff;border-radius:50%;transition:.2s;}
+  input.switch-input{display:none;}
+  input.switch-input:checked + .switch{background:var(--gold-grad);}
+  input.switch-input:checked + .switch::after{left:20px;}
+  select{width:100%;padding:10px 12px;border:1px solid var(--line-strong);border-radius:8px;font:inherit;background:#0d0d11;color:var(--ink);font-size:14px;}
+
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;margin-top:4px;}
+  .footnote{text-align:center;font-size:11px;color:var(--muted);margin-top:18px;line-height:1.6;}
+  .footnote b{color:var(--gold-bright);}
+  details.method{margin-top:10px;border:1px solid var(--line);border-radius:8px;background:var(--panel-2);}
+  details.method summary{cursor:pointer;padding:10px 14px;font-size:12px;font-weight:700;color:var(--gold-bright);text-transform:uppercase;letter-spacing:.08em;}
+  details.method .m-body{padding:0 14px 14px;font-size:12px;color:var(--muted);line-height:1.6;}
+  details.method .m-body b{color:var(--ink);}
+
+  @media (max-width:720px){
+    .app{padding:14px;}
+    .input-row{grid-template-columns:1fr 1fr;}
+    .input-row .add-wrap{grid-column:1 / -1;}
+    .grid-2,.set-grid{grid-template-columns:1fr;}
+    .logo-img{max-height:70px;}
+    .brand-sub{display:none;}
+    .item{grid-template-columns:auto 1fr auto;}
+    .item .del{grid-column:3;grid-row:1;}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ===== Brand header ===== -->
+  <div class="brandbar">
+    <div class="brandbar-row">
+      <div class="logo">
+        <img src="RENO_to_SOLD_logo_only.png" alt="Reno to Sold" class="logo-img"
+             onerror="this.style.display='none';document.getElementById('logoFallback').style.display='block';">
+        <span id="logoFallback" class="logo-fallback" style="display:none;">RENO <span class="to">to</span> <span class="sold">SOLD</span></span>
+      </div>
+      <div class="brand-sub">
+        <div class="tag">Trim Calculator</div>
+        <div class="ttl">Door &amp; Window Casing</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="brand-tagline">
+    <span class="bt-line">Measure <span class="bt-accent">smart.</span> Order <span class="bt-accent">right.</span></span>
+    <span class="bt-line bt-sub">Quote with <span class="bt-accent">confidence.</span></span>
+  </div>
+
+  <!-- ===== Add opening ===== -->
+  <div class="panel">
+    <h2>Add Opening</h2>
+    <div class="panel-body">
+      <div style="margin-bottom:16px;">
+        <div class="seg">
+          <button id="typeDoor" class="on" onclick="TC.setType('door')">🚪 Door &middot; 6 pieces</button>
+          <button id="typeWindow" onclick="TC.setType('window')">🪟 Window &middot; 4 pieces</button>
+        </div>
+      </div>
+      <div class="input-row">
+        <div>
+          <label>Length / Height (in)</label>
+          <input type="number" id="inLen" min="0" step="0.25" placeholder="e.g. 84" inputmode="decimal">
+        </div>
+        <div>
+          <label>Width (in)</label>
+          <input type="number" id="inWid" min="0" step="0.25" placeholder="e.g. 32" inputmode="decimal">
+        </div>
+        <div>
+          <label>Qty</label>
+          <input type="number" id="inQty" min="1" step="1" value="1" inputmode="numeric">
+        </div>
+        <div class="add-wrap">
+          <button class="btn-gold" onclick="TC.addItem()">＋ Add</button>
+        </div>
+      </div>
+      <div class="hint">
+        <b style="color:var(--ink)">Doors</b> are cased both sides = 6 pieces (4 legs + 2 heads). <b style="color:var(--ink)">Windows</b> are picture-framed one side = 4 pieces (2 legs, head, sill).
+        Enter the rough opening height &amp; width in inches; linear feet are figured per piece automatically.
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Items list ===== -->
+  <div class="panel">
+    <h2>Openings <span id="itemCount" class="pill pill-w">0</span></h2>
+    <div class="panel-body">
+      <div id="itemsList" class="items"></div>
+      <div id="emptyState" class="empty">No openings yet — add a door or window above.</div>
+    </div>
+  </div>
+
+  <!-- ===== Settings ===== -->
+  <div class="panel">
+    <h2>Order Settings</h2>
+    <div class="panel-body">
+      <div class="set-grid">
+        <div>
+          <label>Waste factor</label>
+          <div class="ptg" id="wastePtg">
+            <button class="on" data-v="10" onclick="TC.setWaste(10)">10% &middot; paint-grade</button>
+            <button data-v="15" onclick="TC.setWaste(15)">15% &middot; stain-grade</button>
+          </div>
+          <div class="hint" id="wasteHint">10% suits standard paint-grade casing. 15% for stain-grade or many miter cuts.</div>
+        </div>
+        <div>
+          <label>Stock length per stick</label>
+          <div class="ptg" id="stickPtg">
+            <button class="on" data-v="16" onclick="TC.setStick(16)">16 ft</button>
+            <button data-v="14" onclick="TC.setStick(14)">14 ft</button>
+            <button data-v="12" onclick="TC.setStick(12)">12 ft</button>
+            <button data-v="8" onclick="TC.setStick(8)">8 ft</button>
+            <button data-v="7" onclick="TC.setStick(7)">7 ft</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Totals ===== -->
+  <div class="grid-2">
+    <div class="panel">
+      <h2>Material to Order</h2>
+      <div class="panel-body">
+        <div class="stat-grid" style="margin-bottom:14px;">
+          <div class="stat"><div class="s-lbl">Total Doors</div><div class="s-val" id="cntDoors">0</div></div>
+          <div class="stat"><div class="s-lbl">Total Windows</div><div class="s-val" id="cntWindows">0</div></div>
+        </div>
+        <div class="totrow"><span>Doors &mdash; raw trim</span><span class="v" id="lfDoors">0 LF</span></div>
+        <div class="totrow"><span>Windows &mdash; raw trim</span><span class="v" id="lfWindows">0 LF</span></div>
+        <div class="totrow"><span>Subtotal (raw)</span><span class="v" id="lfRaw">0 LF</span></div>
+        <div class="totrow"><span>Waste added (<span id="wastePctLbl">10</span>%)</span><span class="v" id="lfWaste">0 LF</span></div>
+        <div class="order-box">
+          <div class="s-lbl" style="color:var(--gold-deep);font-weight:700;">Order this much trim</div>
+          <div class="big" id="lfOrder">0 <small>linear ft</small></div>
+          <div class="sub" id="sticksLbl">= 0 sticks @ 16 ft</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Client Quote &middot; 2026 GTA</h2>
+      <div class="panel-body">
+        <div class="set-grid" style="margin-bottom:14px;">
+          <div>
+            <label>Per door ($)</label>
+            <input type="number" id="rateDoor" min="0" step="5" value="210" onchange="TC.render()" oninput="TC.render()">
+          </div>
+          <div>
+            <label>Per window ($)</label>
+            <input type="number" id="rateWindow" min="0" step="5" value="190" onchange="TC.render()" oninput="TC.render()">
+          </div>
+        </div>
+        <div class="totrow"><span id="qDoorsLbl">Doors</span><span class="v" id="qDoors">$0</span></div>
+        <div class="totrow"><span id="qWindowsLbl">Windows</span><span class="v" id="qWindows">$0</span></div>
+        <div class="totrow"><span>Subtotal</span><span class="v" id="qSub">$0</span></div>
+        <div class="switch-row" style="padding:10px 0 2px;">
+          <label style="margin:0;">Add HST (13%)</label>
+          <span><input type="checkbox" id="hstChk" class="switch-input" onchange="TC.render()"><span class="switch" onclick="document.getElementById('hstChk').click()"></span></span>
+        </div>
+        <div class="totrow" id="hstRow" style="display:none;"><span>HST (13%)</span><span class="v" id="qHst">$0</span></div>
+        <div class="quote-grand"><span class="lbl">Quote total</span><span class="v" id="qGrand">$0</span></div>
+        <div class="range" id="qRange">Typical GTA range: &mdash;</div>
+        <details class="method">
+          <summary>How this quote is built</summary>
+          <div class="m-body">
+            Defaults reflect <b>2026 Toronto/GTA averages</b> for <b>replacing</b> casing (remove old, supply &amp; install new), all-in labour + material. Per-door <b>$150&ndash;$300</b>, per-window <b>$120&ndash;$350</b>; GTA runs 10&ndash;20% above rural Ontario. Edit the per-door / per-window rates above to match your supplier and crew. The range shown is &plusmn;15% / +35% around your rates.
+          </div>
+        </details>
+      </div>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <button onclick="TC.clearAll()">Clear all</button>
+    <button onclick="window.print()">Print / Save PDF</button>
+  </div>
+
+  <p class="footnote">
+    Linear feet are calculated geometrically from each opening, then padded by your waste factor &mdash; <b>order the padded amount</b>.
+    Built-in pricing reflects <b>2026 GTA market averages</b>; tap a rate to align with your own quotes.
+  </p>
+  <p class="footnote" style="letter-spacing:.18em;text-transform:uppercase;font-size:10px;color:var(--gold-deep);">Reno to Sold &middot; Renovate Smart &middot; Sell For More</p>
+</div>
+
+<script>
+/* =====================================================================
+   RENO TO SOLD — Trim Calculator
+   Self-contained module. State + pure calc functions are namespaced on
+   TC so this can be lifted into the main estimator as a tab/module:
+     - TC.state           : { type, items[] }
+     - TC.calcItemLF(it)  : pure LF-per-opening (x qty)
+     - TC.computeTotals() : pure totals object (no DOM)
+     - TC.render()        : DOM paint (replace when embedding)
+   ===================================================================== */
+const TC = {
+  state: { type: 'door', items: [], waste: 10, stick: 16 },
+
+  PIECES: { door: 6, window: 4 },
+
+  setType(t){
+    this.state.type = t;
+    document.getElementById('typeDoor').classList.toggle('on', t==='door');
+    document.getElementById('typeWindow').classList.toggle('on', t==='window');
+  },
+
+  _syncPtg(id, val){
+    document.querySelectorAll('#'+id+' button').forEach(b=>{
+      b.classList.toggle('on', +b.dataset.v === val);
+    });
+  },
+  setWaste(v){ this.state.waste = v; this._syncPtg('wastePtg', v); this.render(); },
+  setStick(v){ this.state.stick = v; this._syncPtg('stickPtg', v); this.render(); },
+
+  // ---- Pure calc: linear feet for ONE opening (all pieces), x qty ----
+  // door  : cased both sides -> 4 legs (length) + 2 heads (width)
+  // window: picture frame one side -> 2 legs (length) + 2 heads (width)
+  calcItemLF(it){
+    const L = +it.len || 0, W = +it.wid || 0, q = +it.qty || 1;
+    let inches;
+    if(it.type === 'door')  inches = (4*L) + (2*W);
+    else                    inches = (2*L) + (2*W);
+    return (inches/12) * q; // linear feet
+  },
+
+  addItem(){
+    const len = parseFloat(document.getElementById('inLen').value);
+    const wid = parseFloat(document.getElementById('inWid').value);
+    let qty = parseInt(document.getElementById('inQty').value, 10);
+    if(!qty || qty < 1) qty = 1;
+    if(!(len > 0) || !(wid > 0)){
+      alert('Enter a length and width greater than 0.');
+      return;
+    }
+    this.state.items.push({ type:this.state.type, len, wid, qty });
+    document.getElementById('inLen').value = '';
+    document.getElementById('inWid').value = '';
+    document.getElementById('inQty').value = '1';
+    document.getElementById('inLen').focus();
+    this.render();
+  },
+
+  removeItem(i){ this.state.items.splice(i,1); this.render(); },
+
+  clearAll(){
+    if(this.state.items.length && !confirm('Clear all openings?')) return;
+    this.state.items = []; this.render();
+  },
+
+  // ---- Pure totals (no DOM) ----
+  computeTotals(){
+    const wastePct = this.state.waste;
+    const stick    = this.state.stick;
+    let doors=0, windows=0, lfDoors=0, lfWindows=0;
+    this.state.items.forEach(it=>{
+      const lf = this.calcItemLF(it);
+      if(it.type==='door'){ doors += it.qty; lfDoors += lf; }
+      else { windows += it.qty; lfWindows += lf; }
+    });
+    const lfRaw   = lfDoors + lfWindows;
+    const lfOrder = lfRaw * (1 + wastePct/100);
+    const lfOrderRnd = Math.ceil(lfOrder);
+    const sticks  = stick>0 ? Math.ceil(lfOrderRnd/stick) : 0;
+    return { wastePct, stick, doors, windows, lfDoors, lfWindows, lfRaw,
+             lfWaste: lfOrder - lfRaw, lfOrder: lfOrderRnd, sticks };
+  },
+
+  render(){
+    const t = this.computeTotals();
+    const fmtLF = n => (Math.round(n*10)/10).toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:1}) + ' LF';
+    const fmt$  = n => '$' + Math.round(n).toLocaleString();
+
+    // ---- Items list ----
+    const list = document.getElementById('itemsList');
+    const empty = document.getElementById('emptyState');
+    document.getElementById('itemCount').textContent = this.state.items.length;
+    if(!this.state.items.length){
+      list.innerHTML=''; empty.style.display='block';
+    } else {
+      empty.style.display='none';
+      list.innerHTML = this.state.items.map((it,i)=>{
+        const isDoor = it.type==='door';
+        const lf = this.calcItemLF(it);
+        const pieces = this.PIECES[it.type]*it.qty;
+        return `<div class="item">
+          <div class="ticon">${isDoor?'🚪':'🪟'}</div>
+          <div class="imeta">
+            <div class="iname">${isDoor?'Door':'Window'}
+              <span class="pill ${isDoor?'pill-d':'pill-w'}">${pieces} pcs</span>
+              ${it.qty>1?`<span class="pill pill-w">×${it.qty}</span>`:''}
+            </div>
+            <div class="idim">${it.len}" H × ${it.wid}" W</div>
+          </div>
+          <div class="ilf">${fmtLF(lf)}<small>raw trim</small></div>
+          <button class="del" onclick="TC.removeItem(${i})" title="Remove">✕</button>
+        </div>`;
+      }).join('');
+    }
+
+    // ---- Material ----
+    document.getElementById('cntDoors').textContent   = t.doors;
+    document.getElementById('cntWindows').textContent = t.windows;
+    document.getElementById('lfDoors').textContent    = fmtLF(t.lfDoors);
+    document.getElementById('lfWindows').textContent  = fmtLF(t.lfWindows);
+    document.getElementById('lfRaw').textContent      = fmtLF(t.lfRaw);
+    document.getElementById('wastePctLbl').textContent= t.wastePct;
+    document.getElementById('lfWaste').textContent    = '+ ' + fmtLF(t.lfWaste);
+    document.getElementById('lfOrder').innerHTML      = t.lfOrder.toLocaleString() + ' <small>linear ft</small>';
+    document.getElementById('sticksLbl').textContent  = `≈ ${t.sticks} stick${t.sticks===1?'':'s'} @ ${t.stick} ft`;
+
+    // ---- Quote ----
+    const rD = +document.getElementById('rateDoor').value || 0;
+    const rW = +document.getElementById('rateWindow').value || 0;
+    const qD = t.doors*rD, qW = t.windows*rW, sub = qD+qW;
+    const hst = document.getElementById('hstChk').checked;
+    const hstAmt = hst ? sub*0.13 : 0;
+    const grand = sub + hstAmt;
+    document.getElementById('qDoorsLbl').textContent   = `Doors (${t.doors} × ${fmt$(rD)})`;
+    document.getElementById('qWindowsLbl').textContent = `Windows (${t.windows} × ${fmt$(rW)})`;
+    document.getElementById('qDoors').textContent   = fmt$(qD);
+    document.getElementById('qWindows').textContent = fmt$(qW);
+    document.getElementById('qSub').textContent     = fmt$(sub);
+    document.getElementById('hstRow').style.display = hst ? 'flex' : 'none';
+    document.getElementById('qHst').textContent     = fmt$(hstAmt);
+    document.getElementById('qGrand').textContent   = fmt$(grand);
+    document.getElementById('qRange').textContent   = sub>0
+      ? `Typical GTA range: ${fmt$(sub*0.85)} – ${fmt$(sub*1.35)}${hst?' + HST':''}`
+      : 'Typical GTA range: —';
+  }
+};
+TC.render();
+</script>
+</body>
+</html>
