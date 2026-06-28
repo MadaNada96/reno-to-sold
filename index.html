@@ -15144,18 +15144,27 @@ function initSupabase(){
             setSessErr = timeoutErr;
           }
           if(setSessErr){
-            console.error("[auth] setSession failed:", setSessErr.message || setSessErr);
+            // setSession's promise didn't resolve in 5s. IMPORTANT fact
+            // verified by the test session at homeboynada@gmail.com:
+            // the hang is in the promise resolution only — the session
+            // IS actually written to localStorage. The very next step
+            // (getSession + fetchCurrentProfile) succeeds with the new
+            // user's identity, proving the storage write happened.
+            // So we log the hang but DO NOT treat it as a session failure.
+            console.warn("[auth] setSession promise didn't resolve in 5s — proceeding (storage write likely succeeded; see homeboynada test 2026-06-28)");
           } else {
             console.log("[auth] URL-fragment session applied for " + (sessionData && sessionData.user && sessionData.user.email));
-            /* Recovery flow → force the password setup modal to appear
-               on this session, regardless of past dismissals OR the
-               password_set metadata flag. The user JUST clicked
-               Activate Account, so they need a password. */
-            if(linkType === "recovery"){
-              try { localStorage.removeItem("rts_pw_setup_dismissed"); } catch(e){}
-              try { sessionStorage.setItem("rts_force_pw_setup", "1"); } catch(e){}
-              console.log("[auth] Force-pw-setup flag set for recovery flow");
-            }
+          }
+          /* Recovery flow → force the password setup modal to appear
+             on this session, regardless of past dismissals OR the
+             password_set metadata flag. The user JUST clicked Activate
+             Account, so they need a password. Runs whether setSession
+             resolved cleanly or hung — both end up with the session in
+             storage, and either way they need to set a password. */
+          if(linkType === "recovery"){
+            try { localStorage.removeItem("rts_pw_setup_dismissed"); } catch(e){}
+            try { sessionStorage.setItem("rts_force_pw_setup", "1"); } catch(e){}
+            console.log("[auth] Force-pw-setup flag set for recovery flow");
           }
         } else {
           console.warn("[auth] URL fragment had auth marker but ended up with no access/refresh tokens");
