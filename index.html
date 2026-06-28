@@ -16010,16 +16010,18 @@ function applyAuthGate(){
     }
   };
   const m = msgMap[reason];
-  // Tweaked Sign-out: also clear sb-* localStorage so the next attempt
-  // doesn't auto-resume the same wrong session. Without this, OAuth users
-  // sometimes get stuck re-landing on the lockout screen because the
-  // session token is still cached.
+  /* Sign-out from the lockout screen: wipe the sb-* localStorage keys
+     and reload. Note: we DO NOT call supa.auth.signOut() — it uses
+     supabase-js internals that hang silently (same hang we see on
+     setSession/updateUser/getSession). Verified on 2026-06-28 with
+     the realestatenada lockout: button did nothing because the await
+     never resolved. Clearing the auth keys IS the sign-out from the
+     client's perspective; the next page load has no session, applyAuthGate
+     renders the login form, and the user can sign in fresh. Server-side
+     session cleanup happens lazily as the refresh token expires. */
   const signOutSnippet =
-    "(async () => {" +
-      "try { await supa.auth.signOut(); } catch(e){}" +
-      "try { for(let i=localStorage.length-1;i>=0;i--){const k=localStorage.key(i); if(k && /^sb-/.test(k)) localStorage.removeItem(k);} } catch(e){}" +
-      "setTimeout(() => location.reload(), 250);" +
-    "})();";
+    "try { for(let i=localStorage.length-1;i>=0;i--){const k=localStorage.key(i); if(k && /^sb-/.test(k)) localStorage.removeItem(k);} } catch(e){}" +
+    "location.reload();";
   overlay.innerHTML = `
     <div style="max-width:480px;padding:36px 36px 32px;text-align:center;
                 background:linear-gradient(180deg,#1a1408,#0f0c06);
