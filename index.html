@@ -15030,11 +15030,20 @@ function initSupabase(){
 
   /* Snapshot the URL hash BEFORE any other code can modify it. Then
      clear it from the address bar so the tokens don't sit there.
-     We'll process the snapshot in the init flow below. */
-  const _capturedHash = window.location.hash || "";
-  const _hasFragmentTokens = /access_token=/.test(_capturedHash);
+     We'll process the snapshot in the init flow below.
+
+     Two link formats can arrive here:
+       (a) Legacy implicit-flow links containing access_token + refresh_token
+           directly in the fragment (older invitations may still be in inboxes).
+       (b) token_hash-based links from our admin-users Edge Function (the
+           prefetch-proof format — see admin-users/index.ts for why). We
+           exchange these via POST /auth/v1/verify in the init flow. */
+  const _capturedHash    = window.location.hash || "";
+  const _hasAccessToken  = /access_token=/.test(_capturedHash);
+  const _hasTokenHash    = /token_hash=/.test(_capturedHash);
+  const _hasFragmentTokens = _hasAccessToken || _hasTokenHash;
   if(_hasFragmentTokens){
-    console.log("[auth] Captured URL fragment with auth tokens (len=" + _capturedHash.length + ")");
+    console.log("[auth] Captured URL fragment (kind=" + (_hasTokenHash ? "token_hash" : "access_token") + ", len=" + _capturedHash.length + ")");
     try {
       history.replaceState(null, "", window.location.pathname + window.location.search);
     } catch(e){}
@@ -15051,15 +15060,89 @@ function initSupabase(){
     if(_hasFragmentTokens){
       try {
         const params = new URLSearchParams(_capturedHash.slice(1));
-        const accessToken  = params.get("access_token");
-        const refreshToken = params.get("refresh_token");
-        const linkType     = params.get("type") || "";
+        let accessToken  = params.get("access_token");
+        let refreshToken = params.get("refresh_token");
+        const linkType   = params.get("type") || "";
+        const tokenHash  = params.get("token_hash");
+
+        /* token_hash path (new prefetch-proof format from admin-users
+           Edge Function): exchange token_hash for access/refresh tokens
+           via plain fetch to /auth/v1/verify. We bypass supabase-js
+           because it has a well-documented hang issue (see restFetch /
+           dbInsert helpers elsewhere in this file for the same pattern).
+           After the exchange, fall through into the normal setSession
+           branch below using the access/refresh tokens we received. */
+        if(!accessToken && tokenHash){
+          console.log("[auth] Exchanging token_hash via /auth/v1/verify (type=" + (linkType || "recovery") + ")");
+          try {
+            const exchangeController = new AbortController();
+            const exchangeTimeout = setTimeout(() => exchangeController.abort(), 10000);
+            const verifyResp = await fetch(SUPABASE_URL + "/auth/v1/verify", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "apikey": SUPABASE_ANON_KEY,
+                "Authorization": "Bearer " + SUPABASE_ANON_KEY,
+              },
+              body: JSON.stringify({
+                type:       linkType || "recovery",
+                token_hash: tokenHash,
+              }),
+              signal: exchangeController.signal,
+            });
+            clearTimeout(exchangeTimeout);
+            const verifyJson = await verifyResp.json().catch(() => ({}));
+            if(!verifyResp.ok){
+              const detail = (verifyJson && (verifyJson.msg || verifyJson.error_description || verifyJson.message || verifyJson.error)) || ("HTTP " + verifyResp.status);
+              console.error("[auth] token_hash exchange failed:", detail, verifyJson);
+              // Surface a visible error so the user isn't left guessing.
+              try {
+                const errBanner = document.createElement("div");
+                errBanner.style.cssText =
+                  "position:fixed;top:0;left:0;right:0;z-index:99999;" +
+                  "background:#3a0f0f;border-bottom:2px solid #d4af6a;" +
+                  "padding:14px 20px;text-align:center;color:#ffd2c4;" +
+                  "font-size:13px;font-weight:600;" +
+                  "font-family:-apple-system,'Segoe UI',Roboto,sans-serif;" +
+                  "box-shadow:0 4px 16px rgba(0,0,0,.5);";
+                errBanner.textContent = "Activation link is invalid or expired. Ask the admin to send a new invitation.";
+                document.body.appendChild(errBanner);
+                setTimeout(() => { try { errBanner.remove(); } catch(e){} }, 12000);
+              } catch(e){}
+            } else {
+              accessToken  = verifyJson.access_token  || null;
+              refreshToken = verifyJson.refresh_token || null;
+              if(accessToken && refreshToken){
+                console.log("[auth] token_hash exchange succeeded — got access/refresh tokens (user=" + (verifyJson.user && verifyJson.user.email) + ")");
+              } else {
+                console.error("[auth] token_hash exchange returned OK but no tokens:", verifyJson);
+              }
+            }
+          } catch(exchangeErr){
+            console.error("[auth] token_hash exchange threw:", exchangeErr && exchangeErr.message || exchangeErr);
+          }
+        }
+
         if(accessToken && refreshToken){
           console.log("[auth] Applying URL-fragment session (type=" + linkType + ")");
-          const { data: sessionData, error: setSessErr } = await supa.auth.setSession({
-            access_token:  accessToken,
-            refresh_token: refreshToken
-          });
+          // 5s timeout. supabase-js setSession sometimes hangs (same
+          // hang we see elsewhere). If it doesn't resolve, log clearly
+          // so we know that's where things died.
+          let sessionData, setSessErr;
+          try {
+            const setSessionPromise = supa.auth.setSession({
+              access_token:  accessToken,
+              refresh_token: refreshToken
+            });
+            const timeoutPromise = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error("setSession timed out at 5s — supabase-js hang")), 5000)
+            );
+            const result = await Promise.race([setSessionPromise, timeoutPromise]);
+            sessionData = result.data;
+            setSessErr = result.error;
+          } catch(timeoutErr){
+            setSessErr = timeoutErr;
+          }
           if(setSessErr){
             console.error("[auth] setSession failed:", setSessErr.message || setSessErr);
           } else {
@@ -15075,7 +15158,7 @@ function initSupabase(){
             }
           }
         } else {
-          console.warn("[auth] URL fragment had access_token marker but parameters were missing");
+          console.warn("[auth] URL fragment had auth marker but ended up with no access/refresh tokens");
         }
       } catch(e){
         console.warn("[auth] URL fragment handler threw:", e);
