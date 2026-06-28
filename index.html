@@ -14998,6 +14998,52 @@ function initSupabase(){
     console.warn("Supabase JS not loaded — cloud sync disabled.");
     return;
   }
+  /* Snapshot the URL hash BEFORE creating the supa client. The order
+     here matters: createClient(persistSession:true) restores any
+     existing session from localStorage and fires an early
+     onAuthStateChange(SIGNED_IN) event. If we have a fresh activation
+     link in the URL (token_hash) AND a stale session is still in
+     localStorage from a previous user, that stale session restores
+     FIRST and races our incoming new session, which then causes
+     setSession to hang (verified during the homeboynada test on
+     2026-06-28: stale 2ea56e6a user kept showing while setSession for
+     homeboynada hung at 5s timeout).
+
+     Two link formats can arrive here:
+       (a) Legacy implicit-flow links containing access_token + refresh_token
+           directly in the fragment (older invitations may still be in inboxes).
+       (b) token_hash-based links from our admin-users Edge Function (the
+           prefetch-proof format — see admin-users/index.ts for why). We
+           exchange these via POST /auth/v1/verify in the init flow. */
+  const _capturedHash    = window.location.hash || "";
+  const _hasAccessToken  = /access_token=/.test(_capturedHash);
+  const _hasTokenHash    = /token_hash=/.test(_capturedHash);
+  const _hasFragmentTokens = _hasAccessToken || _hasTokenHash;
+  if(_hasFragmentTokens){
+    console.log("[auth] Captured URL fragment (kind=" + (_hasTokenHash ? "token_hash" : "access_token") + ", len=" + _capturedHash.length + ")");
+    try {
+      history.replaceState(null, "", window.location.pathname + window.location.search);
+    } catch(e){}
+    /* CRITICAL: a fragment-tokens URL means this tab is starting a
+       brand-new session (activation, password reset, magic link).
+       Any sb-* localStorage from a prior signed-in user MUST be
+       cleared before createClient or supabase-js will restore the
+       stale session and conflict with the new one. */
+    try {
+      const stale = [];
+      for(let i = 0; i < localStorage.length; i++){
+        const k = localStorage.key(i);
+        if(k && (k.startsWith("sb-") || k === "supabase.auth.token")) stale.push(k);
+      }
+      stale.forEach(k => { try { localStorage.removeItem(k); } catch(e){} });
+      if(stale.length){
+        console.log("[auth] Cleared " + stale.length + " stale sb-* keys before client init (fragment-tokens URL)");
+      }
+    } catch(e){
+      console.warn("[auth] sb-* cleanup before createClient threw:", e);
+    }
+  }
+
   /* Auth config:
      - flowType: 'pkce' — more reliable than the default implicit flow,
        avoids known race conditions during session restore.
@@ -15027,27 +15073,6 @@ function initSupabase(){
       lock: async (_name, _acquireTimeout, fn) => await fn()
     }
   });
-
-  /* Snapshot the URL hash BEFORE any other code can modify it. Then
-     clear it from the address bar so the tokens don't sit there.
-     We'll process the snapshot in the init flow below.
-
-     Two link formats can arrive here:
-       (a) Legacy implicit-flow links containing access_token + refresh_token
-           directly in the fragment (older invitations may still be in inboxes).
-       (b) token_hash-based links from our admin-users Edge Function (the
-           prefetch-proof format — see admin-users/index.ts for why). We
-           exchange these via POST /auth/v1/verify in the init flow. */
-  const _capturedHash    = window.location.hash || "";
-  const _hasAccessToken  = /access_token=/.test(_capturedHash);
-  const _hasTokenHash    = /token_hash=/.test(_capturedHash);
-  const _hasFragmentTokens = _hasAccessToken || _hasTokenHash;
-  if(_hasFragmentTokens){
-    console.log("[auth] Captured URL fragment (kind=" + (_hasTokenHash ? "token_hash" : "access_token") + ", len=" + _capturedHash.length + ")");
-    try {
-      history.replaceState(null, "", window.location.pathname + window.location.search);
-    } catch(e){}
-  }
 
   /* Init flow with proper sequencing:
      1. If URL fragment had tokens → call setSession FIRST and wait
