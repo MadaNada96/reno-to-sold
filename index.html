@@ -13882,25 +13882,23 @@ let currentUser = null;
    - If profile fetch fails (e.g. RLS denies, network down), we
      keep currentProfile=null and show the lockout screen.
 
-   FAIL-SAFE for the existing admin (Mo):
-   - On the very first load after Phase 1 deploys, his profile row
-     may not exist yet (the SQL migration creates it). If we see
-     `email===ADMIN_EMAIL_FALLBACK` AND profile fetch returns null,
-     we treat him as admin temporarily so he isn't locked out of
-     his own app. This is a one-time bootstrap; once he runs the SQL
-     migration, the profile row exists and this fallback is never hit.
+   (A historical bootstrap fallback ADMIN_EMAIL_FALLBACKS was removed
+   on 2026-06-28 — see the inline comment further down. Admin access
+   now strictly requires a real role=admin row in public.profiles.)
    ============================================================ */
 let currentProfile = null;
-/* List of emails that get the bootstrap-fallback admin access if the
-   SQL migration hasn't been run yet (or if their profile row somehow
-   went missing). Once Phase 1 SQL has been applied AND both rows are
-   in public.profiles, the fallback is harmless dead code. Keeping it
-   here is belt-and-suspenders so neither admin ever locks themselves
-   out of their own app. */
-const ADMIN_EMAIL_FALLBACKS = [
-  "realestatenada@gmail.com",
-  "renotosold@gmail.com"
-];
+/* ADMIN_EMAIL_FALLBACKS removed on 2026-06-28.
+   Reason: it was a day-1 bootstrap safety net to prevent admin lockout
+   before the Phase 1 SQL migration created the real admin profile row.
+   Once renotosold@gmail.com's role=admin profile was in place, the
+   fallback became a security hole — any sign-in (including Google
+   OAuth) using realestatenada@gmail.com or renotosold@gmail.com was
+   auto-granted admin access regardless of whether a profile row
+   existed in the DB. Verified bug on 2026-06-28: signed in via Google
+   as realestatenada@gmail.com (an email with NO profile row in the
+   database), got admin access via this fallback. Real admin profile
+   for renotosold@gmail.com still exists in public.profiles, so the
+   normal sign-in path is unaffected by removing the fallback. */
 
 /* All feature names used in the UI. Keep this in sync with the
    features JSONB in the profiles table (defined in SQL migration).
@@ -14975,30 +14973,11 @@ async function fetchCurrentProfile(){
     console.warn("[auth] Profile fetch threw:", e);
     if(hydratedFromCache){ return cached; }
   }
-  /* Bootstrap fallback: if no profile row exists but this email is
-     in the admin-fallback list, treat as admin so they can't lock
-     themselves out before running the SQL migration. */
-  if(ADMIN_EMAIL_FALLBACKS.indexOf(currentUser.email) >= 0){
-    currentProfile = {
-      id: currentUser.id,
-      email: currentUser.email,
-      full_name: "Mohamed Nada",
-      role: "admin",
-      features: { estimator:true, expense_tracker:true, invoicing:true,
-                  contractor_bids:true, pricing_editor:true },
-      subscription_expires_at: null,
-      suspended: false,
-      _bootstrap_fallback: true  // flag so we can warn in console
-    };
-    console.warn("Profile bootstrap fallback in use for " + currentUser.email +
-                 " — run the Phase 1 SQL migration to create the real profile row.");
-    /* Self-healing for the stale-session gotcha: if the fallback was
-       triggered by a TIMEOUT (not by a missing profile), it means the
-       client's session is stuck. We auto-recover by clearing storage
-       and reloading. Runs at most once per page load. */
-    autoRecoverStaleSession();
-    return currentProfile;
-  }
+  /* No profile row → user is not provisioned. accountLockoutReason()
+     will return "no_profile" and applyAuthGate() will render the
+     "Wrong Google account" / "Account not provisioned" lockout
+     screen. This is the correct behaviour for any email that hasn't
+     been explicitly invited by an admin. */
   currentProfile = null;
   return null;
 }
