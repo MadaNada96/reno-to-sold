@@ -15059,6 +15059,43 @@ function initSupabase(){
         try { sessionStorage.setItem("rts_force_pw_setup", "1"); } catch(e){}
         try { localStorage.removeItem("rts_pw_setup_dismissed"); } catch(e){}
         console.log("[auth] Force-pw-setup flag set early (type=recovery in URL fragment)");
+
+        /* UX: cover the page with a branded "Activating your account…"
+           overlay BEFORE any auth code runs. Without it, there's a
+           ~50–150ms window between the supabase-js listener firing
+           applyAuthGate (which makes the estimator visible) and the
+           password modal opening on top. Users perceive that as a
+           split-second flash of "I'm logged in" before the password
+           prompt appears — flagged by Mo during homeboynada test on
+           2026-06-28. The overlay sits at z-index 9997, the modal at
+           9998, so the modal layers cleanly on top. The overlay is
+           removed when openPasswordSetupModalDirect runs. */
+        try {
+          const _showOverlay = () => {
+            if(document.getElementById("rtsActivationOverlay")) return;
+            const ov = document.createElement("div");
+            ov.id = "rtsActivationOverlay";
+            ov.style.cssText =
+              "position:fixed;inset:0;z-index:9997;background:#0a0a0a;" +
+              "display:flex;align-items:center;justify-content:center;" +
+              "font-family:'Montserrat',sans-serif;color:#d4af6a;" +
+              "text-align:center;padding:20px;";
+            ov.innerHTML =
+              '<div>' +
+                '<div style="font-weight:800;font-size:22px;letter-spacing:.12em;margin-bottom:10px;">RENO TO SOLD</div>' +
+                '<div style="color:#a8853f;font-size:11px;letter-spacing:.18em;text-transform:uppercase;">Activating your account…</div>' +
+              '</div>';
+            (document.body || document.documentElement).appendChild(ov);
+          };
+          if(document.body){
+            _showOverlay();
+          } else {
+            // Body not parsed yet — append as soon as DOM is ready.
+            document.addEventListener("DOMContentLoaded", _showOverlay, { once: true });
+          }
+        } catch(e){
+          console.warn("[auth] activation overlay creation threw:", e);
+        }
       }
     } catch(e){}
   }
@@ -15434,6 +15471,12 @@ function openPasswordSetupModalDirect(){
     </div>
   `;
   document.body.appendChild(modal);
+  // Remove the "Activating your account…" overlay if it was shown
+  // (recovery activation flow) — the modal now layers on top.
+  try {
+    const ov = document.getElementById("rtsActivationOverlay");
+    if(ov) ov.remove();
+  } catch(e){}
   setTimeout(() => { const e = document.getElementById("pwSetupNew"); if(e) e.focus(); }, 80);
   console.log("[auth] Password setup modal opened (direct)");
 }
