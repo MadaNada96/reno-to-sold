@@ -15438,16 +15438,29 @@ function initSupabase(){
       await bootstrapServerPricing();
       flash("Signed in as " + session.user.email);
       bootstrapCloudSync(true);
-      /* First-time password setup prompt:
-         - PASSWORD_RECOVERY event = clicked the activation link from
-           the welcome email. Force the modal to show — they NEED to
-           set a password before continuing. Wipe any prior dismissal.
-         - SIGNED_IN via OAuth/magic-link = check user_metadata to see
-           if they've set a password already (skip if so). */
+      /* First-time password setup prompt — only on recovery, never
+         on routine sign-ins.
+         Why removed for SIGNED_IN: the prompt was firing every time
+         a user signed back in with email+password because
+         user_metadata.password_set wasn't propagating reliably to the
+         next JWT (Supabase quirk). Asking someone who JUST typed a
+         password whether they want to set one is nonsensical anyway.
+         Verified bug on 2026-06-28: homeboynada activated + set
+         password successfully, logged out, signed back in with email
+         + password → modal re-appeared. Removing this listener
+         trigger fixes it. The recovery (activation) flow has its own
+         direct call to openPasswordSetupModalDirect in the token_hash
+         exchange success branch, so first-time activations still
+         prompt correctly. */
       if(event === "PASSWORD_RECOVERY"){
         try { localStorage.removeItem("rts_pw_setup_dismissed"); } catch(e){}
+        // Recovery: the token_hash branch already triggered the modal
+        // directly. This is just a backstop in case that path was skipped
+        // (e.g. user clicked an old-format recovery link without token_hash).
+        setTimeout(() => maybeShowPasswordSetupPrompt(), 600);
       }
-      setTimeout(() => maybeShowPasswordSetupPrompt(), 600);
+      // SIGNED_IN: do NOT auto-prompt. Users who want a password but
+      // signed in via OAuth can use "Forgot password?" to set one.
     } else if(event === "SIGNED_OUT"){
       // CRITICAL: clear the previous user's locally-cached data so the
       // next signed-in user (whoever that turns out to be) doesn't see
