@@ -15158,6 +15158,29 @@ function initSupabase(){
               refreshToken = verifyJson.refresh_token || null;
               if(accessToken && refreshToken){
                 console.log("[auth] token_hash exchange succeeded — got access/refresh tokens (user=" + (verifyJson.user && verifyJson.user.email) + ")");
+                /* DIRECT MODAL TRIGGER — no listener, no setTimeout
+                   chain, no flag indirection. We have the user, we
+                   have valid tokens, and this is a recovery flow.
+                   The user clicked Activate Account → they need to
+                   set a password. Open the modal NOW.
+                   Verified during homeboynada test 2026-06-28: the
+                   listener-based path was opening-and-closing the
+                   modal opportunity before the force flag was set,
+                   so the modal never appeared. */
+                if((linkType || "recovery") === "recovery" && verifyJson.user){
+                  try {
+                    setCurrentUser(verifyJson.user);
+                    // Small delay so the DOM is ready and any concurrent
+                    // sign-in toast doesn't race the modal append.
+                    setTimeout(() => {
+                      try { openPasswordSetupModalDirect(); }
+                      catch(modalErr){ console.error("[auth] openPasswordSetupModalDirect threw:", modalErr); }
+                    }, 150);
+                    console.log("[auth] Direct modal trigger scheduled from token_hash success branch");
+                  } catch(setUserErr){
+                    console.error("[auth] setCurrentUser from verifyJson threw:", setUserErr);
+                  }
+                }
               } else {
                 console.error("[auth] token_hash exchange returned OK but no tokens:", verifyJson);
               }
@@ -15342,12 +15365,26 @@ function maybeShowPasswordSetupPrompt(){
   if(!force){
     try { if(localStorage.getItem("rts_pw_setup_dismissed") === "1") return; } catch(e){}
   }
-  // Skip if there's an existing modal showing
-  if(document.getElementById("pwSetupModal")) return;
-  /* The force flag is consumed when the modal opens. Even if they
-     dismiss the modal right away, they won't be re-prompted on the
-     next page load — but they will if they click Activate Account
-     again from another email. */
+  openPasswordSetupModalDirect();
+}
+
+/* Guard-free modal opener. Use this when the caller has already
+   decided the modal MUST appear — e.g. the token_hash recovery
+   activation flow, where we don't want to rely on the listener +
+   maybeShowPasswordSetupPrompt indirection chain (verified broken
+   during homeboynada test 2026-06-28: modal never opened despite
+   force flag being set, force log never firing, suggesting the
+   listener path was blocked somewhere upstream).
+
+   The only guard we keep is the duplicate-modal check, because
+   opening two stacked modals would be a worse UX bug than not
+   opening one at all. */
+function openPasswordSetupModalDirect(){
+  if(document.getElementById("pwSetupModal")){
+    console.log("[auth] Password setup modal already open — not creating duplicate");
+    return;
+  }
+  // Consume the force flag so subsequent paths don't try to re-open.
   try { sessionStorage.removeItem("rts_force_pw_setup"); } catch(e){}
 
   const modal = document.createElement("div");
@@ -15401,6 +15438,7 @@ function maybeShowPasswordSetupPrompt(){
   `;
   document.body.appendChild(modal);
   setTimeout(() => { const e = document.getElementById("pwSetupNew"); if(e) e.focus(); }, 80);
+  console.log("[auth] Password setup modal opened (direct)");
 }
 
 /* Live-update the password requirements checklist as the user types. */
