@@ -15428,11 +15428,8 @@ function openPasswordSetupModalDirect(){
         </button>
       </form>
       <div id="pwSetupMsg" style="margin-top:10px;font-size:12px;min-height:18px;text-align:center;color:#ff9090;"></div>
-      <div style="text-align:center;margin-top:14px;">
-        <a href="#" onclick="event.preventDefault(); dismissPasswordSetup();"
-          style="color:#888;font-size:11.5px;text-decoration:none;">
-          Skip for now — keep using sign-in links
-        </a>
+      <div style="margin-top:14px;font-size:11px;color:#888;text-align:center;line-height:1.55;">
+        Setting a password is required to continue. You'll use this every time you sign back in.
       </div>
     </div>
   `;
@@ -15477,13 +15474,40 @@ async function submitPasswordSetup(){
   const btn = document.getElementById("pwSetupBtn");
   if(btn){ btn.disabled = true; btn.textContent = "Setting…"; }
   try {
-    const { data, error } = await supa.auth.updateUser({
-      password: pw1,
-      data: { password_set: true }
+    /* Bypass supa.auth.updateUser — it uses supabase-js internals
+       that hang silently (same hang we see on setSession + getSession).
+       Verified during homeboynada test 2026-06-28: the "Set Password"
+       button got stuck on "Setting…" forever because updateUser never
+       resolved. Direct REST call to /auth/v1/user with the stored
+       access token does the same job and returns reliably. */
+    const accessToken = getStoredAuthToken();
+    if(!accessToken){
+      throw new Error("Session expired. Please refresh the page and click your activation link again.");
+    }
+    const controller = new AbortController();
+    const abortTimer = setTimeout(() => controller.abort(), 15000);
+    const resp = await fetch(SUPABASE_URL + "/auth/v1/user", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + accessToken,
+        "apikey": SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({
+        password: pw1,
+        data: { password_set: true },
+      }),
+      signal: controller.signal,
     });
-    if(error) throw error;
-    // Refresh currentUser reference (its metadata changed)
-    if(data && data.user) setCurrentUser(data.user);
+    clearTimeout(abortTimer);
+    const result = await resp.json().catch(() => ({}));
+    if(!resp.ok){
+      const detail = (result && (result.msg || result.error_description || result.error || result.message)) || ("HTTP " + resp.status);
+      throw new Error(detail);
+    }
+    // Refresh currentUser reference (its metadata changed). The REST
+    // response returns the updated user object directly.
+    if(result && result.id) setCurrentUser(result);
     setMsg("Password set ✓ You can use email + password from now on.", true);
     setTimeout(() => {
       const m = document.getElementById("pwSetupModal");
@@ -15491,7 +15515,10 @@ async function submitPasswordSetup(){
     }, 1200);
   } catch(e) {
     console.error("Password setup failed:", e);
-    setMsg("Failed: " + (e.message || "unknown error"));
+    const msg = (e && e.name === "AbortError")
+      ? "Request timed out. Please try again."
+      : (e && e.message) || "unknown error";
+    setMsg("Failed: " + msg);
     if(btn){ btn.disabled = false; btn.textContent = "Set Password"; }
   }
 }
