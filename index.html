@@ -15365,9 +15365,19 @@ function initSupabase(){
         detectUserSwitch(session.user.id);   // clear localStorage if different user
         setCurrentUser(session.user);
         await fetchCurrentProfile();      // hydrate profile + features
-        await bootstrapServerPricing();   // pull global pricing + subscribe
-        applyAuthGate();                  // show login or lockout if needed
+        /* CRITICAL ORDERING — applyAuthGate() MUST run before any
+           non-essential post-sign-in work. Otherwise if anything
+           between fetchCurrentProfile and applyAuthGate hangs (e.g.
+           bootstrapServerPricing calls supa.from which is known to
+           hang), the lockout overlay never renders and users with
+           no profile end up sitting in the app without authorization.
+           Verified bug on 2026-06-28: realestatenada@gmail.com signed
+           in via Google with no profile row, accountLockoutReason
+           returned "no_profile" but the overlay was never appended
+           to the DOM because bootstrapServerPricing was blocking. */
+        applyAuthGate();                  // ← security gate FIRST
         applyFeatureGates();              // hide UI for features the user doesn't have
+        await bootstrapServerPricing();   // pull global pricing + subscribe
         // Background-sync after a tick so UI is responsive
         setTimeout(() => bootstrapCloudSync(false), 250);
 
@@ -15418,9 +15428,14 @@ function initSupabase(){
       detectUserSwitch(session.user.id);   // clear if different user just signed in
       setCurrentUser(session.user);
       await fetchCurrentProfile();
-      await bootstrapServerPricing();
+      /* Same CRITICAL ORDERING as the init flow above — security
+         gate fires immediately after the profile is known, BEFORE
+         anything that could hang (bootstrapServerPricing,
+         bootstrapCloudSync, etc.). See the long comment in init
+         flow for the bug this fixes. */
       applyAuthGate();
       applyFeatureGates();
+      await bootstrapServerPricing();
       flash("Signed in as " + session.user.email);
       bootstrapCloudSync(true);
       /* First-time password setup prompt:
