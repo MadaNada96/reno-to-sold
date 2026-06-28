@@ -15042,6 +15042,25 @@ function initSupabase(){
     } catch(e){
       console.warn("[auth] sb-* cleanup before createClient threw:", e);
     }
+    /* CRITICAL: set the force-pw-setup flag NOW, at the earliest
+       possible point. Race verified during homeboynada test on
+       2026-06-28: supabase-js fires onAuthStateChange(SIGNED_IN)
+       internally during setSession (at ~T+500ms). The listener calls
+       maybeShowPasswordSetupPrompt at T+1.1s — but our init flow only
+       reached the "set force flag" branch at T+5s (after setSession
+       hit its timeout). By then, the listener had already opened-and-
+       closed the modal opportunity. Setting the flag here, at URL
+       parse time, ensures any code path that subsequently triggers the
+       password modal sees it. We also clear the dismissed flag so a
+       previously-dismissed modal will re-show for this activation. */
+    try {
+      const _params = new URLSearchParams(_capturedHash.slice(1));
+      if((_params.get("type") || "") === "recovery"){
+        try { sessionStorage.setItem("rts_force_pw_setup", "1"); } catch(e){}
+        try { localStorage.removeItem("rts_pw_setup_dismissed"); } catch(e){}
+        console.log("[auth] Force-pw-setup flag set early (type=recovery in URL fragment)");
+      }
+    } catch(e){}
   }
 
   /* Auth config:
