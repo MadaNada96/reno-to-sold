@@ -15176,20 +15176,100 @@ function initSupabase(){
             if(!verifyResp.ok){
               const detail = (verifyJson && (verifyJson.msg || verifyJson.error_description || verifyJson.message || verifyJson.error)) || ("HTTP " + verifyResp.status);
               console.error("[auth] token_hash exchange failed:", detail, verifyJson);
-              // Surface a visible error so the user isn't left guessing.
+
+              /* Self-service resend flow. Supabase recovery tokens
+                 have a 1h–24h TTL (server-enforced; can't be made
+                 unlimited). When a token's dead, we DON'T leave the
+                 user stranded — we use the email we baked into the
+                 URL fragment at invite time to automatically request
+                 a fresh activation link via admin-users's
+                 resend_activation action. The user never has to
+                 contact the admin and can self-serve any number of
+                 times. */
+              const expiredEmail = (params.get("email") || "").trim();
+
+              // Remove the activation overlay so the user sees the
+              // resend banner cleanly instead of through the overlay.
               try {
-                const errBanner = document.createElement("div");
-                errBanner.style.cssText =
-                  "position:fixed;top:0;left:0;right:0;z-index:99999;" +
-                  "background:#3a0f0f;border-bottom:2px solid #d4af6a;" +
-                  "padding:14px 20px;text-align:center;color:#ffd2c4;" +
-                  "font-size:13px;font-weight:600;" +
-                  "font-family:-apple-system,'Segoe UI',Roboto,sans-serif;" +
-                  "box-shadow:0 4px 16px rgba(0,0,0,.5);";
-                errBanner.textContent = "Activation link is invalid or expired. Ask the admin to send a new invitation.";
-                document.body.appendChild(errBanner);
-                setTimeout(() => { try { errBanner.remove(); } catch(e){} }, 12000);
+                const ov = document.getElementById("rtsActivationOverlay");
+                if(ov) ov.remove();
               } catch(e){}
+
+              // Render the gold banner. If we DON'T have an email
+              // (extremely unlikely — we always bake it in), fall
+              // back to the original red dead-end message.
+              try {
+                const banner = document.createElement("div");
+                banner.id = "rtsResendBanner";
+                banner.style.cssText =
+                  "position:fixed;top:0;left:0;right:0;z-index:99999;" +
+                  "background:linear-gradient(180deg,#2a2010 0%,#1a1408 100%);" +
+                  "border-bottom:2px solid #d4af6a;padding:18px 20px;text-align:center;" +
+                  "color:#e8c989;font-size:13px;font-weight:600;" +
+                  "font-family:-apple-system,'Segoe UI',Roboto,sans-serif;" +
+                  "box-shadow:0 4px 16px rgba(0,0,0,.5);line-height:1.55;";
+                if(expiredEmail){
+                  banner.innerHTML =
+                    '<div style="font-size:14px;color:#d4af6a;margin-bottom:6px;">Your activation link has expired.</div>' +
+                    '<div id="rtsResendStatus" style="font-size:12px;color:#cfcfcf;font-weight:400;">' +
+                    'Sending you a fresh one to <b style="color:#e8c989;">' + escapeHtml(expiredEmail) + '</b>…' +
+                    '</div>';
+                } else {
+                  banner.style.background = "#3a0f0f";
+                  banner.style.color = "#ffd2c4";
+                  banner.innerHTML =
+                    '<div style="font-size:14px;margin-bottom:6px;">Activation link is invalid or expired.</div>' +
+                    '<div style="font-size:12px;font-weight:400;">Please contact your administrator for a new invitation.</div>';
+                }
+                document.body.appendChild(banner);
+              } catch(e){}
+
+              // Fire the resend (only if we have an email)
+              if(expiredEmail){
+                try {
+                  const resendController = new AbortController();
+                  const resendTimer = setTimeout(() => resendController.abort(), 20000);
+                  const resendResp = await fetch(SUPABASE_URL + "/functions/v1/admin-users", {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      "apikey": SUPABASE_ANON_KEY,
+                      "Authorization": "Bearer " + SUPABASE_ANON_KEY,
+                    },
+                    body: JSON.stringify({ action: "resend_activation", email: expiredEmail }),
+                    signal: resendController.signal,
+                  });
+                  clearTimeout(resendTimer);
+                  const resendJson = await resendResp.json().catch(() => ({}));
+                  const statusEl = document.getElementById("rtsResendStatus");
+                  if(statusEl){
+                    if(resendResp.ok && resendJson && resendJson.sent){
+                      statusEl.innerHTML =
+                        '<span style="color:#5fce86;">✓</span> Fresh activation link sent to <b style="color:#e8c989;">' +
+                        escapeHtml(expiredEmail) +
+                        '</b>. Check your inbox and click the new link.';
+                    } else if(resendResp.ok && resendJson && resendJson.sent === false){
+                      statusEl.innerHTML =
+                        'We couldn\'t find an account for <b style="color:#e8c989;">' +
+                        escapeHtml(expiredEmail) +
+                        '</b>. Please contact your administrator.';
+                    } else {
+                      statusEl.innerHTML =
+                        'Couldn\'t send a fresh link automatically (' +
+                        escapeHtml((resendJson && resendJson.error) || ("HTTP " + resendResp.status)) +
+                        '). Please contact your administrator.';
+                    }
+                  }
+                  console.log("[auth] resend_activation result:", resendResp.status, resendJson);
+                } catch(resendErr){
+                  console.error("[auth] resend_activation threw:", resendErr);
+                  const statusEl = document.getElementById("rtsResendStatus");
+                  if(statusEl){
+                    statusEl.innerHTML =
+                      'Couldn\'t send a fresh link automatically. Please refresh this page to try again, or contact your administrator.';
+                  }
+                }
+              }
             } else {
               accessToken  = verifyJson.access_token  || null;
               refreshToken = verifyJson.refresh_token || null;
