@@ -14846,11 +14846,21 @@ async function dbDelete(table, filter){
 async function invokeFunctionViaRest(functionName, body){
   const token = getStoredAuthToken();
   const url = SUPABASE_URL.replace(/\/$/, "") + "/functions/v1/" + functionName;
+  /* Supabase Edge Functions require an Authorization Bearer header
+     to pass the gateway's JWT verification (even for actions that
+     don't themselves require auth, like reset_password_request and
+     magic_link_request which are called from the sign-in screen).
+     Fall back to the public anon key when the user isn't signed in
+     yet. The Edge Function itself decides whether each action needs
+     real admin auth — that's its job, not the gateway's. Without
+     this fallback, every unauthenticated function call fails with
+     "Missing authorization header" — verified during reset-password
+     test on 2026-06-28. */
   const headers = {
     "apikey": SUPABASE_ANON_KEY,
-    "Content-Type": "application/json"
+    "Content-Type": "application/json",
+    "Authorization": "Bearer " + (token || SUPABASE_ANON_KEY),
   };
-  if(token) headers["Authorization"] = "Bearer " + token;
   const r = await fetch(url, {
     method: "POST",
     headers: headers,
@@ -16135,7 +16145,16 @@ async function loginWithGoogle(){
   try {
     const { data, error } = await supa.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: window.location.href.split("#")[0].split("?")[0] }
+      options: {
+        redirectTo: window.location.href.split("#")[0].split("?")[0],
+        /* Force Google to show the account picker every time, even
+           when the user is already signed into a Google account in
+           the browser. Without this, Google silently reuses the
+           last-active account and Mo couldn't test multi-account
+           sign-in scenarios. Verified during sign-in test on
+           2026-06-28. */
+        queryParams: { prompt: "select_account" },
+      }
     });
     if(error) throw error;
     // Browser redirects to Google → back to our app on success
@@ -16149,11 +16168,15 @@ async function loginWithMagicLink(){
   const email = (document.getElementById("loginEmail").value || "").trim();
   if(!email){ setLoginMsg("Enter your email above first, then click this link."); return; }
   try {
-    const { error } = await supa.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: window.location.href.split("#")[0].split("?")[0] }
-    });
-    if(error) throw error;
+    /* Route through our admin-users magic_link_request action so the
+       email is branded (gold/black RENO TO SOLD template via Resend)
+       instead of the default unbranded Supabase template. The action
+       generates the link with the same prefetch-proof token_hash
+       pattern we use for invites + activation, so Gmail's link
+       scanner can't consume it before the user clicks. */
+    setLoginMsg("Sending sign-in link…", true);
+    const data = await invokeFunctionViaRest("admin-users", { action: "magic_link_request", email });
+    if(data && data.error) throw new Error(data.error);
     setLoginMsg("Sign-in link sent to " + email + " ✓ Check your inbox.", true);
   } catch(e) {
     console.error("Magic link failed:", e);
