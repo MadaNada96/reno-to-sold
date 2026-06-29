@@ -173,7 +173,7 @@
   .logo-img-print{display:none;}  /* shown only on print/PDF — see @media print */
 
   .toolbar{display:flex;gap:8px;flex-wrap:wrap;}
-  .toolbar-row-2{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:10px;padding-top:10px;border-top:1px dashed rgba(212,175,106,.18);position:relative;}
+  .toolbar-row-2{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin:0 0 18px;padding:0;position:relative;}
   .import-pdf-link{
     display:inline-flex;align-items:center;gap:6px;
     font:inherit;font-size:12px;font-weight:600;letter-spacing:.08em;
@@ -3989,6 +3989,11 @@
     </div>
   </div>
 </div>
+</div><!-- /#etApp — RESTORED 2026-06-29. Removed by mistake during Push 1.1
+                   structural cleanup. Without this close, every modal-bg
+                   ended up nested inside #etApp (display:none), causing
+                   "click does nothing" for every modal-opening button.
+                   See Mo's diagnostic: modal had display:flex + 0×0 bounds. -->
 
 <div id="print-area"></div>
 
@@ -5262,6 +5267,23 @@ function persistSavedList(arr){ localStorage.setItem("reno_estimates_v1", JSON.s
 
 function saveEstimate(opts){
   opts = opts || {};
+  /* Validation — require property name AND address AND sqft before
+     saving a new estimate. This stops the "Untitled property" rows
+     that used to clutter the Saved list. We only enforce on FIRST
+     save (no state._id yet) so editing an existing saved estimate
+     still works even if it's incomplete. Silent saves (used by
+     invoicing edits etc.) also skip validation. */
+  if(!state._id && !opts.silent){
+    const missing = [];
+    if(!(state.propName || "").trim())    missing.push("property name");
+    if(!(state.propAddress || "").trim()) missing.push("address");
+    if(!(state.propSqft || "").toString().trim()) missing.push("total property sqft");
+    if(missing.length){
+      const msg = "Add " + missing.join(", ") + " before saving the estimate.";
+      try { brandedAlert(msg); } catch(e){ flash(msg, "error"); }
+      return;
+    }
+  }
   const list = loadSavedList();
   const name = state.propName.trim() || "Untitled property";
   const id = state._id || ("e_"+Date.now());
