@@ -3198,7 +3198,11 @@
     margin-top:auto;padding:10px 8px 4px;border-top:1px solid var(--line);
     font-size:11px;color:var(--muted);
   }
-  .app-sidebar.collapsed .sb-footer{font-size:0;border:none;padding:6px 0 0;}
+  .app-sidebar.collapsed .sb-footer{
+    border-top:1px solid var(--line);padding:6px 0 0;margin-top:auto;
+  }
+  /* Hide the user email entirely when collapsed — too squished to read at 56px */
+  .app-sidebar.collapsed #sbUserEmail{display:none !important;}
 
   /* Tooltip for collapsed-state items (CSS-only, no JS) */
   .app-sidebar.collapsed .sb-item{position:relative;}
@@ -3365,6 +3369,26 @@
   /* Slogan only on dashboard; hide everywhere else. JS toggles
      [data-route] on documentElement. */
   html:not([data-route="dashboard"]) .brand-tagline{display:none;}
+
+  /* Submit-for-Review CTA — agent's primary action. Visually
+     elevated above the other toolbar buttons so it's obvious. */
+  .submit-review-cta{
+    background:linear-gradient(180deg,#d4af6a,#a8853f) !important;
+    color:#1a1405 !important;
+    border:1px solid #d4af6a !important;
+    padding:11px 22px !important;
+    font-size:13.5px !important;
+    font-weight:800 !important;
+    letter-spacing:.06em !important;
+    box-shadow:0 4px 14px rgba(212,175,106,.28) !important;
+    transition:transform .12s ease,box-shadow .12s ease !important;
+  }
+  .submit-review-cta:hover{
+    transform:translateY(-1px) !important;
+    box-shadow:0 6px 18px rgba(212,175,106,.40) !important;
+    filter:brightness(1.05);
+  }
+  .submit-review-cta:active{transform:translateY(0) !important;}
 
 </style>
 </head>
@@ -3550,7 +3574,9 @@
           </button>
           <button onclick="openClientEstimate()">Print / PDF</button>
           <button onclick="openEmailEstimateModal()">Email to Client</button>
-          <button data-feature="submit_for_review" id="submitForReviewBtn" onclick="openSubmitForReviewModal()" title="Submit this estimate to Reno to Sold for final review and approval" class="primary">Submit for Review</button>
+          <button data-feature="submit_for_review" id="submitForReviewBtn" onclick="openSubmitForReviewModal()" title="Submit this estimate to Reno to Sold for final review and approval" class="primary submit-review-cta">
+            <i class="ti ti-send" style="font-size:16px;vertical-align:-2px;margin-right:6px;" aria-hidden="true"></i>Submit for Review
+          </button>
           <input type="file" id="pdfImportInput" accept="application/pdf,.pdf" style="display:none;" onchange="onPdfFileChosen(event)">
         </div>
 
@@ -3711,7 +3737,10 @@
 
   <p class="footnote no-print" style="text-align:center;margin-top:18px;">Built-in averages reflect 2026 GTA market data. Tap <b style="color:var(--gold-bright)">Pricing</b> to align with your contractor quotes. Estimates save locally to this browser.</p>
   <p class="footnote no-print" style="text-align:center;margin-top:6px;letter-spacing:.18em;text-transform:uppercase;font-size:10px;color:var(--gold-deep);">Reno to Sold &middot; Renovate Smart &middot; Sell For More</p>
-</div>
+      </div><!-- /view-estimator -->
+    </main><!-- /app-view -->
+  </div><!-- /app-shell -->
+</div><!-- /.app -->
 
 <!-- Contractor Bid Sheet (full-screen overlay) -->
 
@@ -3961,14 +3990,9 @@
   </div>
 </div>
 
-      </div><!-- /view-estimator -->
-    </main><!-- /app-view -->
-  </div><!-- /app-shell -->
-
 <div id="print-area"></div>
 
 <div class="toast" id="toast"></div>
-</div>
 
 <div id="contractorView" class="contractor-view">
   <div class="contractor-toolbar no-print">
@@ -14487,8 +14511,23 @@ function applyEstimateLock(){
 /* ===== Submit for Review modal ===== */
 async function openSubmitForReviewModal(){
   if(!canUse("submit_for_review")){ await brandedAlert("Only agents can submit estimates for review."); return; }
-  if(!state || !state._id){ await brandedAlert("Save the estimate first before submitting for review."); return; }
-  if(!state.propAddress && !state.propName){ await brandedAlert("Add a property name or address before submitting."); return; }
+  // Require at least a property name/address so the submission has identity.
+  // (The agent can fill this in BEFORE clicking — we don't want to silently submit
+  // an "Untitled property".)
+  if(!state.propAddress && !state.propName){
+    await brandedAlert("Add a property name or address before submitting.");
+    return;
+  }
+  // Auto-save if the estimate isn't saved yet (was a "save first" prompt — now silent).
+  if(!state || !state._id){
+    try { saveEstimate({ silent:true }); } catch(e){ console.warn("auto-save before submit failed:", e); }
+    // Give the save a moment to settle
+    await new Promise(r => setTimeout(r, 80));
+    if(!state._id){
+      await brandedAlert("Couldn't save the estimate automatically. Please click Save first, then Submit for Review.");
+      return;
+    }
+  }
 
   /* Hard guard: if the estimate is already in a non-submittable state,
      refuse to open the modal. This is defense-in-depth — applyEstimateLock
@@ -18980,8 +19019,8 @@ function renderDashboard(){
     welcomeEl.style.display = "none";
   }
 
-  // First-run tour
-  renderFirstRunTour();
+  // First-run tour removed per Mo's request 2026-06-29 (kept the function
+  // below as a no-op so any future references don't break).
 
   // Cards
   const cards = dashboardCards();
@@ -19055,10 +19094,18 @@ async function renderMySubmissions(){
   }
   body.innerHTML = '<div style="color:var(--muted);font-size:12px;text-align:center;padding:30px 0;">Loading...</div>';
   try {
-    // Use the proven plain-fetch bypass — supabase-js hangs on these reads.
-    const cols = "id,client_id,name,state,updated_at";
-    const path = "estimates?user_id=eq." + encodeURIComponent(currentUser.id) +
-                 "&type=eq.client&order=updated_at.desc&limit=200&select=" + cols;
+    /* Same query shape as the admin Submissions queue (loadSubmissions
+       above) — type=eq.estimate, status set + not draft, ordered desc.
+       Agents only see their own rows because RLS filters by user_id =
+       auth.uid() on the estimates table. */
+    const cols = "id,user_id,client_id,name,state,updated_at";
+    const path = "estimates?" +
+      "select=" + encodeURIComponent(cols) +
+      "&type=eq.estimate" +
+      "&" + encodeURIComponent("state->>status") + "=not.is.null" +
+      "&" + encodeURIComponent("state->>status") + "=neq.draft" +
+      "&order=updated_at.desc" +
+      "&limit=100";
     const rows = await restFetch(path);
     // Keep only those that have a status set (i.e. were submitted at some point).
     const subs = (rows || []).filter(r => r.state && r.state.status &&
@@ -21153,13 +21200,20 @@ function renderProjectFinancialsCard(){
 /* Open the Invoicing modal. Requires the estimator's current state to be
    the project we're invoicing for. If unsaved, prompt the user to save. */
 async function openInvoicing(){
-  if(!state._id){
-    if(!(await brandedConfirm("Save this estimate first to start invoicing?\n\nThe estimate will be saved under its current name.", { destructive: false, confirmLabel: "Save & Continue" }))) return;
-    try{ saveEstimate(); }catch(e){}
-    if(!state._id){
-      await brandedAlert("Could not save the estimate. Please give it a name and address, then try again.");
-      return;
+  // No active estimate? Open the All Projects dashboard view instead of
+  // prompting to save. Admin opening Invoicing from the dashboard always
+  // hits this path (no estimate context); they see the cross-project
+  // invoice list and can drill into any specific invoice from there.
+  if(!state || !state._id){
+    _invoicingScope = "all";
+    if(!Array.isArray(state && state.invoices)) {
+      if(state) state.invoices = [];
     }
+    const nameEl = document.getElementById("invModalEstimateName");
+    if(nameEl) nameEl.textContent = "All Projects";
+    renderInvoicing();
+    document.getElementById("invoicingModal").classList.add("show");
+    return;
   }
   if(!Array.isArray(state.invoices)) state.invoices = [];
   const nameEl = document.getElementById("invModalEstimateName");
