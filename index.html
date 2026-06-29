@@ -3756,7 +3756,8 @@
     </div>
     <div class="spacer"></div>
     <a href="javascript:void(0)" onclick="ET.backToEstimator()" class="btn" style="text-decoration:none" title="Back to the Reno to Sold estimator">← Estimator</a>
-    <button class="btn" onclick="ET.goHome()" title="View all saved tracker projects">Saved</button>
+    <!-- "Saved" button removed 2026-06-29 — redundant with the Projects tab on the home view. -->
+
     <button class="btn gold" onclick="ET.openNewProject()">＋ New Project</button>
   </div>
 </header>
@@ -8635,7 +8636,25 @@ function _bidContractorFieldValue(){
   return c.contact ? `${c.company} — ${c.contact}` : (c.company || "");
 }
 
-function openContractorBid(){
+async function openContractorBid(){
+  /* Guard — opening Contractor Bid without a loaded estimate produces
+     an empty sheet (no categories enabled, no scope to send to the
+     contractor). Verified on 2026-06-29: admin clicking from
+     dashboard → blank black page. Friendly bail to the Bids dashboard
+     OR offer to go to the estimator to load one. */
+  const hasActiveEstimate = !!(state && state._id);
+  const hasEnabledCats = state && state.enabled &&
+    Object.keys(CONTRACTOR_CAT_LABELS).some(c => !!state.enabled[c]);
+  if(!hasActiveEstimate || !hasEnabledCats){
+    const goToEstimator = await brandedConfirm(
+      "Contractor Bid needs an active estimate with at least one category enabled.\n\nOpen the Estimator to load or create one?",
+      { destructive: false, confirmLabel: "Open Estimator" }
+    );
+    if(goToEstimator){
+      navigateTo("estimator");
+    }
+    return;
+  }
   // Default the per-bid filter to every currently-enabled category
   contractorBidCats = new Set(
     Object.keys(CONTRACTOR_CAT_LABELS).filter(c => !!state.enabled[c])
@@ -20658,6 +20677,12 @@ function openExpenseTracker(){
       // create a standalone tracker project (or save the estimate first
       // if they want it linked).
       if(window.ET && ET.show) ET.show();
+      // CRITICAL — re-render the home view so it reflects the CURRENT
+      // DB.projects. The initial render at script-load time ran when
+      // cloud projects hadn't been pulled yet, so without this re-render
+      // the user sees an empty "No projects yet" state even when their
+      // cloud has projects. Verified during Mo's test on 2026-06-29.
+      if(window.ET && ET.goHome) ET.goHome();
       return;
     }
     let total = 0;
