@@ -5263,14 +5263,14 @@ function migrateOldEstimate(m){
   delete m.sellerName; delete m.sellerPhone; delete m.sellerEmail;
 }
 async function deleteEstimate(id){
-  if(!(await brandedConfirm("Delete this estimate?"))) return;
+  if(!(await brandedConfirm("Delete this estimate?", { confirmLabel: "Delete" }))) return;
   const list = loadSavedList().filter(x=>x.id!==id);
   persistSavedList(list);
   renderSavedList();
   if(currentUser && supa){ deleteCloudEstimate(id); }
 }
 async function newEstimate(){
-  if(!(await brandedConfirm("Start a new estimate? Unsaved changes will be lost."))) return;
+  if(!(await brandedConfirm("Start a new estimate? Unsaved changes will be lost.", { confirmLabel: "Start New" }))) return;
   state = freshState();
   renderAll();
 }
@@ -8755,7 +8755,7 @@ async function submitSiteAccess(){
 async function lockSite(){
   if(!supa){ flash("Not signed in."); return; }
   if(!currentUser){ flash("Not signed in."); return; }
-  if(!(await brandedConfirm("Sign out of " + currentUser.email + "?"))) return;
+  if(!(await brandedConfirm("Sign out of " + currentUser.email + "?", { confirmLabel: "Sign Out" }))) return;
   /* Skip supa.auth.signOut() — supabase-js hangs (verified across the
      codebase on setSession/updateUser/getSession etc.). Clearing the
      sb-* auth tokens from localStorage IS the sign-out from the
@@ -11395,7 +11395,7 @@ function saveContractorEntry(){
 async function deleteContractor(id){
   const c = loadContractors().find(x => x.id === id);
   if(!c) return;
-  if(!(await brandedConfirm(`Delete "${c.company || "this contractor"}"? This can't be undone.`))) return;
+  if(!(await brandedConfirm(`Delete "${c.company || "this contractor"}"? This can't be undone.`, { confirmLabel: "Delete" }))) return;
   const list = loadContractors().filter(x => x.id !== id);
   saveContractors(list);
   if(currentUser && supa) deleteCloudContractor(id);
@@ -18341,7 +18341,7 @@ async function onAuthClick(){
        The old defensive try/catch existed to handle native confirm()
        being blocked by overlays; the branded modal renders the OK
        button in the document itself so that failure mode is gone. */
-    const proceed = await brandedConfirm("Sign out of " + currentUser.email + "?");
+    const proceed = await brandedConfirm("Sign out of " + currentUser.email + "?", { confirmLabel: "Sign Out" });
     if(!proceed){
       console.log("[auth] User cancelled sign-out");
       return;
@@ -20181,7 +20181,7 @@ function renderProjectFinancialsCard(){
    the project we're invoicing for. If unsaved, prompt the user to save. */
 async function openInvoicing(){
   if(!state._id){
-    if(!(await brandedConfirm("Save this estimate first to start invoicing?\n\nClick OK to save (the estimate will be saved under its current name).", { destructive: false, confirmLabel: "Save & Continue" }))) return;
+    if(!(await brandedConfirm("Save this estimate first to start invoicing?\n\nThe estimate will be saved under its current name.", { destructive: false, confirmLabel: "Save & Continue" }))) return;
     try{ saveEstimate(); }catch(e){}
     if(!state._id){
       await brandedAlert("Could not save the estimate. Please give it a name and address, then try again.");
@@ -20788,7 +20788,7 @@ function markInvoicePaid(invId){
 }
 
 async function voidInvoice(invId){
-  if(!(await brandedConfirm("Void this invoice? It will be marked void and excluded from totals. Use this for invoices issued in error.", { confirmLabel: "Void Invoice" }))) return;
+  if(!(await brandedConfirm("Void this invoice? It will be marked void and excluded from totals. Use this for invoices issued in error.", { destructive: true, confirmLabel: "Void Invoice" }))) return;
   const inv = (state.invoices || []).find(x => x.id === invId);
   if(!inv) return;
   inv.status = "void";
