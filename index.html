@@ -4858,10 +4858,10 @@ function savePrices(){
     try { pushServerPricing("client"); } catch(e){}
   }
 }
-function resetPricing(){
+async function resetPricing(){
   // Same gate as setPrice — bail if the editor isn't unlocked.
   if(!internalUnlocked) return;
-  if(!confirm("Reset all unit prices to GTA defaults?")) return;
+  if(!(await brandedConfirm("Reset all unit prices to GTA defaults?", { confirmLabel: "Reset Prices" }))) return;
   prices = JSON.parse(JSON.stringify(DEFAULT_PRICES));
   savePrices();
   renderPricingEditor();
@@ -5262,15 +5262,15 @@ function migrateOldEstimate(m){
   // Drop the legacy fields once migrated so saves stay clean
   delete m.sellerName; delete m.sellerPhone; delete m.sellerEmail;
 }
-function deleteEstimate(id){
-  if(!confirm("Delete this estimate?")) return;
+async function deleteEstimate(id){
+  if(!(await brandedConfirm("Delete this estimate?"))) return;
   const list = loadSavedList().filter(x=>x.id!==id);
   persistSavedList(list);
   renderSavedList();
   if(currentUser && supa){ deleteCloudEstimate(id); }
 }
-function newEstimate(){
-  if(!confirm("Start a new estimate? Unsaved changes will be lost.")) return;
+async function newEstimate(){
+  if(!(await brandedConfirm("Start a new estimate? Unsaved changes will be lost."))) return;
   state = freshState();
   renderAll();
 }
@@ -8752,10 +8752,10 @@ async function submitSiteAccess(){
    out of Supabase (delegating to the same flow as the Account button).
    The Lock button is still admin-only and serves as a quick "log out"
    action. Agents use their Account button instead. */
-function lockSite(){
+async function lockSite(){
   if(!supa){ flash("Not signed in."); return; }
   if(!currentUser){ flash("Not signed in."); return; }
-  if(!confirm("Sign out of " + currentUser.email + "?")) return;
+  if(!(await brandedConfirm("Sign out of " + currentUser.email + "?"))) return;
   /* Skip supa.auth.signOut() — supabase-js hangs (verified across the
      codebase on setSession/updateUser/getSession etc.). Clearing the
      sb-* auth tokens from localStorage IS the sign-out from the
@@ -11391,10 +11391,10 @@ function saveContractorEntry(){
   renderContractorsList();
   flash(editingContractorId ? "Contractor updated" : "Contractor saved");
 }
-function deleteContractor(id){
+async function deleteContractor(id){
   const c = loadContractors().find(x => x.id === id);
   if(!c) return;
-  if(!confirm(`Delete "${c.company || "this contractor"}"? This can't be undone.`)) return;
+  if(!(await brandedConfirm(`Delete "${c.company || "this contractor"}"? This can't be undone.`))) return;
   const list = loadContractors().filter(x => x.id !== id);
   saveContractors(list);
   if(currentUser && supa) deleteCloudContractor(id);
@@ -12008,7 +12008,7 @@ function renderRevisionSnapshot(snap, cats){
   `;
 }
 async function acceptReceivedBid(token){
-  if(!confirm("Accept this bid? The contractor's link will become read-only and they can no longer revise.")) return;
+  if(!(await brandedConfirm("Accept this bid? The contractor's link will become read-only and they can no longer revise.", { destructive: false, confirmLabel: "Accept Bid" }))) return;
   try{
     // dbUpdate uses restFetch — bypasses the supabase-js hang
     await dbUpdate("contractor_bids",
@@ -12019,10 +12019,10 @@ async function acceptReceivedBid(token){
     await loadReceivedBids();
     setReceivedBidsTab("accepted");
     setTimeout(() => expandReceivedBid(token), 100);
-  }catch(e){ alert("Couldn't accept: " + (e.message || e)); }
+  }catch(e){ await brandedAlert("Couldn't accept: " + (e.message || e)); }
 }
 async function reopenReceivedBid(token){
-  if(!confirm("Reopen this bid for revision? The contractor's link will become editable again.")) return;
+  if(!(await brandedConfirm("Reopen this bid for revision? The contractor's link will become editable again.", { destructive: false, confirmLabel: "Reopen" }))) return;
   try{
     await dbUpdate("contractor_bids",
       { user_id: currentUser.id, bid_token: token },
@@ -12032,10 +12032,10 @@ async function reopenReceivedBid(token){
     await loadReceivedBids();
     setReceivedBidsTab("submitted");
     setTimeout(() => expandReceivedBid(token), 100);
-  }catch(e){ alert("Couldn't reopen: " + (e.message || e)); }
+  }catch(e){ await brandedAlert("Couldn't reopen: " + (e.message || e)); }
 }
 async function cancelReceivedBid(token){
-  if(!confirm("Cancel this bid request? The contractor's link will become read-only. This keeps the record visible in your Bids list — use Delete to remove it entirely.")) return;
+  if(!(await brandedConfirm("Cancel this bid request? The contractor's link will become read-only. This keeps the record visible in your Bids list — use Delete to remove it entirely.", { confirmLabel: "Cancel Bid" }))) return;
   try{
     await dbUpdate("contractor_bids",
       { user_id: currentUser.id, bid_token: token },
@@ -12043,19 +12043,19 @@ async function cancelReceivedBid(token){
     );
     flash("Bid cancelled");
     await loadReceivedBids();
-  }catch(e){ alert("Couldn't cancel: " + (e.message || e)); }
+  }catch(e){ await brandedAlert("Couldn't cancel: " + (e.message || e)); }
 }
 /* Permanently removes the bid row. The contractor's link becomes invalid
    (the Edge Function returns "Bid not found" once the row is gone). */
 async function deleteReceivedBid(token){
   const bid = (_receivedBidsCache || []).find(b => b.bid_token === token);
   const who = bid ? (bid.contractor_company || bid.sent_to_email || "this contractor") : "this contractor";
-  if(!confirm(`Permanently delete this bid from ${who}? The contractor's link will stop working immediately. This cannot be undone.`)) return;
+  if(!(await brandedConfirm(`Permanently delete this bid from ${who}? The contractor's link will stop working immediately. This cannot be undone.`, { confirmLabel: "Delete" }))) return;
   try{
     await dbDelete("contractor_bids", { user_id: currentUser.id, bid_token: token });
     flash("Bid deleted");
     await loadReceivedBids();
-  }catch(e){ alert("Couldn't delete: " + (e.message || e)); }
+  }catch(e){ await brandedAlert("Couldn't delete: " + (e.message || e)); }
 }
 
 /* Build the scope_data JSON that gets stored on the bid record and rendered
@@ -15590,6 +15590,207 @@ function openPasswordSetupModalDirect(){
   console.log("[auth] Password setup modal opened (direct)");
 }
 
+/* ===========================================================
+   BRANDED DIALOG HELPERS — replace native confirm/alert/prompt
+   ===========================================================
+   Native browser dialogs (confirm/alert/prompt) can't be styled —
+   they use the OS chrome and look out-of-place against our gold/
+   black Reno to Sold aesthetic. These helpers render the same
+   semantic dialogs but in our branded look.
+
+   USAGE (all return Promises — call sites must `await`):
+     const ok = await brandedConfirm("Sign out of " + email + "?");
+     await brandedAlert("Save the estimate first.");
+     const name = await brandedPrompt("New folder name?", "Untitled");
+
+   OPTIONS object (all optional):
+     { title: "..."            — header text (default: smart guess)
+       confirmLabel: "..."     — primary button text (default: "Confirm" or "OK")
+       cancelLabel: "..."      — secondary button text (default: "Cancel")
+       destructive: true       — red Confirm button (default: auto-detected)
+       error: true             — red header text on alerts
+       inputType: "password"   — for brandedPrompt (default: "text") }
+
+   Keyboard: Enter = confirm, Escape = cancel. Click outside = cancel.
+   Helper duplicate-modal guard prevents accidentally stacking two. */
+
+function _brandedDialogCommonStyle(){
+  return "position:fixed;inset:0;z-index:99999;" +
+         "background:rgba(10,10,10,.85);" +
+         "display:flex;align-items:center;justify-content:center;padding:20px;" +
+         "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;" +
+         "backdrop-filter:blur(6px);";
+}
+
+function _brandedDialogCardStyle(){
+  return "max-width:440px;width:100%;" +
+         "background:linear-gradient(180deg,#1a1408,#0f0c06);" +
+         "border:1px solid #c98e2a;border-radius:12px;" +
+         "box-shadow:0 20px 60px rgba(0,0,0,.6);" +
+         "padding:26px 26px 22px;color:#e8c989;";
+}
+
+function _brandedDialogButtonPrimary(destructive){
+  if(destructive){
+    return "padding:11px 22px;border:none;border-radius:6px;cursor:pointer;" +
+           "font-size:12.5px;font-weight:800;letter-spacing:.10em;text-transform:uppercase;" +
+           "min-width:120px;" +
+           "background:linear-gradient(180deg,#d44a4a,#a83838);color:#fff;";
+  }
+  return "padding:11px 22px;border:none;border-radius:6px;cursor:pointer;" +
+         "font-size:12.5px;font-weight:800;letter-spacing:.10em;text-transform:uppercase;" +
+         "min-width:120px;" +
+         "background:linear-gradient(180deg,#d4af6a,#a8853f);color:#0a0a0a;";
+}
+
+function _brandedDialogButtonSecondary(){
+  return "padding:11px 22px;background:transparent;border:1px solid #555;color:#cfcfcf;" +
+         "border-radius:6px;font-size:12.5px;font-weight:700;letter-spacing:.08em;" +
+         "text-transform:uppercase;cursor:pointer;min-width:120px;";
+}
+
+function brandedConfirm(message, opts){
+  opts = opts || {};
+  return new Promise((resolve) => {
+    // Block stacking — if one is already open, cancel-resolve the new one.
+    if(document.getElementById("brandedDialog")){
+      resolve(false);
+      return;
+    }
+    const destructive = (opts.destructive === true) ||
+      (opts.destructive !== false && /delete|remove|reset|cancel|sign out|log out|wipe|clear|reject/i.test(message + " " + (opts.title || "")));
+    const title = opts.title || (destructive ? "Please confirm" : "Confirm");
+    const confirmLabel = opts.confirmLabel || (destructive ? "Confirm" : "OK");
+    const cancelLabel = opts.cancelLabel || "Cancel";
+
+    const modal = document.createElement("div");
+    modal.id = "brandedDialog";
+    modal.style.cssText = _brandedDialogCommonStyle();
+    modal.innerHTML =
+      '<div style="' + _brandedDialogCardStyle() + '">' +
+        '<div style="text-align:center;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:' + (destructive ? "#ff9090" : "#a8853f") + ';margin-bottom:10px;font-weight:700;">' +
+          escapeHtml(title) +
+        '</div>' +
+        '<div style="text-align:center;font-size:14px;color:#f5f1e6;line-height:1.55;margin-bottom:22px;white-space:pre-wrap;">' +
+          escapeHtml(message) +
+        '</div>' +
+        '<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">' +
+          '<button id="brandedDialogCancel" style="' + _brandedDialogButtonSecondary() + '">' + escapeHtml(cancelLabel) + '</button>' +
+          '<button id="brandedDialogOk"     style="' + _brandedDialogButtonPrimary(destructive) + '">' + escapeHtml(confirmLabel) + '</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(modal);
+
+    const cleanup = (result) => {
+      try { modal.remove(); } catch(e){}
+      document.removeEventListener("keydown", keyHandler, true);
+      resolve(result);
+    };
+    const keyHandler = (e) => {
+      if(e.key === "Escape"){ e.preventDefault(); cleanup(false); }
+      else if(e.key === "Enter"){ e.preventDefault(); cleanup(true); }
+    };
+    document.addEventListener("keydown", keyHandler, true);
+    document.getElementById("brandedDialogOk").addEventListener("click", () => cleanup(true));
+    document.getElementById("brandedDialogCancel").addEventListener("click", () => cleanup(false));
+    modal.addEventListener("click", (e) => { if(e.target === modal) cleanup(false); });
+    setTimeout(() => { const b = document.getElementById("brandedDialogOk"); if(b) b.focus(); }, 50);
+  });
+}
+
+function brandedAlert(message, opts){
+  opts = opts || {};
+  return new Promise((resolve) => {
+    if(document.getElementById("brandedDialog")){
+      resolve();
+      return;
+    }
+    const isError = (opts.error === true) ||
+      (opts.error !== false && /fail|couldn't|error|required|invalid|not found|denied|expired/i.test(message));
+    const title = opts.title || (isError ? "Notice" : "Reno to Sold");
+
+    const modal = document.createElement("div");
+    modal.id = "brandedDialog";
+    modal.style.cssText = _brandedDialogCommonStyle();
+    modal.innerHTML =
+      '<div style="' + _brandedDialogCardStyle() + '">' +
+        '<div style="text-align:center;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:' + (isError ? "#ff9090" : "#a8853f") + ';margin-bottom:10px;font-weight:700;">' +
+          escapeHtml(title) +
+        '</div>' +
+        '<div style="text-align:center;font-size:14px;color:#f5f1e6;line-height:1.55;margin-bottom:22px;white-space:pre-wrap;">' +
+          escapeHtml(message) +
+        '</div>' +
+        '<div style="display:flex;justify-content:center;">' +
+          '<button id="brandedDialogOk" style="' + _brandedDialogButtonPrimary(false) + '">OK</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(modal);
+
+    const cleanup = () => {
+      try { modal.remove(); } catch(e){}
+      document.removeEventListener("keydown", keyHandler, true);
+      resolve();
+    };
+    const keyHandler = (e) => {
+      if(e.key === "Escape" || e.key === "Enter"){ e.preventDefault(); cleanup(); }
+    };
+    document.addEventListener("keydown", keyHandler, true);
+    document.getElementById("brandedDialogOk").addEventListener("click", cleanup);
+    modal.addEventListener("click", (e) => { if(e.target === modal) cleanup(); });
+    setTimeout(() => { const b = document.getElementById("brandedDialogOk"); if(b) b.focus(); }, 50);
+  });
+}
+
+function brandedPrompt(message, defaultValue, opts){
+  opts = opts || {};
+  return new Promise((resolve) => {
+    if(document.getElementById("brandedDialog")){
+      resolve(null);
+      return;
+    }
+    const title = opts.title || "Reno to Sold";
+    const inputType = opts.inputType || "text";
+
+    const modal = document.createElement("div");
+    modal.id = "brandedDialog";
+    modal.style.cssText = _brandedDialogCommonStyle();
+    modal.innerHTML =
+      '<div style="' + _brandedDialogCardStyle() + '">' +
+        '<div style="text-align:center;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#a8853f;margin-bottom:10px;font-weight:700;">' +
+          escapeHtml(title) +
+        '</div>' +
+        '<div style="text-align:center;font-size:14px;color:#f5f1e6;line-height:1.55;margin-bottom:16px;white-space:pre-wrap;">' +
+          escapeHtml(message) +
+        '</div>' +
+        '<input type="' + escapeHtmlAttr(inputType) + '" id="brandedDialogInput" value="' + escapeHtmlAttr(defaultValue || "") + '" ' +
+          'style="width:100%;padding:11px 13px;background:#0a0a0a;border:1px solid #3a3a42;color:#f5f1e6;' +
+                 'border-radius:6px;font-size:13px;margin-bottom:18px;box-sizing:border-box;' +
+                 'font-family:-apple-system,BlinkMacSystemFont,sans-serif;">' +
+        '<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">' +
+          '<button id="brandedDialogCancel" style="' + _brandedDialogButtonSecondary() + '">Cancel</button>' +
+          '<button id="brandedDialogOk"     style="' + _brandedDialogButtonPrimary(false) + '">OK</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(modal);
+
+    const input = document.getElementById("brandedDialogInput");
+    const cleanup = (result) => {
+      try { modal.remove(); } catch(e){}
+      document.removeEventListener("keydown", keyHandler, true);
+      resolve(result);
+    };
+    const keyHandler = (e) => {
+      if(e.key === "Escape"){ e.preventDefault(); cleanup(null); }
+      else if(e.key === "Enter"){ e.preventDefault(); cleanup(input.value); }
+    };
+    document.addEventListener("keydown", keyHandler, true);
+    document.getElementById("brandedDialogOk").addEventListener("click", () => cleanup(input.value));
+    document.getElementById("brandedDialogCancel").addEventListener("click", () => cleanup(null));
+    modal.addEventListener("click", (e) => { if(e.target === modal) cleanup(null); });
+    setTimeout(() => { input.focus(); try { input.select(); } catch(e){} }, 50);
+  });
+}
+
 /* Live-update the password requirements checklist as the user types. */
 function updatePasswordChecklist(){
   const pw1 = (document.getElementById("pwSetupNew") || {}).value || "";
@@ -18125,24 +18326,18 @@ function updateAuthUI(){
   }
 }
 
-function onAuthClick(){
+async function onAuthClick(){
   console.log("[auth] Log out / Sign in button clicked. supa:", !!supa, "currentUser:", !!currentUser, "email:", currentUser && currentUser.email);
   if(!supa){
     flash("Sync unavailable — Supabase failed to load");
     return;
   }
   if(currentUser){
-    /* Sign out flow — kept defensive because confirm() can be blocked
-       by overlays or browser settings. If confirm fails or returns
-       falsy, we still attempt sign-out so the button never silently
-       does nothing — that confused the user before. */
-    let proceed = true;
-    try {
-      proceed = confirm("Sign out of " + currentUser.email + "?");
-    } catch(e){
-      console.warn("[auth] confirm() blocked, defaulting to sign out:", e);
-      proceed = true;
-    }
+    /* Sign out flow — branded confirm dialog replaces the native one.
+       The old defensive try/catch existed to handle native confirm()
+       being blocked by overlays; the branded modal renders the OK
+       button in the document itself so that failure mode is gone. */
+    const proceed = await brandedConfirm("Sign out of " + currentUser.email + "?");
     if(!proceed){
       console.log("[auth] User cancelled sign-out");
       return;
