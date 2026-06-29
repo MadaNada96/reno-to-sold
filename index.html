@@ -8756,7 +8756,19 @@ function lockSite(){
   if(!supa){ flash("Not signed in."); return; }
   if(!currentUser){ flash("Not signed in."); return; }
   if(!confirm("Sign out of " + currentUser.email + "?")) return;
-  supa.auth.signOut().then(() => { location.reload(); });
+  /* Skip supa.auth.signOut() — supabase-js hangs (verified across the
+     codebase on setSession/updateUser/getSession etc.). Clearing the
+     sb-* auth tokens from localStorage IS the sign-out from the
+     client's perspective; the next page load has no session and
+     applyAuthGate renders the login form. Server-side session
+     cleanup happens lazily as the refresh token expires. */
+  try {
+    for(let i = localStorage.length - 1; i >= 0; i--){
+      const k = localStorage.key(i);
+      if(k && /^sb-.*-auth-token/i.test(k)) localStorage.removeItem(k);
+    }
+  } catch(e){}
+  location.reload();
 }
 
 /* ============================================================
@@ -18136,35 +18148,24 @@ function onAuthClick(){
       return;
     }
     console.log("[auth] Signing out...");
-    /* Always clear local data + reload, even if signOut errors OR
-       hangs forever. After deploys the in-memory supa client can be
-       holding a stale WebSocket and signOut() never resolves —
-       we force a teardown after 3 seconds no matter what. */
-    let alreadyFinished = false;
-    const finishSignOut = (reason) => {
-      if(alreadyFinished) return;
-      alreadyFinished = true;
-      console.log("[auth] Finishing sign-out:", reason);
-      try { clearUserScopedLocalStorage("sign-out (forced)"); } catch(e){}
-      try { localStorage.removeItem(LAST_USER_ID_KEY); } catch(e){}
-      /* Belt-and-suspenders: also clear the Supabase auth token directly
-         from localStorage so we know we're truly signed out even if the
-         client never confirmed. */
-      try {
-        for(let i = localStorage.length - 1; i >= 0; i--){
-          const k = localStorage.key(i);
-          if(k && /^sb-.*-auth-token/i.test(k)) localStorage.removeItem(k);
-        }
-      } catch(e){}
-      flash("Signed out");
-      setTimeout(() => location.reload(), 200);
-    };
-    // 3-second timeout — never let the user wait longer than this
-    const hardTimeout = setTimeout(() => finishSignOut("3s timeout"), 3000);
-    supa.auth.signOut().then(
-      () => { clearTimeout(hardTimeout); console.log("[auth] Signed out successfully"); finishSignOut("normal completion"); },
-      (err) => { clearTimeout(hardTimeout); console.error("[auth] Sign-out failed:", err); finishSignOut("error: " + (err && err.message)); }
-    );
+    /* INSTANT SIGN-OUT — skip supa.auth.signOut() entirely.
+       Background: supabase-js's signOut hangs (same hang we see on
+       setSession/updateUser/getSession). The previous version of
+       this code awaited signOut with a 3s hard timeout, which made
+       every sign-out take 3 seconds even on fast networks. Mo
+       flagged the lag on 2026-06-28.
+       Clearing the sb-* auth tokens from localStorage IS the
+       sign-out from the client's perspective. Server-side session
+       cleanup happens lazily as the refresh token expires. */
+    try { clearUserScopedLocalStorage("sign-out"); } catch(e){}
+    try { localStorage.removeItem(LAST_USER_ID_KEY); } catch(e){}
+    try {
+      for(let i = localStorage.length - 1; i >= 0; i--){
+        const k = localStorage.key(i);
+        if(k && /^sb-.*-auth-token/i.test(k)) localStorage.removeItem(k);
+      }
+    } catch(e){}
+    location.reload();
     return;
   }
   openAuthModal();
