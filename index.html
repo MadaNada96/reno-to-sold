@@ -11278,8 +11278,9 @@ async function pullCloudContractors(showMigratePrompt){
   // First-time-on-this-device prompt
   if(showMigratePrompt && !localStorage.getItem(migrateKey) && localList.length > 0){
     const n = localList.length;
-    const ok = confirm("You have " + n + " local contractor" + (n===1?"":"s")
-      + " on this device. Upload to your account so they sync across all your devices?");
+    const ok = await brandedConfirm("You have " + n + " local contractor" + (n===1?"":"s")
+      + " on this device. Upload to your account so they sync across all your devices?",
+      { destructive: false, confirmLabel: "Upload" });
     if(ok){
       for(const c of localList){
         if(!c.updatedAt) c.updatedAt = Date.now();
@@ -12781,8 +12782,8 @@ function saveContractorPrices(){
     try { pushServerPricing("contractor"); } catch(e){}
   }
 }
-function resetContractorPricing(){
-  if(!confirm("Reset all contractor rates to 70% of client defaults?")) return;
+async function resetContractorPricing(){
+  if(!(await brandedConfirm("Reset all contractor rates to 70% of client defaults?", { confirmLabel: "Reset Rates" }))) return;
   contractorPrices = defaultContractorPrices();
   saveContractorPrices();
   renderContractorPricingEditor();
@@ -14705,8 +14706,8 @@ function saveDiscountRequest(){
   renderTotals();
   if(typeof flash === "function") flash("Discount request saved. It'll be reviewed when you submit the estimate.");
 }
-function clearDiscountRequest(){
-  if(!confirm("Remove the discount request from this estimate?")) return;
+async function clearDiscountRequest(){
+  if(!(await brandedConfirm("Remove the discount request from this estimate?", { confirmLabel: "Remove" }))) return;
   state.discount_request = null;
   saveEstimate({ silent: true });
   closeDiscountRequestModal();
@@ -16728,7 +16729,7 @@ async function submitEditUser(userId){
 }
 
 async function deleteUserConfirm(userId, email){
-  if(!confirm(`Permanently delete ${email}?\n\nThis removes their account AND profile. All their estimates are kept (RLS just orphans them).\n\nThis cannot be undone.`)) return;
+  if(!(await brandedConfirm(`Permanently delete ${email}?\n\nThis removes their account AND profile. All their estimates are kept (RLS just orphans them).\n\nThis cannot be undone.`, { confirmLabel: "Delete User" }))) return;
   const statusEl = document.getElementById("uf_status");
   statusEl.innerHTML = `<span style="color:var(--gold-bright);">Deleting…</span>`;
   try {
@@ -17116,24 +17117,25 @@ async function downloadSubmissionPdf(estimateId){
 
 async function deleteSubmission(estimateId){
   const row = submissionsList.find(r => r.id === estimateId);
-  if(!row){ alert("Submission not found — refresh the queue and try again."); return; }
+  if(!row){ await brandedAlert("Submission not found — refresh the queue and try again."); return; }
   const s = row.state || {};
   const sub = s.submission || {};
   const agentName = sub.submitted_by_name || sub.submitted_by_email || "this agent";
   const propAddr = s.propAddress || s.propName || "this property";
   /* Two-step confirm: a normal yes/no, then a typed-name confirmation
      to prevent muscle-memory mistakes on the agent name. */
-  const firstOk = confirm(
+  const firstOk = await brandedConfirm(
     "Delete submission?\n\n" +
     "Property: " + propAddr + "\n" +
     "Agent: " + agentName + "\n\n" +
-    "This removes the estimate from your queue AND from the agent's saved list permanently. It can't be undone."
+    "This removes the estimate from your queue AND from the agent's saved list permanently. It can't be undone.",
+    { confirmLabel: "Continue" }
   );
   if(!firstOk) return;
-  const typed = prompt("To confirm, type the agent's name exactly:\n  " + agentName);
+  const typed = await brandedPrompt("To confirm, type the agent's name exactly:\n  " + agentName, "", { title: "Confirm deletion" });
   if(typed == null) return; // cancelled
   if(typed.trim().toLowerCase() !== agentName.trim().toLowerCase()){
-    alert("Agent name didn't match. Deletion cancelled.");
+    await brandedAlert("Agent name didn't match. Deletion cancelled.");
     return;
   }
   try {
@@ -17149,25 +17151,26 @@ async function deleteSubmission(estimateId){
     if(typeof flash === "function") flash("Submission deleted");
   } catch(e){
     console.error("[submissions] Delete failed:", e);
-    alert("Couldn't delete: " + (e && e.message ? e.message : String(e)));
+    await brandedAlert("Couldn't delete: " + (e && e.message ? e.message : String(e)));
   }
 }
 
 async function reopenSubmission(estimateId){
   const row = submissionsList.find(r => r.id === estimateId);
-  if(!row){ alert("Submission not found — refresh the queue and try again."); return; }
+  if(!row){ await brandedAlert("Submission not found — refresh the queue and try again."); return; }
   const s = row.state || {};
   const sub = s.submission || {};
   const agentName = sub.submitted_by_name || sub.submitted_by_email || "the agent";
   const propAddr = s.propAddress || s.propName || "this property";
-  const firstOk = confirm(
+  const firstOk = await brandedConfirm(
     "Reopen this submission for the agent to edit?\n\n" +
     "Property: " + propAddr + "\n" +
     "Agent: " + agentName + "\n\n" +
-    "The estimate goes back to draft status. The agent will be able to make changes and resubmit. They'll get an email notification."
+    "The estimate goes back to draft status. The agent will be able to make changes and resubmit. They'll get an email notification.",
+    { destructive: false, confirmLabel: "Reopen" }
   );
   if(!firstOk) return;
-  const note = prompt("Optional note to the agent explaining what needs to change:\n(Leave blank to skip)") || "";
+  const note = (await brandedPrompt("Optional note to the agent explaining what needs to change:\n(Leave blank to skip)", "", { title: "Note to agent" })) || "";
 
   try {
     // Build new state — reset status to draft + record this admin action
@@ -17391,15 +17394,16 @@ function closeSubmissionDetail(){
 */
 let stashedAdminState = null;  // { state, prices, fromSubmissionId, savedEstimateId }
 
-function sendBidForSubmission(estimateId){
+async function sendBidForSubmission(estimateId){
   const row = submissionsList.find(r => r.id === estimateId);
-  if(!row) return alert("Submission not found — try refreshing.");
+  if(!row){ await brandedAlert("Submission not found — try refreshing."); return; }
   const sub = row.state && row.state.submission;
   if(!sub || !sub.state_snapshot || !sub.pricing_snapshot){
-    return alert("This submission predates snapshot capture — can't load it for contractor bid.");
+    await brandedAlert("This submission predates snapshot capture — can't load it for contractor bid.");
+    return;
   }
   if(stashedAdminState){
-    if(!confirm("You're already reviewing another submission. Switch to this one?")) return;
+    if(!(await brandedConfirm("You're already reviewing another submission. Switch to this one?", { destructive: false, confirmLabel: "Switch" }))) return;
     // Discard the previous stash — banner click later will only restore
     // from the latest stashedAdminState, which is fine.
   }
@@ -18195,7 +18199,7 @@ async function confirmSubmissionDecision(){
         : evalResult.status === "pending_only"
         ? "Bids were sent but no contractor has submitted pricing yet. Approve anyway?"
         : "Best bid yields " + evalResult.bestMargin.toFixed(1) + "% margin — below your " + PROFIT_MARGIN_TARGET_PCT + "% target. Approve anyway?";
-      if(!confirm(promptMsg)){
+      if(!(await brandedConfirm(promptMsg, { destructive: false, title: "Profit-margin warning", confirmLabel: "Approve anyway" }))){
         statusEl.style.color = "var(--muted)";
         statusEl.textContent = "Approval cancelled.";
         return;
@@ -18583,7 +18587,7 @@ async function bootstrapCloudSync(showMigratePrompt){
   const migrateKey = "reno_cloud_migrated_" + currentUser.id;
   const localList = loadSavedList();
   if(showMigratePrompt && !localStorage.getItem(migrateKey) && localList.length > 0){
-    const ok = confirm("Welcome! You have " + localList.length + " local estimate(s) on this device. Upload them to your account so they sync across all your devices?");
+    const ok = await brandedConfirm("Welcome! You have " + localList.length + " local estimate(s) on this device. Upload them to your account so they sync across all your devices?", { destructive: false, confirmLabel: "Upload" });
     if(ok){
       for(const e of localList){ await upsertCloudEstimate(e); }
       flash("Uploaded " + localList.length + " estimate" + (localList.length===1?"":"s"));
@@ -19296,7 +19300,7 @@ function renderPdfDetectModal(){
   document.getElementById("pdfApplyBtn").disabled = false;
 }
 
-function applyPdfImport(){
+async function applyPdfImport(){
   if(!pdfDetected) return;
   const d = pdfDetected;
   // Read user-adjusted values from the form
@@ -19304,7 +19308,7 @@ function applyPdfImport(){
   const addressForm  = (document.getElementById("pdfAddress").value || "").trim();
   const sqftForm     = (document.getElementById("pdfSqft").value || "").trim();
 
-  if(!confirm("Apply detected data? Your current estimate will be replaced with a new one filled in from this PDF, with all categories enabled.")) return;
+  if(!(await brandedConfirm("Apply detected data? Your current estimate will be replaced with a new one filled in from this PDF, with all categories enabled.", { destructive: false, confirmLabel: "Apply" }))) return;
 
   // ---- Start fresh ----
   state = freshState();
@@ -20175,12 +20179,12 @@ function renderProjectFinancialsCard(){
 
 /* Open the Invoicing modal. Requires the estimator's current state to be
    the project we're invoicing for. If unsaved, prompt the user to save. */
-function openInvoicing(){
+async function openInvoicing(){
   if(!state._id){
-    if(!confirm("Save this estimate first to start invoicing?\n\nClick OK to save (the estimate will be saved under its current name).")) return;
+    if(!(await brandedConfirm("Save this estimate first to start invoicing?\n\nClick OK to save (the estimate will be saved under its current name).", { destructive: false, confirmLabel: "Save & Continue" }))) return;
     try{ saveEstimate(); }catch(e){}
     if(!state._id){
-      alert("Could not save the estimate. Please give it a name and address, then try again.");
+      await brandedAlert("Could not save the estimate. Please give it a name and address, then try again.");
       return;
     }
   }
@@ -20558,12 +20562,12 @@ function createMilestoneInvoice(milestoneId){
 }
 
 /* Create a new custom invoice (free-form, not tied to a milestone). */
-function createCustomInvoice(){
-  const name = prompt("Custom invoice name (e.g. \"Change Order #1 — Add island countertop\"):", "Change Order");
+async function createCustomInvoice(){
+  const name = await brandedPrompt("Custom invoice name (e.g. \"Change Order #1 — Add island countertop\"):", "Change Order", { title: "New custom invoice" });
   if(!name) return;
-  const amtStr = prompt("Invoice amount $ (pre-HST):", "1000");
+  const amtStr = await brandedPrompt("Invoice amount $ (pre-HST):", "1000", { title: "Invoice amount" });
   const amount = parseFloat(amtStr);
-  if(!isFinite(amount) || amount <= 0){ alert("Invalid amount."); return; }
+  if(!isFinite(amount) || amount <= 0){ await brandedAlert("Invalid amount."); return; }
   const hstAmount = +(amount * INVOICE_HST_RATE_DEFAULT).toFixed(2);
   const total = +(amount + hstAmount).toFixed(2);
   const now = new Date().toISOString();
@@ -20783,8 +20787,8 @@ function markInvoicePaid(invId){
   renderInvoiceDetail(inv);
 }
 
-function voidInvoice(invId){
-  if(!confirm("Void this invoice? It will be marked void and excluded from totals. Use this for invoices issued in error.")) return;
+async function voidInvoice(invId){
+  if(!(await brandedConfirm("Void this invoice? It will be marked void and excluded from totals. Use this for invoices issued in error.", { confirmLabel: "Void Invoice" }))) return;
   const inv = (state.invoices || []).find(x => x.id === invId);
   if(!inv) return;
   inv.status = "void";
@@ -20793,8 +20797,8 @@ function voidInvoice(invId){
   renderInvoiceDetail(inv);
 }
 
-function deleteInvoice(invId){
-  if(!confirm("Delete this invoice permanently? This cannot be undone. (For invoices issued in error, prefer 'Void' instead.)")) return;
+async function deleteInvoice(invId){
+  if(!(await brandedConfirm("Delete this invoice permanently? This cannot be undone. (For invoices issued in error, prefer 'Void' instead.)", { confirmLabel: "Delete" }))) return;
   const idx = (state.invoices || []).findIndex(x => x.id === invId);
   if(idx < 0) return;
   state.invoices.splice(idx, 1);
@@ -21130,8 +21134,9 @@ async function bootstrapCloudSync(ctx, showMigratePrompt){
   // First-time-on-this-device prompt — offer to push local projects up
   if(showMigratePrompt && !localStorage.getItem(migrateKey) && (DB.projects||[]).length > 0){
     const n = DB.projects.length;
-    const ok = confirm("You have " + n + " local Expense Tracker project" + (n===1?"":"s")
-      + " on this device. Upload to your account so they sync across all your devices?");
+    const ok = await brandedConfirm("You have " + n + " local Expense Tracker project" + (n===1?"":"s")
+      + " on this device. Upload to your account so they sync across all your devices?",
+      { destructive: false, confirmLabel: "Upload" });
     if(ok){
       for(const p of DB.projects){ await upsertCloudProject(p); }
       if((DB.customCategories||[]).length) await upsertCloudCustomCategories();
@@ -21292,9 +21297,9 @@ function handleIncomingLink(){
   const inv=params.get("invoice")||params.get("total")||"";
   document.getElementById("np-invoice").value=inv?String(parseNum(inv)):"";
 }
-function deleteProject(id){
+async function deleteProject(id){
   const p=getProject(id); if(!p) return;
-  if(!confirm(`Delete "${p.name||"this project"}" and all its expenses? This can't be undone.`)) return;
+  if(!(await brandedConfirm(`Delete "${p.name||"this project"}" and all its expenses? This can't be undone.`, { confirmLabel: "Delete Project" }))) return;
   DB.projects=DB.projects.filter(x=>x.id!==id); save();
   if(cloudReady()) deleteCloudProject(id);
   renderHome(); toast("Project deleted");
@@ -21602,9 +21607,9 @@ function refreshFilterCategories(){
   const opts = Array.from(fcat.options).map(o=>o.value);
   fcat.value = opts.indexOf(prev) >= 0 ? prev : "all";
 }
-function deleteExpense(id){
+async function deleteExpense(id){
   const p=curr(); if(!p) return;
-  if(!confirm("Delete this expense?")) return;
+  if(!(await brandedConfirm("Delete this expense?", { confirmLabel: "Delete" }))) return;
   p.expenses=p.expenses.filter(x=>x.id!==id); selectedExpenses.delete(id);
   p.updatedAt=Date.now(); save(p);
   renderExpenses(); if(activeTab==="profit") renderProfit(); toast("Expense deleted");
@@ -21632,10 +21637,10 @@ function updateBulkBar(){
   const c=document.getElementById("bulk-count"); if(c) c.textContent=n+" selected";
 }
 function clearSelection(){ selectedExpenses.clear(); renderExpenses(); }
-function deleteSelected(){
+async function deleteSelected(){
   const p=curr(); if(!p||!selectedExpenses.size) return;
   const n=selectedExpenses.size;
-  if(!confirm("Delete "+n+" selected expense"+(n===1?"":"s")+"? This can't be undone.")) return;
+  if(!(await brandedConfirm("Delete "+n+" selected expense"+(n===1?"":"s")+"? This can't be undone.", { confirmLabel: "Delete " + n }))) return;
   p.expenses=p.expenses.filter(e=>!selectedExpenses.has(e.id));
   selectedExpenses.clear(); p.updatedAt=Date.now(); save(p);
   renderExpenses(); if(activeTab==="profit") renderProfit();
@@ -21959,8 +21964,8 @@ async function submitSiteAccess(){
     if(inp){ inp.value=""; inp.focus(); }
   }
 }
-function lockSite(){
-  if(!confirm("Lock the site? You'll need to re-enter the access code on this browser.")) return;
+async function lockSite(){
+  if(!(await brandedConfirm("Lock the site? You'll need to re-enter the access code on this browser.", { confirmLabel: "Lock" }))) return;
   try{ localStorage.removeItem(window.SITE_ACCESS_KEY); }catch(e){}
   location.reload();
 }
@@ -22706,13 +22711,13 @@ window.ET={ goHome:goHome, openNewProject:openNewProject, switchHome:switchHome,
     const hasAny = data.bid_summary.total_bid
       || Object.values(data.sections).some(s => Object.values(s).some(v => v && String(v).trim()));
     if(!hasAny){
-      alert("Please fill in at least one section or the total bid before submitting.");
+      await brandedAlert("Please fill in at least one section or the total bid before submitting.");
       return;
     }
     const msg = isRevision
       ? "Submit this revised bid? The owner will receive a notification with the changes you made."
       : "Submit your bid? You can still revise it later from this same link until the owner accepts it.";
-    if(!confirm(msg)) return;
+    if(!(await brandedConfirm(msg, { destructive: false, confirmLabel: "Submit" }))) return;
     btn.disabled = true; btn.textContent = "Submitting...";
     try{
       const out = await callApi({ action:"submit", bid_token:token, submission:data });
