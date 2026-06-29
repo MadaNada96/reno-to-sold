@@ -31,6 +31,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<!-- Tabler outline icons — used by the dashboard sidebar, identity card, dashboard cards.
+     CSS-only font, so no init step required; just <i class="ti ti-NAME"></i>. -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/3.31.0/tabler-icons.min.css">
 
 <!-- ============================================================
      SITE PIN GATE — RETIRED in Phase 1c.
@@ -3125,6 +3128,244 @@
   #etApp #siteGate .sg-foot{margin-top:18px;padding-top:18px;border-top:1px solid #2a2a30;font-size:11px;
     letter-spacing:.10em;text-transform:uppercase;color:#8a8579}
   @media (max-width:480px){#etApp #siteGate .sg-card{padding:32px 24px 26px}#etApp #siteGate .sg-title{font-size:15px;letter-spacing:.18em}}
+
+  /* ====================================================================
+     DASHBOARD SHELL — left collapsible sidebar + routed views
+     ====================================================================
+     The shell wraps everything below the brand bar. Sidebar is always on
+     the left (on desktop); on mobile it becomes a drawer triggered by a
+     hamburger. The main view area swaps content based on location.hash:
+       #/dashboard, #/estimator, #/bids, #/invoicing, #/tracker, #/trim
+     Routes that need full views are inside this shell. Modals
+     (Submissions / Users / Pricing) still overlay on top — those launch
+     from sidebar items but don't change the route. */
+
+  .app-shell{display:flex;gap:18px;align-items:flex-start;margin-top:14px;}
+  .app-view{flex:1;min-width:0;}
+  .view{display:none;}
+  .view.active{display:block;}
+
+  /* ----- Sidebar — expanded state ----- */
+  .app-sidebar{
+    width:200px;flex-shrink:0;background:var(--panel);border:1px solid var(--line);
+    border-radius:14px;padding:14px 10px;display:flex;flex-direction:column;gap:4px;
+    position:sticky;top:14px;box-shadow:var(--shadow);transition:width .18s ease;
+  }
+  .app-sidebar.collapsed{width:56px;}
+  .app-sidebar .sb-head{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:4px 8px 8px;border-bottom:1px solid var(--line);margin-bottom:6px;
+  }
+  .app-sidebar .sb-eyebrow{
+    font-size:9px;letter-spacing:.20em;text-transform:uppercase;color:var(--muted);
+    font-weight:700;
+  }
+  .app-sidebar.collapsed .sb-eyebrow{display:none;}
+  .app-sidebar .sb-toggle{
+    background:transparent;border:none;color:var(--gold);font-size:18px;cursor:pointer;
+    padding:2px 6px;border-radius:6px;line-height:1;transition:background .15s;
+  }
+  .app-sidebar .sb-toggle:hover{background:rgba(212,175,106,.10);}
+  .app-sidebar .sb-toggle i{font-size:18px;}
+  .app-sidebar .sb-section{
+    font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);
+    font-weight:700;padding:10px 12px 6px;
+  }
+  .app-sidebar.collapsed .sb-section{
+    display:none;
+  }
+  .app-sidebar.collapsed .sb-section + .sb-item{margin-top:8px;}
+  .app-sidebar .sb-item{
+    display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;
+    color:var(--ink);font-size:13px;font-weight:500;cursor:pointer;
+    text-decoration:none;border:none;background:transparent;text-align:left;
+    width:100%;transition:background .15s,color .15s;font-family:inherit;
+  }
+  .app-sidebar .sb-item:hover{background:rgba(212,175,106,.06);color:var(--gold-bright);}
+  .app-sidebar .sb-item.active{
+    background:rgba(212,175,106,.14);color:var(--gold-bright);
+  }
+  .app-sidebar .sb-item i{font-size:18px;flex-shrink:0;color:var(--gold);}
+  .app-sidebar.collapsed .sb-item{
+    justify-content:center;padding:10px 0;width:36px;height:36px;
+    margin:0 auto;
+  }
+  .app-sidebar.collapsed .sb-item-label{display:none;}
+  .app-sidebar .sb-divider{
+    height:1px;background:var(--line);margin:8px 4px;
+  }
+  .app-sidebar .sb-footer{
+    margin-top:auto;padding:10px 8px 4px;border-top:1px solid var(--line);
+    font-size:11px;color:var(--muted);
+  }
+  .app-sidebar.collapsed .sb-footer{font-size:0;border:none;padding:6px 0 0;}
+
+  /* Tooltip for collapsed-state items (CSS-only, no JS) */
+  .app-sidebar.collapsed .sb-item{position:relative;}
+  .app-sidebar.collapsed .sb-item:hover::after{
+    content:attr(data-label);position:absolute;left:calc(100% + 10px);top:50%;
+    transform:translateY(-50%);background:#0a0a0a;color:var(--ink);
+    padding:6px 10px;border-radius:6px;font-size:12px;font-weight:500;
+    border:1px solid var(--line-strong);white-space:nowrap;z-index:1000;
+    pointer-events:none;box-shadow:var(--shadow);letter-spacing:0;
+  }
+
+  /* ----- Mobile drawer ----- */
+  .sidebar-mobile-toggle{
+    display:none;background:transparent;border:1px solid var(--line-strong);
+    color:var(--gold);width:38px;height:38px;border-radius:8px;cursor:pointer;
+    align-items:center;justify-content:center;padding:0;
+  }
+  .sidebar-mobile-toggle i{font-size:20px;}
+  .sidebar-backdrop{
+    display:none;position:fixed;inset:0;background:rgba(10,10,10,.7);
+    z-index:998;backdrop-filter:blur(2px);
+  }
+  .sidebar-backdrop.show{display:block;}
+
+  @media (max-width:900px){
+    .app-shell{gap:0;}
+    .sidebar-mobile-toggle{display:inline-flex;}
+    .app-sidebar{
+      position:fixed;top:0;left:0;bottom:0;width:230px;border-radius:0;
+      border-right:1px solid var(--line-strong);transform:translateX(-100%);
+      transition:transform .25s ease;z-index:999;margin:0;padding:18px 12px;
+    }
+    .app-sidebar.show-mobile{transform:translateX(0);}
+    .app-sidebar.collapsed{width:230px;}  /* collapse toggle doesn't apply on mobile */
+    .app-sidebar .sb-toggle{display:none;}
+    .app-sidebar.collapsed .sb-eyebrow,
+    .app-sidebar.collapsed .sb-section,
+    .app-sidebar.collapsed .sb-item-label{display:initial;}
+    .app-sidebar.collapsed .sb-item{justify-content:flex-start;width:100%;height:auto;padding:8px 12px;}
+  }
+
+  /* ====================================================================
+     BRAND HEADER — agent identity card (replaces old top toolbar)
+     ==================================================================== */
+  .user-identity{
+    display:flex;align-items:center;gap:14px;text-align:right;
+  }
+  .user-identity-text{display:flex;flex-direction:column;gap:2px;min-width:0;}
+  .uic-name{
+    font-size:12px;letter-spacing:.18em;text-transform:uppercase;
+    color:var(--gold-deep);font-weight:700;line-height:1.2;
+  }
+  .uic-brokerage{
+    font-size:13px;color:var(--ink);font-weight:500;line-height:1.2;
+  }
+  .uic-contact{
+    font-size:11px;color:var(--muted);line-height:1.3;margin-top:3px;
+    display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;
+  }
+  .uic-contact span{display:inline-flex;align-items:center;gap:4px;}
+  .uic-contact i{font-size:12px;color:var(--gold);}
+  .uic-avatar{
+    width:54px;height:54px;border-radius:50%;background:var(--panel-2);
+    border:2px solid var(--gold);overflow:hidden;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .uic-avatar img{width:100%;height:100%;object-fit:cover;display:block;}
+  .uic-avatar.no-photo{display:none;}  /* hide cleanly when no photo — header still balanced */
+
+  @media (max-width:720px){
+    .user-identity{flex-direction:row-reverse;text-align:left;gap:10px;}
+    .uic-contact{justify-content:flex-start;}
+    .uic-avatar{width:44px;height:44px;border-width:1.5px;}
+    .uic-name{font-size:11px;}
+    .uic-brokerage{font-size:12px;}
+    .uic-contact{font-size:10px;}
+  }
+
+  /* ====================================================================
+     DASHBOARD VIEW — card grid
+     ==================================================================== */
+  .dash-grid{
+    display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
+    gap:14px;margin-top:4px;
+  }
+  .dash-card{
+    background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:18px 18px 16px;cursor:pointer;text-align:left;color:var(--ink);
+    font-family:inherit;display:flex;flex-direction:column;gap:14px;min-height:140px;
+    transition:transform .15s ease,border-color .15s ease,box-shadow .15s ease;
+  }
+  .dash-card:hover{
+    transform:translateY(-2px);border-color:var(--gold-deep);
+    box-shadow:var(--gold-glow);
+  }
+  .dash-card .dc-icon{
+    width:38px;height:38px;border-radius:10px;display:flex;align-items:center;
+    justify-content:center;background:rgba(212,175,106,.12);
+    border:1px solid rgba(212,175,106,.30);color:var(--gold-bright);
+  }
+  .dash-card .dc-icon i{font-size:20px;}
+  .dash-card .dc-title{font-size:14px;font-weight:700;letter-spacing:.04em;color:var(--ink-strong);}
+  .dash-card .dc-desc{font-size:11.5px;color:var(--muted);line-height:1.55;margin-top:-4px;}
+  .dash-card .dc-stat{
+    margin-top:auto;font-size:11px;color:var(--gold-bright);font-weight:600;
+    letter-spacing:.05em;
+  }
+  .dash-card .dc-stat.urgent{color:#f08c8c;}
+  .dash-welcome{
+    margin-bottom:16px;padding:18px 22px;background:var(--panel-2);
+    border:1px solid var(--line);border-radius:12px;
+    display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+  }
+  .dash-welcome .dw-greet{font-size:18px;font-weight:600;color:var(--gold-bright);}
+  .dash-welcome .dw-sub{font-size:12px;color:var(--muted);margin-top:3px;}
+
+  /* First-run tour card */
+  .tour-card{
+    margin:0 0 16px;padding:18px 22px;background:linear-gradient(135deg,rgba(212,175,106,.10),rgba(212,175,106,.03));
+    border:1px solid rgba(212,175,106,.35);border-radius:12px;
+    display:flex;gap:14px;align-items:flex-start;
+  }
+  .tour-card .tc-icon i{color:var(--gold);font-size:24px;}
+  .tour-card .tc-body{flex:1;}
+  .tour-card .tc-title{font-size:13px;font-weight:700;color:var(--gold-bright);letter-spacing:.06em;margin-bottom:5px;}
+  .tour-card .tc-text{font-size:12.5px;color:var(--ink);line-height:1.55;}
+  .tour-card .tc-close{
+    background:transparent;border:1px solid var(--line-strong);color:var(--muted);
+    border-radius:6px;font-size:11px;padding:5px 11px;cursor:pointer;
+    letter-spacing:.06em;text-transform:uppercase;font-weight:600;
+  }
+  .tour-card .tc-close:hover{color:var(--gold);border-color:var(--gold-deep);}
+
+  /* ====================================================================
+     AVATAR UPLOAD — in admin user-edit form
+     ==================================================================== */
+  .avatar-uploader{
+    display:flex;align-items:center;gap:14px;padding:12px 14px;
+    background:var(--panel-2);border:1px dashed var(--line-strong);border-radius:10px;
+  }
+  .avatar-uploader .au-preview{
+    width:62px;height:62px;border-radius:50%;background:#0d0d11;
+    border:2px solid var(--line-strong);overflow:hidden;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;color:var(--muted);
+    font-size:11px;letter-spacing:.06em;text-transform:uppercase;
+  }
+  .avatar-uploader .au-preview img{width:100%;height:100%;object-fit:cover;display:block;}
+  .avatar-uploader .au-actions{display:flex;flex-direction:column;gap:6px;flex:1;}
+  .avatar-uploader .au-row{display:flex;gap:8px;}
+  .avatar-uploader .au-hint{font-size:10.5px;color:var(--muted);}
+  .avatar-uploader input[type="file"]{display:none;}
+  .avatar-uploader .au-pick,
+  .avatar-uploader .au-remove{
+    background:transparent;border:1px solid var(--line-strong);color:var(--ink);
+    border-radius:6px;font-size:11px;padding:6px 11px;cursor:pointer;
+    font-weight:600;letter-spacing:.04em;font-family:inherit;
+  }
+  .avatar-uploader .au-pick:hover{border-color:var(--gold);color:var(--gold-bright);}
+  .avatar-uploader .au-remove:hover{border-color:#a83838;color:#f08c8c;}
+
+  /* ====================================================================
+     ROUTE-SPECIFIC VISIBILITY
+     ==================================================================== */
+  /* Slogan only on dashboard; hide everywhere else. JS toggles
+     [data-route] on documentElement. */
+  html:not([data-route="dashboard"]) .brand-tagline{display:none;}
+
 </style>
 </head>
 <body>
@@ -3152,45 +3393,166 @@
 <div class="app">
   <div class="brandbar">
     <div class="brandbar-row">
-      <a href="./" class="logo" aria-label="Reno to Sold home">
+      <a href="#/dashboard" class="logo" aria-label="Reno to Sold home" onclick="event.preventDefault(); navigateTo('dashboard');">
         <img src="RENO_to_SOLD_logo_only.png" alt="Reno to Sold" class="logo-img">
         <img src="updated-logo-trans.png" alt="Reno to Sold &mdash; Renovate for less. Sell for more. Fully managed from start to sold." class="logo-img-print">
       </a>
-      <!-- Row 1: admin / account buttons. data-feature attrs gate visibility
-           per the signed-in user's role + features (see applyFeatureGates). -->
-      <div class="toolbar no-print">
-        <button data-admin-only="true" onclick="openUsersModal()" title="Create, edit, suspend, or delete user accounts (admin only)">Users</button>
-        <button data-admin-only="true" onclick="openSubmissionsModal()" title="Review estimates submitted by agents (admin only)">
-          Submissions<span id="submissionsCountBadge" style="display:none;margin-left:6px;background:#c98e2a;color:#0a0a0a;border-radius:10px;padding:1px 7px;font-size:10px;font-weight:700;"></span>
-        </button>
-        <button data-feature="pricing_editor"  onclick="openSettings()">Pricing</button>
-        <button data-feature="contractor_bids" onclick="openContractorBid()">Contractor Bid</button>
+
+      <!-- Identity card: shows signed-in user's name, brokerage, contact + circular
+           avatar (agents only). Populated by renderUserIdentity() any time the
+           profile updates. Hidden until a profile is loaded. -->
+      <div id="userIdentity" class="user-identity no-print" style="display:none;">
+        <div class="user-identity-text">
+          <div class="uic-name" id="uicName"></div>
+          <div class="uic-brokerage" id="uicBrokerage"></div>
+          <div class="uic-contact" id="uicContact"></div>
+        </div>
+        <div id="uicAvatar" class="uic-avatar no-photo">
+          <img id="uicAvatarImg" alt="" style="display:none;">
+        </div>
+      </div>
+
+      <!-- Mobile hamburger — opens the sidebar drawer on small screens.
+           Hidden on desktop via CSS. -->
+      <button class="sidebar-mobile-toggle no-print" onclick="toggleMobileSidebar()" aria-label="Open menu">
+        <i class="ti ti-menu-2" aria-hidden="true"></i>
+      </button>
+
+      <!-- Auth button kept here as a fallback for the legacy "Sign in" state.
+           When signed in, this is hidden (identity card shows instead); the
+           sidebar footer is the canonical sign-out location. -->
+      <div class="toolbar no-print" id="authToolbar">
         <button id="authBtn" onclick="onAuthClick()">Sign in</button>
       </div>
     </div>
-    <!-- Row 2: workflow buttons (New, Save, Saved, Import from PDF, Print/PDF, Email to Client) -->
-    <div class="toolbar-row-2 no-print">
-      <button onclick="newEstimate()">+ New</button>
-      <button onclick="saveEstimate()">Save</button>
-      <button onclick="openSavedModal()">Saved</button>
-      <button class="import-pdf-link" onclick="triggerPdfImport()" title="Auto-fill a new estimate from an iGUIDE floor plan PDF">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 12 15 15"/></svg>
-        <span>Import from PDF</span>
-      </button>
-      <button onclick="openClientEstimate()">Print / PDF</button>
-      <button onclick="openEmailEstimateModal()">Email to Client</button>
-      <button data-feature="submit_for_review" id="submitForReviewBtn" onclick="openSubmitForReviewModal()" title="Submit this estimate to Reno to Sold for final review and approval" class="primary">Submit for Review</button>
-      <button data-feature="expense_tracker" onclick="openExpenseTracker()" title="Track renovation expenses & profit for this estimate">Expense Tracker</button>
-      <button data-feature="invoicing"       onclick="openInvoicing()" title="Issue invoices on the project payment schedule (10/40/40/10 — or 10/40/20/20/10 when a kitchen reno is part of the scope)">Invoicing</button>
-      <input type="file" id="pdfImportInput" accept="application/pdf,.pdf" style="display:none;" onchange="onPdfFileChosen(event)">
-    </div>
   </div>
 
-  <!-- Brand tagline -->
+  <!-- Brand tagline — shown ONLY on the dashboard route (CSS hides it elsewhere). -->
   <div class="brand-tagline">
     <span class="bt-line">Renovate for <span class="bt-accent">less.</span> Sell for <span class="bt-accent">more.</span></span>
     <span class="bt-line bt-sub">Fully managed <span class="bt-accent">from start to sold.</span></span>
   </div>
+
+  <!-- ====================================================================
+       Dashboard shell — sidebar (left) + routed view container (right).
+       Built once and mounted by mountAppShell() on init. Sidebar
+       persistence (collapsed/expanded) lives in localStorage.
+       ==================================================================== -->
+  <div class="app-shell" id="appShell">
+
+    <!-- Sidebar — collapsible on desktop, drawer on mobile -->
+    <aside class="app-sidebar" id="appSidebar">
+      <div class="sb-head">
+        <span class="sb-eyebrow">Reno to Sold</span>
+        <button class="sb-toggle" onclick="toggleSidebar()" aria-label="Collapse sidebar" title="Collapse sidebar (⌘ B)">
+          <i class="ti ti-layout-sidebar-left-collapse" aria-hidden="true"></i>
+        </button>
+      </div>
+
+      <button class="sb-item" data-route="dashboard" data-label="Dashboard" onclick="navigateTo('dashboard')">
+        <i class="ti ti-home" aria-hidden="true"></i>
+        <span class="sb-item-label">Dashboard</span>
+      </button>
+
+      <div class="sb-section">Workspace</div>
+
+      <button class="sb-item" data-route="estimator" data-label="Estimator" onclick="navigateTo('estimator')">
+        <i class="ti ti-calculator" aria-hidden="true"></i>
+        <span class="sb-item-label">Estimator</span>
+      </button>
+
+      <button class="sb-item" data-feature="contractor_bids" data-label="Contractor bid" onclick="openContractorBid(); closeMobileSidebar();">
+        <i class="ti ti-briefcase" aria-hidden="true"></i>
+        <span class="sb-item-label">Contractor bid</span>
+      </button>
+
+      <button class="sb-item" data-feature="invoicing" data-label="Invoicing" onclick="openInvoicing(); closeMobileSidebar();">
+        <i class="ti ti-receipt" aria-hidden="true"></i>
+        <span class="sb-item-label">Invoicing</span>
+      </button>
+
+      <button class="sb-item" data-feature="expense_tracker" data-label="Expense tracker" onclick="openExpenseTracker(); closeMobileSidebar();">
+        <i class="ti ti-chart-bar" aria-hidden="true"></i>
+        <span class="sb-item-label">Expense tracker</span>
+      </button>
+
+      <button class="sb-item" data-feature="submit_for_review" data-label="My submissions" onclick="navigateTo('my-submissions')">
+        <i class="ti ti-file-check" aria-hidden="true"></i>
+        <span class="sb-item-label">My submissions</span>
+      </button>
+
+      <div class="sb-section" data-admin-only="true">Admin</div>
+
+      <button class="sb-item" data-admin-only="true" data-label="Submissions" onclick="openSubmissionsModal(); closeMobileSidebar();">
+        <i class="ti ti-inbox" aria-hidden="true"></i>
+        <span class="sb-item-label">Submissions<span id="sbSubmissionsBadge" style="display:none;margin-left:6px;background:#c98e2a;color:#0a0a0a;border-radius:10px;padding:1px 7px;font-size:10px;font-weight:700;letter-spacing:0;"></span></span>
+      </button>
+
+      <button class="sb-item" data-admin-only="true" data-label="Manage users" onclick="openUsersModal(); closeMobileSidebar();">
+        <i class="ti ti-users" aria-hidden="true"></i>
+        <span class="sb-item-label">Manage users</span>
+      </button>
+
+      <button class="sb-item" data-feature="pricing_editor" data-label="Pricing" onclick="openSettings(); closeMobileSidebar();">
+        <i class="ti ti-tag" aria-hidden="true"></i>
+        <span class="sb-item-label">Pricing</span>
+      </button>
+
+      <div class="sb-footer">
+        <div id="sbUserEmail" style="font-size:11px;color:var(--muted);margin-bottom:6px;word-break:break-word;"></div>
+        <button class="sb-item" onclick="onAuthClick(); closeMobileSidebar();" data-label="Log out" style="color:#cfcfcf;">
+          <i class="ti ti-logout" aria-hidden="true"></i>
+          <span class="sb-item-label">Log out</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Backdrop for mobile drawer -->
+    <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeMobileSidebar()"></div>
+
+    <!-- View container: each direct child is a routable view. JS toggles
+         .active on the current one. -->
+    <main class="app-view" id="appView">
+
+      <!-- Dashboard view — landing page. Cards rendered by renderDashboard()
+           based on the user's role + features. -->
+      <div id="view-dashboard" class="view">
+        <div id="dashWelcome" class="dash-welcome" style="display:none;">
+          <div>
+            <div class="dw-greet" id="dwGreet">Welcome.</div>
+            <div class="dw-sub" id="dwSub"></div>
+          </div>
+        </div>
+        <div id="dashTour" style="display:none;"></div>
+        <div id="dashGrid" class="dash-grid"></div>
+      </div>
+
+      <!-- My Submissions view — agents see their own submitted estimates with status. -->
+      <div id="view-my-submissions" class="view">
+        <h2 style="font-size:18px;font-weight:700;color:var(--gold-bright);letter-spacing:.06em;margin:6px 0 14px;text-transform:uppercase;">My submissions</h2>
+        <div id="mySubmissionsBody"><div style="color:var(--muted);font-size:12px;text-align:center;padding:30px 0;">Loading...</div></div>
+      </div>
+
+      <!-- Estimator view — wraps all the original estimator content. The
+           workflow toolbar (+ New, Save, etc.) lives at the top of this
+           view, NOT in the brand bar, so it only appears when the user is
+           on the estimator. -->
+      <div id="view-estimator" class="view">
+
+        <!-- Workflow toolbar (was Row 2 of the old brand bar). -->
+        <div class="toolbar-row-2 no-print">
+          <button onclick="newEstimate()">+ New</button>
+          <button onclick="saveEstimate()">Save</button>
+          <button onclick="openSavedModal()">Saved</button>
+          <button class="import-pdf-link" onclick="triggerPdfImport()" title="Auto-fill a new estimate from an iGUIDE floor plan PDF">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 12 15 15"/></svg>
+            <span>Import from PDF</span>
+          </button>
+          <button onclick="openClientEstimate()">Print / PDF</button>
+          <button onclick="openEmailEstimateModal()">Email to Client</button>
+          <button data-feature="submit_for_review" id="submitForReviewBtn" onclick="openSubmitForReviewModal()" title="Submit this estimate to Reno to Sold for final review and approval" class="primary">Submit for Review</button>
+          <input type="file" id="pdfImportInput" accept="application/pdf,.pdf" style="display:none;" onchange="onPdfFileChosen(event)">
+        </div>
 
   <!-- Live Total -->
   <div class="total-card" id="totalCard">
@@ -3598,6 +3960,10 @@
     </div>
   </div>
 </div>
+
+      </div><!-- /view-estimator -->
+    </main><!-- /app-view -->
+  </div><!-- /app-shell -->
 
 <div id="print-area"></div>
 
@@ -13870,6 +14236,15 @@ function onAddressKey(ev){
   }
 }
 
+/* ---------- Reno to Sold contact info ---------- */
+/* Mo plans to swap in a Reno to Sold-specific business line shortly;
+   until then this is the office number used in the identity card,
+   PDF footers, and email templates. Change in ONE place — every
+   surface that displays the office phone reads from here. */
+const OFFICE_PHONE = "416-832-3779";
+const OFFICE_EMAIL = "renotosold@gmail.com";
+const OFFICE_COMPANY = "Reno to Sold Inc.";
+
 /* ---------- Supabase cross-device sync ---------- */
 const SUPABASE_URL = "https://icrnvnmvcdpmhnjorefs.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imljcm52bm12Y2RwbWhuam9yZWZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2ODQwMDgsImV4cCI6MjA5NDI2MDAwOH0.YoeBndWsky8vAW6mLeMziPeH2j2C6c_3VdAvOG_i0kA";
@@ -14930,7 +15305,7 @@ async function fetchCurrentProfile(){
      library call times out at 8s. */
   const attemptFetch = async (timeoutMs, attemptLabel) => {
     const t0 = Date.now();
-    const selectCols = "id,email,full_name,brokerage,phone,role,features,subscription_starts_at,subscription_expires_at,suspended";
+    const selectCols = "id,email,full_name,brokerage,phone,role,features,subscription_starts_at,subscription_expires_at,suspended,avatar_url";
     const queryPromise = restFetch("profiles?id=eq." + encodeURIComponent(currentUser.id) + "&select=" + selectCols, { single: true })
       .then(data => ({ data: data, error: null }))
       .catch(err => {
@@ -14996,6 +15371,12 @@ async function fetchCurrentProfile(){
 }
 
 function initSupabase(){
+  // Mount the dashboard shell first — wires the router, sidebar,
+  // and renders whatever view the URL hash points at. Runs even if
+  // Supabase fails to load, so signed-out users at least see the
+  // brand bar + sign-in prompt without a broken layout.
+  try { mountAppShell(); } catch(e){ console.warn("mountAppShell:", e); }
+
   if(typeof window.supabase === "undefined"){
     console.warn("Supabase JS not loaded — cloud sync disabled.");
     return;
@@ -16607,6 +16988,35 @@ function renderUserForm(existing){
       </div>
     </div>
 
+    ${isEdit ? `
+      <div id="uf_avatar_section" style="margin-top:18px;display:${u.role === "agent" ? "block" : "none"};">
+        <label style="display:block;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:6px;">Agent Photo (Headshot)</label>
+        <div class="avatar-uploader">
+          <div class="au-preview" id="uf_avatar_preview">
+            ${u.avatar_url
+              ? `<img src="${escapeHtmlAttr(u.avatar_url)}" alt="">`
+              : '<span>No photo</span>'}
+          </div>
+          <div class="au-actions">
+            <div class="au-row">
+              <label class="au-pick" for="uf_avatar_file">Choose photo</label>
+              <input type="file" id="uf_avatar_file" accept="image/jpeg,image/png,image/webp" onchange="onAvatarFilePicked(event)">
+              ${u.avatar_url ? `<button type="button" class="au-remove" onclick="onAvatarRemove()">Remove</button>` : ''}
+            </div>
+            <div class="au-hint">JPG, PNG, or WebP. Max 2 MB. Appears in the agent's header and on every PDF estimate they generate for their clients.</div>
+            <div id="uf_avatar_status" style="font-size:11px;color:var(--gold-bright);margin-top:2px;min-height:14px;"></div>
+          </div>
+        </div>
+        <input type="hidden" id="uf_avatar_url" value="${escapeHtmlAttr(u.avatar_url || "")}">
+        <input type="hidden" id="uf_avatar_pending_remove" value="0">
+      </div>
+    ` : `
+      <div style="margin-top:14px;padding:10px 14px;background:#0a0a0e;border:1px dashed var(--line);border-radius:8px;font-size:11.5px;color:var(--muted);">
+        <i class="ti ti-info-circle" style="font-size:14px;vertical-align:-2px;color:var(--gold);margin-right:4px;" aria-hidden="true"></i>
+        You can add a headshot to this agent's profile after they're created — just edit their user record once the invite goes out.
+      </div>
+    `}
+
     <div style="margin-top:18px;padding:14px;background:#0a0a0e;border:1px solid var(--line);border-radius:8px;">
       <div style="font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold-bright);font-weight:700;margin-bottom:8px;">Optional Features (in addition to Estimator)</div>
       <div id="uf_features" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
@@ -16666,6 +17076,9 @@ function renderUserFormFeatures(role){
       if(isPricing) cb.checked = false;
     }
   });
+  // Avatar section is agent-only per Mo's spec
+  const avatarSection = document.getElementById("uf_avatar_section");
+  if(avatarSection) avatarSection.style.display = (role === "agent") ? "block" : "none";
 }
 
 function collectUserFormData(){
@@ -16718,9 +17131,34 @@ async function submitEditUser(userId){
     subscription_expires_at: data.subscription_expires_at,
     suspended: !!(suspendedEl && suspendedEl.checked)
   };
+
+  /* Avatar handling — admin may have picked a new photo, removed an
+     existing one, or done nothing. Upload first so the URL is saved
+     atomically with the rest of the profile update. */
+  const existingUrl  = (document.getElementById("uf_avatar_url") || {}).value || "";
+  const wantsRemove  = ((document.getElementById("uf_avatar_pending_remove") || {}).value === "1");
+  if(data.role === "agent"){
+    if(_pendingAvatarFile){
+      statusEl.innerHTML = `<span style="color:var(--gold-bright);">Uploading photo…</span>`;
+      try {
+        const url = await uploadAvatar(userId, _pendingAvatarFile);
+        updates.avatar_url = url;
+      } catch(e){
+        statusEl.innerHTML = `<span style="color:#ff7676;">Photo upload failed: ${escapeHtml(e.message || String(e))}</span>`;
+        return;  // bail — don't save the rest if the photo failed (admin will retry)
+      }
+    } else if(wantsRemove){
+      updates.avatar_url = null;
+    }
+  } else {
+    // Non-agent role — clear any existing avatar (avatars are agent-only)
+    if(existingUrl) updates.avatar_url = null;
+  }
+
   statusEl.innerHTML = `<span style="color:var(--gold-bright);">Saving…</span>`;
   try {
     await callAdminUsersFunc({ action:"update", user_id: userId, updates });
+    _pendingAvatarFile = null;  // reset after successful save
     statusEl.innerHTML = `<span style="color:#5fce86;">✓ Saved.</span>`;
     setTimeout(() => { closeUserFormModal(); refreshUsersList(); }, 900);
   } catch(e) {
@@ -16958,18 +17396,22 @@ function renderSubStatusPill(status){
 }
 
 function updateSubmissionsCountBadge(){
-  const badge = document.getElementById("submissionsCountBadge");
-  if(!badge) return;
   const pendingCount = submissionsList.filter(r => {
     const s = r.state && r.state.status;
     return s === "submitted" || s === "client_approved";
   }).length;
-  if(pendingCount > 0){
-    badge.textContent = String(pendingCount);
-    badge.style.display = "inline-block";
-  } else {
-    badge.style.display = "none";
-  }
+  // Update BOTH the legacy badge (still in DOM if anything kept the
+  // brand-bar Submissions button) AND the sidebar badge.
+  ["submissionsCountBadge", "sbSubmissionsBadge"].forEach(id => {
+    const badge = document.getElementById(id);
+    if(!badge) return;
+    if(pendingCount > 0){
+      badge.textContent = String(pendingCount);
+      badge.style.display = "inline-block";
+    } else {
+      badge.style.display = "none";
+    }
+  });
 }
 
 function subscribeToSubmissions(){
@@ -18267,6 +18709,525 @@ async function confirmSubmissionDecision(){
   }
 }
 
+/* ============================================================
+   DASHBOARD SHELL — router, sidebar state, view rendering,
+   identity card, avatar upload helpers, first-run tour.
+   ============================================================
+   The dashboard is the default landing surface after sign-in. It
+   replaces the old "land directly in the estimator" behaviour. The
+   estimator is still here — it's now just one of several routed
+   views inside the app-shell.
+
+   Routes (hash-based, location.hash):
+     #/dashboard       — the landing card grid
+     #/estimator       — the estimator (toolbar + total card + panels)
+     #/my-submissions  — agent's read-only view of their submitted estimates
+   Modals (Submissions, Users, Pricing, Bids, Tracker, Invoicing)
+   still overlay on top of whatever view is active — they're launched
+   from sidebar items and don't change the URL. */
+
+const VALID_ROUTES = ["dashboard", "estimator", "my-submissions"];
+const DEFAULT_ROUTE = "dashboard";
+
+function getCurrentRoute(){
+  const h = (window.location.hash || "").replace(/^#\/?/, "").trim();
+  if(!h) return DEFAULT_ROUTE;
+  // Strip any query-like suffix (e.g. "#/estimator?est=123")
+  const r = h.split(/[?&]/)[0];
+  return VALID_ROUTES.includes(r) ? r : DEFAULT_ROUTE;
+}
+
+function navigateTo(route){
+  // Mobile: close the drawer when the user navigates
+  closeMobileSidebar();
+  const target = VALID_ROUTES.includes(route) ? route : DEFAULT_ROUTE;
+  /* Use history.pushState rather than setting location.hash directly so
+     the browser back button works naturally and we don't trigger an
+     extra hashchange + double render. */
+  const url = "#/" + target;
+  if(location.hash !== url){
+    history.pushState({route: target}, "", url);
+  }
+  renderRoute();
+}
+
+function renderRoute(){
+  const route = getCurrentRoute();
+  // Mark documentElement so CSS can show/hide route-specific elements
+  // (e.g. slogan visible only on dashboard).
+  document.documentElement.setAttribute("data-route", route);
+  // Toggle .active on the correct view
+  document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
+  const target = document.getElementById("view-" + route);
+  if(target) target.classList.add("active");
+  // Highlight the active sidebar item
+  document.querySelectorAll(".app-sidebar .sb-item[data-route]").forEach(b => {
+    b.classList.toggle("active", b.getAttribute("data-route") === route);
+  });
+  // Per-route side-effects
+  if(route === "dashboard"){
+    renderDashboard();
+  } else if(route === "my-submissions"){
+    renderMySubmissions();
+  }
+  // Scroll to top of view container so navigation feels clean
+  try { window.scrollTo({top:0, behavior:"instant"}); } catch(e) { try{window.scrollTo(0,0);}catch(e){} }
+}
+
+/* Sidebar collapse — desktop only. Persists per browser. */
+const SIDEBAR_COLLAPSED_KEY = "rts_sidebar_collapsed_v1";
+
+function applySidebarCollapsedFromStorage(){
+  const sb = document.getElementById("appSidebar");
+  if(!sb) return;
+  let collapsed = false;
+  try { collapsed = localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1"; } catch(e){}
+  sb.classList.toggle("collapsed", collapsed);
+  updateSidebarToggleIcon();
+}
+
+function toggleSidebar(){
+  const sb = document.getElementById("appSidebar");
+  if(!sb) return;
+  const wasCollapsed = sb.classList.contains("collapsed");
+  sb.classList.toggle("collapsed", !wasCollapsed);
+  try { localStorage.setItem(SIDEBAR_COLLAPSED_KEY, !wasCollapsed ? "1" : "0"); } catch(e){}
+  updateSidebarToggleIcon();
+}
+
+function updateSidebarToggleIcon(){
+  const sb = document.getElementById("appSidebar");
+  if(!sb) return;
+  const icon = sb.querySelector(".sb-toggle i");
+  if(!icon) return;
+  // ti-layout-sidebar-left-collapse when expanded (clicking it collapses)
+  // ti-layout-sidebar-left-expand when collapsed (clicking it expands)
+  if(sb.classList.contains("collapsed")){
+    icon.className = "ti ti-layout-sidebar-left-expand";
+    sb.querySelector(".sb-toggle").setAttribute("aria-label", "Expand sidebar");
+  } else {
+    icon.className = "ti ti-layout-sidebar-left-collapse";
+    sb.querySelector(".sb-toggle").setAttribute("aria-label", "Collapse sidebar");
+  }
+}
+
+function toggleMobileSidebar(){
+  const sb = document.getElementById("appSidebar");
+  const bd = document.getElementById("sidebarBackdrop");
+  if(!sb || !bd) return;
+  const isOpen = sb.classList.contains("show-mobile");
+  sb.classList.toggle("show-mobile", !isOpen);
+  bd.classList.toggle("show", !isOpen);
+}
+
+function closeMobileSidebar(){
+  const sb = document.getElementById("appSidebar");
+  const bd = document.getElementById("sidebarBackdrop");
+  if(sb) sb.classList.remove("show-mobile");
+  if(bd) bd.classList.remove("show");
+}
+
+/* ============================================================
+   USER IDENTITY CARD — top right of brand bar.
+   Agents see: name + brokerage + phone + email + circular avatar.
+   Admin / Staff see: name + "Reno to Sold Inc." + OFFICE_PHONE,
+     no avatar (per Mo's direction — avatars are an agent perk).
+   Hidden entirely when no profile is loaded.
+   ============================================================ */
+function renderUserIdentity(){
+  const wrap = document.getElementById("userIdentity");
+  if(!wrap) return;
+  if(!currentUser || !currentProfile){
+    wrap.style.display = "none";
+    return;
+  }
+  wrap.style.display = "flex";
+
+  const nameEl = document.getElementById("uicName");
+  const brokEl = document.getElementById("uicBrokerage");
+  const contactEl = document.getElementById("uicContact");
+  const avatarWrap = document.getElementById("uicAvatar");
+  const avatarImg  = document.getElementById("uicAvatarImg");
+
+  const role = currentProfile.role || "agent";
+  const isAgentRole = role === "agent";
+
+  // Name — always the user's full name (fallback to email prefix)
+  const name = currentProfile.full_name || (currentUser.email || "").split("@")[0] || "Member";
+  if(nameEl) nameEl.textContent = name;
+
+  // Brokerage line — agent shows their brokerage, admin/staff show company
+  const brokerage = isAgentRole
+    ? (currentProfile.brokerage || "")
+    : OFFICE_COMPANY;
+  if(brokEl){
+    brokEl.textContent = brokerage;
+    brokEl.style.display = brokerage ? "" : "none";
+  }
+
+  // Contact line — phone + email
+  const phone = isAgentRole
+    ? (currentProfile.phone || "")
+    : OFFICE_PHONE;
+  const email = isAgentRole
+    ? (currentUser.email || "")
+    : OFFICE_EMAIL;
+  if(contactEl){
+    const parts = [];
+    if(phone) parts.push('<span><i class="ti ti-phone" aria-hidden="true"></i>' + escapeHtml(phone) + '</span>');
+    if(email) parts.push('<span><i class="ti ti-mail" aria-hidden="true"></i>' + escapeHtml(email) + '</span>');
+    contactEl.innerHTML = parts.join("");
+    contactEl.style.display = parts.length ? "" : "none";
+  }
+
+  // Avatar — agent only, only if avatar_url exists. No broken/missing
+  // image fallback; just hide the avatar wrapper.
+  if(avatarWrap && avatarImg){
+    const url = isAgentRole && currentProfile.avatar_url ? currentProfile.avatar_url : "";
+    if(url){
+      avatarImg.src = url;
+      avatarImg.style.display = "block";
+      avatarWrap.classList.remove("no-photo");
+    } else {
+      avatarImg.removeAttribute("src");
+      avatarImg.style.display = "none";
+      avatarWrap.classList.add("no-photo");
+    }
+  }
+
+  // Also update the sidebar footer email
+  const sbEmail = document.getElementById("sbUserEmail");
+  if(sbEmail) sbEmail.textContent = currentUser.email || "";
+}
+
+/* ============================================================
+   DASHBOARD VIEW — card grid + welcome + first-run tour.
+   Cards are role-aware: agents see Estimator + My Submissions +
+   their enabled tools; admins see everything they have permission
+   to use. Stats are deferred to Push 4 — for now the cards just
+   describe the tool.
+   ============================================================ */
+function dashboardCards(){
+  /* Returns the ordered list of card definitions for the current user.
+     Each card: { key, title, icon, desc, action, requireFeature?, adminOnly? }
+     A card is included if:
+       - it has no requireFeature/adminOnly, OR
+       - the user has the feature flag, OR
+       - the user is admin and the card is adminOnly. */
+  const allCards = [
+    { key: "estimator", title: "Estimator", icon: "ti-calculator",
+      desc: "Build a renovation estimate. Save, print, email, or submit for review.",
+      action: () => navigateTo("estimator") },
+
+    { key: "contractor_bids", requireFeature: "contractor_bids",
+      title: "Contractor bid", icon: "ti-briefcase",
+      desc: "Send the current scope to subcontractors and collect their pricing.",
+      action: () => openContractorBid() },
+
+    { key: "invoicing", requireFeature: "invoicing",
+      title: "Invoicing", icon: "ti-receipt",
+      desc: "Issue milestone invoices and track what's paid, due, or overdue.",
+      action: () => openInvoicing() },
+
+    { key: "expense_tracker", requireFeature: "expense_tracker",
+      title: "Expense tracker", icon: "ti-chart-bar",
+      desc: "Log project expenses and watch your profit margin in real time.",
+      action: () => openExpenseTracker() },
+
+    { key: "my_submissions", requireFeature: "submit_for_review",
+      title: "My submissions", icon: "ti-file-check",
+      desc: "Track estimates you've sent to Reno to Sold for review.",
+      action: () => navigateTo("my-submissions") },
+
+    { key: "submissions", adminOnly: true,
+      title: "Submissions", icon: "ti-inbox",
+      desc: "Review estimates submitted by agents. Approve, request changes, or reject.",
+      action: () => openSubmissionsModal() },
+
+    { key: "users", adminOnly: true,
+      title: "Manage users", icon: "ti-users",
+      desc: "Invite, edit, suspend, or remove agents and staff.",
+      action: () => openUsersModal() },
+
+    { key: "pricing", requireFeature: "pricing_editor",
+      title: "Pricing", icon: "ti-tag",
+      desc: "Edit unit pricing and contractor rates that drive every estimate.",
+      action: () => openSettings() },
+  ];
+
+  return allCards.filter(c => {
+    if(c.adminOnly && !isAdmin()) return false;
+    if(c.requireFeature && !canUse(c.requireFeature)) return false;
+    return true;
+  });
+}
+
+function renderDashboard(){
+  const grid = document.getElementById("dashGrid");
+  if(!grid) return;
+
+  // Welcome strip
+  const welcomeEl = document.getElementById("dashWelcome");
+  const greetEl   = document.getElementById("dwGreet");
+  const subEl     = document.getElementById("dwSub");
+  if(welcomeEl && currentProfile){
+    welcomeEl.style.display = "flex";
+    const first = (currentProfile.full_name || "").split(/\s+/)[0] || "there";
+    if(greetEl) greetEl.textContent = "Welcome back, " + first + ".";
+    const roleLabel = isAdmin() ? "Administrator" : isStaff() ? "Staff" : "Agent";
+    if(subEl)   subEl.textContent = roleLabel + " · " + (currentUser ? currentUser.email : "");
+  } else if(welcomeEl){
+    welcomeEl.style.display = "none";
+  }
+
+  // First-run tour
+  renderFirstRunTour();
+
+  // Cards
+  const cards = dashboardCards();
+  grid.innerHTML = cards.map(c =>
+    '<button class="dash-card" type="button" data-card="' + escapeHtml(c.key) + '">' +
+      '<div class="dc-icon"><i class="ti ' + escapeHtml(c.icon) + '" aria-hidden="true"></i></div>' +
+      '<div>' +
+        '<div class="dc-title">' + escapeHtml(c.title) + '</div>' +
+        '<div class="dc-desc">' + escapeHtml(c.desc) + '</div>' +
+      '</div>' +
+      // Stat slot reserved for Push 4 (live counts)
+      '<div class="dc-stat" data-stat="' + escapeHtml(c.key) + '"></div>' +
+    '</button>'
+  ).join("");
+
+  // Wire click handlers
+  cards.forEach(c => {
+    const btn = grid.querySelector('[data-card="' + c.key + '"]');
+    if(btn) btn.addEventListener("click", c.action);
+  });
+}
+
+/* ============================================================
+   FIRST-RUN TOUR — single dismissible card on the dashboard.
+   Shown once per user (per browser). Dismissible.
+   ============================================================ */
+function renderFirstRunTour(){
+  const wrap = document.getElementById("dashTour");
+  if(!wrap || !currentUser) return;
+  const KEY = "rts_tour_seen_v1_" + currentUser.id;
+  let seen = false;
+  try { seen = localStorage.getItem(KEY) === "1"; } catch(e){}
+  if(seen){
+    wrap.style.display = "none";
+    wrap.innerHTML = "";
+    return;
+  }
+  wrap.style.display = "block";
+  wrap.innerHTML =
+    '<div class="tour-card">' +
+      '<div class="tc-icon"><i class="ti ti-sparkles" aria-hidden="true"></i></div>' +
+      '<div class="tc-body">' +
+        '<div class="tc-title">Welcome to your new dashboard</div>' +
+        '<div class="tc-text">' +
+          'Everything you used to do lives here, just better organized. Use the sidebar on the left to jump between tools — Estimator, Invoicing, Expense Tracker, and more. The dashboard is always one click away (logo or Dashboard link).' +
+        '</div>' +
+      '</div>' +
+      '<button class="tc-close" type="button" onclick="dismissFirstRunTour()">Got it</button>' +
+    '</div>';
+}
+
+function dismissFirstRunTour(){
+  if(!currentUser) return;
+  const KEY = "rts_tour_seen_v1_" + currentUser.id;
+  try { localStorage.setItem(KEY, "1"); } catch(e){}
+  const wrap = document.getElementById("dashTour");
+  if(wrap){ wrap.style.display = "none"; wrap.innerHTML = ""; }
+}
+
+/* ============================================================
+   MY SUBMISSIONS — agent's read-only view of their submitted
+   estimates with status badges. Pulls from the same estimates
+   table but filtered to estimates with state.status set.
+   ============================================================ */
+async function renderMySubmissions(){
+  const body = document.getElementById("mySubmissionsBody");
+  if(!body) return;
+  if(!currentUser){
+    body.innerHTML = '<div style="color:var(--muted);font-size:12px;text-align:center;padding:30px 0;">Sign in to see your submissions.</div>';
+    return;
+  }
+  body.innerHTML = '<div style="color:var(--muted);font-size:12px;text-align:center;padding:30px 0;">Loading...</div>';
+  try {
+    // Use the proven plain-fetch bypass — supabase-js hangs on these reads.
+    const cols = "id,client_id,name,state,updated_at";
+    const path = "estimates?user_id=eq." + encodeURIComponent(currentUser.id) +
+                 "&type=eq.client&order=updated_at.desc&limit=200&select=" + cols;
+    const rows = await restFetch(path);
+    // Keep only those that have a status set (i.e. were submitted at some point).
+    const subs = (rows || []).filter(r => r.state && r.state.status &&
+                                          ["submitted","client_approved","approved","request_changes","rejected"].includes(r.state.status));
+    if(subs.length === 0){
+      body.innerHTML =
+        '<div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:32px 24px;text-align:center;">' +
+          '<i class="ti ti-file-off" style="font-size:32px;color:var(--muted);" aria-hidden="true"></i>' +
+          '<div style="font-size:14px;color:var(--ink);margin-top:10px;font-weight:600;">No submissions yet</div>' +
+          '<div style="font-size:12px;color:var(--muted);margin-top:6px;">When you submit an estimate for review, it appears here with its status.</div>' +
+        '</div>';
+      return;
+    }
+    const statusLabel = {
+      submitted:       { txt: "Awaiting review",   color: "#e8c989" },
+      client_approved: { txt: "Client approved",   color: "#cfd8ff" },
+      approved:        { txt: "Approved",          color: "#9ee0a5" },
+      request_changes: { txt: "Changes requested", color: "#ffd189" },
+      rejected:        { txt: "Rejected",          color: "#f08c8c" },
+    };
+    const fmtDate = iso => {
+      try { return new Date(iso).toLocaleDateString("en-CA", { year:"numeric", month:"short", day:"numeric" }); }
+      catch(e){ return ""; }
+    };
+    body.innerHTML =
+      '<div style="display:flex;flex-direction:column;gap:10px;">' +
+      subs.map(r => {
+        const s = r.state || {};
+        const status = s.status || "submitted";
+        const lbl = statusLabel[status] || { txt: status, color: "var(--muted)" };
+        const addr = s.propAddress || s.propName || "Untitled property";
+        const sub = s.submission || {};
+        const subDate = sub.submitted_at ? fmtDate(sub.submitted_at) : fmtDate(r.updated_at);
+        return '<button type="button" onclick="loadEstimateById(\'' + escapeHtml(r.id) + '\')" ' +
+                  'style="text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;cursor:pointer;color:var(--ink);font-family:inherit;display:flex;align-items:center;gap:14px;">' +
+                 '<div style="flex:1;min-width:0;">' +
+                   '<div style="font-size:14px;font-weight:600;color:var(--ink-strong);">' + escapeHtml(addr) + '</div>' +
+                   '<div style="font-size:11px;color:var(--muted);margin-top:3px;">Submitted ' + escapeHtml(subDate) + '</div>' +
+                 '</div>' +
+                 '<div style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:' + lbl.color + ';font-weight:700;">' +
+                   escapeHtml(lbl.txt) +
+                 '</div>' +
+                 '<i class="ti ti-chevron-right" style="color:var(--muted);font-size:18px;" aria-hidden="true"></i>' +
+               '</button>';
+      }).join("") +
+      '</div>';
+  } catch(e){
+    console.error("[my-submissions] load failed:", e);
+    body.innerHTML = '<div style="color:#f08c8c;font-size:12px;text-align:center;padding:30px 0;">Could not load submissions. Refresh and try again.</div>';
+  }
+}
+
+/* Helper for My Submissions: click a row → load the estimate + go to the estimator view. */
+function loadEstimateById(id){
+  try {
+    if(typeof loadEstimate === "function"){ loadEstimate(id); }
+  } catch(e){ console.error("loadEstimateById:", e); }
+  navigateTo("estimator");
+}
+
+/* ============================================================
+   AVATAR UPLOAD — Supabase Storage helpers.
+   The admin Manage Users form has a file picker that calls
+   uploadAvatar() with a File object. We upload to the 'avatars'
+   bucket and save the public URL back to profiles.avatar_url.
+   Setup steps live in AVATAR_STORAGE_SETUP.md.
+   ============================================================ */
+async function uploadAvatar(userId, file){
+  if(!file) throw new Error("No file selected");
+  if(!userId) throw new Error("Missing user id");
+  // Basic guardrails
+  if(!/^image\/(jpeg|png|webp)$/i.test(file.type)){
+    throw new Error("Please choose a JPG, PNG, or WebP image");
+  }
+  if(file.size > 2 * 1024 * 1024){
+    throw new Error("Image must be smaller than 2 MB");
+  }
+  const ext  = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const path = userId + "-" + Date.now() + "." + (ext || "jpg");
+  const token = getStoredAuthToken();
+  if(!token) throw new Error("Not signed in");
+  const uploadUrl = SUPABASE_URL + "/storage/v1/object/avatars/" + encodeURIComponent(path);
+  const resp = await fetch(uploadUrl, {
+    method: "POST",
+    headers: {
+      "Authorization": "Bearer " + token,
+      "apikey": SUPABASE_ANON_KEY,
+      "Content-Type": file.type,
+      "x-upsert": "true",  // overwrite if exists
+    },
+    body: file,
+  });
+  if(!resp.ok){
+    const txt = await resp.text().catch(() => "");
+    throw new Error("Upload failed: " + (txt || ("HTTP " + resp.status)));
+  }
+  // Public URL — bucket is public per AVATAR_STORAGE_SETUP.md
+  const publicUrl = SUPABASE_URL + "/storage/v1/object/public/avatars/" + encodeURIComponent(path);
+  return publicUrl;
+}
+
+/* User-form avatar UI handlers. The file isn't uploaded until the
+   admin clicks Save Changes — until then we just preview it inline. */
+let _pendingAvatarFile = null;
+
+function onAvatarFilePicked(event){
+  const file = event.target.files && event.target.files[0];
+  if(!file) return;
+  if(!/^image\/(jpeg|png|webp)$/i.test(file.type)){
+    brandedAlert("Please choose a JPG, PNG, or WebP image.");
+    event.target.value = "";
+    return;
+  }
+  if(file.size > 2 * 1024 * 1024){
+    brandedAlert("Image must be smaller than 2 MB.");
+    event.target.value = "";
+    return;
+  }
+  _pendingAvatarFile = file;
+  // Preview
+  const preview = document.getElementById("uf_avatar_preview");
+  if(preview){
+    const reader = new FileReader();
+    reader.onload = e => { preview.innerHTML = '<img src="' + escapeHtmlAttr(e.target.result) + '" alt="">'; };
+    reader.readAsDataURL(file);
+  }
+  const status = document.getElementById("uf_avatar_status");
+  if(status) status.textContent = "Will upload when you click Save Changes.";
+  // Cancel any pending remove since they picked a new photo
+  const removeFlag = document.getElementById("uf_avatar_pending_remove");
+  if(removeFlag) removeFlag.value = "0";
+}
+
+function onAvatarRemove(){
+  _pendingAvatarFile = null;
+  const preview = document.getElementById("uf_avatar_preview");
+  if(preview) preview.innerHTML = '<span>No photo</span>';
+  const removeFlag = document.getElementById("uf_avatar_pending_remove");
+  if(removeFlag) removeFlag.value = "1";
+  const fileInput = document.getElementById("uf_avatar_file");
+  if(fileInput) fileInput.value = "";
+  const status = document.getElementById("uf_avatar_status");
+  if(status) status.textContent = "Photo will be removed when you click Save Changes.";
+}
+
+/* ============================================================
+   MOUNT — wire up everything on init. Called from initSupabase
+   right after the supa client is created, BEFORE auth resolves.
+   ============================================================ */
+function mountAppShell(){
+  // Apply saved sidebar state
+  applySidebarCollapsedFromStorage();
+  // Render the current route
+  renderRoute();
+  // Listen for hash navigation (back/forward, manual URL edit)
+  window.addEventListener("hashchange", renderRoute);
+  window.addEventListener("popstate", renderRoute);
+  // Keyboard shortcut: Cmd/Ctrl+B toggles sidebar (VS Code / Linear convention)
+  document.addEventListener("keydown", (e) => {
+    if((e.metaKey || e.ctrlKey) && (e.key === "b" || e.key === "B") && !e.shiftKey && !e.altKey){
+      // Skip if user is typing in an input/textarea
+      const tag = (e.target && e.target.tagName) || "";
+      if(/INPUT|TEXTAREA|SELECT/i.test(tag)) return;
+      e.preventDefault();
+      toggleSidebar();
+    }
+  });
+}
+
 function applyFeatureGates(){
   /* Phase 1b: hide every element whose data-feature attribute isn't
      enabled for the current user, plus any element with
@@ -18310,6 +19271,12 @@ function applyFeatureGates(){
        and the panel is never injected. With this call, the moment the
        profile resolves and we know we're an agent, the panel appears. */
     try { applyAgentDiscountUI(); } catch(e){ console.warn("applyAgentDiscountUI error:", e); }
+    /* Dashboard wiring — refresh the identity card + dashboard cards
+       whenever the profile changes (role, features, brokerage, etc.). */
+    try { renderUserIdentity(); } catch(e){ console.warn("renderUserIdentity error:", e); }
+    try {
+      if(getCurrentRoute() === "dashboard") renderDashboard();
+    } catch(e){ console.warn("renderDashboard error:", e); }
   } catch(e) {
     console.warn("applyFeatureGates error:", e);
   }
@@ -18317,16 +19284,22 @@ function applyFeatureGates(){
 
 function updateAuthUI(){
   const btn = document.getElementById("authBtn");
+  const toolbar = document.getElementById("authToolbar");
   if(!btn) return;
   btn.classList.remove("primary");
   if(currentUser){
-    // Phase 1c: "Log out" is clearer than "Account" — single-purpose action,
-    // and matches the user's mental model of how every other web app works.
+    // Signed in: hide the brand-bar sign-in button entirely. The
+    // identity card on the right shows who you are; the sidebar
+    // footer has the canonical Log out action.
     btn.textContent = "Log out";
     btn.title = "Signed in as " + currentUser.email + " — tap to log out";
+    if(toolbar) toolbar.style.display = "none";
   } else {
+    // Signed out: show the brand-bar Sign in button (no sidebar to
+    // log out from yet).
     btn.textContent = "Sign in";
     btn.title = "Sign in to your account";
+    if(toolbar) toolbar.style.display = "";
   }
 }
 
