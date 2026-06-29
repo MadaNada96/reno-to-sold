@@ -11369,13 +11369,13 @@ function startEditContractor(id){
   document.getElementById("cfCompany").focus();
 }
 function cancelContractorEdit(){ resetContractorForm(); }
-function saveContractorEntry(){
+async function saveContractorEntry(){
   const company = (document.getElementById("cfCompany").value || "").trim();
   const contact = (document.getElementById("cfContact").value || "").trim();
   const email   = (document.getElementById("cfEmail").value   || "").trim();
   const phone   = (document.getElementById("cfPhone").value   || "").trim();
-  if(!company){ alert("Company name is required."); return; }
-  if(email && !isValidEmail(email)){ alert("That email doesn't look valid."); return; }
+  if(!company){ await brandedAlert("Company name is required."); return; }
+  if(email && !isValidEmail(email)){ await brandedAlert("That email doesn't look valid."); return; }
   const list = loadContractors();
   let touched = null;
   if(editingContractorId){
@@ -12964,7 +12964,7 @@ async function exportRatesPdf({ type, filename, title, intro }){
     }
   } catch(e){
     console.error("exportRatesPdf failed:", e);
-    alert("PDF export failed: " + (e && e.message ? e.message : "unknown error"));
+    await brandedAlert("PDF export failed: " + (e && e.message ? e.message : "unknown error"));
   }
 }
 
@@ -14110,10 +14110,10 @@ function applyEstimateLock(){
 }
 
 /* ===== Submit for Review modal ===== */
-function openSubmitForReviewModal(){
-  if(!canUse("submit_for_review")){ alert("Only agents can submit estimates for review."); return; }
-  if(!state || !state._id){ alert("Save the estimate first before submitting for review."); return; }
-  if(!state.propAddress && !state.propName){ alert("Add a property name or address before submitting."); return; }
+async function openSubmitForReviewModal(){
+  if(!canUse("submit_for_review")){ await brandedAlert("Only agents can submit estimates for review."); return; }
+  if(!state || !state._id){ await brandedAlert("Save the estimate first before submitting for review."); return; }
+  if(!state.propAddress && !state.propName){ await brandedAlert("Add a property name or address before submitting."); return; }
 
   /* Hard guard: if the estimate is already in a non-submittable state,
      refuse to open the modal. This is defense-in-depth — applyEstimateLock
@@ -14128,7 +14128,7 @@ function openSubmitForReviewModal(){
       approved:         "approved — no further action needed",
       rejected:         "rejected — please contact Reno to Sold to discuss"
     }[state.status] || ("in status: " + state.status);
-    alert("This estimate has already been " + friendly + ". You can't submit it again from here.");
+    await brandedAlert("This estimate has already been " + friendly + ". You can't submit it again from here.");
     return;
   }
 
@@ -16468,8 +16468,8 @@ async function callAdminUsersFunc(payload){
   return data;
 }
 
-function openUsersModal(){
-  if(!isAdmin()){ alert("Admin access required."); return; }
+async function openUsersModal(){
+  if(!isAdmin()){ await brandedAlert("Admin access required."); return; }
   document.getElementById("usersModal").classList.add("show");
   refreshUsersList();
 }
@@ -16550,9 +16550,9 @@ function openInviteUserForm(){
   renderUserForm(null);
   document.getElementById("userFormModal").classList.add("show");
 }
-function openEditUserForm(userId){
+async function openEditUserForm(userId){
   const u = _userListCache.find(x => x.id === userId);
-  if(!u){ alert("User not found"); return; }
+  if(!u){ await brandedAlert("User not found"); return; }
   renderUserForm(u);
   document.getElementById("userFormModal").classList.add("show");
 }
@@ -16759,9 +16759,9 @@ async function deleteUserConfirm(userId, email){
 let submissionsList = [];                // cached rows
 let submissionsRealtimeChannel = null;   // Realtime subscription handle
 
-function openSubmissionsModal(){
+async function openSubmissionsModal(){
   if(!isAdmin()){
-    alert("Admin access required.");
+    await brandedAlert("Admin access required.");
     return;
   }
   const modal = document.getElementById("submissionsModal");
@@ -17012,12 +17012,12 @@ function unsubscribeFromSubmissions(){
 async function downloadSubmissionPdf(estimateId){
   const row = submissionsList.find(r => r.id === estimateId);
   if(!row){
-    alert("Submission not found. Try refreshing the queue.");
+    await brandedAlert("Submission not found. Try refreshing the queue.");
     return;
   }
   const sub = row.state && row.state.submission;
   if(!sub || !sub.state_snapshot || !sub.pricing_snapshot){
-    alert("This submission predates snapshot capture — no PDF can be regenerated. Future submissions will include the full snapshot.");
+    await brandedAlert("This submission predates snapshot capture — no PDF can be regenerated. Future submissions will include the full snapshot.");
     return;
   }
 
@@ -17206,7 +17206,7 @@ async function reopenSubmission(estimateId){
     if(typeof flash === "function") flash("Submission reopened for the agent");
   } catch(e){
     console.error("[submissions] Reopen failed:", e);
-    alert("Couldn't reopen: " + (e && e.message ? e.message : String(e)));
+    await brandedAlert("Couldn't reopen: " + (e && e.message ? e.message : String(e)));
   }
 }
 
@@ -17344,10 +17344,10 @@ const SUBMISSION_CATEGORY_LABELS = {
   miscellaneous: "Miscellaneous"
 };
 
-function openSubmissionDetail(estimateId){
+async function openSubmissionDetail(estimateId){
   const row = submissionsList.find(r => r.id === estimateId);
   if(!row){
-    alert("Submission not found — try refreshing the queue.");
+    await brandedAlert("Submission not found — try refreshing the queue.");
     return;
   }
   currentSubmissionDetail = row;
@@ -17434,7 +17434,7 @@ async function sendBidForSubmission(estimateId){
   if(typeof openContractorBid === "function"){
     openContractorBid();
   } else {
-    alert("Contractor bid feature isn't loaded — refresh the page and try again.");
+    await brandedAlert("Contractor bid feature isn't loaded — refresh the page and try again.");
   }
 }
 
@@ -17873,9 +17873,9 @@ function renderSubmissionDetail(){
 
 let currentDecisionContext = null; // { action, estimateId, row }
 
-function openSubmissionDecisionModal(action, estimateId){
+async function openSubmissionDecisionModal(action, estimateId){
   const row = submissionsList.find(r => r.id === estimateId);
-  if(!row){ alert("Submission not found — try refreshing the queue."); return; }
+  if(!row){ await brandedAlert("Submission not found — try refreshing the queue."); return; }
   currentDecisionContext = { action, estimateId, row };
   const modal = document.getElementById("submissionDecisionModal");
   if(modal) modal.classList.add("show");
@@ -17991,12 +17991,12 @@ function renderSubmissionDecisionBody(){
 
 let currentDiscountContext = null; // { estimateId, row }
 
-function openDiscountDecisionModal(estimateId){
+async function openDiscountDecisionModal(estimateId){
   const row = submissionsList.find(r => r.id === estimateId);
-  if(!row){ alert("Submission not found — try refreshing the queue."); return; }
+  if(!row){ await brandedAlert("Submission not found — try refreshing the queue."); return; }
   const dr = row.state && row.state.discount_request;
   if(!dr || dr.status !== "pending"){
-    alert("This discount request is no longer pending.");
+    await brandedAlert("This discount request is no longer pending.");
     return;
   }
   currentDiscountContext = { estimateId, row };
@@ -18670,9 +18670,9 @@ let pdfTileBasementKitchen = false; // when basement included AND a basement kit
                                     // user can opt to TILE that kitchen instead of flooring it
                                     // with the secondary (basement) material.
 
-function triggerPdfImport(){
+async function triggerPdfImport(){
   if(typeof pdfjsLib === "undefined"){
-    alert("PDF reader is still loading. Try again in a second.");
+    await brandedAlert("PDF reader is still loading. Try again in a second.");
     return;
   }
   pdfIncludeBasement = false; // reset each time the import opens
@@ -19734,10 +19734,10 @@ function invoiceEffectiveStatus(inv){
    email-estimate Edge Function (which is generic over the payload shape). */
 let _currentEmailInvoiceId = null;
 
-function openEmailInvoiceModal(invId){
+async function openEmailInvoiceModal(invId){
   const inv = (state.invoices || []).find(x => x.id === invId);
-  if(!inv){ alert("Invoice not found."); return; }
-  if(inv.status === "void"){ alert("This invoice is voided — can't send."); return; }
+  if(!inv){ await brandedAlert("Invoice not found."); return; }
+  if(inv.status === "void"){ await brandedAlert("This invoice is voided — can't send."); return; }
   _currentEmailInvoiceId = invId;
 
   // Pre-fill recipients from sellers' emails (same convention as Email Estimate).
@@ -19901,9 +19901,9 @@ function formatEmailErrorLine(err){
          to currentUser.email — confirms Resend actually delivers.
    Status is shown via a non-blocking flash + alert if it fails. */
 async function runEmailHealthCheck(){
-  if(!supa){ alert("Supabase isn't initialised yet — wait a moment and try again."); return; }
+  if(!supa){ await brandedAlert("Supabase isn't initialised yet — wait a moment and try again."); return; }
   if(!currentUser || !currentUser.email){
-    alert("Sign in first so we have an email address to send the test to.");
+    await brandedAlert("Sign in first so we have an email address to send the test to.");
     return;
   }
   const btn = document.activeElement;
@@ -19955,12 +19955,12 @@ async function runEmailHealthCheck(){
     const data = await Promise.race([invokePromiseHC, timeoutPromiseHC]);
     if(data && data.error) throw new Error(data.error);
 
-    const fns = (typeof flash === "function") ? flash : (m => alert(m));
+    const fns = (typeof flash === "function") ? flash : (m => brandedAlert(m));
     fns(`✓ Email pipeline OK. Test message sent to ${currentUser.email}.`);
   } catch(e){
     console.error("Email health check failed:", e);
     const c = classifyEmailError(e);
-    alert("Email pipeline FAILED\n\n" +
+    await brandedAlert("Email pipeline FAILED\n\n" +
       "What broke: " + c.title + "\n" +
       "Why: "        + c.detail + "\n\n" +
       "Fix: "        + c.fix);
@@ -20502,14 +20502,14 @@ function renderInvoicingAllProjects(){
    DIFFERENT estimate, we need to load that estimate into the workspace
    first (otherwise openInvoiceDetail can't find the invoice on
    state.invoices). Uses the existing loadEstimate path. */
-function openInvoiceFromAllProjects(estId, invId){
+async function openInvoiceFromAllProjects(estId, invId){
   // Persist the user's desire to land on this invoice after the load swap.
   try{ localStorage.setItem("rts_pending_invoice_open", invId); }catch(e){}
   // Switch to the target estimate.
   if(typeof loadEstimate === "function"){
     loadEstimate(estId);
   } else {
-    alert("Can't switch projects — load helper not available.");
+    await brandedAlert("Can't switch projects — load helper not available.");
     return;
   }
   // Defer the open to give the load + render cycle a tick.
@@ -20528,9 +20528,9 @@ function openInvoiceFromAllProjects(estId, invId){
 
 /* Create a new milestone invoice (called from clicking a milestone card
    that doesn't have an invoice yet). */
-function createMilestoneInvoice(milestoneId){
+async function createMilestoneInvoice(milestoneId){
   const m = INVOICE_MILESTONES.find(x => x.id === milestoneId);
-  if(!m){ alert("Unknown milestone: " + milestoneId); return; }
+  if(!m){ await brandedAlert("Unknown milestone: " + milestoneId); return; }
   const contract = invoiceContractValue();
   const amount = +(contract * (m.pct/100)).toFixed(2);
   const hstAmount = +(amount * INVOICE_HST_RATE_DEFAULT).toFixed(2);
@@ -20595,9 +20595,9 @@ async function createCustomInvoice(){
 }
 
 /* Open the detail modal for an invoice (by id). */
-function openInvoiceDetail(invoiceId){
+async function openInvoiceDetail(invoiceId){
   const inv = (state.invoices || []).find(x => x.id === invoiceId);
-  if(!inv){ alert("Invoice not found."); return; }
+  if(!inv){ await brandedAlert("Invoice not found."); return; }
   const heading = document.getElementById("invDetailHeading");
   if(heading) heading.textContent = "Invoice " + (inv.number || "—") + " — " + (inv.milestoneLabel || "");
   renderInvoiceDetail(inv);
@@ -20809,7 +20809,7 @@ async function deleteInvoice(invId){
 /* Build an invoice PDF and download it. Reuses pdfFromElement. */
 async function downloadInvoicePdf(invId){
   const inv = (state.invoices || []).find(x => x.id === invId);
-  if(!inv){ alert("Invoice not found."); return; }
+  if(!inv){ await brandedAlert("Invoice not found."); return; }
   try{
     const el = buildInvoicePdfEl(inv);
     document.body.appendChild(el);
@@ -20831,7 +20831,7 @@ async function downloadInvoicePdf(invId){
     }
   } catch(e){
     console.error("Invoice PDF failed:", e);
-    alert("PDF generation failed: " + (e && e.message ? e.message : "unknown error"));
+    await brandedAlert("PDF generation failed: " + (e && e.message ? e.message : "unknown error"));
   }
 }
 
@@ -22742,7 +22742,7 @@ window.ET={ goHome:goHome, openNewProject:openNewProject, switchHome:switchHome,
       window.scrollTo({ top:0, behavior:"smooth" });
     }catch(e){
       btn.disabled = false; btn.textContent = isRevision ? "Resubmit Bid" : "Submit Bid";
-      alert("Submission failed: " + (e.message || "unknown error") + ". Your typed values are still saved in the draft — please try again.");
+      await brandedAlert("Submission failed: " + (e.message || "unknown error") + ". Your typed values are still saved in the draft — please try again.");
     }
   }
 
