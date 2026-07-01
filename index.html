@@ -1632,6 +1632,43 @@
   }
   .es-contact-block .ln{ display:block; }
 
+  /* Agent branding block — shown on the client-facing estimate for
+     agents so the client sees THEIR real estate agent as the deliverer.
+     Reno to Sold logo stays prominent above (in .es-logo); a footer line
+     credits the platform. */
+  .es-agent-block{
+    margin-top:10px;
+    display:flex; align-items:center; gap:12px;
+  }
+  .es-agent-avatar{
+    width:56px; height:56px; border-radius:50%;
+    background:#f4efe1; border:2px solid #d4af6a; overflow:hidden;
+    flex-shrink:0;
+  }
+  .es-agent-avatar img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .es-agent-avatar.no-photo{ display:none; }
+  .es-agent-text{ line-height:1.35; min-width:0; }
+  .es-agent-name{
+    font-size:13px; font-weight:800; color:#0a0a0a;
+    letter-spacing:.02em; margin-bottom:2px;
+  }
+  .es-agent-brokerage{
+    font-size:10.5px; color:#3d3d3d; font-weight:500;
+    text-transform:uppercase; letter-spacing:.10em; margin-bottom:4px;
+  }
+  .es-agent-contact{
+    font-size:10px; color:#444; line-height:1.45;
+  }
+  .es-agent-contact span{ display:inline-block; margin-right:10px; }
+  .es-agent-partner{
+    font-size:9px; color:#888; margin-top:5px;
+    letter-spacing:.10em; text-transform:uppercase;
+  }
+  @media (max-width:720px){
+    .es-agent-avatar{ width:48px; height:48px; }
+    .es-agent-name{ font-size:12px; }
+  }
+
   .es-h-right{ text-align:right; min-width:180px; }
   .es-badge{
     display:inline-block;
@@ -10966,17 +11003,49 @@ function renderClientEstimate(){
   const sections = buildEstimateSummary();
   const totals = computeTotals();
 
-  // Header
+  /* Header — for AGENTS, we replace the Reno to Sold contact block with
+     the agent's own branding (name, brokerage, phone, email, avatar).
+     The RTS logo stays prominent above so the client still sees the
+     platform brand; a footer line credits Reno to Sold Inc. below.
+     For admins/staff, we render the classic RTS contact block. */
+  const showAgentBranding = (typeof isAgent === "function" && isAgent() && currentProfile);
+  let headerContactBlock;
+  if(showAgentBranding){
+    const agentName      = (currentProfile.full_name || "").trim();
+    const agentBrokerage = (currentProfile.brokerage || "").trim();
+    const agentPhone     = (currentProfile.phone     || "").trim();
+    const agentEmail     = ((currentUser && currentUser.email) || "").trim();
+    const agentAvatarUrl = (currentProfile.avatar_url || "").trim();
+    const contactBits = [];
+    if(agentPhone) contactBits.push('<span>' + escapeHtml(agentPhone) + '</span>');
+    if(agentEmail) contactBits.push('<span>' + escapeHtml(agentEmail) + '</span>');
+    headerContactBlock =
+      '<div class="es-agent-block">' +
+        (agentAvatarUrl
+          ? '<div class="es-agent-avatar"><img src="' + escapeHtmlAttr(agentAvatarUrl) + '" alt=""></div>'
+          : '<div class="es-agent-avatar no-photo"></div>') +
+        '<div class="es-agent-text">' +
+          (agentName      ? '<div class="es-agent-name">'      + escapeHtml(agentName)      + '</div>' : '') +
+          (agentBrokerage ? '<div class="es-agent-brokerage">' + escapeHtml(agentBrokerage) + '</div>' : '') +
+          (contactBits.length ? '<div class="es-agent-contact">' + contactBits.join("") + '</div>' : '') +
+          '<div class="es-agent-partner">in partnership with Reno to Sold Inc.</div>' +
+        '</div>' +
+      '</div>';
+  } else {
+    headerContactBlock =
+      '<div class="es-contact-block">' +
+        '<span class="ln">' + escapeHtml(ci.phone) + '</span>' +
+        '<span class="ln">' + escapeHtml(ci.email) + '</span>' +
+        '<span class="ln">' + escapeHtml(ci.addressLine1) + '</span>' +
+        '<span class="ln">' + escapeHtml(ci.addressLine2) + '</span>' +
+      '</div>';
+  }
+
   let html = `
     <div class="es-header">
       <div class="es-h-left">
         <div class="es-logo"><img src="${escapeHtml(ci.logoSrc)}" alt="${escapeHtml(ci.logoAlt)}"></div>
-        <div class="es-contact-block">
-          <span class="ln">${escapeHtml(ci.phone)}</span>
-          <span class="ln">${escapeHtml(ci.email)}</span>
-          <span class="ln">${escapeHtml(ci.addressLine1)}</span>
-          <span class="ln">${escapeHtml(ci.addressLine2)}</span>
-        </div>
+        ${headerContactBlock}
       </div>
       <div class="es-h-right">
         <div class="es-badge">Estimate</div>
@@ -11260,7 +11329,11 @@ function renderClientEstimate(){
         ${sellerSigBlocks}
         ${brokerSigBlock}
       </div>
-      <div class="es-footer">Prepared by Reno to Sold Inc.</div>
+      <div class="es-footer">${
+        showAgentBranding
+          ? "Prepared by " + escapeHtml((currentProfile.full_name || "").trim() || "your agent") + " · Powered by Reno to Sold Inc."
+          : "Prepared by Reno to Sold Inc."
+      }</div>
     </div>
   `;
 
@@ -17379,7 +17452,7 @@ function renderUserForm(existing){
               <input type="file" id="uf_avatar_file" accept="image/jpeg,image/png,image/webp" onchange="onAvatarFilePicked(event)">
               ${u.avatar_url ? `<button type="button" class="au-remove" onclick="onAvatarRemove()">Remove</button>` : ''}
             </div>
-            <div class="au-hint">JPG, PNG, or WebP. Max 2 MB. Appears in the agent's header and on every PDF estimate they generate for their clients.</div>
+            <div class="au-hint">JPG, PNG, or WebP. Max 15 MB. Appears in the agent's header and on every PDF estimate they generate for their clients.</div>
             <div id="uf_avatar_status" style="font-size:11px;color:var(--gold-bright);margin-top:2px;min-height:14px;"></div>
           </div>
         </div>
@@ -19818,8 +19891,8 @@ async function uploadAvatar(userId, file){
   if(!/^image\/(jpeg|png|webp)$/i.test(file.type)){
     throw new Error("Please choose a JPG, PNG, or WebP image");
   }
-  if(file.size > 2 * 1024 * 1024){
-    throw new Error("Image must be smaller than 2 MB");
+  if(file.size > 15 * 1024 * 1024){
+    throw new Error("Image must be smaller than 15 MB");
   }
   const ext  = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
   const path = userId + "-" + Date.now() + "." + (ext || "jpg");
@@ -19857,8 +19930,8 @@ function onAvatarFilePicked(event){
     event.target.value = "";
     return;
   }
-  if(file.size > 2 * 1024 * 1024){
-    brandedAlert("Image must be smaller than 2 MB.");
+  if(file.size > 15 * 1024 * 1024){
+    brandedAlert("Image must be smaller than 15 MB.");
     event.target.value = "";
     return;
   }
