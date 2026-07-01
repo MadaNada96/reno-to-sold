@@ -1676,6 +1676,45 @@
     font-size:9px; color:#888; margin-top:5px;
     letter-spacing:.10em; text-transform:uppercase;
   }
+  /* Client PDF "Powered by RTS" divider — mirrors Option C from the
+     portal header (gold hairline with the label floating on top of it,
+     followed by a compact RTS logo). Sits below the agent identity
+     block on agent-authored estimates so RTS reads as the platform
+     underneath the agent's brand, not the co-lead. */
+  .es-powered-by{
+    display:flex; align-items:center; gap:14px;
+    margin-top:14px; padding-top:10px;
+    border-top:1px solid rgba(168,133,63,.25);
+  }
+  .es-powered-by-divider{
+    position:relative; flex:0 0 auto;
+    width:44px; height:1px; background:#a8853f;
+  }
+  .es-powered-by-label{
+    position:absolute; top:50%; left:50%;
+    transform:translate(-50%,-50%);
+    background:#ffffff; padding:0 6px;
+    font-size:8px; letter-spacing:.22em;
+    text-transform:uppercase; color:#a8853f;
+    font-weight:800; white-space:nowrap; line-height:1;
+  }
+  .es-powered-by-logo{
+    display:inline-block; height:26px; flex:0 0 auto;
+  }
+  .es-powered-by-logo img{
+    height:100%; width:auto; object-fit:contain;
+    object-position:left center; display:block;
+    max-width:130px;
+  }
+  @media print{
+    .es-powered-by-label{
+      -webkit-print-color-adjust:exact;
+      print-color-adjust:exact;
+    }
+    .es-powered-by-logo img{
+      max-height:26px !important;
+    }
+  }
   @media (max-width:720px){
     .es-agent-avatar{
       width:52px; height:52px;
@@ -11108,13 +11147,16 @@ function renderClientEstimate(){
   const sections = buildEstimateSummary();
   const totals = computeTotals();
 
-  /* Header — for AGENTS, we replace the Reno to Sold contact block with
-     the agent's own branding (name, brokerage, phone, email, avatar).
-     The RTS logo stays prominent above so the client still sees the
-     platform brand; a footer line credits Reno to Sold Inc. below.
-     For admins/staff, we render the classic RTS contact block. */
+  /* Header — Push 5.3 (Option C):
+     - AGENTS: agent identity is the primary face at top-left (avatar +
+       name + brokerage + contact). Below it, a short gold hairline with
+       "POWERED BY" floating on top of the line, then a compact RTS logo.
+       Skips the big RTS logo above so the agent is the visual anchor.
+     - ADMINS/STAFF: unchanged — big RTS logo top-left, RTS contact
+       block below. The document reads as coming directly from Reno to
+       Sold Inc. when there's no agent to attribute to. */
   const showAgentBranding = (typeof isAgent === "function" && isAgent() && currentProfile);
-  let headerContactBlock;
+  let leftHeaderHtml;
   if(showAgentBranding){
     const agentName      = (currentProfile.full_name || "").trim();
     const agentBrokerage = (currentProfile.brokerage || "").trim();
@@ -11124,7 +11166,11 @@ function renderClientEstimate(){
     const contactBits = [];
     if(agentPhone) contactBits.push('<span>' + escapeHtml(agentPhone) + '</span>');
     if(agentEmail) contactBits.push('<span>' + escapeHtml(agentEmail) + '</span>');
-    headerContactBlock =
+    /* Agent block — avatar left, text (name/brokerage/contact) right.
+       No more "in partnership with" text line: that's replaced by the
+       .es-powered-by divider element that renders below the agent block
+       (gold hairline + POWERED BY label + compact RTS logo). */
+    const agentBlockHtml =
       '<div class="es-agent-block">' +
         (agentAvatarUrl
           ? '<div class="es-agent-avatar"><img src="' + escapeHtmlAttr(agentAvatarUrl) + '" alt=""></div>'
@@ -11133,11 +11179,20 @@ function renderClientEstimate(){
           (agentName      ? '<div class="es-agent-name">'      + escapeHtml(agentName)      + '</div>' : '') +
           (agentBrokerage ? '<div class="es-agent-brokerage">' + escapeHtml(agentBrokerage) + '</div>' : '') +
           (contactBits.length ? '<div class="es-agent-contact">' + contactBits.join("") + '</div>' : '') +
-          '<div class="es-agent-partner">in partnership with Reno to Sold Inc.</div>' +
         '</div>' +
       '</div>';
+    const poweredByHtml =
+      '<div class="es-powered-by">' +
+        '<div class="es-powered-by-divider">' +
+          '<span class="es-powered-by-label">Powered by</span>' +
+        '</div>' +
+        '<div class="es-powered-by-logo"><img src="' + escapeHtmlAttr(ci.logoSrc) + '" alt="' + escapeHtmlAttr(ci.logoAlt) + '"></div>' +
+      '</div>';
+    leftHeaderHtml = agentBlockHtml + poweredByHtml;
   } else {
-    headerContactBlock =
+    /* Classic admin/staff layout — big RTS logo, RTS contact block. */
+    leftHeaderHtml =
+      '<div class="es-logo"><img src="' + escapeHtmlAttr(ci.logoSrc) + '" alt="' + escapeHtmlAttr(ci.logoAlt) + '"></div>' +
       '<div class="es-contact-block">' +
         '<span class="ln">' + escapeHtml(ci.phone) + '</span>' +
         '<span class="ln">' + escapeHtml(ci.email) + '</span>' +
@@ -11149,8 +11204,7 @@ function renderClientEstimate(){
   let html = `
     <div class="es-header">
       <div class="es-h-left">
-        <div class="es-logo"><img src="${escapeHtml(ci.logoSrc)}" alt="${escapeHtml(ci.logoAlt)}"></div>
-        ${headerContactBlock}
+        ${leftHeaderHtml}
       </div>
       <div class="es-h-right">
         <div class="es-badge">Estimate</div>
