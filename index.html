@@ -4171,7 +4171,9 @@
     <h3>
       <span>Invoicing &mdash; <span id="invModalEstimateName">Project</span></span>
       <span class="small-stack">
-        <button class="ghost" onclick="runEmailHealthCheck()" title="Send a small test email to your own address to verify the Resend pipeline (Supabase → Edge Function → Resend) is alive. Use before sending a real client invoice if anything feels off.">Test Email</button>
+        <!-- Test Email button removed 2026-06-29 — moved out of the invoicing
+             surface (will live in a dedicated diagnostics area later). The
+             runEmailHealthCheck() function itself stays defined for future use. -->
         <button class="primary" onclick="closeInvoicing()">Done</button>
       </span>
     </h3>
@@ -14535,15 +14537,19 @@ function applyEstimateLock(){
     const currentStatus = (state && state.status) || "draft";
     const submittable = !NON_SUBMITTABLE_STATUSES.includes(currentStatus);
     submitBtn.style.display = (canUse("submit_for_review") && submittable) ? "" : "none";
-    // Re-label based on state
+    /* Re-label based on state. Use innerHTML (not textContent) so the
+       paper-plane icon stays in the button — textContent strips child
+       elements. Verified during Mo's test on 2026-06-29: button looked
+       "the same" because textContent wiped the icon every render. */
+    const icon = '<i class="ti ti-send" style="font-size:16px;vertical-align:-2px;margin-right:6px;" aria-hidden="true"></i>';
     if(state && state.status === "priced"){
-      submitBtn.textContent = "Resubmit — Client Approved";
+      submitBtn.innerHTML = icon + "Resubmit — Client Approved";
       submitBtn.title = "Confirm your client has approved this priced estimate and resubmit for final approval";
     } else if(state && state.status === "request_changes"){
-      submitBtn.textContent = "Re-Submit for Review";
+      submitBtn.innerHTML = icon + "Re-Submit for Review";
       submitBtn.title = "After making the requested changes, resubmit for review";
     } else {
-      submitBtn.textContent = "Submit for Review";
+      submitBtn.innerHTML = icon + "Submit for Review";
       submitBtn.title = "Submit this estimate to Reno to Sold for final review and approval";
     }
   }
@@ -19171,6 +19177,10 @@ async function renderMySubmissions(){
       try { return new Date(iso).toLocaleDateString("en-CA", { year:"numeric", month:"short", day:"numeric" }); }
       catch(e){ return ""; }
     };
+    // Cache the rows so loadMySubmissionById can find them even if the
+    // estimate isn't in localStorage (cloud-only — agent signed in on
+    // a different device than where they originally created it).
+    _mySubmissionsCache = subs;
     body.innerHTML =
       '<div style="display:flex;flex-direction:column;gap:10px;">' +
       subs.map(r => {
@@ -19180,7 +19190,7 @@ async function renderMySubmissions(){
         const addr = s.propAddress || s.propName || "Untitled property";
         const sub = s.submission || {};
         const subDate = sub.submitted_at ? fmtDate(sub.submitted_at) : fmtDate(r.updated_at);
-        return '<button type="button" onclick="loadEstimateById(\'' + escapeHtml(r.id) + '\')" ' +
+        return '<button type="button" onclick="loadMySubmissionById(\'' + escapeHtml(r.id) + '\')" ' +
                   'style="text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;cursor:pointer;color:var(--ink);font-family:inherit;display:flex;align-items:center;gap:14px;">' +
                  '<div style="flex:1;min-width:0;">' +
                    '<div style="font-size:14px;font-weight:600;color:var(--ink-strong);">' + escapeHtml(addr) + '</div>' +
@@ -19199,7 +19209,60 @@ async function renderMySubmissions(){
   }
 }
 
-/* Helper for My Submissions: click a row → load the estimate + go to the estimator view. */
+/* Cache of the rows returned by the most recent renderMySubmissions
+   query. Used by loadMySubmissionById so we don't need to re-fetch
+   the row to load it. */
+let _mySubmissionsCache = [];
+
+/* Click a row in My Submissions → load the estimate into the
+   estimator, then route there. Falls back to localStorage first
+   (preserves any local edits), then to the cloud-fetched row from
+   the cache (so cloud-only submissions still load). Verified fix
+   on 2026-06-29: loadEstimate(id) was returning silently when the
+   estimate wasn't in localStorage, leaving the user with a fresh
+   blank estimator. */
+function loadMySubmissionById(id){
+  try {
+    // First try local. If found, that's the freshest version (might
+    // have local edits not yet synced).
+    const list = (typeof loadSavedList === "function") ? loadSavedList() : [];
+    const local = list.find(x => x.id === id);
+    if(local){
+      loadEstimate(id);
+      navigateTo("estimator");
+      return;
+    }
+    // No local copy — pull the snapshot from the cache and inject it.
+    const cloud = _mySubmissionsCache.find(r => r.id === id);
+    if(cloud && cloud.state){
+      // Mirror loadEstimate's effect: set state, persist to local list,
+      // re-render the estimator.
+      state = JSON.parse(JSON.stringify(cloud.state));
+      state._id = id;
+      // Persist so the next click finds it locally (cleaner repeat UX)
+      try {
+        const updated = list.slice();
+        updated.unshift({ id, name: state.propName || "Untitled property",
+                          savedAt: new Date().toISOString(),
+                          state: JSON.parse(JSON.stringify(state)) });
+        persistSavedList(updated);
+      } catch(e){ console.warn("persist cloud-only submission failed:", e); }
+      try { migrateOldEstimate(state); } catch(e){}
+      try { renderAll(); } catch(e){ console.error("renderAll after cloud-only load:", e); }
+      navigateTo("estimator");
+      return;
+    }
+    // Last resort — fall through to the old behaviour.
+    if(typeof loadEstimate === "function"){ loadEstimate(id); }
+    navigateTo("estimator");
+  } catch(e){
+    console.error("loadMySubmissionById:", e);
+    navigateTo("estimator");
+  }
+}
+
+/* Kept for back-compat with any external callers — same behaviour as
+   loadMySubmissionById but tries local only. */
 function loadEstimateById(id){
   try {
     if(typeof loadEstimate === "function"){ loadEstimate(id); }
