@@ -3598,6 +3598,25 @@
   .avatar-uploader .au-pick:hover{border-color:var(--gold);color:var(--gold-bright);}
   .avatar-uploader .au-remove:hover{border-color:#a83838;color:#f08c8c;}
 
+  /* User Settings modal — sectioned layout with subtle dividers. */
+  .us-section{
+    margin-top:16px; padding-top:16px;
+    border-top:1px solid var(--line);
+  }
+  .us-section:first-child{ margin-top:0; padding-top:0; border-top:none; }
+  .us-section-head{
+    font-size:10.5px; letter-spacing:.16em; text-transform:uppercase;
+    color:var(--gold-bright); font-weight:800; margin-bottom:10px;
+  }
+  .us-label{
+    display:block; font-size:10px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--muted); font-weight:700;
+    margin-bottom:4px;
+  }
+  .us-hint{
+    font-size:10.5px; color:var(--muted); margin-top:4px; line-height:1.4;
+  }
+
   /* ====================================================================
      FEATURE FLAG TOGGLES — in admin user-edit form (Push 6)
      Each feature is a row with a checkbox, a bold label, and a muted
@@ -3949,6 +3968,10 @@
 
       <div class="sb-footer">
         <div id="sbUserEmail" style="font-size:11px;color:var(--muted);margin-bottom:6px;word-break:break-word;"></div>
+        <button class="sb-item" onclick="openUserSettings(); closeMobileSidebar();" data-label="User settings" id="sbUserSettingsBtn" style="display:none;">
+          <i class="ti ti-user-cog" aria-hidden="true"></i>
+          <span class="sb-item-label">User settings</span>
+        </button>
         <button class="sb-item" onclick="onAuthClick(); closeMobileSidebar();" data-label="Log out" style="color:#cfcfcf;">
           <i class="ti ti-logout" aria-hidden="true"></i>
           <span class="sb-item-label">Log out</span>
@@ -4784,6 +4807,22 @@
       <button class="ghost" onclick="closeUserFormModal()">Close</button>
     </h3>
     <div class="modal-body" id="userFormBody"></div>
+  </div>
+</div>
+
+<!-- ============= USER SETTINGS (self-serve, all signed-in users) =============
+     Any signed-in user can open this from the sidebar footer. Lets them
+     update their own avatar, name, and phone, and change their password.
+     Brokerage + email + role stay read-only (admin-managed). Server-side
+     safety comes from the prevent_privilege_escalation trigger — see
+     supabase/migrations/user_settings.sql. -->
+<div class="modal-bg" id="userSettingsModal" onclick="if(event.target===this)closeUserSettings()">
+  <div class="modal" style="max-width:580px;">
+    <h3>
+      <span>User settings</span>
+      <button class="ghost" onclick="closeUserSettings()">Close</button>
+    </h3>
+    <div class="modal-body" id="userSettingsBody"></div>
   </div>
 </div>
 
@@ -18194,6 +18233,298 @@ async function deleteUserConfirm(userId, email){
 }
 
 /* ============================================================
+   USER SETTINGS — self-serve profile edit + password change
+   ============================================================
+   Any signed-in user can open this modal from the sidebar footer.
+   Editable: avatar, full_name, phone, password.
+   Read-only: email, brokerage, role.
+
+   Server-side safety:
+   • The prevent_privilege_escalation trigger on profiles rejects
+     any non-admin attempt to change role, features, suspended, or
+     subscription_expires_at. Migration: supabase/migrations/user_settings.sql.
+   • The avatars bucket RLS policies (see AVATAR_STORAGE_SETUP.md)
+     allow authenticated users to insert/update files whose name
+     starts with their own user_id. Prevents an agent from
+     overwriting someone else's headshot.
+
+   Password change requires the current password — we verify it by
+   calling signInWithPassword before calling updateUser, so a hijacked
+   session can't silently reset the password. */
+
+let _settingsPendingAvatarFile = null;
+let _settingsPendingRemoveAvatar = false;
+
+function openUserSettings(){
+  if(!currentUser || !currentProfile){
+    brandedAlert("Sign in first to change your settings.");
+    return;
+  }
+  _settingsPendingAvatarFile = null;
+  _settingsPendingRemoveAvatar = false;
+  renderUserSettingsForm();
+  document.getElementById("userSettingsModal").classList.add("show");
+}
+function closeUserSettings(){
+  document.getElementById("userSettingsModal").classList.remove("show");
+}
+
+function renderUserSettingsForm(){
+  const p = currentProfile || {};
+  const email = (currentUser && currentUser.email) || "";
+  const avatarUrl = (p.avatar_url || "").trim();
+  const role = (p.role || "").trim();
+  const isAgentRole = role === "agent";
+  const brokerage = (p.brokerage || "").trim();
+  const body = document.getElementById("userSettingsBody");
+  body.innerHTML = `
+    <!-- Photo section — hidden for admins/staff since their avatar
+         doesn't appear on any client-facing surface right now. Agents
+         see this because their headshot goes on every PDF estimate. -->
+    ${isAgentRole ? `
+      <div class="us-section">
+        <div class="us-section-head">Your headshot</div>
+        <div class="avatar-uploader">
+          <div class="au-preview" id="us_avatar_preview">
+            ${avatarUrl
+              ? `<img src="${escapeHtmlAttr(avatarUrl)}" alt="">`
+              : '<span>No photo</span>'}
+          </div>
+          <div class="au-actions">
+            <div class="au-row">
+              <label class="au-pick" for="us_avatar_file">Choose photo</label>
+              <input type="file" id="us_avatar_file" accept="image/jpeg,image/png,image/webp" onchange="onSettingsAvatarPicked(event)">
+              ${avatarUrl ? `<button type="button" class="au-remove" onclick="onSettingsAvatarRemove()">Remove</button>` : ''}
+            </div>
+            <div class="au-hint">JPG, PNG, or WebP. Max 15 MB. Appears in your header and on every PDF estimate you generate for your clients.</div>
+            <div id="us_avatar_status" style="font-size:11px;color:var(--gold-bright);margin-top:2px;min-height:14px;"></div>
+          </div>
+        </div>
+      </div>
+    ` : ""}
+
+    <div class="us-section">
+      <div class="us-section-head">Personal info</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+        <div>
+          <label class="us-label">Full name</label>
+          <input type="text" id="us_full_name" value="${escapeHtmlAttr(p.full_name || "")}" placeholder="Jane Smith" style="width:100%;padding:9px 11px;">
+        </div>
+        <div>
+          <label class="us-label">Phone</label>
+          <input type="tel" id="us_phone" value="${escapeHtmlAttr(p.phone || "")}" placeholder="(416) 555-1234" style="width:100%;padding:9px 11px;">
+        </div>
+        <div>
+          <label class="us-label">Email</label>
+          <input type="text" value="${escapeHtmlAttr(email)}" readonly style="width:100%;padding:9px 11px;background:#1a1a1a;color:var(--muted);">
+          <div class="us-hint">Contact your admin to change your email.</div>
+        </div>
+        <div>
+          <label class="us-label">Brokerage</label>
+          <input type="text" value="${escapeHtmlAttr(brokerage || "—")}" readonly style="width:100%;padding:9px 11px;background:#1a1a1a;color:var(--muted);">
+          <div class="us-hint">${isAgentRole ? "Contact your admin to change your brokerage." : "Not applicable for your role."}</div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-top:14px;">
+        <button class="primary" onclick="saveUserSettingsProfile()" id="us_save_profile_btn">Save profile</button>
+      </div>
+      <div id="us_profile_status" style="margin-top:8px;font-size:12px;text-align:right;min-height:14px;"></div>
+    </div>
+
+    <div class="us-section">
+      <div class="us-section-head">Change password</div>
+      <div style="display:grid;grid-template-columns:1fr;gap:12px;max-width:360px;">
+        <div>
+          <label class="us-label">Current password</label>
+          <input type="password" id="us_pw_current" autocomplete="current-password" style="width:100%;padding:9px 11px;">
+        </div>
+        <div>
+          <label class="us-label">New password</label>
+          <input type="password" id="us_pw_new" autocomplete="new-password" style="width:100%;padding:9px 11px;">
+          <div class="us-hint">At least 8 characters.</div>
+        </div>
+        <div>
+          <label class="us-label">Confirm new password</label>
+          <input type="password" id="us_pw_confirm" autocomplete="new-password" style="width:100%;padding:9px 11px;">
+        </div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-top:14px;">
+        <button class="primary" onclick="changeMyPassword()" id="us_change_pw_btn">Change password</button>
+      </div>
+      <div id="us_pw_status" style="margin-top:8px;font-size:12px;text-align:right;min-height:14px;"></div>
+    </div>
+  `;
+}
+
+/* Avatar picker for the settings modal. Mirrors the admin flow —
+   preview locally, actual upload happens on Save Profile. */
+function onSettingsAvatarPicked(event){
+  const file = event.target.files && event.target.files[0];
+  if(!file) return;
+  if(!/^image\/(jpeg|png|webp)$/i.test(file.type)){
+    document.getElementById("us_avatar_status").textContent = "Please choose a JPG, PNG, or WebP image.";
+    document.getElementById("us_avatar_status").style.color = "#ff7676";
+    event.target.value = "";
+    return;
+  }
+  if(file.size > 15 * 1024 * 1024){
+    document.getElementById("us_avatar_status").textContent = "Image must be smaller than 15 MB.";
+    document.getElementById("us_avatar_status").style.color = "#ff7676";
+    event.target.value = "";
+    return;
+  }
+  _settingsPendingAvatarFile = file;
+  _settingsPendingRemoveAvatar = false;
+  // Local preview
+  const reader = new FileReader();
+  reader.onload = e => {
+    const prev = document.getElementById("us_avatar_preview");
+    if(prev) prev.innerHTML = `<img src="${e.target.result}" alt="">`;
+  };
+  reader.readAsDataURL(file);
+  const s = document.getElementById("us_avatar_status");
+  s.style.color = "var(--gold-bright)";
+  s.textContent = "Ready to save — click Save Profile.";
+}
+function onSettingsAvatarRemove(){
+  _settingsPendingAvatarFile = null;
+  _settingsPendingRemoveAvatar = true;
+  const prev = document.getElementById("us_avatar_preview");
+  if(prev) prev.innerHTML = "<span>No photo</span>";
+  const s = document.getElementById("us_avatar_status");
+  s.style.color = "var(--gold-bright)";
+  s.textContent = "Photo will be removed on save.";
+}
+
+async function saveUserSettingsProfile(){
+  if(!supa || !currentUser){ return; }
+  const statusEl = document.getElementById("us_profile_status");
+  const btn = document.getElementById("us_save_profile_btn");
+  const fullName = (document.getElementById("us_full_name").value || "").trim();
+  const phone    = (document.getElementById("us_phone").value || "").trim();
+  if(!fullName){
+    statusEl.style.color = "#ff7676";
+    statusEl.textContent = "Full name can't be blank.";
+    return;
+  }
+  btn.disabled = true;
+  const origLabel = btn.textContent;
+  btn.textContent = "Saving…";
+  statusEl.style.color = "var(--gold-bright)";
+  statusEl.textContent = "Saving…";
+  try {
+    /* Upload / remove avatar first so the URL is baked into the same
+       row-level update. If it fails, bail before touching the profile
+       so the UI doesn't half-save. */
+    const updates = { full_name: fullName, phone };
+    if(_settingsPendingAvatarFile){
+      statusEl.textContent = "Uploading photo…";
+      try {
+        const url = await uploadAvatar(currentUser.id, _settingsPendingAvatarFile);
+        updates.avatar_url = url;
+      } catch(e){
+        statusEl.style.color = "#ff7676";
+        statusEl.textContent = "Photo upload failed: " + (e.message || String(e));
+        btn.disabled = false;
+        btn.textContent = origLabel;
+        return;
+      }
+    } else if(_settingsPendingRemoveAvatar){
+      updates.avatar_url = null;
+    }
+    /* Direct update against profiles. RLS allows self-updates; the
+       prevent_privilege_escalation trigger blocks anything sensitive.
+       We only send whitelisted columns from the UI anyway. */
+    const { error } = await supa.from("profiles").update(updates).eq("id", currentUser.id);
+    if(error) throw error;
+    // Refresh local cache so header + PDFs pick up the change immediately
+    currentProfile = { ...currentProfile, ...updates };
+    try { renderUserIdentity(); } catch(e){}
+    try { applyFeatureGates(); } catch(e){}
+    _settingsPendingAvatarFile = null;
+    _settingsPendingRemoveAvatar = false;
+    statusEl.style.color = "#5fce86";
+    statusEl.textContent = "✓ Saved.";
+    setTimeout(() => { statusEl.textContent = ""; }, 2500);
+  } catch(e){
+    statusEl.style.color = "#ff7676";
+    statusEl.textContent = "Failed: " + (e.message || String(e));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = origLabel;
+  }
+}
+
+async function changeMyPassword(){
+  if(!supa || !currentUser){ return; }
+  const statusEl = document.getElementById("us_pw_status");
+  const btn = document.getElementById("us_change_pw_btn");
+  const currentPw = document.getElementById("us_pw_current").value;
+  const newPw     = document.getElementById("us_pw_new").value;
+  const confirmPw = document.getElementById("us_pw_confirm").value;
+  if(!currentPw){
+    statusEl.style.color = "#ff7676";
+    statusEl.textContent = "Enter your current password.";
+    return;
+  }
+  if(!newPw || newPw.length < 8){
+    statusEl.style.color = "#ff7676";
+    statusEl.textContent = "New password must be at least 8 characters.";
+    return;
+  }
+  if(newPw !== confirmPw){
+    statusEl.style.color = "#ff7676";
+    statusEl.textContent = "New password + confirmation don't match.";
+    return;
+  }
+  if(newPw === currentPw){
+    statusEl.style.color = "#ff7676";
+    statusEl.textContent = "New password can't be the same as the current one.";
+    return;
+  }
+  btn.disabled = true;
+  const origLabel = btn.textContent;
+  btn.textContent = "Verifying…";
+  statusEl.style.color = "var(--gold-bright)";
+  statusEl.textContent = "Verifying current password…";
+  try {
+    /* Verify by re-signing-in with the current password. This issues
+       a fresh session for the same user (harmless), but crucially
+       fails if the current password is wrong — Supabase's updateUser
+       alone would let anyone with a hijacked session silently rotate
+       the password, which is exactly what we're guarding against. */
+    const email = currentUser.email;
+    const { error: signInErr } = await supa.auth.signInWithPassword({
+      email, password: currentPw
+    });
+    if(signInErr){
+      statusEl.style.color = "#ff7676";
+      statusEl.textContent = "Current password is incorrect.";
+      btn.disabled = false;
+      btn.textContent = origLabel;
+      return;
+    }
+    btn.textContent = "Updating…";
+    statusEl.textContent = "Updating password…";
+    const { error: updateErr } = await supa.auth.updateUser({ password: newPw });
+    if(updateErr) throw updateErr;
+    // Clear the fields so the new password isn't lingering in the DOM
+    document.getElementById("us_pw_current").value = "";
+    document.getElementById("us_pw_new").value = "";
+    document.getElementById("us_pw_confirm").value = "";
+    statusEl.style.color = "#5fce86";
+    statusEl.textContent = "✓ Password changed.";
+    setTimeout(() => { statusEl.textContent = ""; }, 3000);
+  } catch(e){
+    statusEl.style.color = "#ff7676";
+    statusEl.textContent = "Failed: " + (e.message || String(e));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = origLabel;
+  }
+}
+
+/* ============================================================
    PHASE 2 DROP 2 — SUBMISSIONS DASHBOARD (admin only)
    ============================================================
 
@@ -19927,6 +20258,8 @@ function renderUserIdentity(){
   if(!currentUser || !currentProfile){
     wrap.style.display = "none";
     if(brandbar) brandbar.classList.remove("has-identity");
+    const settingsBtnHide = document.getElementById("sbUserSettingsBtn");
+    if(settingsBtnHide) settingsBtnHide.style.display = "none";
     return;
   }
   wrap.style.display = "flex";
@@ -19987,6 +20320,11 @@ function renderUserIdentity(){
   // Also update the sidebar footer email
   const sbEmail = document.getElementById("sbUserEmail");
   if(sbEmail) sbEmail.textContent = currentUser.email || "";
+
+  /* Show the "User settings" sidebar button once a profile exists.
+     Hidden on the sign-in screen (no profile → no settings to change). */
+  const settingsBtn = document.getElementById("sbUserSettingsBtn");
+  if(settingsBtn) settingsBtn.style.display = "";
 }
 
 /* ============================================================
