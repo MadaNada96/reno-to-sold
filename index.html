@@ -3484,14 +3484,27 @@
     }
   }
   @media (max-width:480px){
-    /* Very narrow (iPhone SE, small Androids): shrink further and make
-       the partner block sit under the agent info by wrapping the
-       brandbar row. Hamburger stays visible top-right via flex order. */
-    .brandbar.has-identity .brandbar-row{flex-wrap:wrap;}
-    .brandbar.has-identity .user-identity{flex:1 1 100%;}
+    /* Very narrow (iPhone SE, small Androids): agent identity takes the
+       full first line; hamburger and "Powered by" wrap to a second line
+       with hamburger on the LEFT (under the avatar) and Powered-by on
+       the RIGHT (Mo's placement request 2026-07-01). Order values give
+       hamburger a lower order than rts-partner so it sits first on the
+       wrap line; justify-content:space-between on .brandbar-row (from
+       its base style) pushes them to opposite ends. */
+    .brandbar.has-identity .brandbar-row{
+      flex-wrap:wrap;
+      row-gap:10px;   /* tighter vertical spacing between the two rows */
+    }
+    .brandbar.has-identity .user-identity{
+      flex:1 1 100%;
+      order:1;
+    }
+    .brandbar.has-identity .sidebar-mobile-toggle{
+      order:2;         /* second in flow — visually LEFT on the wrap line */
+    }
     .brandbar.has-identity .rts-partner{
       flex:0 0 auto;
-      margin-top:10px;
+      order:3;         /* third in flow — visually RIGHT on the wrap line */
       flex-direction:row;   /* back to row when wrapped to own line */
       align-items:center;
       gap:8px;
@@ -3501,7 +3514,6 @@
     }
     .brandbar.has-identity .logo{max-width:100px;}
     .brandbar.has-identity .logo-img{max-width:100px;max-height:32px;}
-    .sidebar-mobile-toggle{order:2;}
   }
 
   /* ====================================================================
