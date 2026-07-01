@@ -3393,11 +3393,18 @@
   .uic-avatar img{width:100%;height:100%;object-fit:cover;object-position:center;display:block;}
   .uic-avatar.no-photo{display:none;}  /* hide cleanly when no photo — header still balanced */
 
-  /* "Powered by" divider — a short horizontal gold hairline with the
-     label centered on top of it. Sits between the agent identity (left)
-     and the compact RTS logo (right). Hidden unless .brandbar has the
-     .has-identity class (added by renderUserIdentity when an agent /
-     admin profile is loaded). */
+  /* RTS partner block — wraps the "Powered by" divider + compact RTS
+     logo. Sits between the agent identity (left) and the hamburger
+     (right). Layout adapts by breakpoint:
+       Desktop: horizontal — divider (line + label) then logo, side-by-side.
+       Mobile:  vertical   — "POWERED BY" caption stacked above the logo.
+     The divider itself is hidden when the user isn't signed in via
+     .brandbar.has-identity — otherwise a full-width RTS logo on the
+     sign-in screen would have a stray hairline floating next to it. */
+  .rts-partner{
+    display:flex; align-items:center; gap:14px;
+    flex:0 0 auto;
+  }
   .powered-by-rule{
     display:none;
     align-items:center;
@@ -3434,9 +3441,30 @@
   }
 
   @media (max-width:720px){
-    .brandbar.has-identity .powered-by-rule{display:none;}
-    .brandbar.has-identity .logo{max-width:120px;}
-    .brandbar.has-identity .logo-img{max-width:120px;max-height:44px;}
+    /* Mobile: stack the RTS partner block vertically so the "POWERED BY"
+       caption sits directly above the compact RTS logo. This keeps the
+       partnership language visible on narrow screens instead of hiding
+       it (Mo's feedback on the first mobile test). */
+    .brandbar.has-identity .rts-partner{
+      flex-direction:column;
+      align-items:flex-end;
+      gap:3px;
+    }
+    .brandbar.has-identity .powered-by-rule{
+      /* Kill the line + absolute-positioned chip effect. On mobile the
+         label just floats above the logo like a plain caption. */
+      padding:0;
+      position:static;
+    }
+    .brandbar.has-identity .powered-by-rule .pbr-line{display:none;}
+    .brandbar.has-identity .powered-by-rule .pbr-label{
+      position:static;transform:none;
+      background:transparent;padding:0;
+      font-size:8.5px;letter-spacing:.20em;
+      color:var(--gold);
+    }
+    .brandbar.has-identity .logo{max-width:110px;}
+    .brandbar.has-identity .logo-img{max-width:110px;max-height:38px;}
     .user-identity{gap:10px;}
     .uic-avatar{
       width:44px;height:44px;
@@ -3448,6 +3476,32 @@
     .uic-name{font-size:11px;}
     .uic-brokerage{font-size:12px;}
     .uic-contact{font-size:10px;}
+    /* On very narrow screens the contact line (phone + email) tends to
+       overflow horizontally. Let it wrap under the name/brokerage so
+       nothing gets truncated. */
+    .uic-contact{
+      flex-wrap:wrap;gap:4px 10px;
+    }
+  }
+  @media (max-width:480px){
+    /* Very narrow (iPhone SE, small Androids): shrink further and make
+       the partner block sit under the agent info by wrapping the
+       brandbar row. Hamburger stays visible top-right via flex order. */
+    .brandbar.has-identity .brandbar-row{flex-wrap:wrap;}
+    .brandbar.has-identity .user-identity{flex:1 1 100%;}
+    .brandbar.has-identity .rts-partner{
+      flex:0 0 auto;
+      margin-top:10px;
+      flex-direction:row;   /* back to row when wrapped to own line */
+      align-items:center;
+      gap:8px;
+    }
+    .brandbar.has-identity .powered-by-rule .pbr-label{
+      font-size:8px;
+    }
+    .brandbar.has-identity .logo{max-width:100px;}
+    .brandbar.has-identity .logo-img{max-width:100px;max-height:32px;}
+    .sidebar-mobile-toggle{order:2;}
   }
 
   /* ====================================================================
@@ -3699,20 +3753,24 @@
         </div>
       </div>
 
-      <!-- "Powered by" divider — a short gold hairline with the label
-           centered on top (Option C from Push 5.2 mockups). Hidden by
-           default; .brandbar.has-identity toggles it visible so we don't
-           show a floating divider next to a full-width RTS logo when the
-           user isn't signed in. -->
-      <div class="powered-by-rule no-print" aria-hidden="true">
-        <span class="pbr-line"></span>
-        <span class="pbr-label">Powered by</span>
+      <!-- RTS partner block — wraps the "Powered by" divider and the
+           compact RTS logo so we can layout them side-by-side on desktop
+           and stack them (label above logo) on mobile. The divider is
+           still hidden when the user isn't signed in — see
+           .brandbar.has-identity in CSS. -->
+      <div class="rts-partner no-print">
+        <!-- Divider: gold hairline (desktop) with "POWERED BY" label on
+             top of it, or the same label as a plain caption on mobile
+             where the line collapses. -->
+        <div class="powered-by-rule" aria-hidden="true">
+          <span class="pbr-line"></span>
+          <span class="pbr-label">Powered by</span>
+        </div>
+        <a href="#/dashboard" class="logo" aria-label="Reno to Sold home" onclick="event.preventDefault(); navigateTo('dashboard');">
+          <img src="RENO_to_SOLD_logo_only.png" alt="Reno to Sold" class="logo-img">
+          <img src="updated-logo-trans.png" alt="Reno to Sold &mdash; Renovate for less. Sell for more. Fully managed from start to sold." class="logo-img-print">
+        </a>
       </div>
-
-      <a href="#/dashboard" class="logo" aria-label="Reno to Sold home" onclick="event.preventDefault(); navigateTo('dashboard');">
-        <img src="RENO_to_SOLD_logo_only.png" alt="Reno to Sold" class="logo-img">
-        <img src="updated-logo-trans.png" alt="Reno to Sold &mdash; Renovate for less. Sell for more. Fully managed from start to sold." class="logo-img-print">
-      </a>
 
       <!-- Mobile hamburger — opens the sidebar drawer on small screens.
            Hidden on desktop via CSS. -->
