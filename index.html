@@ -15636,12 +15636,26 @@ async function notifyAdminOfSubmission(targetStatus, notes){
     // 60s hard timeout. Uses invokeFunctionViaRest bypass.
     // Attachment is optional — only included when PDF generation succeeded.
     const ADMIN_NOTIF_TIMEOUT_MS = 60000;
+    /* Build agent-branded HTML wrapper so admin sees which agent
+       submitted at a glance — avatar, name, and brokerage render in the
+       black header bar; the plain-text body sits below; agent contact
+       info sits in the footer. Reuses buildClientEstimateEmailHtml since
+       it already branches on isAgent() to render agent branding when the
+       sender is an agent, or the classic RTS layout when admin/staff
+       submits (rare, but supported for round-tripping).
+       Without this bodyHtml override, the Edge Function would fall back
+       to its generic brandedHtml() which hardcodes RENO TO SOLD + the
+       RE/MAX brokerage — obscuring which agent actually submitted. */
+    const bodyHtml = (typeof buildClientEstimateEmailHtml === "function")
+      ? buildClientEstimateEmailHtml(body)
+      : undefined;
     const emailPayload = {
       to: ["renotosold@gmail.com"],
       cc: [],
       subject: `New estimate submission — ${propTitle}`,
       body
     };
+    if(bodyHtml) emailPayload.bodyHtml = bodyHtml;
     if(pdfBase64 && filename){
       emailPayload.pdfBase64 = pdfBase64;
       emailPayload.filename = filename;
