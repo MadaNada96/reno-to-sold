@@ -3485,17 +3485,17 @@
         <span class="sb-item-label">Estimator</span>
       </button>
 
-      <button class="sb-item" data-feature="contractor_bids" data-label="Contractor bid" onclick="openContractorBid(); closeMobileSidebar();">
+      <button class="sb-item" data-route="bids" data-feature="contractor_bids" data-label="Contractor bid" onclick="navigateTo('bids')">
         <i class="ti ti-briefcase" aria-hidden="true"></i>
         <span class="sb-item-label">Contractor bid</span>
       </button>
 
-      <button class="sb-item" data-feature="invoicing" data-label="Invoicing" onclick="openInvoicing(); closeMobileSidebar();">
+      <button class="sb-item" data-route="invoicing" data-feature="invoicing" data-label="Invoicing" onclick="navigateTo('invoicing')">
         <i class="ti ti-receipt" aria-hidden="true"></i>
         <span class="sb-item-label">Invoicing</span>
       </button>
 
-      <button class="sb-item" data-feature="expense_tracker" data-label="Expense tracker" onclick="openExpenseTracker(); closeMobileSidebar();">
+      <button class="sb-item" data-route="tracker" data-feature="expense_tracker" data-label="Expense tracker" onclick="navigateTo('tracker')">
         <i class="ti ti-chart-bar" aria-hidden="true"></i>
         <span class="sb-item-label">Expense tracker</span>
       </button>
@@ -8677,6 +8677,12 @@ function setBidContractor(id){
 }
 function closeContractorBid(){
   document.body.classList.remove("show-contractor");
+  // Sync URL — if user's currently on /#/bids, take them back to estimator
+  try {
+    if(typeof getCurrentRoute === "function" && getCurrentRoute() === "bids"){
+      navigateTo("estimator");
+    }
+  } catch(e){}
 }
 function toggleContractorBidCat(cat){
   if(contractorBidCats.has(cat)) contractorBidCats.delete(cat);
@@ -18812,8 +18818,14 @@ async function confirmSubmissionDecision(){
    still overlay on top of whatever view is active — they're launched
    from sidebar items and don't change the URL. */
 
-const VALID_ROUTES = ["dashboard", "estimator", "my-submissions"];
+const VALID_ROUTES = ["dashboard", "estimator", "my-submissions", "bids", "invoicing", "tracker"];
 const DEFAULT_ROUTE = "dashboard";
+/* Tool routes — these use existing overlay/modal code rather than
+   .view containers. The router opens/closes them via helper hooks
+   in TOOL_ROUTE_HANDLERS below. Advantages: (a) URLs are now shareable
+   / bookmarkable / browser-back-friendly for these tools; (b) no
+   DOM restructure needed, keeping the risk of regression low. */
+const TOOL_ROUTES = ["bids", "invoicing", "tracker"];
 
 function getCurrentRoute(){
   const h = (window.location.hash || "").replace(/^#\/?/, "").trim();
@@ -18837,25 +18849,77 @@ function navigateTo(route){
   renderRoute();
 }
 
+/* Close any tool overlay that might be open (Expense Tracker,
+   Contractor Bid, Invoicing modal). Called when navigating AWAY from
+   a tool route so the previous tool doesn't linger on top of the new
+   page. Safe to call even when nothing is open (no-ops on close). */
+function closeAllToolOverlays(){
+  try {
+    // Expense Tracker — hides #etApp + shows .app
+    const etApp = document.getElementById("etApp");
+    if(etApp && etApp.style.display && etApp.style.display !== "none"){
+      etApp.style.display = "none";
+    }
+    const mainApp = document.querySelector(".app");
+    if(mainApp && mainApp.style.display === "none"){
+      mainApp.style.display = "";
+    }
+  } catch(e){}
+  try {
+    // Contractor Bid overlay — driven by body.show-contractor class
+    document.body.classList.remove("show-contractor");
+  } catch(e){}
+  try {
+    // Invoicing modal — remove .show
+    const invModal = document.getElementById("invoicingModal");
+    if(invModal) invModal.classList.remove("show");
+  } catch(e){}
+}
+
 function renderRoute(){
   const route = getCurrentRoute();
   // Mark documentElement so CSS can show/hide route-specific elements
   // (e.g. slogan visible only on dashboard).
   document.documentElement.setAttribute("data-route", route);
-  // Toggle .active on the correct view
+
+  // Route-change hygiene: close any tool overlay that was open.
+  // If we're navigating to a different tool route, the correct one
+  // gets re-opened below. If we're navigating to a normal .view
+  // route, the overlays stay closed and the .view content shows.
+  closeAllToolOverlays();
+
+  // Toggle .active on the correct view (only for the "normal" routes
+  // that have a .view container in the shell). Tool routes don't
+  // have .view containers — they use overlays instead.
   document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
-  const target = document.getElementById("view-" + route);
-  if(target) target.classList.add("active");
-  // Highlight the active sidebar item
+  if(!TOOL_ROUTES.includes(route)){
+    const target = document.getElementById("view-" + route);
+    if(target) target.classList.add("active");
+  }
+
+  // Highlight the active sidebar item. Both data-route AND data-tool-route
+  // attributes are considered so tool routes get their sidebar highlight too.
   document.querySelectorAll(".app-sidebar .sb-item[data-route]").forEach(b => {
     b.classList.toggle("active", b.getAttribute("data-route") === route);
   });
+
   // Per-route side-effects
   if(route === "dashboard"){
     renderDashboard();
   } else if(route === "my-submissions"){
     renderMySubmissions();
+  } else if(route === "tracker"){
+    // Open the Expense Tracker. openExpenseTracker handles the "no
+    // active estimate" branch by going straight to the home view.
+    try { openExpenseTracker(); } catch(e){ console.error("route tracker:", e); }
+  } else if(route === "invoicing"){
+    try { openInvoicing(); } catch(e){ console.error("route invoicing:", e); }
+  } else if(route === "bids"){
+    // openContractorBid may prompt to open the Estimator if no active
+    // estimate is loaded — that's the intended UX for the empty case.
+    try { openContractorBid(); } catch(e){ console.error("route bids:", e); }
   }
+
   // Scroll to top of view container so navigation feels clean
   try { window.scrollTo({top:0, behavior:"instant"}); } catch(e) { try{window.scrollTo(0,0);}catch(e){} }
 }
@@ -19008,17 +19072,17 @@ function dashboardCards(){
     { key: "contractor_bids", requireFeature: "contractor_bids",
       title: "Contractor bid", icon: "ti-briefcase",
       desc: "Send the current scope to subcontractors and collect their pricing.",
-      action: () => openContractorBid() },
+      action: () => navigateTo("bids") },
 
     { key: "invoicing", requireFeature: "invoicing",
       title: "Invoicing", icon: "ti-receipt",
       desc: "Issue milestone invoices and track what's paid, due, or overdue.",
-      action: () => openInvoicing() },
+      action: () => navigateTo("invoicing") },
 
     { key: "expense_tracker", requireFeature: "expense_tracker",
       title: "Expense tracker", icon: "ti-chart-bar",
       desc: "Log project expenses and watch your profit margin in real time.",
-      action: () => openExpenseTracker() },
+      action: () => navigateTo("tracker") },
 
     { key: "my_submissions", requireFeature: "submit_for_review",
       title: "My submissions", icon: "ti-file-check",
@@ -21338,6 +21402,14 @@ async function openInvoicing(){
 
 function closeInvoicing(){
   document.getElementById("invoicingModal").classList.remove("show");
+  // Sync URL — if user's currently on /#/invoicing, take them back to
+  // the dashboard. Otherwise leave the URL alone (Invoicing modal was
+  // opened inline from a project).
+  try {
+    if(typeof getCurrentRoute === "function" && getCurrentRoute() === "invoicing"){
+      navigateTo("dashboard");
+    }
+  } catch(e){}
 }
 
 /* Render the full Invoicing body — Project Financials, milestone cards,
@@ -23127,6 +23199,10 @@ function backToEstimator(){
   document.getElementById("etApp").style.display="none";
   var app=document.querySelector(".app"); if(app) app.style.display="";
   window.scrollTo(0,0);
+  /* Also update the URL so back-button + tab bookmarking stays in
+     sync with what's on screen. If the router doesn't exist (older
+     embeds), the DOM changes above still work. */
+  try { if(typeof navigateTo === "function") navigateTo("estimator"); } catch(e){}
 }
 function openFromEstimator(ctx){
   show();
