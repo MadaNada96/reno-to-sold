@@ -1641,11 +1641,23 @@
     display:flex; align-items:center; gap:12px;
   }
   .es-agent-avatar{
-    width:56px; height:56px; border-radius:50%;
+    width:64px; height:64px;
+    min-width:64px; max-width:64px;
+    min-height:64px; max-height:64px;
+    aspect-ratio: 1 / 1;
+    border-radius:50%;
     background:#f4efe1; border:2px solid #d4af6a; overflow:hidden;
-    flex-shrink:0;
+    flex:0 0 64px;
+    box-sizing:border-box;
+    display:inline-block;
+    vertical-align:middle;
   }
-  .es-agent-avatar img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .es-agent-avatar img{
+    width:100%; height:100%;
+    aspect-ratio: 1 / 1;
+    object-fit:cover; object-position:center;
+    display:block;
+  }
   .es-agent-avatar.no-photo{ display:none; }
   .es-agent-text{ line-height:1.35; min-width:0; }
   .es-agent-name{
@@ -1665,8 +1677,31 @@
     letter-spacing:.10em; text-transform:uppercase;
   }
   @media (max-width:720px){
-    .es-agent-avatar{ width:48px; height:48px; }
+    .es-agent-avatar{
+      width:52px; height:52px;
+      min-width:52px; max-width:52px;
+      min-height:52px; max-height:52px;
+      flex:0 0 52px;
+    }
     .es-agent-name{ font-size:12px; }
+  }
+  @media print{
+    .es-agent-avatar{
+      width:64px !important; height:64px !important;
+      min-width:64px !important; max-width:64px !important;
+      min-height:64px !important; max-height:64px !important;
+      aspect-ratio: 1 / 1 !important;
+      flex:0 0 64px !important;
+      border-radius:50% !important;
+      -webkit-print-color-adjust:exact;
+      print-color-adjust:exact;
+    }
+    .es-agent-avatar img{
+      width:64px !important; height:64px !important;
+      aspect-ratio: 1 / 1 !important;
+      object-fit:cover !important;
+      object-position:center !important;
+    }
   }
 
   .es-h-right{ text-align:right; min-width:180px; }
@@ -11312,7 +11347,11 @@ function renderClientEstimate(){
       <div class="es-disclaimer">
         <div class="es-disc-title"><span class="es-disc-title-text">Important &mdash; Renovation, Exclusive Listing &amp; MLS&reg; Listing Disclaimer</span></div>
 
-        <p><b>Parties and roles.</b> This renovation estimate is provided by <b>Reno to Sold Inc.</b> (&ldquo;the Renovation Company&rdquo;), which quotes and coordinates the renovation project, manages all subcontractors, and oversees the work end-to-end so the renovation is fully hands-off for the seller(s). The associated real estate listing services are provided separately by <b>Mohamed Nada, Broker</b> (&ldquo;the Listing Representative&rdquo;), registered with and acting on behalf of <b>RE/MAX West Realty Inc., Brokerage</b> (&ldquo;the Brokerage&rdquo;). Reno to Sold Inc. is a separate legal entity from the Brokerage; the renovation services and the real estate representation services are distinct agreements.</p>
+        <p><b>Parties and roles.</b> This renovation estimate is provided by <b>Reno to Sold Inc.</b> (&ldquo;the Renovation Company&rdquo;), which quotes and coordinates the renovation project, manages all subcontractors, and oversees the work end-to-end so the renovation is fully hands-off for the seller(s). The associated real estate listing services are provided separately by <b>${escapeHtml(
+          (showAgentBranding ? (currentProfile.full_name || "").trim() : "Mohamed Nada") || "Mohamed Nada"
+        )}</b> (&ldquo;the Listing Representative&rdquo;), registered with and acting on behalf of <b>${escapeHtml(
+          (showAgentBranding ? (currentProfile.brokerage || "").trim() : "RE/MAX West Realty Inc.") || "RE/MAX West Realty Inc."
+        )}, Brokerage</b> (&ldquo;the Brokerage&rdquo;). Reno to Sold Inc. is a separate legal entity from the Brokerage; the renovation services and the real estate representation services are distinct agreements.</p>
 
         <p>This estimate, and any discount(s) shown above, are provided to the seller(s) exclusively on the conditions set out below. All real estate listing arrangements referenced in this disclaimer are governed by the <b>Trust in Real Estate Services Act, 2002 (TRESA)</b> and the rules of the <b>Real Estate Council of Ontario (RECO)</b>, and are entered into between the seller(s) and the Brokerage on the applicable OREA form.</p>
 
@@ -11379,12 +11418,34 @@ function openEmailEstimateModal(){
   else if(firstNames.length === 2)  greeting = `Hi ${firstNames[0]} & ${firstNames[1]},`;
   else                              greeting = `Hi ${firstNames.slice(0,-1).join(", ")} & ${firstNames[firstNames.length-1]},`;
 
+  /* Build the signature dynamically:
+     - Agent sender → their own name + brokerage + phone; footer credits RTS
+     - Admin/staff  → Mohamed Nada, Broker, RE/MAX West Realty Inc.
+     Body includes phone on its own line so clients can scan for it fast.
+     If the profile is incomplete we defensively fall through to safe defaults. */
+  const _isAgentSender = (typeof isAgent === "function" && isAgent() && currentProfile);
+  let signatureBlock;
+  if(_isAgentSender){
+    const _agentName      = (currentProfile.full_name || "").trim();
+    const _agentBrokerage = (currentProfile.brokerage || "").trim();
+    const _agentPhone     = (currentProfile.phone     || "").trim();
+    const _lines = ["Best,"];
+    if(_agentName)      _lines.push(_agentName);
+    if(_agentBrokerage) _lines.push(_agentBrokerage);
+    if(_agentPhone)     _lines.push(_agentPhone);
+    _lines.push("");
+    _lines.push("— Renovation coordinated by Reno to Sold Inc.");
+    signatureBlock = _lines.join("\n");
+  } else {
+    signatureBlock = "Best,\nMohamed Nada\nBroker, RE/MAX West Realty Inc.\nReno to Sold Inc.";
+  }
+
   document.getElementById("emailBody").value =
     `${greeting}\n\n`+
     `Please find attached your renovation estimate from Reno to Sold Inc.\n`+
     `Take a look through the scope of work, payment schedule, and the listing disclaimer on the second page.\n\n`+
     `Let me know if you have any questions — happy to walk through any of it.\n\n`+
-    `Best,\nMohamed Nada\nBroker, RE/MAX West Realty Inc.\nReno to Sold Inc.`;
+    signatureBlock;
 
   // CC self — defaults to logged-in Supabase user, hides if not signed in
   const ccLabel = document.getElementById("emailCcSelfAddr");
@@ -11829,6 +11890,116 @@ async function pdfFromNodeViaIframe({ sourceEl, bodyClasses, extraCss, pdfOption
   });
 }
 
+/* ===================================================================
+   buildClientEstimateEmailHtml — the HTML wrapper for the "Email to
+   Client" flow. If the sender is an agent, we render an agent-branded
+   header (avatar + name + brokerage) and sign-off block with their
+   contact info; the RTS logo still shows small below as the platform
+   credit. For admin/staff senders we fall through to the classic
+   RTS-only layout.
+
+   Why we build this on the client instead of letting the Edge Function
+   wrap the plain text: the Edge Function's brandedHtml() is generic —
+   it hardcodes "RENO TO SOLD" and the RE/MAX brokerage in the header
+   and RTS contact info in the footer. That was fine when Mo was the
+   only sender. Now that agents can send from their own accounts the
+   client email must show THEIR branding to their client, not Mo's.
+
+   Passing bodyHtml causes the Edge Function to send our HTML verbatim
+   as the `html` field of the Resend payload, alongside the plain-text
+   `text` fallback. Recipients that block HTML get plain text, everyone
+   else gets the branded layout.
+   =================================================================== */
+function buildClientEstimateEmailHtml(plainBody){
+  // Split the plain-text body into paragraphs so line breaks render
+  // correctly in the HTML version. Preserve intended blank-line breaks.
+  const escaped = String(plainBody || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  const paragraphs = escaped
+    .split(/\n\n+/)
+    .map(p => `<p style="margin:0 0 14px;">${p.replace(/\n/g, "<br>")}</p>`)
+    .join("");
+
+  const _isAgentSender = (typeof isAgent === "function" && isAgent() && currentProfile);
+
+  // Header block — agent avatar+name+brokerage OR classic RTS logo.
+  let headerBlock;
+  if(_isAgentSender){
+    const agentName      = (currentProfile.full_name || "").trim();
+    const agentBrokerage = (currentProfile.brokerage || "").trim();
+    const agentAvatarUrl = (currentProfile.avatar_url || "").trim();
+    // Inline the avatar as a circular image. Fallback to a gold circle
+    // when there's no avatar — better than a broken image icon.
+    const avatarHtml = agentAvatarUrl
+      ? `<img src="${escapeHtmlAttr(agentAvatarUrl)}" width="60" height="60" alt="" style="display:block;width:60px;height:60px;border-radius:50%;object-fit:cover;border:2px solid #d4af6a;background:#f4efe1;">`
+      : `<div style="width:60px;height:60px;border-radius:50%;background:#f4efe1;border:2px solid #d4af6a;display:inline-block;"></div>`;
+    headerBlock = `
+      <tr><td style="background:#0a0a0a;padding:22px 26px;border-bottom:3px solid #d4af6a;">
+        <table cellpadding="0" cellspacing="0" border="0" width="100%">
+          <tr>
+            <td width="76" valign="middle" style="padding-right:14px;">${avatarHtml}</td>
+            <td valign="middle">
+              ${agentName ? `<div style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:17px;font-weight:800;color:#ffffff;letter-spacing:.02em;line-height:1.2;">${escapeHtml(agentName)}</div>` : ""}
+              ${agentBrokerage ? `<div style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:10.5px;font-weight:600;color:#d4af6a;letter-spacing:.16em;text-transform:uppercase;margin-top:4px;">${escapeHtml(agentBrokerage)}</div>` : ""}
+              <div style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:9.5px;color:#888;letter-spacing:.14em;text-transform:uppercase;margin-top:6px;">in partnership with Reno to Sold Inc.</div>
+            </td>
+          </tr>
+        </table>
+      </td></tr>`;
+  } else {
+    headerBlock = `
+      <tr><td style="background:#0a0a0a;padding:22px 24px;text-align:center;border-bottom:3px solid #d4af6a;">
+        <div style="font-family:'Montserrat',Helvetica,Arial,sans-serif;font-size:24px;font-weight:800;letter-spacing:.10em;color:#d4af6a;">RENO TO SOLD</div>
+        <div style="font-family:Helvetica,Arial,sans-serif;font-size:10px;color:#a8853f;letter-spacing:.14em;text-transform:uppercase;margin-top:4px;">RE/MAX West Realty Inc., Brokerage</div>
+      </td></tr>`;
+  }
+
+  // Footer block — agent contact OR RTS contact.
+  let footerBlock;
+  if(_isAgentSender){
+    const agentPhone = (currentProfile.phone || "").trim();
+    const agentEmail = ((currentUser && currentUser.email) || "").trim();
+    const bits = [];
+    if(agentPhone) bits.push(`<a href="tel:${escapeHtmlAttr(agentPhone.replace(/[^\d+]/g, ""))}" style="color:#a8853f;text-decoration:none;">${escapeHtml(agentPhone)}</a>`);
+    if(agentEmail) bits.push(`<a href="mailto:${escapeHtmlAttr(agentEmail)}" style="color:#a8853f;text-decoration:none;">${escapeHtml(agentEmail)}</a>`);
+    footerBlock = `
+      Renovation coordinated by <b>Reno to Sold Inc.</b><br>
+      ${bits.join(" &middot; ")}`;
+  } else {
+    footerBlock = `
+      Reno to Sold Inc. &middot; Mississauga, ON L4Y 0G4 &middot; 416-832-3779<br>
+      <a href="mailto:renotosold@gmail.com" style="color:#a8853f;text-decoration:none;">renotosold@gmail.com</a>`;
+  }
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+</head>
+<body style="margin:0;padding:0;background:#f4f3ef;-webkit-font-smoothing:antialiased;">
+  <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f4f3ef;padding:24px 12px;">
+    <tr><td align="center">
+      <table cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;background:#ffffff;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;">
+        ${headerBlock}
+        <tr><td style="background:#ffffff;padding:26px 28px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1a1a1a;line-height:1.6;font-size:14px;">
+          ${paragraphs}
+        </td></tr>
+        <tr><td style="background:#0a0a0a;padding:12px 22px;text-align:center;">
+          <p style="margin:0;font-size:10px;letter-spacing:.18em;color:#888;text-transform:uppercase;">Renovate for less. Sell for more.</p>
+        </td></tr>
+      </table>
+      <div style="text-align:center;color:#888;font-size:11px;margin-top:14px;font-family:Helvetica,Arial,sans-serif;line-height:1.6;">
+        ${footerBlock}
+      </div>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
 async function sendEstimateEmail(){
   const toRaw    = document.getElementById("emailTo").value;
   const subject  = (document.getElementById("emailSubject").value || "").trim();
@@ -11865,6 +12036,14 @@ async function sendEstimateEmail(){
   try{
     // ---- 1. Generate PDF from the estimate sheet ----
     setEmailStatus("Generating PDF...", "working");
+    /* Force a fresh render right before capture. openEmailEstimateModal
+       calls renderClientEstimate() when the modal first opens, but if
+       agent-branding state was still loading at that moment (e.g. the
+       profile hadn't finished hydrating), the sheet HTML would have
+       fallen through to the RTS contact block. Re-rendering here uses
+       the live currentProfile, so the attachment ALWAYS matches what
+       the estimator shows in the print/PDF view. */
+    if(typeof renderClientEstimate === "function") renderClientEstimate();
     const sheetEl = document.getElementById("estimateSheet");
     if(!sheetEl) throw new Error("Estimate sheet not found");
 
@@ -11914,11 +12093,21 @@ async function sendEstimateEmail(){
     // ---- 2. Send via Supabase Edge Function (calls Resend) ----
     setEmailStatus(`Sending (${sizeKB} KB attachment)...`, "working");
 
+    /* Build a branded HTML wrapper on the client side so the email
+       header matches the sender — agent branding for agents, RTS
+       branding for admin/staff. Sending bodyHtml causes the Edge
+       Function to skip its generic brandedHtml() wrapper and use ours
+       verbatim (see supabase/functions/email-estimate/index.ts line 127).
+       Plain-text `body` is still included as the text-fallback so
+       HTML-blocking clients still get a legible copy. */
+    const bodyHtml = buildClientEstimateEmailHtml(body);
+
     const payload = {
       to: recipients,
       cc: (ccSelf && currentUser && currentUser.email) ? [currentUser.email] : [],
       subject,
       body,
+      bodyHtml,
       pdfBase64,
       filename
     };
