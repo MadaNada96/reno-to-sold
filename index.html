@@ -3485,9 +3485,9 @@
         <span class="sb-item-label">Estimator</span>
       </button>
 
-      <button class="sb-item" data-route="bids" data-feature="contractor_bids" data-label="Contractor bid" onclick="navigateTo('bids')">
+      <button class="sb-item" data-route="bids" data-admin-only="true" data-label="Bids" onclick="navigateTo('bids')">
         <i class="ti ti-briefcase" aria-hidden="true"></i>
-        <span class="sb-item-label">Contractor bid</span>
+        <span class="sb-item-label">Bids</span>
       </button>
 
       <button class="sb-item" data-route="invoicing" data-feature="invoicing" data-label="Invoicing" onclick="navigateTo('invoicing')">
@@ -3574,6 +3574,9 @@
           </button>
           <button onclick="openClientEstimate()">Print / PDF</button>
           <button onclick="openEmailEstimateModal()">Email to Client</button>
+          <button data-admin-only="true" onclick="openContractorBid()" title="Send this estimate's scope to subcontractors and collect their pricing">
+            <i class="ti ti-briefcase" style="font-size:14px;vertical-align:-2px;margin-right:5px;" aria-hidden="true"></i>Contractor Bid
+          </button>
           <button data-feature="submit_for_review" id="submitForReviewBtn" onclick="openSubmitForReviewModal()" title="Submit this estimate to Reno to Sold for final review and approval" class="primary submit-review-cta">
             <i class="ti ti-send" style="font-size:16px;vertical-align:-2px;margin-right:6px;" aria-hidden="true"></i>Submit for Review
           </button>
@@ -12048,6 +12051,19 @@ function rbMoneyDisplay(s){
   return v != null ? rbFmtMoney(v) : (s ? String(s) : "—");
 }
 
+/* Bids dashboard — the admin's cross-project bid queue. Called from
+   the sidebar's "Bids" item and the dashboard's Bids card. Always
+   opens with the "All bids" scope so the admin sees every bid across
+   every estimate. Different from openReceivedBidsModal which
+   context-switches based on the currently loaded estimate. */
+function openBidsDashboard(){
+  document.getElementById("receivedBidsModal").classList.add("show");
+  _receivedBidsTab = "all";
+  _receivedBidsScope = "all";  // dashboard entry always shows all bids
+  loadReceivedBids();
+  setTimeout(() => setReceivedBidsTab("all"), 60);
+}
+
 function openReceivedBidsModal(){
   document.getElementById("receivedBidsModal").classList.add("show");
   _receivedBidsTab = "all";
@@ -12076,6 +12092,14 @@ function setReceivedBidsScope(scope){
 }
 function closeReceivedBidsModal(){
   document.getElementById("receivedBidsModal").classList.remove("show");
+  // Sync URL — if user's on /#/bids (came via sidebar/dashboard), take them
+  // back to the dashboard. If they opened this modal from inside the
+  // Contractor Bid view or an estimate, leave the URL alone.
+  try {
+    if(typeof getCurrentRoute === "function" && getCurrentRoute() === "bids"){
+      navigateTo("dashboard");
+    }
+  } catch(e){}
 }
 function setReceivedBidsTab(tab){
   _receivedBidsTab = tab;
@@ -18874,6 +18898,11 @@ function closeAllToolOverlays(){
     const invModal = document.getElementById("invoicingModal");
     if(invModal) invModal.classList.remove("show");
   } catch(e){}
+  try {
+    // Bids dashboard — remove .show
+    const rbModal = document.getElementById("receivedBidsModal");
+    if(rbModal) rbModal.classList.remove("show");
+  } catch(e){}
 }
 
 function renderRoute(){
@@ -18915,9 +18944,11 @@ function renderRoute(){
   } else if(route === "invoicing"){
     try { openInvoicing(); } catch(e){ console.error("route invoicing:", e); }
   } else if(route === "bids"){
-    // openContractorBid may prompt to open the Estimator if no active
-    // estimate is loaded — that's the intended UX for the empty case.
-    try { openContractorBid(); } catch(e){ console.error("route bids:", e); }
+    // /#/bids is the admin's cross-project Bids DASHBOARD (a list of
+    // every bid across every estimate). This is different from
+    // openContractorBid which is the CREATE-bid flow launched from
+    // inside an active estimate.
+    try { openBidsDashboard(); } catch(e){ console.error("route bids:", e); }
   }
 
   // Scroll to top of view container so navigation feels clean
@@ -19069,9 +19100,9 @@ function dashboardCards(){
       desc: "Build a renovation estimate. Save, print, email, or submit for review.",
       action: () => navigateTo("estimator") },
 
-    { key: "contractor_bids", requireFeature: "contractor_bids",
-      title: "Contractor bid", icon: "ti-briefcase",
-      desc: "Send the current scope to subcontractors and collect their pricing.",
+    { key: "bids", adminOnly: true,
+      title: "Bids", icon: "ti-briefcase",
+      desc: "Review contractor bids across every estimate. Accept, reopen, or cancel.",
       action: () => navigateTo("bids") },
 
     { key: "invoicing", requireFeature: "invoicing",
