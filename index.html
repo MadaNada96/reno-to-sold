@@ -3905,7 +3905,7 @@
         <span class="sb-item-label">Estimator</span>
       </button>
 
-      <button class="sb-item" data-route="trim" data-label="Trim calculator" onclick="navigateTo('trim')">
+      <button class="sb-item" data-route="trim" data-feature="trim_calculator" data-label="Trim calculator" onclick="navigateTo('trim')">
         <i class="ti ti-ruler-measure" aria-hidden="true"></i>
         <span class="sb-item-label">Trim calculator</span>
       </button>
@@ -7459,7 +7459,7 @@ function renderCatBody(cat){
            tool, linked to THIS estimate so "Push to Estimate" flows straight
            back here. Fills in newDoorTrimLinFt + newWindowTrimLinFt with the
            waste-padded LF from the calc. -->
-      <div style="margin-bottom:12px;display:flex;justify-content:center;">
+      <div data-feature="trim_calculator" style="margin-bottom:12px;display:flex;justify-content:center;">
         <button type="button" onclick="openTrimCalcFromEstimate()"
           style="background:linear-gradient(135deg,#e8c989 0%,#d4af6a 45%,#a8853f 100%);color:#1a1405;border:1px solid var(--gold);border-radius:8px;padding:10px 20px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;letter-spacing:.05em;display:inline-flex;align-items:center;gap:8px;box-shadow:0 4px 14px rgba(212,175,106,.20);">
           <i class="ti ti-ruler-measure" style="font-size:16px;" aria-hidden="true"></i>
@@ -15179,6 +15179,7 @@ let currentProfile = null;
 const ALL_FEATURES = [
   "estimator",          // base — the renovation estimator (everyone gets this)
   "submit_for_review",  // agents → submits to admin for approval
+  "trim_calculator",    // trim calculator (companion tool to the estimator)
   "expense_tracker",    // tracker page (staff + admin)
   "invoicing",          // invoicing modal (staff + admin)
   "contractor_bids",    // contractor bid creation + email + bids dashboard
@@ -17859,11 +17860,20 @@ async function openEditUserForm(userId){
 }
 function closeUserFormModal(){ document.getElementById("userFormModal").classList.remove("show"); }
 
+/* Default features admin gets pre-checked when INVITING a brand-new
+   user. Adjust here if you want to change the "starter tier". Adding
+   a feature to this list = it's toggled ON in the invite form; admin
+   can still uncheck it before sending the invite. */
+const DEFAULT_INVITE_FEATURES = {
+  trim_calculator: true
+};
+
 function renderUserForm(existing){
   const isEdit = !!existing;
   const u = existing || {
     email:"", full_name:"", brokerage:"", phone:"",
-    role:"agent", features:{},
+    role:"agent",
+    features: { ...DEFAULT_INVITE_FEATURES },
     subscription_expires_at: defaultExpiry1Year(),
     suspended: false
   };
@@ -17971,6 +17981,14 @@ function renderUserForm(existing){
    digging into code. Order matters: features appear top-to-bottom in
    the form and left-to-right in the users-table summary column. */
 const FEATURE_GROUPS = [
+  {
+    group: "Estimator tools",
+    icon: "ti-ruler-measure",
+    features: [
+      { key: "trim_calculator", label: "Trim Calculator", shortLabel: "Trim",
+        description: "Measure door and window casing linear feet with waste-padding, and push the total into any saved estimate's trim fields." }
+    ]
+  },
   {
     group: "Sales tools",
     icon: "ti-briefcase",
@@ -19990,7 +20008,8 @@ function dashboardCards(){
       desc: "Build a renovation estimate. Save, print, email, or submit for review.",
       action: () => navigateTo("estimator") },
 
-    { key: "trim", title: "Trim calculator", icon: "ti-ruler-measure",
+    { key: "trim", requireFeature: "trim_calculator",
+      title: "Trim calculator", icon: "ti-ruler-measure",
       desc: "Measure door & window casing linear feet. Push results into any estimate's trim fields.",
       action: () => navigateTo("trim") },
 
