@@ -19449,6 +19449,179 @@ function renderDashboard(){
     const btn = grid.querySelector('[data-card="' + c.key + '"]');
     if(btn) btn.addEventListener("click", c.action);
   });
+
+  // Populate live stats from any caches that are already warm.
+  try { updateDashboardStats(); } catch(e){ console.warn("updateDashboardStats:", e); }
+  // Kick off async cloud loads so admins see fresh submission/bid/user counts within a beat.
+  try { refreshDashboardStatsAsync(); } catch(e){ console.warn("refreshDashboardStatsAsync:", e); }
+}
+
+/* ============================================================
+   DASHBOARD LIVE STATS
+   ============================================================
+   Each dashboard card has a <div class="dc-stat" data-stat="KEY">
+   slot. updateDashboardStats() computes a short one-line label for
+   every visible card from whatever data is already in memory
+   (loadSavedList, DB.projects, submissionsList, _receivedBidsCache,
+   _userListCache, _mySubmissionsCache).
+
+   For admin cards that need cloud data (Submissions, Bids, Users),
+   refreshDashboardStatsAsync() kicks off the background loads and
+   calls updateDashboardStats() again when each returns. That way
+   the dashboard shows something reasonable immediately AND updates
+   to the real numbers as soon as they land.
+
+   Stats marked "urgent" (overdue invoices) get a red accent from
+   the .dc-stat.urgent class already in the CSS.
+   ============================================================ */
+
+function _setDashStat(key, text, urgent){
+  const el = document.querySelector('.dc-stat[data-stat="' + key + '"]');
+  if(!el) return;
+  el.textContent = text || "";
+  el.classList.toggle("urgent", !!urgent);
+}
+
+function updateDashboardStats(){
+  // Estimator — count of local saved estimates
+  try {
+    const saves = (typeof loadSavedList === "function" ? loadSavedList() : []) || [];
+    const n = saves.length;
+    _setDashStat("estimator", n === 0 ? "Start your first estimate" : (n + " saved estimate" + (n === 1 ? "" : "s")));
+  } catch(e){}
+
+  // Trim calculator — check scratchpad for in-progress standalone work
+  try {
+    let scratch = null;
+    try { scratch = JSON.parse(localStorage.getItem("rts_trim_scratchpad_v1") || "null"); } catch(e){}
+    const n = scratch && Array.isArray(scratch.items) ? scratch.items.length : 0;
+    _setDashStat("trim", n === 0 ? "Standalone tool" : (n + " opening" + (n === 1 ? "" : "s") + " in progress"));
+  } catch(e){}
+
+  // Expense tracker — active projects (window.DB set up by the tracker module)
+  try {
+    const projs = (window.DB && Array.isArray(window.DB.projects)) ? window.DB.projects : [];
+    const n = projs.length;
+    _setDashStat("expense_tracker", n === 0 ? "Start tracking a project" : (n + " active project" + (n === 1 ? "" : "s")));
+  } catch(e){}
+
+  // Invoicing — overdue invoices across ALL local saved estimates. Sums
+  // the total of any "sent" invoices whose dueDate is in the past.
+  try {
+    const saves = (typeof loadSavedList === "function" ? loadSavedList() : []) || [];
+    let overdueCount = 0, overdueAmount = 0;
+    const now = new Date();
+    for(const e of saves){
+      const invs = (e.state && Array.isArray(e.state.invoices)) ? e.state.invoices : [];
+      for(const inv of invs){
+        if(inv.status !== "sent") continue;
+        if(!inv.dueDate) continue;
+        const due = new Date(inv.dueDate);
+        if(!isNaN(due.getTime()) && due < now){
+          overdueCount++;
+          overdueAmount += (+inv.total || 0);
+        }
+      }
+    }
+    if(overdueCount === 0){
+      _setDashStat("invoicing", "No overdue invoices");
+    } else {
+      _setDashStat("invoicing", overdueCount + " overdue · $" + Math.round(overdueAmount).toLocaleString("en-US"), true);
+    }
+  } catch(e){}
+
+  // My submissions (agent) — from renderMySubmissions cache
+  try {
+    const cache = Array.isArray(_mySubmissionsCache) ? _mySubmissionsCache : [];
+    const pending = cache.filter(r => r.state && (r.state.status === "submitted" || r.state.status === "client_approved")).length;
+    _setDashStat("my_submissions", pending === 0 ? "No open submissions" : (pending + " awaiting decision"));
+  } catch(e){}
+
+  // Submissions (admin) — from submissionsList queue cache
+  try {
+    const list = Array.isArray(submissionsList) ? submissionsList : [];
+    const pending = list.filter(r => {
+      const s = r.state && r.state.status;
+      return s === "submitted" || s === "client_approved";
+    }).length;
+    _setDashStat("submissions", pending === 0 ? "Queue clear" : (pending + " pending review"));
+  } catch(e){}
+
+  // Bids (admin) — from received bids cache. "submitted" = contractor
+  // sent back pricing and it's waiting on admin decision.
+  try {
+    const cache = Array.isArray(_receivedBidsCache) ? _receivedBidsCache : [];
+    const awaiting = cache.filter(b => b.status === "submitted").length;
+    _setDashStat("bids", awaiting === 0 ? "No bids to review" : (awaiting + " awaiting review"));
+  } catch(e){}
+
+  // Manage users (admin) — from _userListCache
+  try {
+    const cache = Array.isArray(_userListCache) ? _userListCache : [];
+    const active = cache.filter(u => !u.suspended).length;
+    if(cache.length > 0){
+      _setDashStat("users", active + " active user" + (active === 1 ? "" : "s"));
+    } else {
+      _setDashStat("users", "");
+    }
+  } catch(e){}
+
+  // Pricing — no meaningful count, leave blank so the card looks clean
+  _setDashStat("pricing", "");
+}
+
+/* Guard so we don't spam parallel loads if the user bounces back to
+   the dashboard many times in quick succession. */
+let _dashRefreshInFlight = false;
+
+async function refreshDashboardStatsAsync(){
+  if(_dashRefreshInFlight) return;
+  if(!currentProfile) return;
+  _dashRefreshInFlight = true;
+  try {
+    const admin = isAdmin();
+
+    // Kick off all the loads in parallel; update stats as each returns.
+    const jobs = [];
+
+    if(admin){
+      // Submissions queue
+      if(typeof loadSubmissions === "function"){
+        jobs.push((async () => {
+          try { await loadSubmissions(); } catch(e){}
+          updateDashboardStats();
+        })());
+      }
+      // Bids queue (admin)
+      if(typeof loadReceivedBids === "function"){
+        jobs.push((async () => {
+          try { await loadReceivedBids(); } catch(e){}
+          updateDashboardStats();
+        })());
+      }
+      // User list
+      if(typeof refreshUsersList === "function"){
+        jobs.push((async () => {
+          try { await refreshUsersList(); } catch(e){}
+          updateDashboardStats();
+        })());
+      }
+    }
+
+    // My Submissions (agent) — canUse submit_for_review
+    if(!admin && typeof canUse === "function" && canUse("submit_for_review")){
+      jobs.push((async () => {
+        try { await renderMySubmissions(); } catch(e){}
+        updateDashboardStats();
+      })());
+    }
+
+    await Promise.allSettled(jobs);
+    // Final pass so any stats that require multiple caches are consistent.
+    updateDashboardStats();
+  } finally {
+    _dashRefreshInFlight = false;
+  }
 }
 
 /* ============================================================
