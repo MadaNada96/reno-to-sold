@@ -3762,18 +3762,12 @@
           </div>
 
           <div class="panel">
-            <h2>Client Quote · 2026 GTA</h2>
+            <h2>Client Quote</h2>
             <div class="panel-body">
-              <div class="tc-set-grid" style="margin-bottom:14px;">
-                <div>
-                  <label>Per door ($)</label>
-                  <input type="number" id="rateDoor" min="0" step="5" value="210" onchange="TC.render()" oninput="TC.render()">
-                </div>
-                <div>
-                  <label>Per window ($)</label>
-                  <input type="number" id="rateWindow" min="0" step="5" value="190" onchange="TC.render()" oninput="TC.render()">
-                </div>
-              </div>
+              <!-- Rates come from the estimator's pricing (prices.doorsTrims).
+                   Edit them there — pill toggles Internal Mode → Pricing.
+                   No per-door / per-window rates here; the trim calc uses
+                   the same per-LF rates the estimate itself will bill. -->
               <div class="tc-totrow"><span id="qDoorsLbl">Doors</span><span class="v" id="qDoors">$0</span></div>
               <div class="tc-totrow"><span id="qWindowsLbl">Windows</span><span class="v" id="qWindows">$0</span></div>
               <div class="tc-totrow"><span>Subtotal</span><span class="v" id="qSub">$0</span></div>
@@ -3783,7 +3777,7 @@
               </div>
               <div class="tc-totrow" id="hstRow" style="display:none;"><span>HST (13%)</span><span class="v" id="qHst">$0</span></div>
               <div class="tc-quote-grand"><span class="lbl">Quote total</span><span class="v" id="qGrand">$0</span></div>
-              <div class="tc-range" id="qRange">Typical GTA range: —</div>
+              <div class="tc-range" id="qRateNote" style="font-size:11px;color:var(--muted);text-align:right;margin-top:6px;">Uses your estimator's per-LF trim rates.</div>
             </div>
           </div>
         </div>
@@ -4839,8 +4833,8 @@ const DEFAULT_PRICES = {
       shaker:   { rate: 1100 }
     },
     // New window trim — per linear foot (MDF/poplar casing, install, primer
-    // + 2 coats paint).
-    newWindowTrim: { rate: 8 },
+    // + 2 coats paint). Updated 2026-07-01 per Mo's published rate sheet.
+    newWindowTrim: { rate: 6.5 },
     // New door trims to match baseboard — per LF, L/M split mirroring the
     // baseboard install rate ($4.00 labour / $2.50 material) since the
     // material and labour profile is identical to baseboard install.
@@ -5344,7 +5338,7 @@ function migrateFlatShowerPrice(p){
     if(!nsd.sixPanel || typeof nsd.sixPanel.rate !== "number") nsd.sixPanel = { rate: 900 };
     if(!nsd.shaker   || typeof nsd.shaker.rate   !== "number") nsd.shaker   = { rate: 1100 };
     if(!p.doorsTrims.newWindowTrim || typeof p.doorsTrims.newWindowTrim.rate !== "number"){
-      p.doorsTrims.newWindowTrim = { rate: 8 };
+      p.doorsTrims.newWindowTrim = { rate: 6.5 };
     }
     // New: door trims to match baseboard — L/M per LF, defaults to baseboard rates.
     if(!p.doorsTrims.newDoorTrim || typeof p.doorsTrims.newDoorTrim.labour !== "number" || typeof p.doorsTrims.newDoorTrim.material !== "number"){
@@ -19872,24 +19866,32 @@ const TC = {
     document.getElementById('lfOrder').innerHTML       = t.lfOrder.toLocaleString() + ' <small>linear ft</small>';
     document.getElementById('sticksLbl').textContent   = '≈ ' + t.sticks + ' stick' + (t.sticks === 1 ? '' : 's') + ' @ ' + t.stick + ' ft';
 
-    // Quote
-    const rD = +document.getElementById('rateDoor').value || 0;
-    const rW = +document.getElementById('rateWindow').value || 0;
-    const qD = t.doors * rD, qW = t.windows * rW, sub = qD + qW;
+    /* Client Quote — uses the estimator's per-LF rates (prices.doorsTrims)
+       exactly as the estimate will bill the client. Falls back to seeded
+       defaults if prices haven't loaded yet. Quantity basis is the
+       WASTE-PADDED LF (what actually goes onto the estimate), so the
+       calculator's quote matches the estimate to the penny. */
+    const doorTrimPx   = (typeof prices === "object" && prices && prices.doorsTrims && prices.doorsTrims.newDoorTrim)   || { labour: 4.00, material: 2.50 };
+    const windowTrimPx = (typeof prices === "object" && prices && prices.doorsTrims && prices.doorsTrims.newWindowTrim) || { rate: 6.5 };
+    const doorRatePerLF   = (+doorTrimPx.labour   || 0) + (+doorTrimPx.material || 0);
+    const windowRatePerLF = (+windowTrimPx.rate   || 0);
+    const doorLF   = t.lfDoorsPadded;
+    const windowLF = t.lfWindowsPadded;
+    const qD  = doorLF   * doorRatePerLF;
+    const qW  = windowLF * windowRatePerLF;
+    const sub = qD + qW;
     const hst = document.getElementById('hstChk').checked;
     const hstAmt = hst ? sub * 0.13 : 0;
-    const grand = sub + hstAmt;
-    document.getElementById('qDoorsLbl').textContent   = 'Doors (' + t.doors + ' × ' + fmt$(rD) + ')';
-    document.getElementById('qWindowsLbl').textContent = 'Windows (' + t.windows + ' × ' + fmt$(rW) + ')';
+    const grand  = sub + hstAmt;
+    const fmtRate = r => "$" + (Math.round(r*100)/100).toLocaleString("en-US", { minimumFractionDigits:2, maximumFractionDigits:2 });
+    document.getElementById('qDoorsLbl').textContent   = 'Doors ('   + doorLF   + ' LF × ' + fmtRate(doorRatePerLF)   + '/LF)';
+    document.getElementById('qWindowsLbl').textContent = 'Windows (' + windowLF + ' LF × ' + fmtRate(windowRatePerLF) + '/LF)';
     document.getElementById('qDoors').textContent   = fmt$(qD);
     document.getElementById('qWindows').textContent = fmt$(qW);
     document.getElementById('qSub').textContent     = fmt$(sub);
     document.getElementById('hstRow').style.display = hst ? 'flex' : 'none';
     document.getElementById('qHst').textContent     = fmt$(hstAmt);
     document.getElementById('qGrand').textContent   = fmt$(grand);
-    document.getElementById('qRange').textContent   = sub > 0
-      ? 'Typical GTA range: ' + fmt$(sub * 0.85) + ' – ' + fmt$(sub * 1.35) + (hst ? ' + HST' : '')
-      : 'Typical GTA range: —';
   },
 
   /* Persist current TC state to the appropriate store — linked estimate
@@ -19902,8 +19904,6 @@ const TC = {
         items: this.state.items,
         waste: this.state.waste,
         stick: this.state.stick,
-        rateDoor: +(document.getElementById('rateDoor') || {}).value || 210,
-        rateWindow: +(document.getElementById('rateWindow') || {}).value || 190,
       };
       if(linkedId){
         // Update the linked estimate in state (in-memory + local list)
@@ -19952,11 +19952,6 @@ function renderTrim(){
     TC.state.items = Array.isArray(source.items) ? source.items : [];
     TC.state.waste = source.waste || 10;
     TC.state.stick = source.stick || 16;
-    // Also restore rate inputs (their onchange calls TC.render so we do this before render)
-    const rD = document.getElementById('rateDoor');
-    const rW = document.getElementById('rateWindow');
-    if(rD) rD.value = source.rateDoor || 210;
-    if(rW) rW.value = source.rateWindow || 190;
   } else {
     TC.state.items = [];
     TC.state.waste = 10;
@@ -20075,8 +20070,6 @@ async function tcPushToEstimate(){
     items: TC.state.items.slice(),
     waste: TC.state.waste,
     stick: TC.state.stick,
-    rateDoor:   +(document.getElementById('rateDoor')   || {}).value || 210,
-    rateWindow: +(document.getElementById('rateWindow') || {}).value || 190,
   };
   // Save + refresh
   try { saveEstimate({ silent: true }); } catch(e){ console.error("saveEstimate on tcPush:", e); }
