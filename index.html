@@ -17916,10 +17916,16 @@ function renderUserForm(existing){
     subscription_expires_at: defaultExpiry1Year(),
     suspended: false
   };
-  // Default 1-year expiry for new agents
+  // Default 1-year expiry for new agents. Uses local-date arithmetic
+  // (not new Date().toISOString().slice(0,10)) so the resulting YYYY-MM-DD
+  // matches the admin's calendar day. The old ISO-based version drifted
+  // by one day when run after ~8pm local in a west-of-UTC timezone.
   function defaultExpiry1Year(){
-    const d = new Date(); d.setFullYear(d.getFullYear()+1);
-    return d.toISOString().slice(0,10);
+    const d = new Date();
+    const y = d.getFullYear() + 1;
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
   }
   const features = u.features || {};
   document.getElementById("userFormHeading").textContent = isEdit ? "Edit User" : "Invite New User";
@@ -17928,7 +17934,8 @@ function renderUserForm(existing){
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
       <div>
         <label style="display:block;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:4px;">Email *</label>
-        <input type="email" id="uf_email" value="${escapeHtmlAttr(u.email)}" ${isEdit ? "readonly" : ""} placeholder="agent@example.com" style="width:100%;padding:9px 11px;${isEdit?"background:#1a1a1a;color:var(--muted);":""}">
+        <input type="email" id="uf_email" value="${escapeHtmlAttr(u.email)}" placeholder="agent@example.com" style="width:100%;padding:9px 11px;">
+        ${isEdit ? `<div style="font-size:10.5px;color:var(--muted);margin-top:4px;">Changing the email will update this user's sign-in address. They keep the same account, features, estimates, and password &mdash; only their login email changes.</div>` : ""}
       </div>
       <div>
         <label style="display:block;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:4px;">Full Name *</label>
@@ -18152,7 +18159,15 @@ function collectUserFormData(){
     phone:      document.getElementById("uf_phone").value.trim(),
     role,
     features,
-    subscription_expires_at: expDate ? new Date(expDate + "T23:59:59").toISOString() : null
+    /* Timezone-safe expiry: pin to UTC noon so any ±12h local-timezone
+       shift can't roll the calendar date forward or back a day. The
+       previous form used `new Date(expDate + "T23:59:59").toISOString()`
+       which interpreted the date picker's value as LOCAL time; on a
+       west-of-UTC machine (e.g. EDT UTC-4), 2027-07-01T23:59:59 local
+       became 2027-07-02T03:59:59Z UTC. Every save-without-changing
+       shifted the calendar date +1 day, so the field appeared to drift
+       forward. Pinning to T12:00:00Z round-trips cleanly. */
+    subscription_expires_at: expDate ? expDate + "T12:00:00.000Z" : null
   };
 }
 
@@ -18175,6 +18190,16 @@ async function submitEditUser(userId){
   const data = collectUserFormData();
   const statusEl = document.getElementById("uf_status");
   const suspendedEl = document.getElementById("uf_suspended");
+  /* Detect an email change so we can send it in the update payload only
+     when it's different — this way most edits don't touch auth.users,
+     and we can show a clearer status message when the email is changing. */
+  const cachedUser = _userListCache.find(x => x.id === userId);
+  const oldEmail = (cachedUser && (cachedUser.email || "").trim().toLowerCase()) || "";
+  const emailChanged = data.email && data.email !== oldEmail;
+  if(data.email && !data.email.includes("@")){
+    statusEl.innerHTML = `<span style="color:#ff7676;">Valid email is required.</span>`;
+    return;
+  }
   const updates = {
     full_name: data.full_name,
     brokerage: data.brokerage,
@@ -18184,6 +18209,10 @@ async function submitEditUser(userId){
     subscription_expires_at: data.subscription_expires_at,
     suspended: !!(suspendedEl && suspendedEl.checked)
   };
+  /* Only include email in the payload when it actually changed. Server
+     also needs to update auth.users.email atomically (see admin-users
+     edge function updateUser action). */
+  if(emailChanged) updates.email = data.email;
 
   /* Avatar handling — admin may have picked a new photo, removed an
      existing one, or done nothing. Upload first so the URL is saved
