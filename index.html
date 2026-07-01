@@ -3599,6 +3599,78 @@
   .avatar-uploader .au-remove:hover{border-color:#a83838;color:#f08c8c;}
 
   /* ====================================================================
+     FEATURE FLAG TOGGLES — in admin user-edit form (Push 6)
+     Each feature is a row with a checkbox, a bold label, and a muted
+     description explaining what it grants. Rows are grouped by category
+     with a small header. Admin-only features are dimmed and disabled.
+     ==================================================================== */
+  .feat-groups{
+    display:flex; flex-direction:column; gap:14px;
+  }
+  .feat-group{
+    display:flex; flex-direction:column; gap:6px;
+  }
+  .feat-group-head{
+    display:flex; align-items:center; gap:6px;
+    font-size:9.5px; letter-spacing:.18em; text-transform:uppercase;
+    color:var(--gold); font-weight:800;
+    padding-bottom:4px; border-bottom:1px solid rgba(212,175,106,.15);
+    margin-bottom:2px;
+  }
+  .feat-group-head i{ font-size:12px; }
+  .feat-row{
+    display:flex; align-items:flex-start; gap:10px;
+    padding:8px 10px; border-radius:6px;
+    background:rgba(255,255,255,.015);
+    border:1px solid rgba(255,255,255,.04);
+    cursor:pointer; transition:background .12s, border-color .12s;
+  }
+  .feat-row:hover{
+    background:rgba(212,175,106,.05);
+    border-color:rgba(212,175,106,.2);
+  }
+  .feat-row input[type="checkbox"]{
+    margin-top:2px; flex-shrink:0;
+    accent-color:var(--gold);
+    width:15px; height:15px; cursor:pointer;
+  }
+  .feat-row.is-admin-only{
+    opacity:.55; cursor:not-allowed;
+    background:rgba(255,255,255,.01);
+  }
+  .feat-row.is-admin-only:hover{
+    background:rgba(255,255,255,.01);
+    border-color:rgba(255,255,255,.04);
+  }
+  .feat-row.is-admin-only input[type="checkbox"]{ cursor:not-allowed; }
+  .feat-text{ flex:1; line-height:1.4; min-width:0; }
+  .feat-label{
+    font-size:12.5px; font-weight:700; color:var(--ink);
+    letter-spacing:.02em;
+  }
+  .feat-desc{
+    font-size:11px; color:var(--muted); margin-top:3px;
+    line-height:1.5;
+  }
+  /* Feature summary pills shown in the users-table Features column */
+  .feat-pill{
+    display:inline-block; margin:1px 3px 1px 0;
+    padding:2px 7px; border-radius:999px;
+    font-size:9.5px; font-weight:700; letter-spacing:.06em;
+    text-transform:uppercase; background:rgba(212,175,106,.13);
+    color:var(--gold-bright); border:1px solid rgba(212,175,106,.28);
+  }
+  .feat-pill.full-access{
+    background:rgba(95,206,134,.14); color:#7de29e;
+    border-color:rgba(95,206,134,.35);
+  }
+  .feat-pill.none{
+    background:transparent; color:var(--muted);
+    border:1px dashed var(--line-strong);
+    font-style:italic; letter-spacing:.02em; text-transform:none;
+  }
+
+  /* ====================================================================
      ROUTE-SPECIFIC VISIBILITY
      ==================================================================== */
   /* Slogan only on dashboard; hide everywhere else. JS toggles
@@ -17747,6 +17819,7 @@ function renderUsersTable(){
         <div style="font-size:11px;color:var(--muted);">${escapeHtml(u.email)}</div>
       </td>
       <td><span style="display:inline-block;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;background:rgba(212,175,106,.15);color:${roleColors[u.role]||"#888"};border:1px solid ${roleColors[u.role]||"#444"};">${escapeHtml(u.role)}</span></td>
+      <td style="line-height:1.6;">${_featureSummaryHtml(u)}</td>
       <td style="font-size:11.5px;">${fmtExpiry(u.subscription_expires_at, u.role)}</td>
       <td style="font-size:11.5px;color:var(--muted);">${u.last_sign_in_at ? fmtDate(u.last_sign_in_at) : "never"}</td>
       <td>${u.suspended ? `<span style="color:#ff7676;font-weight:700;">SUSPENDED</span>` : `<span style="color:#5fce86;">active</span>`}</td>
@@ -17759,6 +17832,7 @@ function renderUsersTable(){
           <tr>
             <th>Name / Email</th>
             <th>Role</th>
+            <th>Features</th>
             <th>Subscription</th>
             <th>Last Sign In</th>
             <th>Status</th>
@@ -17864,11 +17938,13 @@ function renderUserForm(existing){
     `}
 
     <div style="margin-top:18px;padding:14px;background:#0a0a0e;border:1px solid var(--line);border-radius:8px;">
-      <div style="font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold-bright);font-weight:700;margin-bottom:8px;">Optional Features (in addition to Estimator)</div>
-      <div id="uf_features" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <div style="font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold-bright);font-weight:700;margin-bottom:6px;">Features Granted</div>
+      <div style="font-size:10.5px;color:var(--muted);margin-bottom:12px;line-height:1.5;">
+        Every user gets the <b style="color:var(--ink);">Estimator</b>. Agents also get <b style="color:var(--ink);">Submit-for-Review</b> automatically. Admins get everything. Use the toggles below to grant extra tools.
+      </div>
+      <div id="uf_features" class="feat-groups">
         ${renderFeatureCheckboxes(features, u.role)}
       </div>
-      <div style="font-size:10.5px;color:var(--muted);margin-top:8px;">Admins get ALL features automatically. Agents always get Estimator + Submit-for-Review. Use these toggles to grant Staff extra access.</div>
     </div>
 
     ${isEdit ? `
@@ -17890,21 +17966,92 @@ function renderUserForm(existing){
   renderUserFormFeatures(u.role);
 }
 
+/* Feature metadata for the Manage Users form — groups + human-readable
+   descriptions so admin knows exactly what each toggle grants without
+   digging into code. Order matters: features appear top-to-bottom in
+   the form and left-to-right in the users-table summary column. */
+const FEATURE_GROUPS = [
+  {
+    group: "Sales tools",
+    icon: "ti-briefcase",
+    features: [
+      { key: "contractor_bids", label: "Contractor Bids", shortLabel: "Bids",
+        description: "Send bid sheets to contractors, and manage received bids in the Bids dashboard." }
+    ]
+  },
+  {
+    group: "Financial tools",
+    icon: "ti-receipt",
+    features: [
+      { key: "invoicing", label: "Invoicing", shortLabel: "Invoicing",
+        description: "Generate milestone-based invoices for approved estimates and email them to clients." },
+      { key: "expense_tracker", label: "Expense Tracker", shortLabel: "Tracker",
+        description: "Log project expenses, categorize them, and see live profit/margin per project." }
+    ]
+  },
+  {
+    group: "Admin only",
+    icon: "ti-lock",
+    features: [
+      { key: "pricing_editor", label: "Pricing Editor", shortLabel: "Pricing",
+        description: "Edit the unit prices used across the estimator. Admin-only — cannot be granted to staff or agents." }
+    ]
+  }
+];
+
+/* Flat list of feature keys admin can toggle (used by collectUserFormData
+   so we don't have to hand-maintain a parallel list). Excludes estimator
+   (always on) and submit_for_review (derived from role). */
+function _toggleableFeatureKeys(){
+  return FEATURE_GROUPS.flatMap(g => g.features.map(f => f.key));
+}
+
+/* _featureSummaryHtml — renders the "Features" cell in the users table.
+   Shows small gold pills for each enabled optional feature (using the
+   `shortLabel` field from FEATURE_GROUPS). Admins get a solid green
+   "Full access" badge instead. Staff/agents with no extra features get
+   a muted "Estimator only" dashed pill so the column is never blank. */
+function _featureSummaryHtml(u){
+  if(u.role === "admin"){
+    return `<span class="feat-pill full-access">Full access</span>`;
+  }
+  const features = u.features || {};
+  const enabled = FEATURE_GROUPS.flatMap(g => g.features)
+    .filter(f => f.key !== "pricing_editor" && features[f.key]);
+  /* Every non-admin gets Estimator; agents also get Submit-for-Review.
+     Show those as fixed leading pills so the row is self-explanatory. */
+  const leading = [`<span class="feat-pill">Estimator</span>`];
+  if(u.role === "agent") leading.push(`<span class="feat-pill">Submit review</span>`);
+  if(enabled.length === 0){
+    return leading.join("");
+  }
+  const extra = enabled.map(f => `<span class="feat-pill">${escapeHtml(f.shortLabel)}</span>`);
+  return leading.concat(extra).join("");
+}
+
 function renderFeatureCheckboxes(features, role){
-  const list = [
-    { key:"expense_tracker",  label:"Expense Tracker" },
-    { key:"invoicing",         label:"Invoicing" },
-    { key:"contractor_bids",   label:"Contractor Bids" },
-    { key:"pricing_editor",    label:"Pricing Editor (admins only — see below)" }
-  ];
-  return list.map(f => {
-    const adminOnlyNote = f.key === "pricing_editor";
-    const checked = !!features[f.key];
+  return FEATURE_GROUPS.map(g => {
+    const rows = g.features.map(f => {
+      const isAdminOnly = f.key === "pricing_editor";
+      const checked = !!features[f.key];
+      return `
+        <label class="feat-row ${isAdminOnly ? "is-admin-only" : ""}" for="uf_feat_${f.key}">
+          <input type="checkbox" id="uf_feat_${f.key}" ${checked?"checked":""} ${isAdminOnly?"disabled":""}>
+          <div class="feat-text">
+            <div class="feat-label">${escapeHtml(f.label)}</div>
+            <div class="feat-desc">${escapeHtml(f.description)}</div>
+          </div>
+        </label>
+      `;
+    }).join("");
     return `
-      <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer;padding:6px;border-radius:4px;${adminOnlyNote?"opacity:0.5;":""}">
-        <input type="checkbox" id="uf_feat_${f.key}" ${checked?"checked":""} ${adminOnlyNote?"disabled":""}>
-        <span>${f.label}</span>
-      </label>
+      <div class="feat-group">
+        <div class="feat-group-head">
+          <i class="ti ${g.icon}" aria-hidden="true"></i>
+          <span>${escapeHtml(g.group)}</span>
+        </div>
+        ${rows}
+      </div>
     `;
   }).join("");
 }
@@ -17930,7 +18077,10 @@ function renderUserFormFeatures(role){
 function collectUserFormData(){
   const role = document.getElementById("uf_role").value;
   const features = {};
-  ["expense_tracker","invoicing","contractor_bids","pricing_editor"].forEach(k => {
+  /* Pull toggleable feature keys from FEATURE_GROUPS so this list stays
+     in sync with the render side automatically. Adding a new feature =
+     add it to FEATURE_GROUPS only, not here. */
+  _toggleableFeatureKeys().forEach(k => {
     const cb = document.getElementById("uf_feat_"+k);
     if(cb) features[k] = cb.checked;
   });
