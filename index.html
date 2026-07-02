@@ -22644,7 +22644,7 @@ const MAT = {
          Once in moldings/doors mode, the flooring handlers below are
          bypassed. */
       const modeSwitch = _matGuessMode(text);
-      if(modeSwitch){
+      if(modeSwitch && modeSwitch !== mode){
         // Flush any active pending before switching modes
         if(pending){
           if(mode === "flooring"   && pending.priceBox) pushPending();
@@ -22656,7 +22656,12 @@ const MAT = {
         currentCategory = _matCategoryForMode(mode) || currentCategory;
         currentFamily = null;
         pending = null;
-        continue;
+        /* If this line is just a section header (no data), skip it.
+           If it looks like a data row (has $ prices), fall through so
+           the new mode's handler processes it. Otherwise we'd lose the
+           first data row every time the mode switches from a row
+           pattern (e.g. baseboards detection via `Size: ... $0.XX`). */
+        if(!/\$/.test(text)) continue;
       }
 
       /* Mode-specific handlers dispatch here — they may `continue` to
@@ -23570,9 +23575,19 @@ function _matGuessMode(text){
   // linear-foot pricing (per-piece dollars in the $0.14-$0.79 range).
   // Rows follow the pattern:
   //   Size: <dimensions>  $<pallet/ft>  $<cut/ft>  <length>' ft  <pieces>
+  //
+  // The section header "MDF PRIMED BASEBOARDS" is often a rotated label
+  // that pdf.js doesn't extract, so we ALSO detect baseboards from row
+  // content: any `Size: ...` line with sub-$1 pricing is characteristic
+  // of baseboards (doors are $39+, moldings are $16+, adhesives are
+  // $50+). Sub-$1 prices ONLY appear on baseboards + acoustic pads,
+  // and pads have "HUSSSH" in the family name so they don't collide.
   if(/MDF\s+PRIMED\s+BASEBOARDS?/i.test(text)) return "baseboards";
   if(/^\s*BASEBOARDS?\b/i.test(text)) return "baseboards";
   if(/NAF\s+SHOEBASE/i.test(text)) return "baseboards";
+  if(/^\s*Size\s*:/i.test(text) && /\$\s*0?\.\d\d/.test(text) && !/HUSSSH/i.test(text)){
+    return "baseboards";
+  }
 
   // DOORS — must have specific door-panel language OR a Size available
   // line to be sure we're actually on the doors section (not baseboards
