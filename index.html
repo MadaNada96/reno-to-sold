@@ -22357,10 +22357,42 @@ const MAT = {
       }
 
       MAT._renderImportCard({
-        kind:  "success",
-        title: "PDF uploaded",
-        sub:   'Stored as <code style="color:var(--gold-bright);">' + escapeHtml(path) + '</code>. <a class="mat-import-card-link" href="' + escapeHtmlAttr(publicUrl) + '" target="_blank" rel="noopener">Open PDF ↗</a><br><span style="color:var(--muted);font-size:11px;">Parsing will be added in Push 9.2 Phase B. For now, add collections manually — the PDF is safely stored for reference.</span>',
+        kind:  "progress",
+        title: "PDF uploaded — parsing…",
+        sub:   'Extracting product rows from ' + escapeHtml(file.name) + '. This may take a few seconds.',
       });
+
+      /* ── Phase B: parse the PDF ─────────────────────────────────
+         Reads the file we just uploaded (still in memory) via pdf.js,
+         extracts candidate rows, and shows a preview modal. No commit
+         yet — Phase C adds the editable review + commit step. */
+      let parseResult = null;
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        parseResult = await MAT._parsePdf(arrayBuffer);
+        console.log("[MAT] parsePdf:", parseResult);
+      } catch(parseErr) {
+        console.error("[MAT] parsePdf failed:", parseErr);
+        MAT._renderImportCard({
+          kind:  "error",
+          title: "PDF uploaded but parsing failed",
+          sub:   escapeHtml(parseErr.message || String(parseErr)) + ' — the file is safely in Storage. <a class="mat-import-card-link" href="' + escapeHtmlAttr(publicUrl) + '" target="_blank" rel="noopener">Open PDF ↗</a>',
+        });
+        return;
+      }
+
+      const n = parseResult.candidates.length;
+      MAT._renderImportCard({
+        kind:  "success",
+        title: n + " candidate row" + (n === 1 ? "" : "s") + " parsed",
+        sub:   'From <a class="mat-import-card-link" href="' + escapeHtmlAttr(publicUrl) + '" target="_blank" rel="noopener">' + escapeHtml(file.name) + ' ↗</a>. '
+             + '<button class="mat-import-card-link" style="background:none;border:none;padding:0;font:inherit;text-decoration:underline;cursor:pointer;" onclick="MAT._openPreviewModal()">Review parsed rows</button>'
+             + '<br><span style="color:var(--muted);font-size:11px;">Phase B preview only — commit workflow lands in Push 9.2 Phase C.</span>',
+      });
+      // Stash for the preview modal
+      MAT._lastParseResult = parseResult;
+      MAT._lastParsePdfName = file.name;
+      MAT._lastParsePdfUrl = publicUrl;
     } catch(e){
       console.error("[MAT] importPdf failed:", e);
       MAT._renderImportCard({
@@ -22369,6 +22401,277 @@ const MAT = {
         sub:   escapeHtml(e.message || String(e)),
       });
     }
+  },
+
+  /* ── PDF PARSER ────────────────────────────────────────────────
+     Uses pdf.js to extract text with Y-coordinate grouping, then walks
+     the resulting lines with a state machine to identify product rows.
+
+     Each candidate row: { category, product_family, size_spec, colors,
+     width_inches, price_per_sf_pallet, price_per_sf_box, sf_per_box,
+     boxes_per_pallet, confidence, rawLines }.
+
+     Confidence heuristic:
+       "high"   — all seven fields present and parse cleanly
+       "medium" — product_family + at least one price present, some fields missing
+       "low"    — only product_family (colors/size/prices missing)
+
+     Category mapping heuristic follows the Floors@Work catalog structure:
+       LAMINATE section  → LAMINATE
+       All Aqua/SPC/WPC/Vinyl variants → VINYL
+       Solid Hardwood section → SOLID_HARDWOOD
+       Engineered variants → ENGINEERED_HARDWOOD
+       Baseboards / doors / vanity / toilets / soft-coverings → matching
+       Steps / risers / underlays / adhesives → ACCESSORIES
+     Section tracking is done via SECTION_HEADERS keyword regex. */
+
+  async _parsePdf(arrayBuffer){
+    if(typeof pdfjsLib === "undefined"){
+      throw new Error("pdf.js not loaded. Reload the page and try again.");
+    }
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const allLines = [];
+    for(let i = 1; i <= pdf.numPages; i++){
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      /* Group items by Y coordinate into lines. pdf.js gives us
+         positioned text items; items with the same Y (within a small
+         tolerance) belong to the same visual line. We also keep the X
+         so we can preserve horizontal ordering (needed for the numeric
+         columns which appear to the RIGHT of the colors text). */
+      const lineMap = new Map();
+      for(const it of content.items){
+        if(!it.transform) continue;
+        const x = it.transform[4];
+        const y = Math.round(it.transform[5]);   // integer Y for grouping
+        if(!lineMap.has(y)) lineMap.set(y, []);
+        lineMap.get(y).push({ x, str: it.str || "" });
+      }
+      /* Sort lines top-to-bottom (high Y first in PDF coordinate space),
+         then sort each line's items left-to-right by X. */
+      const sortedYs = Array.from(lineMap.keys()).sort((a,b) => b - a);
+      for(const y of sortedYs){
+        const items = lineMap.get(y).sort((a,b) => a.x - b.x);
+        const text = items.map(t => t.str).join(" ").replace(/\s+/g, " ").trim();
+        if(!text) continue;
+        allLines.push({ page: i, y, text, items });
+      }
+    }
+    console.log("[MAT] _parsePdf: extracted " + allLines.length + " lines across " + pdf.numPages + " pages");
+    return MAT._interpretLines(allLines);
+  },
+
+  /* Walk the extracted lines with a small state machine. */
+  _interpretLines(lines){
+    const candidates = [];
+    const warnings = [];
+    /* Track state: currentCategory + currentProductFamily. A new product
+       family resets pending Size/Colors/prices. When a Size line is
+       followed by a Colors + numeric-columns line, we finalize a
+       candidate row and push it. */
+    let currentCategory = null;
+    let currentFamily   = null;
+    let pending = null;   // { size_spec, colors, width, prices }
+    function pushPending(){
+      if(!pending || !currentFamily) return;
+      const c = {
+        category:            currentCategory || null,
+        product_family:      currentFamily,
+        size_spec:           pending.size_spec || null,
+        colors:              pending.colors || [],
+        width_inches:        pending.width || null,
+        price_per_sf_pallet: pending.pricePallet || null,
+        price_per_sf_box:    pending.priceBox || null,
+        sf_per_box:          pending.sfPerBox || null,
+        boxes_per_pallet:    pending.boxesPerPallet || null,
+        rawLines:            pending.raw || [],
+      };
+      c.confidence = _matScoreCandidate(c);
+      candidates.push(c);
+      pending = null;
+    }
+    for(const {text, items} of lines){
+      const catGuess = MAT._guessCategoryFromLine(text);
+      if(catGuess){ currentCategory = catGuess; continue; }
+
+      // Product-family header — starts with a thickness like "12 mm" or
+      // "6.5 mm" or "5mm" followed by uppercase product name.
+      const familyMatch = text.match(/^(\d+\.?\d*\s*mm\b|\d+\.?\d*"\s*x\s*|SIZE:|Colors)/i);
+      if(/^\d+\.?\d*\s*mm\b/i.test(text) && !/^Size:/i.test(text) && !/^Colors/i.test(text)){
+        // Looks like a product-family line.
+        // Push any pending row first (before switching families).
+        if(pending && pending.priceBox){ pushPending(); }
+        currentFamily = text;
+        pending = { raw: [text] };
+        continue;
+      }
+      if(!currentFamily) continue;   // haven't seen a family yet, skip
+
+      // Size line
+      if(/^Size\s*:/i.test(text)){
+        // If we already have a pending row with a price, finalize it
+        // before starting a new sub-row under the same family (some
+        // families have multiple size/color combos).
+        if(pending && pending.priceBox){ pushPending(); pending = { raw: [] }; }
+        if(!pending) pending = { raw: [] };
+        pending.size_spec = text.replace(/^Size\s*:\s*/i, "").trim();
+        pending.raw.push(text);
+        continue;
+      }
+
+      // Colors line (may also contain the numeric columns to the right)
+      if(/^Colors?\b/i.test(text)){
+        if(!pending) pending = { raw: [] };
+        pending.raw.push(text);
+        // Split colors from numerics: numerics start with a $ or a
+        // measurement like `7.71" wide` or `12" x 24"`.
+        const numericIdx = _matFindNumericSplit(items);
+        let colorsText = text;
+        let numericItems = [];
+        if(numericIdx >= 0){
+          colorsText = items.slice(0, numericIdx).map(t => t.str).join(" ").trim();
+          numericItems = items.slice(numericIdx);
+        }
+        const colorsRaw = colorsText.replace(/^Colors?\s*(?:Coming Soon|ON SALE)?\s*:?\s*/i, "").trim();
+        pending.colors = _matSplitColors(colorsRaw);
+        if(numericItems.length){
+          const nums = _matExtractNumerics(numericItems.map(t => t.str).join(" "));
+          if(nums.width)          pending.width          = nums.width;
+          if(nums.pricePallet)    pending.pricePallet    = nums.pricePallet;
+          if(nums.priceBox)       pending.priceBox       = nums.priceBox;
+          if(nums.sfPerBox)       pending.sfPerBox       = nums.sfPerBox;
+          if(nums.boxesPerPallet) pending.boxesPerPallet = nums.boxesPerPallet;
+        }
+        continue;
+      }
+
+      // Standalone numeric row (numbers with no Colors: prefix — happens
+      // when colors overflow to the next line and numbers appear alone).
+      if(/\$\d+\.\d{2}/.test(text) && pending && !pending.priceBox){
+        const nums = _matExtractNumerics(text);
+        if(nums.width)          pending.width          = nums.width;
+        if(nums.pricePallet)    pending.pricePallet    = nums.pricePallet;
+        if(nums.priceBox)       pending.priceBox       = nums.priceBox;
+        if(nums.sfPerBox)       pending.sfPerBox       = nums.sfPerBox;
+        if(nums.boxesPerPallet) pending.boxesPerPallet = nums.boxesPerPallet;
+        pending.raw.push(text);
+        continue;
+      }
+    }
+    // Final flush
+    if(pending && pending.priceBox){ pushPending(); }
+    return { candidates, warnings };
+  },
+
+  _guessCategoryFromLine(text){
+    const t = text.toUpperCase();
+    // Section-header keywords → top-level category. Order matters: more
+    // specific matches first. These signal the START of a section; any
+    // rows AFTER this header until the next section header are tagged
+    // with the same category.
+    if(/\bLAMINATE\s+FLOOR|\bLAMINATE\b(?!\s*MOLDING)/.test(t) &&
+       (t === "LAMINATE" || /LAMINATE$/.test(t.trim()) || /LAMINATE\s+PRICE\s+LIST/.test(t))){
+      return "LAMINATE";
+    }
+    if(/AQUAPLUS\s+RIGID\s+SPC|SPC\s+CORE\s+VINYL|VINYL\s+PLANK|LOOSE\s+LAY|SPC\s+TILES|AQUA\s+TILE|WPC\s+VINYL|LUXURY\s+DRY\s+BACK/.test(t)){
+      return "VINYL";
+    }
+    if(/SOLID\s+HARDWOOD\s+FLOOR|SOLID\s+HARDWOOD$/.test(t)){
+      return "SOLID_HARDWOOD";
+    }
+    if(/ENGINEERED\s+HARDWOOD\s+FLOOR|ENGINEERED\s+HARDWOOD$|T&G\s+ENGINEERED|NAF\s+ENGINEERED/.test(t)){
+      return "ENGINEERED_HARDWOOD";
+    }
+    if(/BASEBOARD|SHOE\s+BASE/.test(t)){
+      return "NAF_BASEBOARDS";
+    }
+    if(/INTERIOR\s+HOLLOW\s+DOOR|PANEL\s+HOLLOW\s+SMOOTH\s+DOOR|MDF\s+PRIMED\s+DOOR/.test(t)){
+      return "NAF_INTERIOR_DOORS";
+    }
+    if(/HDF\s+VANITY|VANITY\s+COLLECTION/.test(t)){
+      return "NAF_HDF_VANITY";
+    }
+    if(/\bTOILET/.test(t)){
+      return "TOILETS";
+    }
+    if(/SOFT\s+COVERING|MURASPEC|WALLCOVERING/.test(t)){
+      return "SOFT_COVERINGS";
+    }
+    if(/HUSSSH|ACOUSTIC\s+PAD|UNDERLAY|STAIR\s+NOSING|MOLDING|STEP\s*\+\s*RISER|STEP\s+SIZE|ADHESIVE|CLEANER/.test(t)){
+      return "ACCESSORIES";
+    }
+    return null;
+  },
+
+  _openPreviewModal(){
+    if(!MAT._lastParseResult){ return; }
+    const modal = document.createElement("div");
+    modal.className = "modal-bg show";
+    modal.id = "matParsePreviewModal";
+    modal.style.zIndex = 99999;
+    const rows = MAT._lastParseResult.candidates;
+    const byCat = {};
+    rows.forEach(r => { const k = r.category || "UNCATEGORIZED"; (byCat[k] = byCat[k] || []).push(r); });
+    const groups = Object.entries(byCat).sort();
+    modal.innerHTML = `
+      <div class="modal" style="max-width:1100px;max-height:88vh;overflow-y:auto;" onclick="event.stopPropagation()">
+        <h3>
+          <span>Parsed rows preview — ${escapeHtml(MAT._lastParsePdfName || "")}</span>
+          <button class="ghost" onclick="MAT._closePreviewModal()">Close</button>
+        </h3>
+        <div class="modal-body">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6;">
+            <b style="color:var(--ink);">${rows.length} candidate row${rows.length===1?"":"s"}</b> extracted from the PDF.
+            <span style="color:var(--gold-bright);">Confidence:</span>
+            ${rows.filter(r => r.confidence === "high").length} high ·
+            ${rows.filter(r => r.confidence === "medium").length} medium ·
+            ${rows.filter(r => r.confidence === "low").length} low.
+            <br><b style="color:var(--gold-bright);">Push 9.2 Phase B:</b> preview only — no rows have been added to your catalog yet.
+            Review the extracted data below; if it looks accurate, Push 9.2 Phase C will add the "review + commit" step.
+          </div>
+          ${groups.map(([cat, rows]) => `
+            <div style="margin-bottom:22px;">
+              <div style="font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--gold);font-weight:800;margin-bottom:8px;">${escapeHtml(cat)} (${rows.length})</div>
+              <table class="inv-list-table" style="width:100%;font-size:12px;">
+                <thead><tr>
+                  <th style="width:16px;"></th>
+                  <th>Product family</th>
+                  <th>Size</th>
+                  <th>Colors</th>
+                  <th style="width:70px;text-align:right;">Width</th>
+                  <th style="width:80px;text-align:right;">$ / pallet</th>
+                  <th style="width:80px;text-align:right;">$ / box</th>
+                  <th style="width:70px;text-align:right;">SF/box</th>
+                  <th style="width:70px;text-align:right;">Boxes</th>
+                </tr></thead>
+                <tbody>
+                  ${rows.map(r => `
+                    <tr>
+                      <td>${_matConfidenceDot(r.confidence)}</td>
+                      <td style="font-weight:600;color:var(--ink);">${escapeHtml(r.product_family || "")}</td>
+                      <td style="color:var(--muted);">${escapeHtml(r.size_spec || "—")}</td>
+                      <td style="color:var(--muted);font-size:11px;">${(r.colors || []).map(c => escapeHtml(c)).join(", ") || "—"}</td>
+                      <td style="text-align:right;">${r.width_inches ? escapeHtml(String(r.width_inches)) + '"' : "—"}</td>
+                      <td style="text-align:right;color:var(--gold-bright);">${r.price_per_sf_pallet ? "$" + Number(r.price_per_sf_pallet).toFixed(2) : "—"}</td>
+                      <td style="text-align:right;color:var(--gold-bright);">${r.price_per_sf_box ? "$" + Number(r.price_per_sf_box).toFixed(2) : "—"}</td>
+                      <td style="text-align:right;">${r.sf_per_box ? escapeHtml(String(r.sf_per_box)) : "—"}</td>
+                      <td style="text-align:right;">${r.boxes_per_pallet ? escapeHtml(String(r.boxes_per_pallet)) : "—"}</td>
+                    </tr>
+                  `).join("")}
+                </tbody>
+              </table>
+            </div>
+          `).join("")}
+          ${rows.length === 0 ? `<div class="mat-empty"><h3>No rows parsed</h3><p>The parser didn't recognize any product families in this PDF. Check the console for extracted text and file feedback.</p></div>` : ""}
+        </div>
+      </div>
+    `;
+    modal.addEventListener("click", e => { if(e.target === modal) MAT._closePreviewModal(); });
+    document.body.appendChild(modal);
+  },
+  _closePreviewModal(){
+    const m = document.getElementById("matParsePreviewModal");
+    if(m) m.remove();
   },
   _renderImportCard({ kind, title, sub }){
     const body = document.getElementById("matBody");
@@ -22438,6 +22741,82 @@ function _matNumOrNull(v){
   if(v === "" || v === null || v === undefined) return null;
   const n = Number(v);
   return isNaN(n) ? null : n;
+}
+
+/* ── PDF parser helpers ─────────────────────────────────────────
+   Split a positioned line into "left half" (product text) and "right
+   half" (numeric columns). Returns the index in the items[] array where
+   the right-half starts. Detection: the first item whose text looks
+   like `nn.nn"` (width) or starts with `$`. Returns -1 if no split. */
+function _matFindNumericSplit(items){
+  for(let i = 0; i < items.length; i++){
+    const s = (items[i].str || "").trim();
+    if(!s) continue;
+    if(/^\$\d/.test(s)) return i;
+    if(/^\d+\.?\d*"\s*wide/i.test(s)) return i;
+    if(/^\d+"\s*x\s*\d+"?/i.test(s)) return i;
+  }
+  return -1;
+}
+
+/* Extract structured numerics from the right-hand text of a product
+   row. Order in the PDF is: width, $ pallet, $ box, sf/box, boxes/pallet.
+   Returns { width, pricePallet, priceBox, sfPerBox, boxesPerPallet }. */
+function _matExtractNumerics(txt){
+  const out = {};
+  const widthMatch = txt.match(/(\d+\.?\d*)"\s*wide/i);
+  if(widthMatch) out.width = Number(widthMatch[1]);
+  const prices = [];
+  const priceRegex = /\$(\d+\.\d{2})/g;
+  let m;
+  while((m = priceRegex.exec(txt)) !== null){ prices.push(Number(m[1])); }
+  if(prices.length >= 1) out.pricePallet = prices[0];
+  if(prices.length >= 2) out.priceBox    = prices[1];
+  // sf/box + boxes/pallet: two bare numbers appearing after the prices.
+  // Strip out width and prices, then look at remaining tokens.
+  const stripped = txt
+    .replace(/\d+\.?\d*"\s*wide/gi, "")
+    .replace(/\$\d+\.\d{2}/g, "")
+    .replace(/\d+"\s*x\s*\d+"?/gi, "");
+  const nums = stripped.match(/\d+\.?\d*/g) || [];
+  if(nums.length >= 1) out.sfPerBox       = Number(nums[0]);
+  if(nums.length >= 2) out.boxesPerPallet = Number(nums[1]);
+  return out;
+}
+
+/* Split a raw colors string into an array. Colors are typically comma-
+   separated; strip trailing punctuation and empties. */
+function _matSplitColors(raw){
+  if(!raw) return [];
+  return raw.split(/[,]+/)
+    .map(s => s.trim().replace(/[.]+$/, ""))
+    .filter(Boolean);
+}
+
+/* Confidence score for a parsed row. */
+function _matScoreCandidate(c){
+  const fields = [
+    !!c.product_family,
+    !!c.size_spec,
+    !!(c.colors && c.colors.length),
+    !!c.width_inches,
+    !!c.price_per_sf_pallet,
+    !!c.price_per_sf_box,
+    !!c.sf_per_box,
+    !!c.boxes_per_pallet,
+  ];
+  const filled = fields.filter(Boolean).length;
+  if(filled >= 7) return "high";
+  if(filled >= 4 && c.price_per_sf_box) return "medium";
+  return "low";
+}
+
+/* Small colored dot for the confidence column in the preview modal. */
+function _matConfidenceDot(conf){
+  const color = conf === "high"   ? "#5fce86"
+              : conf === "medium" ? "#f5c878"
+              :                     "#ff9090";
+  return '<span title="' + conf + ' confidence" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + color + ';"></span>';
 }
 
 function applyFeatureGates(){
