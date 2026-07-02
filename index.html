@@ -22431,7 +22431,14 @@ const MAT = {
     }
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
     const allLines = [];
-    for(let i = 1; i <= pdf.numPages; i++){
+    /* Push 9.2 Phase B (revised): parse only pages 1-3. That's where the
+       LAMINATE / VINYL / SOLID HARDWOOD / ENGINEERED HARDWOOD product
+       rows live — well-structured, thickness-then-size-then-colors-then-
+       numerics. Pages 4-8 are moldings, doors, adhesives, toilets, etc.
+       — mixed formats we can't reliably auto-parse. Admin enters those
+       manually via the "+ Add collection" form. */
+    const MAX_PAGES = Math.min(3, pdf.numPages);
+    for(let i = 1; i <= MAX_PAGES; i++){
       const page = await pdf.getPage(i);
       const content = await page.getTextContent();
       /* Group items by Y coordinate into lines. pdf.js gives us
@@ -22457,21 +22464,22 @@ const MAT = {
         allLines.push({ page: i, y, text, items });
       }
     }
-    console.log("[MAT] _parsePdf: extracted " + allLines.length + " lines across " + pdf.numPages + " pages");
+    console.log("[MAT] _parsePdf: extracted " + allLines.length + " lines from pages 1-" + MAX_PAGES + " (of " + pdf.numPages + ")");
     return MAT._interpretLines(allLines);
   },
 
-  /* Walk the extracted lines with a small state machine. */
+  /* Walk the extracted lines with a state machine.
+     Section boundaries RESET currentFamily so nothing leaks across
+     sections. Product family detection requires both a thickness prefix
+     AND a product-keyword match. Colors can span multiple lines (a
+     continuation line is a line that doesn't start with Size:/Colors:/
+     numerics but looks like a comma-separated color list). */
   _interpretLines(lines){
     const candidates = [];
     const warnings = [];
-    /* Track state: currentCategory + currentProductFamily. A new product
-       family resets pending Size/Colors/prices. When a Size line is
-       followed by a Colors + numeric-columns line, we finalize a
-       candidate row and push it. */
     let currentCategory = null;
     let currentFamily   = null;
-    let pending = null;   // { size_spec, colors, width, prices }
+    let pending = null;
     function pushPending(){
       if(!pending || !currentFamily) return;
       const c = {
@@ -22490,41 +22498,51 @@ const MAT = {
       candidates.push(c);
       pending = null;
     }
-    for(const {text, items} of lines){
-      const catGuess = MAT._guessCategoryFromLine(text);
-      if(catGuess){ currentCategory = catGuess; continue; }
 
-      // Product-family header — starts with a thickness like "12 mm" or
-      // "6.5 mm" or "5mm" followed by uppercase product name.
-      const familyMatch = text.match(/^(\d+\.?\d*\s*mm\b|\d+\.?\d*"\s*x\s*|SIZE:|Colors)/i);
-      if(/^\d+\.?\d*\s*mm\b/i.test(text) && !/^Size:/i.test(text) && !/^Colors/i.test(text)){
-        // Looks like a product-family line.
-        // Push any pending row first (before switching families).
+    for(let idx = 0; idx < lines.length; idx++){
+      const { text, items } = lines[idx];
+
+      /* 1. Section transitions — highest priority. Reset currentFamily
+         and pending so state doesn't leak across sections. */
+      const secGuess = _matGuessSection(text);
+      if(secGuess){
+        if(pending && pending.priceBox){ pushPending(); }
+        currentCategory = secGuess;
+        currentFamily = null;
+        pending = null;
+        continue;
+      }
+
+      /* 2. Ignore decorative labels (single-word tier labels like SELECT,
+         CLASSIC, GOLD, ROYAL, PLATINUM, WPC, LOOSE LAY, SPC TILES which
+         appear rotated on the left side of the PDF). Also ignore the
+         column-header lines (Pallet / Box / SF / Boxes headers). */
+      if(_matIsDecorativeLabel(text)) continue;
+
+      /* 3. Product family header — strong signal required. */
+      if(_matIsProductFamily(text)){
         if(pending && pending.priceBox){ pushPending(); }
         currentFamily = text;
         pending = { raw: [text] };
         continue;
       }
-      if(!currentFamily) continue;   // haven't seen a family yet, skip
 
-      // Size line
+      if(!currentFamily) continue;   // haven't seen a family yet
+
+      /* 4. Size: line — starts a new sub-row under the current family. */
       if(/^Size\s*:/i.test(text)){
-        // If we already have a pending row with a price, finalize it
-        // before starting a new sub-row under the same family (some
-        // families have multiple size/color combos).
         if(pending && pending.priceBox){ pushPending(); pending = { raw: [] }; }
         if(!pending) pending = { raw: [] };
         pending.size_spec = text.replace(/^Size\s*:\s*/i, "").trim();
         pending.raw.push(text);
+        pending._justSawColors = false;
         continue;
       }
 
-      // Colors line (may also contain the numeric columns to the right)
+      /* 5. Colors: line (may include numerics to the right). */
       if(/^Colors?\b/i.test(text)){
         if(!pending) pending = { raw: [] };
         pending.raw.push(text);
-        // Split colors from numerics: numerics start with a $ or a
-        // measurement like `7.71" wide` or `12" x 24"`.
         const numericIdx = _matFindNumericSplit(items);
         let colorsText = text;
         let numericItems = [];
@@ -22536,71 +22554,41 @@ const MAT = {
         pending.colors = _matSplitColors(colorsRaw);
         if(numericItems.length){
           const nums = _matExtractNumerics(numericItems.map(t => t.str).join(" "));
-          if(nums.width)          pending.width          = nums.width;
-          if(nums.pricePallet)    pending.pricePallet    = nums.pricePallet;
-          if(nums.priceBox)       pending.priceBox       = nums.priceBox;
-          if(nums.sfPerBox)       pending.sfPerBox       = nums.sfPerBox;
-          if(nums.boxesPerPallet) pending.boxesPerPallet = nums.boxesPerPallet;
+          _matMergeNums(pending, nums);
         }
+        pending._justSawColors = true;
         continue;
       }
 
-      // Standalone numeric row (numbers with no Colors: prefix — happens
-      // when colors overflow to the next line and numbers appear alone).
+      /* 6. Standalone numeric row (colors overflowed to next line and
+         numerics appear alone — see "14 mm WATERPROOF LAMINATE PRO"
+         example on page 1). */
       if(/\$\d+\.\d{2}/.test(text) && pending && !pending.priceBox){
         const nums = _matExtractNumerics(text);
-        if(nums.width)          pending.width          = nums.width;
-        if(nums.pricePallet)    pending.pricePallet    = nums.pricePallet;
-        if(nums.priceBox)       pending.priceBox       = nums.priceBox;
-        if(nums.sfPerBox)       pending.sfPerBox       = nums.sfPerBox;
-        if(nums.boxesPerPallet) pending.boxesPerPallet = nums.boxesPerPallet;
+        _matMergeNums(pending, nums);
+        pending.raw.push(text);
+        pending._justSawColors = false;
+        continue;
+      }
+
+      /* 7. Colors continuation — the previous line was a Colors: line,
+         and this line looks like more color names (comma-separated, no
+         Size:/Colors:/$/mm markers). Append to pending.colors. */
+      if(pending && pending._justSawColors && _matLooksLikeColorContinuation(text)){
+        const more = _matSplitColors(text);
+        pending.colors = (pending.colors || []).concat(more);
         pending.raw.push(text);
         continue;
       }
+
+      /* Anything else — reset "just saw colors" so the next iteration
+         doesn't misinterpret a fresh line as a colors continuation. */
+      if(pending) pending._justSawColors = false;
     }
+
     // Final flush
     if(pending && pending.priceBox){ pushPending(); }
     return { candidates, warnings };
-  },
-
-  _guessCategoryFromLine(text){
-    const t = text.toUpperCase();
-    // Section-header keywords → top-level category. Order matters: more
-    // specific matches first. These signal the START of a section; any
-    // rows AFTER this header until the next section header are tagged
-    // with the same category.
-    if(/\bLAMINATE\s+FLOOR|\bLAMINATE\b(?!\s*MOLDING)/.test(t) &&
-       (t === "LAMINATE" || /LAMINATE$/.test(t.trim()) || /LAMINATE\s+PRICE\s+LIST/.test(t))){
-      return "LAMINATE";
-    }
-    if(/AQUAPLUS\s+RIGID\s+SPC|SPC\s+CORE\s+VINYL|VINYL\s+PLANK|LOOSE\s+LAY|SPC\s+TILES|AQUA\s+TILE|WPC\s+VINYL|LUXURY\s+DRY\s+BACK/.test(t)){
-      return "VINYL";
-    }
-    if(/SOLID\s+HARDWOOD\s+FLOOR|SOLID\s+HARDWOOD$/.test(t)){
-      return "SOLID_HARDWOOD";
-    }
-    if(/ENGINEERED\s+HARDWOOD\s+FLOOR|ENGINEERED\s+HARDWOOD$|T&G\s+ENGINEERED|NAF\s+ENGINEERED/.test(t)){
-      return "ENGINEERED_HARDWOOD";
-    }
-    if(/BASEBOARD|SHOE\s+BASE/.test(t)){
-      return "NAF_BASEBOARDS";
-    }
-    if(/INTERIOR\s+HOLLOW\s+DOOR|PANEL\s+HOLLOW\s+SMOOTH\s+DOOR|MDF\s+PRIMED\s+DOOR/.test(t)){
-      return "NAF_INTERIOR_DOORS";
-    }
-    if(/HDF\s+VANITY|VANITY\s+COLLECTION/.test(t)){
-      return "NAF_HDF_VANITY";
-    }
-    if(/\bTOILET/.test(t)){
-      return "TOILETS";
-    }
-    if(/SOFT\s+COVERING|MURASPEC|WALLCOVERING/.test(t)){
-      return "SOFT_COVERINGS";
-    }
-    if(/HUSSSH|ACOUSTIC\s+PAD|UNDERLAY|STAIR\s+NOSING|MOLDING|STEP\s*\+\s*RISER|STEP\s+SIZE|ADHESIVE|CLEANER/.test(t)){
-      return "ACCESSORIES";
-    }
-    return null;
   },
 
   _openPreviewModal(){
@@ -22817,6 +22805,91 @@ function _matConfidenceDot(conf){
               : conf === "medium" ? "#f5c878"
               :                     "#ff9090";
   return '<span title="' + conf + ' confidence" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + color + ';"></span>';
+}
+
+/* Merge partial numeric extractions into a pending row. Only overwrites
+   a field if we don't already have a value — avoids clobbering a good
+   value with a later stray match. */
+function _matMergeNums(pending, nums){
+  if(nums.width          && !pending.width)          pending.width          = nums.width;
+  if(nums.pricePallet    && !pending.pricePallet)    pending.pricePallet    = nums.pricePallet;
+  if(nums.priceBox       && !pending.priceBox)       pending.priceBox       = nums.priceBox;
+  if(nums.sfPerBox       && !pending.sfPerBox)       pending.sfPerBox       = nums.sfPerBox;
+  if(nums.boxesPerPallet && !pending.boxesPerPallet) pending.boxesPerPallet = nums.boxesPerPallet;
+}
+
+/* Section-header detector. ONLY the explicit major-section markers
+   trigger a state reset. Sub-tier labels (SELECT, CLASSIC, GOLD, ROYAL,
+   PLATINUM, WPC, LOOSE LAY, SPC TILES, Luxury Dry Back) are decorative
+   rotated labels — they don't change the top-level category and are
+   filtered separately by _matIsDecorativeLabel.
+
+   Category boundaries per the Floors@Work PDF layout (pages 1-3):
+     - LAMINATE section: starts at top of page 1, ends when we see
+       "AQUAPLUS RIGID SPC CORE VINYL" or similar vinyl marker.
+     - VINYL section: from "AQUAPLUS RIGID SPC CORE VINYL" to
+       "SOLID HARDWOOD FLOOR".
+     - SOLID_HARDWOOD section: from "SOLID HARDWOOD FLOOR" to
+       "ENGINEERED HARDWOOD FLOOR".
+     - ENGINEERED_HARDWOOD section: from "ENGINEERED HARDWOOD FLOOR"
+       to the end of page 3 (or "CLEANERS" / "ADHESIVE" marker). */
+function _matGuessSection(text){
+  const t = text.toUpperCase().trim();
+  // Explicit section headers — must match at start/end or be the whole line.
+  if(/^(LAMINATE|LAMINATE FLOOR|LAMINATE PRICE LIST)$/.test(t)) return "LAMINATE";
+  if(/AQUAPLUS RIGID SPC CORE VINYL/.test(t)) return "VINYL";
+  if(/^SOLID HARDWOOD( FLOOR)?$/.test(t)) return "SOLID_HARDWOOD";
+  if(/^ENGINEERED HARDWOOD( FLOOR)?$/.test(t)) return "ENGINEERED_HARDWOOD";
+  // Sections we DON'T want to parse (return null and current state
+  // stays — but _matIsProductFamily will fail for these so we won't
+  // accidentally emit rows).
+  return null;
+}
+
+/* Product family header detector. Requires BOTH:
+   1. Line starts with a thickness measurement (e.g. "12 mm", "6.5 mm").
+   2. Line contains at least one product-family keyword (NAF, LAMINATE,
+      VINYL, HARDWOOD, AQUAPLUS, AQUAWOOD, AQUATILE, etc.).
+   3. Line does NOT start with "Size:" or "Colors" (those get their
+      own handlers).
+   This strict combo prevents false positives on continuation lines,
+   Size/Colors lines that happen to have measurements, and any other
+   incidental "N mm" text. */
+function _matIsProductFamily(text){
+  if(/^Size\s*:/i.test(text)) return false;
+  if(/^Colors?\b/i.test(text)) return false;
+  if(!/^\s*\d+\.?\d*\s*mm\b/i.test(text)) return false;
+  return /\b(NAF|LAMINATE|VINYL|HARDWOOD|AQUAPLUS|AQUAWOOD|AQUATILE|AQUACOMMERCIAL|AQUALUUUZ|AQUASELECT|WATERPROOF|HANDSCRAPED|WIREBRUSHED|EMBOSSED|ENGINEERED|OAK|WALNUT|MAPLE|HICKORY|EXOTIC|ROYAL FLOORING|CLASSIC COLLECTION|VALINGE|CLICK)\b/i.test(text);
+}
+
+/* Decorative-label filter — rotated left-side tier labels and column
+   header rows we want to skip without changing state. */
+function _matIsDecorativeLabel(text){
+  const t = text.toUpperCase().trim();
+  // Single-word tier labels (rotated 90° on the left in the PDF)
+  if(/^(SELECT|CLASSIC|GOLD|ROYAL|PLATINUM|WPC|LOOSE LAY|SPC TILES|LUXURY DRY BACK|SPC STEPS & RISERS|HICKORY|OAK|WALNUT|MAPLE|CLEANERS|MOLDINGS|UNDERLAY|NAF ADHESIVE|LAMINATE)$/.test(t)) return true;
+  // Column header rows
+  if(/PALLET\s+BOX\s+S\.?F\.?\s+BOXES/.test(t)) return true;
+  if(/PRICE\s*\/\s*SF\s+PRICE\s*\/\s*SF\s+PER\s+BOX/.test(t)) return true;
+  // The recurring underlay warning
+  if(/Husssh\s+1\s+is\s+the\s+only\s+recommended/i.test(text)) return true;
+  // Page markers
+  if(/^Page\s+\d+\s+of\s+\d+$/i.test(text)) return true;
+  // Effective-date header at the top
+  if(/^Effective\b/i.test(text)) return true;
+  return false;
+}
+
+/* Colors-continuation detector: line has capital-letter words separated
+   by commas, no Size:/Colors:/$/mm patterns. Used only when the previous
+   pending line was a Colors: line. */
+function _matLooksLikeColorContinuation(text){
+  if(/^Size\s*:/i.test(text)) return false;
+  if(/^Colors?\b/i.test(text)) return false;
+  if(/\$\d/.test(text)) return false;
+  if(/^\d+\.?\d*\s*mm\b/i.test(text)) return false;
+  // Must look like a list of Title-Case words
+  return /^[A-Z][A-Za-z][A-Za-z /-]*(?:,\s*[A-Z][A-Za-z][A-Za-z /-]*)+/.test(text);
 }
 
 function applyFeatureGates(){
