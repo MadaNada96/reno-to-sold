@@ -22525,6 +22525,22 @@ const MAT = {
         continue;
       }
 
+      /* 1b. End-of-flooring markers. These sections (CLEANERS,
+         ADHESIVES, HUSSSH underlays, MOLDINGS, DOORS, etc.) sit AFTER
+         the engineered hardwood on page 3, and their numeric values
+         would otherwise leak into the last hardwood row's pending
+         state (Mo hit this on the MAPLE row where $149/pail from
+         ADHESIVE contaminated the price fields). When we hit one,
+         finalize the current row and clear all state until the next
+         real flooring section header. */
+      if(_matIsEndOfFlooringMarker(text)){
+        if(pending && pending.priceBox){ pushPending(); }
+        currentCategory = null;
+        currentFamily = null;
+        pending = null;
+        continue;
+      }
+
       /* 2. Ignore decorative labels (single-word tier labels like SELECT,
          CLASSIC, GOLD, ROYAL, PLATINUM, WPC, LOOSE LAY, SPC TILES which
          appear rotated on the left side of the PDF). Also ignore the
@@ -22556,12 +22572,25 @@ const MAT = {
 
       if(!currentFamily) continue;   // haven't seen a family yet
 
-      /* 4. Size: line — starts a new sub-row under the current family. */
+      /* 4. Size: line — starts a new sub-row under the current family.
+         Some hardwood Size: lines contain the numeric columns on the
+         same Y-bin (`Size: 6.5" x 18mm x RL, Wirebrushed  6.5" wide
+         $3.69 $3.89 19.18 48`). If we detect that, split the size_spec
+         from the numerics and extract both. */
       if(/^Size\s*:/i.test(text)){
         if(pending && pending.priceBox){ pushPending(); pending = { raw: [] }; }
         if(!pending) pending = { raw: [], _sourceLines: [] };
         if(!pending._sourceLines) pending._sourceLines = [];
-        pending.size_spec = text.replace(/^Size\s*:\s*/i, "").trim();
+        // Split at first $ or width marker following the Size: content
+        const afterPrefix = text.replace(/^Size\s*:\s*/i, "");
+        const numericStart = afterPrefix.search(/\$\s*\d|(?:\d+(?:\.\d+)?[^A-Za-z\d\n]{0,3}wide)/i);
+        if(numericStart >= 0){
+          pending.size_spec = afterPrefix.slice(0, numericStart).trim().replace(/[,\s]+$/, "");
+          const nums = _matExtractNumerics(afterPrefix.slice(numericStart));
+          _matMergeNums(pending, nums);
+        } else {
+          pending.size_spec = afterPrefix.trim();
+        }
         pending.raw.push(text);
         pending._sourceLines.push(text);
         pending._justSawColors = false;
@@ -23225,6 +23254,27 @@ function _matIsProductFamily(text){
     return /\b(NAF|T&G|ENGINEERED|HANDSCRAPED|WIREBRUSHED|OAK|WALNUT|HICKORY|MAPLE|EXOTIC|EUROPEAN)\b/.test(text);
   }
 
+  return false;
+}
+
+/* End-of-flooring markers. On the Floors@Work PDF these sections
+   appear AFTER the last engineered hardwood row and would otherwise
+   leak their numeric data (per-pail adhesive prices, per-roll under-
+   lay prices) into the last hardwood row's pending state. Hitting one
+   flushes any pending row and clears state until the next real section
+   header. */
+function _matIsEndOfFlooringMarker(text){
+  const t = text.toUpperCase().trim();
+  // Explicit section labels + first-line hints
+  if(/^(CLEANERS?|MOLDINGS?|UNDERLAY|NAF\s+ADHESIVES?|NAF\s+CLEANERS?)$/.test(t)) return true;
+  if(/^HUSSSH!?\b/.test(t)) return true;
+  if(/^HUSSSH\s+II\b/i.test(text)) return true;
+  if(/PRICE\s*\/\s*PAIL/i.test(text)) return true;
+  if(/PRICE\s*\/\s*PIECE/i.test(text) && /LENGTH/i.test(text)) return true;
+  if(/MDF\s+PRIMED/i.test(text)) return true;
+  if(/INTERIOR\s+HOLLOW\s+DOOR/i.test(text)) return true;
+  if(/AVAILABLE\s+FOR:\s+Laminate/i.test(text)) return true;   // NAF CLEANERS subtitle
+  if(/Mapei\s+ECO/i.test(text)) return true;                     // Adhesive product line
   return false;
 }
 
