@@ -22647,9 +22647,10 @@ const MAT = {
       if(modeSwitch){
         // Flush any active pending before switching modes
         if(pending){
-          if(mode === "flooring" && pending.priceBox) pushPending();
-          if(mode === "moldings" && pending.unitPrice) pushPending();
-          if(mode === "doors"    && pending.unitPrice) pushPending();
+          if(mode === "flooring"   && pending.priceBox) pushPending();
+          if(mode === "moldings"   && pending.unitPrice) pushPending();
+          if(mode === "baseboards" && pending.unitPrice) pushPending();
+          if(mode === "doors"      && pending.unitPrice) pushPending();
         }
         mode = modeSwitch;
         currentCategory = _matCategoryForMode(mode) || currentCategory;
@@ -22680,6 +22681,17 @@ const MAT = {
           pushPending,
           currentCategory,
           _lastCandidate: candidates[candidates.length - 1],
+        });
+        if(done) continue;
+      }
+      if(mode === "baseboards"){
+        const done = _matHandleBaseboardLine(text, items, {
+          getCurrentFamily: () => currentFamily,
+          setCurrentFamily: (f) => { currentFamily = f; if(pending) pushPending(); pending = null; },
+          getPending: () => pending,
+          setPending: (p) => { pending = p; },
+          pushPending,
+          currentCategory,
         });
         if(done) continue;
       }
@@ -23545,16 +23557,30 @@ function _matIsProductFamily(text){
    push doesn't fully parse (vanity/toilets/soft) returns "skip" so
    we don't produce garbage candidates. */
 function _matGuessMode(text){
-  const t = text.toUpperCase().trim();
-  if(/^MOLDINGS?$/i.test(text.trim())) return "moldings";
-  if(/^LAMINATE\s+MOLDINGS?$/i.test(text.trim())) return "moldings";
-  if(/^AQUA\s*PLUS.*MOLDINGS?/i.test(text.trim())) return "moldings";
-  if(/^MATCHING\s+MOLDINGS/i.test(text.trim())) return "moldings";
-  // Door section headers on the PDF include a column header row
-  // "PALLET / CUT / PRICE / PC / DOORS PER PALLET"
-  if(/PALLET\s+CUT.*DOORS\s+PER\s+PALLET/i.test(text)) return "doors";
-  if(/PRICE\s*\/\s*PC.*PRICE\s*\/\s*PC/i.test(text) && /DOORS/i.test(text)) return "doors";
-  if(/^\s*\d+\s+PANEL\s+HOLLOW/i.test(text)) return "doors";
+  // MOLDINGS — line starts with "MOLDINGS" but usually has column
+  // headers on the same line ("MOLDINGS   Price / Piece   Length").
+  // Also individual molding sub-family headers like "LAMINATE MOLDINGS"
+  // and "MATCHING MOLDINGS FOR ..." switch mode.
+  if(/^\s*MOLDINGS\b/i.test(text)) return "moldings";
+  if(/^\s*LAMINATE\s+MOLDINGS?\b/i.test(text)) return "moldings";
+  if(/^\s*AQUA\s*PLUS.*MOLDINGS?/i.test(text)) return "moldings";
+  if(/^\s*MATCHING\s+MOLDINGS/i.test(text)) return "moldings";
+
+  // BASEBOARDS — MDF Primed Baseboards + Shoebase section. Uses per-
+  // linear-foot pricing (per-piece dollars in the $0.14-$0.79 range).
+  // Rows follow the pattern:
+  //   Size: <dimensions>  $<pallet/ft>  $<cut/ft>  <length>' ft  <pieces>
+  if(/MDF\s+PRIMED\s+BASEBOARDS?/i.test(text)) return "baseboards";
+  if(/^\s*BASEBOARDS?\b/i.test(text)) return "baseboards";
+  if(/NAF\s+SHOEBASE/i.test(text)) return "baseboards";
+
+  // DOORS — must have specific door-panel language OR a Size available
+  // line to be sure we're actually on the doors section (not baseboards
+  // that happen to have a similar column header).
+  if(/\b\d+\s+PANEL\s+HOLLOW\s+(SMOOTH|SHAKER)\s+DOOR/i.test(text)) return "doors";
+  if(/PANEL\s+HOLLOW\s+.*DOOR/i.test(text)) return "doors";
+  if(/Size\s+available\s*:\s*18"/i.test(text)) return "doors";
+
   // Skipped sections — mark mode so we don't try to parse them as flooring
   if(/HDF\s+VANITY|VANITY\s+COLLECTION/i.test(text)) return "skip";
   if(/^TOILETS?$/i.test(text.trim())) return "skip";
@@ -23563,9 +23589,90 @@ function _matGuessMode(text){
 }
 
 function _matCategoryForMode(mode){
-  if(mode === "moldings") return "ACCESSORIES";
-  if(mode === "doors")    return "NAF_INTERIOR_DOORS";
+  if(mode === "moldings")   return "ACCESSORIES";
+  if(mode === "baseboards") return "NAF_BASEBOARDS";
+  if(mode === "doors")      return "NAF_INTERIOR_DOORS";
   return null;
+}
+
+/* Handle a baseboard line. Structure:
+
+     MDF PRIMED BASEBOARDS               PRICE / ft    PRICE / ft   LENGTH   FT / PALLET
+     Size: 5-1/4" x 1/2" x 10'   $0.49  $0.69  10 ft  352
+     Size: 7-1/4" x 5/8" x 10'   $0.79  $0.99  10 ft  216
+     ...
+     NAF SHOEBASE
+     Size: 1-1/4" x 3/8" x 10'   $0.14  $0.18  10 ft  199
+
+   Each row → candidate with:
+     unit = "lin.ft"
+     unit_price = pallet $/ft
+     secondary_price = box/cut $/ft
+     unit_qty_label = "10 ft length" (piece length)
+     pallet_qty = total feet per pallet
+     size_spec = raw dimensions text
+
+   The description is either "MDF Primed Baseboard" (family) or "NAF
+   Shoebase" (a size prefix on the row itself). We track the current
+   sub-family via a header line. */
+function _matHandleBaseboardLine(text, items, ctx){
+  const t = text.trim();
+  if(!t) return true;
+
+  // Skip column headers and page markers
+  if(/PRICE\s*\/\s*ft/i.test(t) && !/\$/.test(t)) return true;
+  if(/^LENGTH\b/i.test(t)) return true;
+  if(/^FT\s*\/\s*PALLET/i.test(t)) return true;
+  if(/^Page\s+\d+/i.test(t)) return true;
+
+  // Sub-family header — line with baseboard/shoebase name (no $ prices)
+  if(/^MDF\s+PRIMED\s+BASEBOARDS?/i.test(t) && !/\$/.test(t)){
+    const p = ctx.getPending();
+    if(p && p.unitPrice) ctx.pushPending();
+    ctx.setCurrentFamily("MDF Primed Baseboard");
+    return true;
+  }
+  if(/^NAF\s+SHOEBASE/i.test(t) && !/\$/.test(t)){
+    const p = ctx.getPending();
+    if(p && p.unitPrice) ctx.pushPending();
+    ctx.setCurrentFamily("NAF Shoebase");
+    return true;
+  }
+
+  // Data row — starts with "Size:" and contains $ prices
+  if(/^Size\s*:/i.test(t) && /\$/.test(t)){
+    if(!ctx.getCurrentFamily()){
+      // Default family if we didn't see a sub-header (fallback)
+      ctx.setCurrentFamily("MDF Primed Baseboard");
+    }
+    const priceRegex = /\$\s*(\d+(?:\.\d{1,2})?)/g;
+    const prices = [];
+    let m;
+    while((m = priceRegex.exec(t)) !== null){ prices.push(Number(m[1])); }
+    // Description: everything from "Size:" up to first $
+    const firstPriceIdx = t.search(/\$/);
+    const sizeSpec = t.slice(0, firstPriceIdx).replace(/^Size\s*:\s*/i, "").trim().replace(/[.,\s]+$/, "");
+    // After the prices: "10 ft 352" → length_ft, pieces_per_pallet
+    const trailing = t.slice(firstPriceIdx).replace(/\$\s*\d+(?:\.\d+)?/g, " ");
+    const nums = trailing.match(/\d+(?:\.\d+)?/g) || [];
+    const lengthFt   = nums.length >= 1 ? Number(nums[0]) : null;
+    const totalPieces = nums.length >= 2 ? Number(nums[nums.length - 1]) : null;
+    const pending = {
+      unit: "lin.ft",
+      unitPrice: prices[0] || null,
+      secondaryPrice: prices[1] || null,
+      unitQtyLabel: lengthFt ? lengthFt + "' length" : null,
+      palletQty: totalPieces,
+      size_spec: sizeSpec,
+      raw: [text],
+      _sourceLines: [text],
+    };
+    ctx.setPending(pending);
+    ctx.pushPending();
+    return true;
+  }
+
+  return true;
 }
 
 /* Handle a molding-section line. Structure of the MOLDINGS section:
