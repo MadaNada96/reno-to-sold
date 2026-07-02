@@ -21694,59 +21694,39 @@ const MAT = {
 
   /* Fetch collections from Supabase.
 
-     Two guardrails against real-world failure modes:
+     Uses restFetch (raw HTTP against the Supabase REST API) instead of
+     supa.from(...) because the codebase explicitly documents that
+     supa.from().select() hangs forever on some code paths — see the
+     comment block at line ~16684 in this file about supabase-js
+     navigator.locks deadlocks. The existing patterns for the entire
+     app (dbInsert, dbUpdate, dbDelete, and the raw restFetch for reads)
+     all bypass supa entirely and only depend on the JWT stored in
+     localStorage. That means we don't even need supa to be defined —
+     restFetch reads the token directly, so the tool works from the
+     first millisecond of page load if the user has a valid session
+     cached.
 
-     (1) supa may not be defined yet — the auth+init flow assigns
-         `supa = createClient(...)` asynchronously, so if the user
-         lands directly on #/materials via URL or clicks the sidebar
-         within the first ~500ms of page load, we get here before supa
-         is ready. Poll up to 10s for it to become defined before
-         bailing. Shows "Loading materials…" during the wait so the
-         UX doesn't feel broken.
-
-     (2) supa call may hang — supabase-js occasionally never resolves
-         when the auth session is mid-refresh. 15s Promise.race
-         timeout prevents an infinite spinner. Errors + timeouts
-         surface via MAT.state.loadError → _renderError shows a real
-         error card with a Retry button.
+     15s Promise.race timeout guards against a slow/failed network so
+     we don't show the loading spinner forever if something else goes
+     wrong. Errors surface via MAT.state.loadError → _renderError.
   */
   async loadCollections(){
     MAT.state.loading   = true;
     MAT.state.loadError = null;
     MAT._renderLoading();
-    console.log("[MAT] loadCollections: starting…");
+    console.log("[MAT] loadCollections: starting (via restFetch)…");
 
-    // ── Guardrail 1: wait for supa to be initialized ──────────────
-    const SUPA_WAIT_TIMEOUT_MS = 10000;
-    const supaWaitStart = Date.now();
-    while(!supa && (Date.now() - supaWaitStart) < SUPA_WAIT_TIMEOUT_MS){
-      await new Promise(r => setTimeout(r, 200));
-    }
-    if(!supa){
-      console.error("[MAT] loadCollections: supa never initialized after " + (SUPA_WAIT_TIMEOUT_MS/1000) + "s");
-      MAT.state.loadError = "Supabase client didn't initialize within 10 seconds. Check your network and reload the page.";
-      MAT.state.loading = false;
-      return;
-    }
-    console.log("[MAT] loadCollections: supa ready, fetching…");
-
-    // ── Guardrail 2: hard timeout on the actual fetch ─────────────
     const LOAD_TIMEOUT_MS = 15000;
     try {
-      const fetchPromise = supa
-        .from("supplier_materials")
-        .select("*")
-        .eq("active", true)
-        .order("category", { ascending: true })
-        .order("product_family", { ascending: true });
+      const path = "supplier_materials?select=*&active=eq.true&order=category.asc,product_family.asc";
+      const fetchPromise = restFetch(path);
       const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() =>
           reject(new Error("Timed out waiting for Supabase (" + (LOAD_TIMEOUT_MS/1000) + "s). Check your network / Supabase status.")),
           LOAD_TIMEOUT_MS)
       );
-      const { data, error } = await Promise.race([fetchPromise, timeoutPromise]);
-      if(error){ throw error; }
-      MAT.state.collections   = data || [];
+      const data = await Promise.race([fetchPromise, timeoutPromise]);
+      MAT.state.collections   = Array.isArray(data) ? data : [];
       MAT.state._loaded       = true;
       MAT.state.lastLoadedAt  = Date.now();
       console.log("[MAT] loadCollections: got " + MAT.state.collections.length + " rows");
@@ -22197,13 +22177,14 @@ const MAT = {
     statusEl.style.color = "var(--gold-bright)";
     statusEl.textContent = existingId ? "Saving changes…" : "Adding collection…";
     try {
+      /* Use dbUpdate / dbInsert from the shared CRUD helpers instead of
+         supa.from().update/insert — the latter hang on the known
+         navigator.locks deadlock path documented at ~line 16684. */
       if(existingId){
-        const { error } = await supa.from("supplier_materials").update(payload).eq("id", existingId);
-        if(error) throw error;
+        await dbUpdate("supplier_materials", { id: existingId }, payload, { prefer: "return=minimal" });
       } else {
         payload.active = true;
-        const { error } = await supa.from("supplier_materials").insert([payload]);
-        if(error) throw error;
+        await dbInsert("supplier_materials", payload, { prefer: "return=minimal" });
       }
       statusEl.style.color = "#5fce86";
       statusEl.textContent = existingId ? "✓ Saved." : "✓ Added.";
@@ -22225,8 +22206,8 @@ const MAT = {
     statusEl.style.color = "var(--gold-bright)";
     statusEl.textContent = "Deleting…";
     try {
-      const { error } = await supa.from("supplier_materials").delete().eq("id", id);
-      if(error) throw error;
+      /* dbDelete bypasses the supa.from() hang — see save handler above. */
+      await dbDelete("supplier_materials", { id });
       await MAT.loadCollections();
       MAT._closeFormModal();
       // If we were on that collection's detail view, back out
