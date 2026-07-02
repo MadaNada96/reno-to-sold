@@ -23655,23 +23655,43 @@ function _matHandleBaseboardLine(text, items, ctx){
   }
 
   // Data row — starts with "Size:" and contains $ prices
-  if(/^Size\s*:/i.test(t) && /\$/.test(t)){
-    if(!ctx.getCurrentFamily()){
-      // Default family if we didn't see a sub-header (fallback)
-      ctx.setCurrentFamily("MDF Primed Baseboard");
-    }
+  // Also handles rows with "NAF SHOEBASE" prefix baked in (pdf.js may
+  // not emit a standalone shoebase header, so we detect from row content).
+  if(/^(?:NAF\s+SHOEBASE\s+)?Size\s*:/i.test(t) && /\$/.test(t)){
     const priceRegex = /\$\s*(\d+(?:\.\d{1,2})?)/g;
     const prices = [];
     let m;
     while((m = priceRegex.exec(t)) !== null){ prices.push(Number(m[1])); }
-    // Description: everything from "Size:" up to first $
+    // Description: everything from "Size:" up to first $ (strip any
+    // leading "NAF SHOEBASE " prefix too).
     const firstPriceIdx = t.search(/\$/);
-    const sizeSpec = t.slice(0, firstPriceIdx).replace(/^Size\s*:\s*/i, "").trim().replace(/[.,\s]+$/, "");
+    const sizeSpec = t.slice(0, firstPriceIdx)
+      .replace(/^NAF\s+SHOEBASE\s+/i, "")
+      .replace(/^Size\s*:\s*/i, "")
+      .trim().replace(/[.,\s]+$/, "");
     // After the prices: "10 ft 352" → length_ft, pieces_per_pallet
     const trailing = t.slice(firstPriceIdx).replace(/\$\s*\d+(?:\.\d+)?/g, " ");
     const nums = trailing.match(/\d+(?:\.\d+)?/g) || [];
     const lengthFt   = nums.length >= 1 ? Number(nums[0]) : null;
     const totalPieces = nums.length >= 2 ? Number(nums[nums.length - 1]) : null;
+
+    /* Family assignment by DIMENSIONS: shoebases are always short
+       (< 2" first dimension). Baseboards are 3"+ tall. This works
+       regardless of whether the PDF supplies a section header,
+       because the size text is on every row. */
+    let family = "MDF Primed Baseboard";
+    if(/^NAF\s+SHOEBASE/i.test(t)){
+      family = "NAF Shoebase";
+    } else {
+      const heightMatch = sizeSpec.match(/^(\d+)(?:-(\d+)\/(\d+))?/);
+      if(heightMatch){
+        const inches = Number(heightMatch[1]) +
+          (heightMatch[2] && heightMatch[3] ? Number(heightMatch[2]) / Number(heightMatch[3]) : 0);
+        if(inches < 2) family = "NAF Shoebase";
+      }
+    }
+    ctx.setCurrentFamily(family);
+
     const pending = {
       unit: "lin.ft",
       unitPrice: prices[0] || null,
@@ -23801,24 +23821,34 @@ function _matHandleDoorLine(text, items, ctx){
     return true;
   }
 
-  // Door row: uppercase description + two prices + doors per pallet
+  // Door row: uppercase description + one or two prices + doors per pallet.
+  // Doors always have "PANEL" in the description AND a per-piece price
+  // in the $30-$100 range. Accept both:
+  //   • two-price rows: "1 PANEL HOLLOW SMOOTH DOOR $39.00 $49.00 32"
+  //   • one-price rows: pdf.js occasionally puts the two prices on
+  //     separate Y-bins; a line with just one $ and "PANEL" is still
+  //     a door — we just leave secondary_price null.
   const prices = [];
   const priceRegex = /\$\s*(\d+(?:\.\d{1,2})?)/g;
   let m;
   while((m = priceRegex.exec(text)) !== null){ prices.push(Number(m[1])); }
-  if(prices.length >= 2){
+  const hasPanel = /\bPANEL\b/i.test(text);
+  const looksLikeDoor = hasPanel || /HOLLOW.*DOOR/i.test(text);
+  if(prices.length >= 1 && looksLikeDoor){
     // First $-index gives us where the description ends
     const firstPriceIdx = text.search(/\$/);
     const desc = text.slice(0, firstPriceIdx).trim().replace(/[.,\s]+$/, "");
     if(!desc || desc.length < 6) return true;
-    // Extract doors per pallet — the trailing bare integer
+    // Extract doors per pallet — the trailing bare integer (typically
+    // 28-40 for these products). Skip integers > 100 which are likely
+    // page-marker artifacts.
     const trailing = text.slice(firstPriceIdx).replace(/\$\s*\d+(?:\.\d+)?/g, " ");
-    const nums = trailing.match(/\d+/g) || [];
-    const doorsPerPallet = nums.length ? Number(nums[nums.length - 1]) : null;
+    const trailingNums = (trailing.match(/\d+/g) || []).map(Number).filter(n => n > 0 && n <= 100);
+    const doorsPerPallet = trailingNums.length ? trailingNums[trailingNums.length - 1] : null;
     const pending = {
       unit: "each",
       unitPrice: prices[0],
-      secondaryPrice: prices[1],
+      secondaryPrice: prices.length >= 2 ? prices[1] : null,
       palletQty: doorsPerPallet,
       raw: [text],
       _sourceLines: [text],
@@ -23826,11 +23856,17 @@ function _matHandleDoorLine(text, items, ctx){
     ctx.setCurrentFamily(desc);
     ctx.setPending(pending);
     ctx.pushPending();
-    // Track the last candidate so the "Size available" row can attach.
-    // Grab it from the candidates array via a re-entrant reference:
-    // we'll add this in the enclosing scope after _matHandleDoorLine
-    // returns. See the caller.
     return true;
+  }
+
+  /* If we're in doors mode but this line only has a price with no
+     panel keyword, it might be a continuation of a previous door's
+     data (pdf.js sometimes splits price lines from description lines).
+     Attach to the last candidate if it exists and has no secondary
+     price yet. */
+  if(prices.length >= 1 && ctx._lastCandidate && ctx._lastCandidate.unit === "each" && !ctx._lastCandidate.secondary_price){
+    ctx._lastCandidate.secondary_price = prices[0];
+    if(ctx._lastCandidate.sourceLines) ctx._lastCandidate.sourceLines.push(text);
   }
 
   return true;
