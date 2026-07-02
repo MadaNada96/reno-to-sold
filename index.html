@@ -3852,12 +3852,21 @@
     border-color:var(--gold);
     box-shadow:0 8px 20px rgba(212,175,106,.10);
   }
+  /* Category / collection tile image. Source images from Floors@Work
+     are mixed shapes (wide text banners, square product photos, tall
+     detail shots) but all have white backgrounds. Using `contain` fits
+     the whole image inside the tile with letterboxing rather than
+     zooming + cropping — nothing gets cut off, text remains readable,
+     and the white letterbox blends seamlessly with the source images'
+     own white backgrounds. */
   .mat-tile-img{
-    width:100%; aspect-ratio:16/10;
-    background:#0a0a0a center/cover no-repeat;
+    width:100%; aspect-ratio:4/3;
+    background:#ffffff center/contain no-repeat;
     display:block;
+    border-bottom:1px solid var(--line);
   }
   .mat-tile-img.no-image{
+    background:var(--panel-2);
     display:flex; align-items:center; justify-content:center;
     color:var(--gold); font-size:32px;
   }
@@ -3885,10 +3894,11 @@
   }
   .mat-detail-image{
     width:100%; aspect-ratio:1/1;
-    background:#0a0a0a center/cover no-repeat;
+    background:#ffffff center/contain no-repeat;
     border:1px solid var(--line); border-radius:12px;
   }
   .mat-detail-image.no-image{
+    background:var(--panel-2);
     display:flex; align-items:center; justify-content:center;
     color:var(--gold); font-size:48px;
   }
