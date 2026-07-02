@@ -22582,7 +22582,16 @@ const MAT = {
          `LOOSE LAY Size:`, `Luxury Dry Back Size:` — the rotated tier
          label appears BEFORE the "Size:" keyword in pdf.js's stream. */
       if(/(?:^|\b)Size\s*:/i.test(text) && text.search(/Size\s*:/i) < 40){
-        if(pending && pending.priceBox){ pushPending(); pending = { raw: [] }; }
+        /* Only fork a new sub-row when the current pending ALREADY has
+           a size_spec — that means we're on variant #2 of the same
+           family. If the current pending has prices but no size_spec
+           (typical when the family line contains embedded numerics —
+           see NAF T&G ENGINEERED HANDSCRAPED EXOTIC WALNUT / MAPLE),
+           MERGE the size_spec into the existing pending instead of
+           forking. That way we don't leave a family+prices candidate
+           with empty size/colors, and no orphaned "just size" pending
+           that pushPending would drop. */
+        if(pending && pending.priceBox && pending.size_spec){ pushPending(); pending = { raw: [] }; }
         if(!pending) pending = { raw: [], _sourceLines: [] };
         if(!pending._sourceLines) pending._sourceLines = [];
         // Find where "Size:" starts (may not be at line start due to
