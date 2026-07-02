@@ -22565,7 +22565,7 @@ const MAT = {
              - a width measurement like `N" wide` or `N" x N"`
            Colors portion = everything BEFORE that; numeric portion =
            everything from that point onward. */
-        const numericStart = full.search(/\$\s*\d|\d+(?:\.\d+)?\s*["″]\s*(?:wide|x\s*\d)/i);
+        const numericStart = full.search(/\$\s*\d|\d+(?:\.\d+)?[^A-Za-z\d\n]{0,3}(?:wide|x[^A-Za-z\d\n]{0,3}\d)/i);
         let colorsText   = numericStart >= 0 ? full.slice(0, numericStart) : full;
         const numericText = numericStart >= 0 ? full.slice(numericStart)    : "";
         const colorsRaw = colorsText.replace(/^Colors?\s*(?:Coming Soon|ON SALE)?\s*:?\s*/i, "").trim();
@@ -22776,13 +22776,18 @@ function _matFindNumericSplit(items){
    — first dimension is treated as the "width" for that row. */
 function _matExtractNumerics(txt){
   const out = {};
-  // Try `N" wide` pattern first (typical plank/laminate row)
-  let widthMatch = txt.match(/(\d+(?:\.\d+)?)\s*["″]\s*wide/i);
+  /* Width regex is deliberately loose. pdf.js returns the double-quote
+     character inconsistently across rows — sometimes ASCII `"`,
+     sometimes Unicode `”` right-double-quotation-mark, sometimes
+     `″` prime, and sometimes it's just absent when pdf.js drops
+     the glyph. Allow ANY 0-3 non-letter chars between the number and
+     the word "wide". Same treatment for the tile-dimension fallback. */
+  let widthMatch = txt.match(/(\d+(?:\.\d+)?)[^A-Za-z\d\n]{0,3}wide/i);
   if(widthMatch){
     out.width = Number(widthMatch[1]);
   } else {
     // Fall back to tile dimension `N" x N"` — first number is width
-    const tileMatch = txt.match(/(\d+(?:\.\d+)?)\s*["″]\s*x\s*\d+(?:\.\d+)?\s*["″]?/i);
+    const tileMatch = txt.match(/(\d+(?:\.\d+)?)[^A-Za-z\d\n]{0,3}x[^A-Za-z\d\n]{0,3}\d+(?:\.\d+)?/i);
     if(tileMatch) out.width = Number(tileMatch[1]);
   }
   const prices = [];
@@ -22911,6 +22916,12 @@ function _matIsProductFamily(text){
   if(/^Colors?\b/i.test(text)) return false;
   if(/^\$/.test(text)) return false;
   if(text.length < 8) return false;
+
+  /* Anti-keywords — non-flooring product types that would otherwise
+     match Pattern B via their uppercase style + NAF prefix. These
+     appear on pages 3 as "NAF CLEANERS", "NAF ADHESIVE", "HUSSSH!
+     SUPERIOR ACOUSTIC PAD", moldings, etc. — skip them entirely. */
+  if(/\b(CLEANER|CLEANERS|ADHESIVE|HUSSSH|ACOUSTIC PAD|UNDERLAY|MOLDING|STAIR NOSING|RISER|VANITY|TOILET|SOFT COVERING|MURASPEC|WALLCOVERING|BASEBOARD|SHOE BASE|INTERIOR HOLLOW DOOR|MDF PRIMED)\b/i.test(text)) return false;
 
   const flooringKeywords = /\b(NAF|LAMINATE|VINYL|HARDWOOD|AQUAPLUS|AQUAWOOD|AQUATILE|AQUACOMMERCIAL|AQUALUUUZ|AQUASELECT|WATERPROOF|HANDSCRAPED|WIREBRUSHED|EMBOSSED|ENGINEERED|OAK|WALNUT|MAPLE|HICKORY|EXOTIC|ROYAL FLOORING|CLASSIC COLLECTION|VALINGE|CLICK|T&G|COLLECTION|EUROPEAN|Vinyl|Classic|Royal)\b/i.test(text);
   if(!flooringKeywords) return false;
