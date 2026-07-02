@@ -21684,22 +21684,43 @@ const MAT = {
 
   /* Fetch collections from Supabase.
 
-     Wraps the supa call in a 15s hard timeout so we never leave the
-     "Loading materials…" spinner up forever if the network is dodgy or
-     the client library hangs (there's a known supabase-js issue where
-     calls occasionally never resolve when the auth session is
-     mid-refresh). Errors + timeouts surface via MAT.state.loadError,
-     which the render code shows as a real error card instead of
-     silently falling through to an empty catalog. */
+     Two guardrails against real-world failure modes:
+
+     (1) supa may not be defined yet — the auth+init flow assigns
+         `supa = createClient(...)` asynchronously, so if the user
+         lands directly on #/materials via URL or clicks the sidebar
+         within the first ~500ms of page load, we get here before supa
+         is ready. Poll up to 10s for it to become defined before
+         bailing. Shows "Loading materials…" during the wait so the
+         UX doesn't feel broken.
+
+     (2) supa call may hang — supabase-js occasionally never resolves
+         when the auth session is mid-refresh. 15s Promise.race
+         timeout prevents an infinite spinner. Errors + timeouts
+         surface via MAT.state.loadError → _renderError shows a real
+         error card with a Retry button.
+  */
   async loadCollections(){
-    if(!supa){
-      MAT.state.loadError = "Supabase client not initialized. Reload the page and try again.";
-      return;
-    }
     MAT.state.loading   = true;
     MAT.state.loadError = null;
     MAT._renderLoading();
-    console.log("[MAT] loadCollections: fetching…");
+    console.log("[MAT] loadCollections: starting…");
+
+    // ── Guardrail 1: wait for supa to be initialized ──────────────
+    const SUPA_WAIT_TIMEOUT_MS = 10000;
+    const supaWaitStart = Date.now();
+    while(!supa && (Date.now() - supaWaitStart) < SUPA_WAIT_TIMEOUT_MS){
+      await new Promise(r => setTimeout(r, 200));
+    }
+    if(!supa){
+      console.error("[MAT] loadCollections: supa never initialized after " + (SUPA_WAIT_TIMEOUT_MS/1000) + "s");
+      MAT.state.loadError = "Supabase client didn't initialize within 10 seconds. Check your network and reload the page.";
+      MAT.state.loading = false;
+      return;
+    }
+    console.log("[MAT] loadCollections: supa ready, fetching…");
+
+    // ── Guardrail 2: hard timeout on the actual fetch ─────────────
     const LOAD_TIMEOUT_MS = 15000;
     try {
       const fetchPromise = supa
