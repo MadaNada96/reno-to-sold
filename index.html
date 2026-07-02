@@ -22538,10 +22538,14 @@ const MAT = {
     }
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
     const allLines = [];
-    const MAX_PAGES = Math.min(3, pdf.numPages);
+    /* Push 9.4: process ALL pages. Flooring is on pages 1-3, moldings
+       + doors on pages 4-5, vanity + toilets + soft coverings on 6-8.
+       The parser mode switches based on section headers, so we scan
+       everything and let the state machine ignore whatever mode isn't
+       being handled yet. */
     const Y_TOLERANCE = 3;   // pixels — group items whose Y differs by ≤ 3
 
-    for(let i = 1; i <= MAX_PAGES; i++){
+    for(let i = 1; i <= pdf.numPages; i++){
       const page = await pdf.getPage(i);
       const content = await page.getTextContent();
       /* Tolerant Y-grouping (Push 9.2 Phase B.5 rewrite).
@@ -22582,7 +22586,7 @@ const MAT = {
         allLines.push({ page: i, y: bin.y, text, items: bin.items });
       }
     }
-    console.log("[MAT] _parsePdf: extracted " + allLines.length + " lines (tolerant Y-grouping) from pages 1-" + MAX_PAGES + " (of " + pdf.numPages + ")");
+    console.log("[MAT] _parsePdf: extracted " + allLines.length + " lines (tolerant Y-grouping) from all " + pdf.numPages + " pages");
     return MAT._interpretLines(allLines);
   },
 
@@ -22598,6 +22602,15 @@ const MAT = {
     let currentCategory = null;
     let currentFamily   = null;
     let pending = null;
+    /* Parser mode routes each line to the appropriate handler set:
+         "flooring"  — pages 1-3 layout (Size:/Colors: + per-SF prices)
+         "moldings"  — page 4 MOLDINGS section (per-piece with length)
+         "doors"     — pages 4-5 NAF INTERIOR DOORS (pallet vs cut price)
+         "skip"      — pages 6-8 vanity/toilet/soft-coverings (not yet
+                       parsed; would need specialized handlers)
+       Section detection in _matGuessSection / _matGuessSectionAll
+       flips the mode. Default is "flooring" so page 1 starts correctly. */
+    let mode = "flooring";
     function pushPending(){
       if(!pending || !currentFamily) return;
       const c = {
@@ -22605,6 +22618,11 @@ const MAT = {
         product_family:      currentFamily,
         size_spec:           pending.size_spec || null,
         colors:              pending.colors || [],
+        unit:                pending.unit || "sf",
+        unit_price:          pending.unitPrice || null,
+        unit_qty_label:      pending.unitQtyLabel || null,
+        pallet_qty:          pending.palletQty || null,
+        secondary_price:     pending.secondaryPrice || null,
         width_inches:        pending.width || null,
         price_per_sf_pallet: pending.pricePallet || null,
         price_per_sf_box:    pending.priceBox || null,
@@ -22620,6 +22638,52 @@ const MAT = {
 
     for(let idx = 0; idx < lines.length; idx++){
       const { text, items } = lines[idx];
+
+      /* 0. Mode switching — check non-flooring section markers FIRST
+         so the parser jumps out of "flooring" state cleanly on page 4+.
+         Once in moldings/doors mode, the flooring handlers below are
+         bypassed. */
+      const modeSwitch = _matGuessMode(text);
+      if(modeSwitch){
+        // Flush any active pending before switching modes
+        if(pending){
+          if(mode === "flooring" && pending.priceBox) pushPending();
+          if(mode === "moldings" && pending.unitPrice) pushPending();
+          if(mode === "doors"    && pending.unitPrice) pushPending();
+        }
+        mode = modeSwitch;
+        currentCategory = _matCategoryForMode(mode) || currentCategory;
+        currentFamily = null;
+        pending = null;
+        continue;
+      }
+
+      /* Mode-specific handlers dispatch here — they may `continue` to
+         skip the flooring case below. */
+      if(mode === "moldings"){
+        const done = _matHandleMoldingLine(text, items, {
+          getCurrentFamily: () => currentFamily,
+          setCurrentFamily: (f) => { currentFamily = f; if(pending) pushPending(); pending = null; },
+          getPending: () => pending,
+          setPending: (p) => { pending = p; },
+          pushPending,
+          currentCategory,
+        });
+        if(done) continue;
+      }
+      if(mode === "doors"){
+        const done = _matHandleDoorLine(text, items, {
+          getCurrentFamily: () => currentFamily,
+          setCurrentFamily: (f) => { currentFamily = f; if(pending) pushPending(); pending = null; },
+          getPending: () => pending,
+          setPending: (p) => { pending = p; },
+          pushPending,
+          currentCategory,
+          _lastCandidate: candidates[candidates.length - 1],
+        });
+        if(done) continue;
+      }
+      if(mode === "skip") continue;
 
       /* 1. Section transitions — highest priority. Reset currentFamily
          and pending so state doesn't leak across sections. */
@@ -22861,15 +22925,15 @@ const MAT = {
             <thead><tr>
               <th style="width:24px;"></th>
               <th style="width:16px;"></th>
+              <th style="width:80px;">Unit</th>
               <th style="width:130px;">Category</th>
               <th style="min-width:180px;">Product family *</th>
               <th style="min-width:130px;">Size spec</th>
-              <th style="min-width:160px;">Colors</th>
-              <th style="width:70px;text-align:right;">Width</th>
-              <th style="width:80px;text-align:right;">$/pallet</th>
-              <th style="width:80px;text-align:right;">$/box</th>
-              <th style="width:70px;text-align:right;">SF/box</th>
-              <th style="width:70px;text-align:right;">Boxes/pallet</th>
+              <th style="min-width:130px;">Colors / qty</th>
+              <th style="width:80px;text-align:right;">Price 1</th>
+              <th style="width:80px;text-align:right;">Price 2</th>
+              <th style="width:70px;text-align:right;">Qty A</th>
+              <th style="width:70px;text-align:right;">Qty B</th>
               <th style="width:32px;"></th>
             </tr></thead>
             <tbody>
@@ -22884,11 +22948,21 @@ const MAT = {
   },
 
   _reviewRowHtml(r, catOptionsHtml){
-    const hasMissing = !r.width_inches || !r.price_per_sf_pallet || !r.price_per_sf_box || !r.sf_per_box || !r.boxes_per_pallet;
-    const numInput = (val, id, step) => {
+    const unit = r.unit || "sf";
+    /* Per-unit field mapping: what goes into each generic column slot
+       depends on the row's unit. Flooring uses per-sf fields; non-
+       flooring uses the new unit_price / secondary_price / etc.
+       column-header labels stay generic ("Price 1 / Price 2 / Qty A /
+       Qty B") but the tooltip and value swap per unit. */
+    const isSF = unit === "sf";
+    const hasMissing = isSF
+      ? (!r.width_inches || !r.price_per_sf_pallet || !r.price_per_sf_box || !r.sf_per_box || !r.boxes_per_pallet)
+      : (!r.unit_price);
+    const numInput = (val, id, step, title) => {
       const isEmpty = val == null || val === "";
       const bg = isEmpty ? "background:rgba(245,200,120,.08);border:1px solid rgba(245,200,120,.35);" : "background:#0d0d11;border:1px solid var(--line);";
       return '<input type="number" step="' + step + '" value="' + (isEmpty ? "" : escapeHtmlAttr(val)) + '" ' +
+        'title="' + escapeHtmlAttr(title || "") + '" ' +
         'oninput="MAT._onCandidateEdit(\'' + r._uiId + '\', \'' + id + '\', this.value)" ' +
         'style="width:100%;padding:5px 7px;text-align:right;color:var(--ink);font:inherit;font-size:11.5px;border-radius:4px;' + bg + '">';
     };
@@ -22899,10 +22973,33 @@ const MAT = {
     const srcBtn = (r.sourceLines && r.sourceLines.length)
       ? '<button onclick="MAT._toggleSource(\'' + r._uiId + '\')" title="Show the raw text extracted from the PDF for this row" style="background:transparent;border:1px solid ' + (hasMissing ? 'var(--gold)' : 'var(--line-strong)') + ';color:' + (hasMissing ? 'var(--gold-bright)' : 'var(--muted)') + ';border-radius:4px;padding:3px 6px;font-family:inherit;font-size:10.5px;cursor:pointer;white-space:nowrap;">📄 Source</button>'
       : '';
+
+    // Unit picker
+    const unitOptions = ["sf","each","lin.ft","pail","roll","set"]
+      .map(u => '<option value="' + u + '"' + (u === unit ? ' selected' : '') + '>' + u + '</option>').join('');
+    // Column values swap based on unit
+    const price1 = isSF ? numInput(r.price_per_sf_pallet, 'price_per_sf_pallet', '0.01', '$/pallet-sf')
+                        : numInput(r.unit_price, 'unit_price', '0.01', '$/' + unit);
+    const price2 = isSF ? numInput(r.price_per_sf_box, 'price_per_sf_box', '0.01', '$/box-sf')
+                        : numInput(r.secondary_price, 'secondary_price', '0.01', 'Secondary/cut price');
+    const qtyA  = isSF ? numInput(r.sf_per_box, 'sf_per_box', '0.01', 'SF per box')
+                       : txtInput(r.unit_qty_label, 'unit_qty_label');
+    const qtyB  = isSF ? numInput(r.boxes_per_pallet, 'boxes_per_pallet', '1', 'Boxes per pallet')
+                       : numInput(r.pallet_qty, 'pallet_qty', '1', 'Units per pallet');
+    // Colors slot doubles as qty_label for non-SF
+    const colorsCell = isSF
+      ? '<input type="text" value="' + escapeHtmlAttr((r.colors || []).join(", ")) + '" oninput="MAT._onCandidateEdit(\'' + r._uiId + '\', \'colors\', this.value)" style="width:100%;padding:5px 7px;background:#0d0d11;border:1px solid var(--line);border-radius:4px;color:var(--ink);font:inherit;font-size:11.5px;">'
+      : '<span style="color:var(--muted);font-size:11px;">n/a</span>';
+
     return `
       <tr id="row_${r._uiId}" style="${r._included ? "" : "opacity:.35;"}">
         <td><input type="checkbox" ${r._included ? "checked" : ""} onchange="MAT._toggleCandidate('${r._uiId}', this.checked)"></td>
         <td>${_matConfidenceDot(r.confidence)}</td>
+        <td>
+          <select onchange="MAT._onCandidateEdit('${r._uiId}', 'unit', this.value); MAT._renderReviewBody();" style="width:100%;padding:5px 7px;background:#0d0d11;border:1px solid var(--line);border-radius:4px;color:var(--ink);font:inherit;font-size:11.5px;">
+            ${unitOptions}
+          </select>
+        </td>
         <td>
           <select onchange="MAT._onCandidateEdit('${r._uiId}', 'category', this.value)" style="width:100%;padding:5px 7px;background:#0d0d11;border:1px solid var(--line);border-radius:4px;color:var(--ink);font:inherit;font-size:11.5px;">
             ${catOptionsHtml(r.category)}
@@ -22910,16 +23007,15 @@ const MAT = {
         </td>
         <td>${txtInput(r.product_family, 'product_family')}</td>
         <td>${txtInput(r.size_spec, 'size_spec')}</td>
-        <td><input type="text" value="${escapeHtmlAttr((r.colors || []).join(", "))}" oninput="MAT._onCandidateEdit('${r._uiId}', 'colors', this.value)" style="width:100%;padding:5px 7px;background:#0d0d11;border:1px solid var(--line);border-radius:4px;color:var(--ink);font:inherit;font-size:11.5px;"></td>
-        <td>${numInput(r.width_inches, 'width_inches', '0.01')}</td>
-        <td>${numInput(r.price_per_sf_pallet, 'price_per_sf_pallet', '0.01')}</td>
-        <td>${numInput(r.price_per_sf_box, 'price_per_sf_box', '0.01')}</td>
-        <td>${numInput(r.sf_per_box, 'sf_per_box', '0.01')}</td>
-        <td>${numInput(r.boxes_per_pallet, 'boxes_per_pallet', '1')}</td>
+        <td>${colorsCell}</td>
+        <td>${price1}</td>
+        <td>${price2}</td>
+        <td>${qtyA}</td>
+        <td>${qtyB}</td>
         <td style="white-space:nowrap;">${srcBtn}<button onclick="MAT._deleteCandidate('${r._uiId}')" title="Delete row" style="background:transparent;border:1px solid var(--line-strong);color:#ff9090;border-radius:4px;padding:3px 8px;font-family:inherit;font-size:14px;cursor:pointer;margin-left:4px;">×</button></td>
       </tr>
       <tr id="src_${r._uiId}" style="display:none;">
-        <td colspan="12" style="padding:0;">
+        <td colspan="13" style="padding:0;">
           <div style="background:#0d0d11;border:1px solid rgba(212,175,106,.3);border-radius:6px;margin:6px 0;padding:10px 14px;">
             <div style="font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);font-weight:800;margin-bottom:6px;">
               Raw PDF text for this row
@@ -22942,7 +23038,10 @@ const MAT = {
     if(!r) return;
     if(field === "colors"){
       r.colors = _matSplitColors(value);
-    } else if(["width_inches","price_per_sf_pallet","price_per_sf_box","sf_per_box","boxes_per_pallet"].includes(field)){
+    } else if([
+      "width_inches","price_per_sf_pallet","price_per_sf_box","sf_per_box","boxes_per_pallet",
+      "unit_price","secondary_price","pallet_qty",
+    ].includes(field)){
       r[field] = value === "" ? null : Number(value);
     } else {
       r[field] = value;
@@ -23012,20 +23111,40 @@ const MAT = {
       const key = norm(r.product_family) + "||" + norm(r.size_spec);
       const existingRow = existingMap.get(key);
       statusEl.textContent = "Committing " + (i + 1) + " of " + rows.length + "…";
+      const unit = r.unit || "sf";
       const payload = {
         supplier_id:         "00000000-0000-4000-8000-000000000001",
         category:            r.category,
         product_family:      (r.product_family || "").trim(),
         size_spec:           r.size_spec ? r.size_spec.trim() : null,
-        width_inches:        r.width_inches,
         colors:              r.colors || [],
-        price_per_sf_pallet: r.price_per_sf_pallet,
-        price_per_sf_box:    r.price_per_sf_box,
-        sf_per_box:          r.sf_per_box,
-        boxes_per_pallet:    r.boxes_per_pallet,
+        unit,
         active:              true,
         updated_at:          new Date().toISOString(),
       };
+      /* Only write the fields relevant to the row's unit so a per-piece
+         door doesn't carry stale per-SF numbers, and vice versa. */
+      if(unit === "sf"){
+        payload.width_inches        = r.width_inches || null;
+        payload.price_per_sf_pallet = r.price_per_sf_pallet || null;
+        payload.price_per_sf_box    = r.price_per_sf_box || null;
+        payload.sf_per_box          = r.sf_per_box || null;
+        payload.boxes_per_pallet    = r.boxes_per_pallet || null;
+        payload.unit_price          = null;
+        payload.unit_qty_label      = null;
+        payload.pallet_qty          = null;
+        payload.secondary_price     = null;
+      } else {
+        payload.unit_price          = r.unit_price || null;
+        payload.unit_qty_label      = r.unit_qty_label || null;
+        payload.pallet_qty          = r.pallet_qty || null;
+        payload.secondary_price     = r.secondary_price || null;
+        payload.width_inches        = null;
+        payload.price_per_sf_pallet = null;
+        payload.price_per_sf_box    = null;
+        payload.sf_per_box          = null;
+        payload.boxes_per_pallet    = null;
+      }
       try {
         if(existingRow){
           await dbUpdate("supplier_materials", { id: existingRow.id }, payload, { prefer: "return=minimal" });
@@ -23278,21 +23397,39 @@ function _matSplitColors(raw){
     .filter(Boolean);
 }
 
-/* Confidence score for a parsed row. */
+/* Confidence score for a parsed row — branches on unit so flooring
+   rows and non-flooring rows use appropriate field sets. */
 function _matScoreCandidate(c){
+  const unit = c.unit || "sf";
+  if(unit === "sf"){
+    const fields = [
+      !!c.product_family,
+      !!c.size_spec,
+      !!(c.colors && c.colors.length),
+      !!c.width_inches,
+      !!c.price_per_sf_pallet,
+      !!c.price_per_sf_box,
+      !!c.sf_per_box,
+      !!c.boxes_per_pallet,
+    ];
+    const filled = fields.filter(Boolean).length;
+    if(filled >= 7) return "high";
+    if(filled >= 4 && c.price_per_sf_box) return "medium";
+    return "low";
+  }
+  // Non-flooring (moldings / doors / etc.)
   const fields = [
     !!c.product_family,
     !!c.size_spec,
-    !!(c.colors && c.colors.length),
-    !!c.width_inches,
-    !!c.price_per_sf_pallet,
-    !!c.price_per_sf_box,
-    !!c.sf_per_box,
-    !!c.boxes_per_pallet,
+    !!c.unit_price,
+    !!c.unit_qty_label,
+    !!c.pallet_qty,
+    !!c.secondary_price,
   ];
   const filled = fields.filter(Boolean).length;
-  if(filled >= 7) return "high";
-  if(filled >= 4 && c.price_per_sf_box) return "medium";
+  if(!c.unit_price) return "low";
+  if(filled >= 4) return "high";
+  if(filled >= 2) return "medium";
   return "low";
 }
 
@@ -23399,6 +23536,182 @@ function _matIsProductFamily(text){
   }
 
   return false;
+}
+
+/* Push 9.4 — non-flooring section detection.
+
+   Returns a new parser mode when we cross into moldings / doors /
+   vanity / toilets / soft coverings sections. Anything the current
+   push doesn't fully parse (vanity/toilets/soft) returns "skip" so
+   we don't produce garbage candidates. */
+function _matGuessMode(text){
+  const t = text.toUpperCase().trim();
+  if(/^MOLDINGS?$/i.test(text.trim())) return "moldings";
+  if(/^LAMINATE\s+MOLDINGS?$/i.test(text.trim())) return "moldings";
+  if(/^AQUA\s*PLUS.*MOLDINGS?/i.test(text.trim())) return "moldings";
+  if(/^MATCHING\s+MOLDINGS/i.test(text.trim())) return "moldings";
+  // Door section headers on the PDF include a column header row
+  // "PALLET / CUT / PRICE / PC / DOORS PER PALLET"
+  if(/PALLET\s+CUT.*DOORS\s+PER\s+PALLET/i.test(text)) return "doors";
+  if(/PRICE\s*\/\s*PC.*PRICE\s*\/\s*PC/i.test(text) && /DOORS/i.test(text)) return "doors";
+  if(/^\s*\d+\s+PANEL\s+HOLLOW/i.test(text)) return "doors";
+  // Skipped sections — mark mode so we don't try to parse them as flooring
+  if(/HDF\s+VANITY|VANITY\s+COLLECTION/i.test(text)) return "skip";
+  if(/^TOILETS?$/i.test(text.trim())) return "skip";
+  if(/SOFT\s+COVERINGS?|MURASPEC|WALLCOVERING/i.test(text)) return "skip";
+  return null;
+}
+
+function _matCategoryForMode(mode){
+  if(mode === "moldings") return "ACCESSORIES";
+  if(mode === "doors")    return "NAF_INTERIOR_DOORS";
+  return null;
+}
+
+/* Handle a molding-section line. Structure of the MOLDINGS section:
+
+     MOLDINGS                             Price / Piece     Length
+     LAMINATE MOLDINGS                    ← sub-family header
+     T - molding / Reducer      $16       8'                ← molding row
+     Stair Nosing               $20       8'                ← molding row
+     AQUA PLUS, AQUALUUUZ & AQUATILES MOLDINGS
+     ...
+
+   Each row: description (product name) + $price + length descriptor.
+   Sub-family header sets currentFamily so downstream rows are grouped
+   under it. Each molding line becomes one candidate:
+     unit = "lin.ft" (moldings are used per linear foot in practice)
+     unit_price = $price (per piece)
+     unit_qty_label = length string (e.g. "8' length")
+
+   The unit is "lin.ft" so the box-count calc in Push 9.5 can convert
+   estimator sqft/lin.ft to piece count using the length descriptor. */
+function _matHandleMoldingLine(text, items, ctx){
+  const t = text.trim();
+  if(!t) return true;
+
+  // Skip column headers and page markers
+  if(/^Price\s*\/\s*Piece\b/i.test(text)) return true;
+  if(/^Length\b/i.test(text)) return true;
+  if(/^Page\s+\d+/i.test(text)) return true;
+
+  // Sub-family header — uppercase-heavy line with no price
+  if(_matIsMoldingFamilyHeader(text)){
+    // Push any active pending before switching
+    const p = ctx.getPending();
+    if(p && p.unitPrice) ctx.pushPending();
+    ctx.setCurrentFamily(t);
+    return true;
+  }
+
+  // Molding row: description then $price then length
+  const priceMatch = text.match(/\$\s*(\d+(?:\.\d{1,2})?)/);
+  if(priceMatch && ctx.getCurrentFamily()){
+    // Description is everything BEFORE the $
+    const desc = text.slice(0, priceMatch.index).trim().replace(/[.,\s]+$/, "");
+    const price = Number(priceMatch[1]);
+    // Length — look for `N'` after the price
+    const afterPrice = text.slice(priceMatch.index + priceMatch[0].length);
+    const lenMatch = afterPrice.match(/(\d+(?:\.\d+)?)\s*'/);
+    const length = lenMatch ? lenMatch[1] + "'" : "";
+    // Create + immediately push a candidate
+    const pending = {
+      unit: "lin.ft",
+      unitPrice: price,
+      unitQtyLabel: length ? length + " length" : null,
+      size_spec: desc || null,
+      raw: [text],
+      _sourceLines: [text],
+    };
+    ctx.setPending(pending);
+    ctx.pushPending();
+    return true;
+  }
+
+  return true;   // consume the line so flooring handlers don't touch it
+}
+
+function _matIsMoldingFamilyHeader(text){
+  const t = text.trim();
+  if(t.length < 6) return false;
+  if(/\$/.test(t)) return false;
+  // Uppercase-heavy family names like "LAMINATE MOLDINGS", "AQUA PLUS,
+  // AQUALUUUZ & AQUATILES MOLDINGS", "MATCHING MOLDINGS FOR ..."
+  const upperChars = (t.match(/[A-Z]/g) || []).length;
+  const totalLetters = (t.match(/[A-Za-z]/g) || []).length;
+  if(totalLetters === 0) return false;
+  const upperRatio = upperChars / totalLetters;
+  if(upperRatio < 0.6) return false;
+  return /MOLDINGS?\b|MATCHING\s+MOLDINGS?/i.test(t);
+}
+
+/* Handle a door-section line. Structure:
+
+     [column header row: PALLET PRICE/PC | CUT PRICE/PC | DOORS PER PALLET]
+     1 PANEL HOLLOW SMOOTH DOOR    $39.00    $49.00    32     ← door row
+     Size available: 18", 20", 22", 24", 26", 28", 30", 32", 34", 36"
+
+   Each door has: description + pallet_price + cut_price + doors_per_pallet.
+   The Size available line captures ALL available sizes. */
+function _matHandleDoorLine(text, items, ctx){
+  const t = text.trim();
+  if(!t) return true;
+
+  // Skip column-header rows and page markers
+  if(/^PALLET\b/i.test(t) && /CUT/i.test(t)) return true;
+  if(/PRICE\s*\/\s*PC/i.test(t) && !/\$/.test(t)) return true;
+  if(/^Page\s+\d+/i.test(text)) return true;
+
+  // Size available row — attach to the last-pushed door candidate
+  if(/Size\s+available\s*:/i.test(text)){
+    // Reach into the previously-pushed candidate and update its size_spec.
+    // We need to peek at the last candidate in the enclosing scope's
+    // candidates[] array. Since we don't have direct access, stash via
+    // pending: create a temporary pending with just size_spec, then
+    // consult the last committed candidate. Simpler approach: use a
+    // static module-level "last door candidate" pointer that
+    // _interpretLines maintains through candidates[candidates.length-1].
+    // We defer this to the enclosing scope by returning a special marker.
+    if(ctx._lastCandidate){
+      ctx._lastCandidate.size_spec = text.replace(/^.*Size\s+available\s*:\s*/i, "").trim();
+      ctx._lastCandidate.sourceLines.push(text);
+    }
+    return true;
+  }
+
+  // Door row: uppercase description + two prices + doors per pallet
+  const prices = [];
+  const priceRegex = /\$\s*(\d+(?:\.\d{1,2})?)/g;
+  let m;
+  while((m = priceRegex.exec(text)) !== null){ prices.push(Number(m[1])); }
+  if(prices.length >= 2){
+    // First $-index gives us where the description ends
+    const firstPriceIdx = text.search(/\$/);
+    const desc = text.slice(0, firstPriceIdx).trim().replace(/[.,\s]+$/, "");
+    if(!desc || desc.length < 6) return true;
+    // Extract doors per pallet — the trailing bare integer
+    const trailing = text.slice(firstPriceIdx).replace(/\$\s*\d+(?:\.\d+)?/g, " ");
+    const nums = trailing.match(/\d+/g) || [];
+    const doorsPerPallet = nums.length ? Number(nums[nums.length - 1]) : null;
+    const pending = {
+      unit: "each",
+      unitPrice: prices[0],
+      secondaryPrice: prices[1],
+      palletQty: doorsPerPallet,
+      raw: [text],
+      _sourceLines: [text],
+    };
+    ctx.setCurrentFamily(desc);
+    ctx.setPending(pending);
+    ctx.pushPending();
+    // Track the last candidate so the "Size available" row can attach.
+    // Grab it from the candidates array via a re-entrant reference:
+    // we'll add this in the enclosing scope after _matHandleDoorLine
+    // returns. See the caller.
+    return true;
+  }
+
+  return true;
 }
 
 /* End-of-flooring markers. On the Floors@Work PDF these sections
