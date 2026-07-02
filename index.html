@@ -21667,6 +21667,7 @@ const MAT = {
     searchTerm:         "",
     collections:        [],
     loading:            false,
+    loadError:          null,
     _loaded:            false,
     lastLoadedAt:       0,
   },
@@ -21681,26 +21682,47 @@ const MAT = {
     MAT._render();
   },
 
-  /* Fetch collections from Supabase. Silent on failure — the empty
-     state UI will explain what to do next. */
+  /* Fetch collections from Supabase.
+
+     Wraps the supa call in a 15s hard timeout so we never leave the
+     "Loading materials…" spinner up forever if the network is dodgy or
+     the client library hangs (there's a known supabase-js issue where
+     calls occasionally never resolve when the auth session is
+     mid-refresh). Errors + timeouts surface via MAT.state.loadError,
+     which the render code shows as a real error card instead of
+     silently falling through to an empty catalog. */
   async loadCollections(){
-    if(!supa){ return; }
-    MAT.state.loading = true;
+    if(!supa){
+      MAT.state.loadError = "Supabase client not initialized. Reload the page and try again.";
+      return;
+    }
+    MAT.state.loading   = true;
+    MAT.state.loadError = null;
     MAT._renderLoading();
+    console.log("[MAT] loadCollections: fetching…");
+    const LOAD_TIMEOUT_MS = 15000;
     try {
-      const { data, error } = await supa
+      const fetchPromise = supa
         .from("supplier_materials")
         .select("*")
         .eq("active", true)
         .order("category", { ascending: true })
         .order("product_family", { ascending: true });
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() =>
+          reject(new Error("Timed out waiting for Supabase (" + (LOAD_TIMEOUT_MS/1000) + "s). Check your network / Supabase status.")),
+          LOAD_TIMEOUT_MS)
+      );
+      const { data, error } = await Promise.race([fetchPromise, timeoutPromise]);
       if(error){ throw error; }
       MAT.state.collections   = data || [];
       MAT.state._loaded       = true;
       MAT.state.lastLoadedAt  = Date.now();
+      console.log("[MAT] loadCollections: got " + MAT.state.collections.length + " rows");
     } catch(e){
-      console.error("[MAT] loadCollections:", e);
+      console.error("[MAT] loadCollections failed:", e);
       MAT.state.collections = [];
+      MAT.state.loadError   = (e && e.message) ? e.message : String(e);
     } finally {
       MAT.state.loading = false;
     }
@@ -21712,6 +21734,7 @@ const MAT = {
     if(MAT.state.loading){ MAT._renderLoading(); return; }
     MAT._renderBreadcrumb();
     MAT._renderHeader();
+    if(MAT.state.loadError){ MAT._renderError(); return; }
     if(MAT.state.searchTerm){
       MAT._renderSearchResults();
       return;
@@ -21723,6 +21746,28 @@ const MAT = {
     } else {
       MAT._renderCategoryGrid();
     }
+  },
+
+  /* Explicit error state. Better than silently showing empty categories
+     when the real problem is an auth/RLS/network failure — that would
+     make it look like there's just no data yet. Retry button re-runs
+     loadCollections. */
+  _renderError(){
+    const body = document.getElementById("matBody");
+    if(!body) return;
+    body.innerHTML = `
+      <div class="mat-empty">
+        <h3>Couldn't load materials</h3>
+        <p>${escapeHtml(MAT.state.loadError || "Unknown error")}</p>
+        <p style="font-size:11px;color:var(--muted);margin-top:6px;">Open the browser console (right-click → Inspect → Console) for the full error trace.</p>
+        <button class="primary" onclick="MAT._retry()" style="margin-top:10px;">Retry</button>
+      </div>
+    `;
+  },
+  async _retry(){
+    MAT.state._loaded = false;
+    MAT.state.loadError = null;
+    await MAT.renderCurrentView();
   },
 
   _renderLoading(){
