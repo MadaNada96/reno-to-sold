@@ -22524,6 +22524,14 @@ const MAT = {
         if(pending && pending.priceBox){ pushPending(); }
         currentFamily = text;
         pending = { raw: [text] };
+        /* Category fallback: if we haven't seen a section header yet
+           (currentCategory is null), infer it from the family name.
+           The Floors@Work PDF puts rotated section labels HALFWAY
+           down page 1, so the first ~2 product families on page 1
+           get parsed before any section header appears. */
+        if(!currentCategory){
+          currentCategory = _matInferCategoryFromFamily(text);
+        }
         continue;
       }
 
@@ -22749,13 +22757,26 @@ function _matFindNumericSplit(items){
 
 /* Extract structured numerics from the right-hand text of a product
    row. Order in the PDF is: width, $ pallet, $ box, sf/box, boxes/pallet.
-   Returns { width, pricePallet, priceBox, sfPerBox, boxesPerPallet }. */
+   Returns { width, pricePallet, priceBox, sfPerBox, boxesPerPallet }.
+
+   Width regex is deliberately permissive because pdf.js often splits
+   `7.71"` and `wide` into two separate text items, so after we join
+   with spaces we get "7.71 " wide" (space between number and quote).
+   Also handles the tile format `7.36" x 48.3"` used on SPC TILES rows
+   — first dimension is treated as the "width" for that row. */
 function _matExtractNumerics(txt){
   const out = {};
-  const widthMatch = txt.match(/(\d+\.?\d*)"\s*wide/i);
-  if(widthMatch) out.width = Number(widthMatch[1]);
+  // Try `N" wide` pattern first (typical plank/laminate row)
+  let widthMatch = txt.match(/(\d+(?:\.\d+)?)\s*["″]\s*wide/i);
+  if(widthMatch){
+    out.width = Number(widthMatch[1]);
+  } else {
+    // Fall back to tile dimension `N" x N"` — first number is width
+    const tileMatch = txt.match(/(\d+(?:\.\d+)?)\s*["″]\s*x\s*\d+(?:\.\d+)?\s*["″]?/i);
+    if(tileMatch) out.width = Number(tileMatch[1]);
+  }
   const prices = [];
-  const priceRegex = /\$(\d+\.\d{2})/g;
+  const priceRegex = /\$\s*(\d+\.\d{2})/g;
   let m;
   while((m = priceRegex.exec(txt)) !== null){ prices.push(Number(m[1])); }
   if(prices.length >= 1) out.pricePallet = prices[0];
@@ -22763,9 +22784,9 @@ function _matExtractNumerics(txt){
   // sf/box + boxes/pallet: two bare numbers appearing after the prices.
   // Strip out width and prices, then look at remaining tokens.
   const stripped = txt
-    .replace(/\d+\.?\d*"\s*wide/gi, "")
-    .replace(/\$\d+\.\d{2}/g, "")
-    .replace(/\d+"\s*x\s*\d+"?/gi, "");
+    .replace(/\d+(?:\.\d+)?\s*["″]\s*wide/gi, "")
+    .replace(/\$\s*\d+\.\d{2}/g, "")
+    .replace(/\d+(?:\.\d+)?\s*["″]\s*x\s*\d+(?:\.\d+)?\s*["″]?/gi, "");
   const nums = stripped.match(/\d+\.?\d*/g) || [];
   if(nums.length >= 1) out.sfPerBox       = Number(nums[0]);
   if(nums.length >= 2) out.boxesPerPallet = Number(nums[1]);
@@ -22843,6 +22864,23 @@ function _matGuessSection(text){
   // Sections we DON'T want to parse (return null and current state
   // stays — but _matIsProductFamily will fail for these so we won't
   // accidentally emit rows).
+  return null;
+}
+
+/* Guess category from a product family name. Used as a fallback when
+   the parser hasn't seen a section header yet (typical for the first
+   ~2 rows on page 1 of the Floors@Work PDF). Falls back to LAMINATE
+   only if the name explicitly says so; otherwise returns null and the
+   row stays uncategorized (admin fixes in review UI). */
+function _matInferCategoryFromFamily(text){
+  const t = text.toUpperCase();
+  // Solid vs engineered hardwood — must be specific
+  if(/HANDSCRAPED\s+EXOTIC\s+WALNUT/.test(t) && !/ENGINEERED/.test(t)) return "SOLID_HARDWOOD";
+  if(/T&G\s+ENGINEERED|NAF\s+ENGINEERED|ENGINEERED\s+(WIREBRUSHED|EUROPEAN|HANDSCRAPED|CLICK)/.test(t)) return "ENGINEERED_HARDWOOD";
+  // Laminates
+  if(/LAMINATE|HANDSCRAPED\/\s*REGISTERED|EMBOSSED\s+LAMINATES|WATERPROOF\s+LAMINATE/.test(t)) return "LAMINATE";
+  // Vinyl variants (broad — most page 1-2 vinyl products match)
+  if(/VINYL|AQUAPLUS|AQUAWOOD|AQUATILE|AQUACOMMERCIAL|AQUALUUUZ|AQUASELECT|SPC|WPC|ROYAL\s+FLOORING|CLASSIC\s+COLLECTION|VALINGE|LUXURY\s+DRY\s+BACK/.test(t)) return "VINYL";
   return null;
 }
 
