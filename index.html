@@ -22431,40 +22431,51 @@ const MAT = {
     }
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
     const allLines = [];
-    /* Push 9.2 Phase B (revised): parse only pages 1-3. That's where the
-       LAMINATE / VINYL / SOLID HARDWOOD / ENGINEERED HARDWOOD product
-       rows live — well-structured, thickness-then-size-then-colors-then-
-       numerics. Pages 4-8 are moldings, doors, adhesives, toilets, etc.
-       — mixed formats we can't reliably auto-parse. Admin enters those
-       manually via the "+ Add collection" form. */
     const MAX_PAGES = Math.min(3, pdf.numPages);
+    const Y_TOLERANCE = 3;   // pixels — group items whose Y differs by ≤ 3
+
     for(let i = 1; i <= MAX_PAGES; i++){
       const page = await pdf.getPage(i);
       const content = await page.getTextContent();
-      /* Group items by Y coordinate into lines. pdf.js gives us
-         positioned text items; items with the same Y (within a small
-         tolerance) belong to the same visual line. We also keep the X
-         so we can preserve horizontal ordering (needed for the numeric
-         columns which appear to the RIGHT of the colors text). */
-      const lineMap = new Map();
+      /* Tolerant Y-grouping (Push 9.2 Phase B.5 rewrite).
+         Previous version rounded Y to the nearest integer for grouping,
+         which was too strict: pdf.js sometimes returns adjacent-looking
+         text items at Y=680 and Y=677 (3 px apart in coordinate space
+         but visually on the same table row). Under integer rounding
+         those became separate lines, so `7.71"` and `wide` would show
+         up as two lines and the width regex never saw them together.
+         New approach: bucket items into "bins" where bin.y is within
+         ±Y_TOLERANCE of the item's Y. Items go into the closest bin. */
+      const bins = [];
       for(const it of content.items){
         if(!it.transform) continue;
         const x = it.transform[4];
-        const y = Math.round(it.transform[5]);   // integer Y for grouping
-        if(!lineMap.has(y)) lineMap.set(y, []);
-        lineMap.get(y).push({ x, str: it.str || "" });
+        const y = it.transform[5];
+        if(!(it.str || "").trim()) continue;
+        // Find an existing bin whose center Y is within tolerance
+        let bin = null;
+        for(const b of bins){
+          if(Math.abs(b.y - y) <= Y_TOLERANCE){ bin = b; break; }
+        }
+        if(bin){
+          bin.items.push({ x, y, str: it.str });
+          // Update bin center to running average so it doesn't drift
+          bin.y = (bin.y * bin.items.length + y) / (bin.items.length + 1);
+        } else {
+          bins.push({ y, items: [{ x, y, str: it.str }] });
+        }
       }
-      /* Sort lines top-to-bottom (high Y first in PDF coordinate space),
-         then sort each line's items left-to-right by X. */
-      const sortedYs = Array.from(lineMap.keys()).sort((a,b) => b - a);
-      for(const y of sortedYs){
-        const items = lineMap.get(y).sort((a,b) => a.x - b.x);
-        const text = items.map(t => t.str).join(" ").replace(/\s+/g, " ").trim();
+      // Sort bins top-to-bottom (high Y first — PDF coordinates)
+      bins.sort((a,b) => b.y - a.y);
+      for(const bin of bins){
+        // Sort items left-to-right by X
+        bin.items.sort((a,b) => a.x - b.x);
+        const text = bin.items.map(t => t.str).join(" ").replace(/\s+/g, " ").trim();
         if(!text) continue;
-        allLines.push({ page: i, y, text, items });
+        allLines.push({ page: i, y: bin.y, text, items: bin.items });
       }
     }
-    console.log("[MAT] _parsePdf: extracted " + allLines.length + " lines from pages 1-" + MAX_PAGES + " (of " + pdf.numPages + ")");
+    console.log("[MAT] _parsePdf: extracted " + allLines.length + " lines (tolerant Y-grouping) from pages 1-" + MAX_PAGES + " (of " + pdf.numPages + ")");
     return MAT._interpretLines(allLines);
   },
 
@@ -22493,6 +22504,7 @@ const MAT = {
         sf_per_box:          pending.sfPerBox || null,
         boxes_per_pallet:    pending.boxesPerPallet || null,
         rawLines:            pending.raw || [],
+        sourceLines:         (pending._sourceLines || []).slice(),
       };
       c.confidence = _matScoreCandidate(c);
       candidates.push(c);
@@ -22519,18 +22531,25 @@ const MAT = {
          column-header lines (Pallet / Box / SF / Boxes headers). */
       if(_matIsDecorativeLabel(text)) continue;
 
-      /* 3. Product family header — strong signal required. */
+      /* 3. Product family header — strong signal required. Also strip
+         any embedded numerics from the family text (some PDF rows have
+         the whole row on one Y-line: family + width + prices + counts).
+         We keep only the alphabetic/product portion as the family name
+         and let the numeric extraction take the rest. */
       if(_matIsProductFamily(text)){
         if(pending && pending.priceBox){ pushPending(); }
-        currentFamily = text;
-        pending = { raw: [text] };
-        /* Category fallback: if we haven't seen a section header yet
-           (currentCategory is null), infer it from the family name.
-           The Floors@Work PDF puts rotated section labels HALFWAY
-           down page 1, so the first ~2 product families on page 1
-           get parsed before any section header appears. */
+        // Strip trailing numerics from family text
+        const cleaned = text.replace(/(\d+(?:\.\d+)?[^A-Za-z\d\n]{0,3}wide.*$|\$\s*\d.*$)/i, "").trim();
+        currentFamily = cleaned || text;
+        pending = { raw: [text], _sourceLines: [text] };
+        // If the raw line contained numerics, extract them into pending
+        // so the family row itself contributes to the candidate.
+        if(cleaned !== text.trim()){
+          const nums = _matExtractNumerics(text);
+          _matMergeNums(pending, nums);
+        }
         if(!currentCategory){
-          currentCategory = _matInferCategoryFromFamily(text);
+          currentCategory = _matInferCategoryFromFamily(cleaned || text);
         }
         continue;
       }
@@ -22540,9 +22559,11 @@ const MAT = {
       /* 4. Size: line — starts a new sub-row under the current family. */
       if(/^Size\s*:/i.test(text)){
         if(pending && pending.priceBox){ pushPending(); pending = { raw: [] }; }
-        if(!pending) pending = { raw: [] };
+        if(!pending) pending = { raw: [], _sourceLines: [] };
+        if(!pending._sourceLines) pending._sourceLines = [];
         pending.size_spec = text.replace(/^Size\s*:\s*/i, "").trim();
         pending.raw.push(text);
+        pending._sourceLines.push(text);
         pending._justSawColors = false;
         continue;
       }
@@ -22555,8 +22576,10 @@ const MAT = {
          a "N\" wide" pattern in isolation. Matching against the joined
          string catches it every time. */
       if(/^Colors?\b/i.test(text)){
-        if(!pending) pending = { raw: [] };
+        if(!pending) pending = { raw: [], _sourceLines: [] };
+        if(!pending._sourceLines) pending._sourceLines = [];
         pending.raw.push(text);
+        pending._sourceLines.push(text);
         // Full line text; use `items` joined instead of `text` so we
         // preserve the spacing pdf.js observed (helps regex alignment).
         const full = items.map(t => t.str).join(" ").replace(/\s+/g, " ").trim();
@@ -22585,6 +22608,23 @@ const MAT = {
         const nums = _matExtractNumerics(text);
         _matMergeNums(pending, nums);
         pending.raw.push(text);
+        if(pending._sourceLines) pending._sourceLines.push(text);
+        pending._justSawColors = false;
+        continue;
+      }
+
+      /* 6b. Bare-number row (no $ signs but has decimals in the width /
+         SF/box / boxes range). Some PDFs return the width and prices in
+         separate Y-bins from the Colors: line, so we get "7.71 wide"
+         alone on a line — pdf.js drops the $ glyph. If we're between
+         a Colors: line and a not-yet-completed row, try to extract. */
+      if(pending && !pending.priceBox && /\d/.test(text) && !/^[A-Z]{5,}/.test(text)){
+        const nums = _matExtractNumerics(text);
+        if(Object.keys(nums).length){
+          _matMergeNums(pending, nums);
+          pending.raw.push(text);
+          if(pending._sourceLines) pending._sourceLines.push(text);
+        }
         pending._justSawColors = false;
         continue;
       }
@@ -22596,6 +22636,7 @@ const MAT = {
         const more = _matSplitColors(text);
         pending.colors = (pending.colors || []).concat(more);
         pending.raw.push(text);
+        if(pending._sourceLines) pending._sourceLines.push(text);
         continue;
       }
 
@@ -22692,14 +22733,21 @@ const MAT = {
   },
 
   _reviewRowHtml(r, catOptionsHtml){
-    const numInput = (val, id, step) =>
-      '<input type="number" step="' + step + '" value="' + (val == null ? "" : escapeHtmlAttr(val)) + '" ' +
-      'oninput="MAT._onCandidateEdit(\'' + r._uiId + '\', \'' + id + '\', this.value)" ' +
-      'style="width:100%;padding:5px 7px;text-align:right;background:#0d0d11;border:1px solid var(--line);border-radius:4px;color:var(--ink);font:inherit;font-size:11.5px;">';
+    const hasMissing = !r.width_inches || !r.price_per_sf_pallet || !r.price_per_sf_box || !r.sf_per_box || !r.boxes_per_pallet;
+    const numInput = (val, id, step) => {
+      const isEmpty = val == null || val === "";
+      const bg = isEmpty ? "background:rgba(245,200,120,.08);border:1px solid rgba(245,200,120,.35);" : "background:#0d0d11;border:1px solid var(--line);";
+      return '<input type="number" step="' + step + '" value="' + (isEmpty ? "" : escapeHtmlAttr(val)) + '" ' +
+        'oninput="MAT._onCandidateEdit(\'' + r._uiId + '\', \'' + id + '\', this.value)" ' +
+        'style="width:100%;padding:5px 7px;text-align:right;color:var(--ink);font:inherit;font-size:11.5px;border-radius:4px;' + bg + '">';
+    };
     const txtInput = (val, id) =>
       '<input type="text" value="' + escapeHtmlAttr(val || "") + '" ' +
       'oninput="MAT._onCandidateEdit(\'' + r._uiId + '\', \'' + id + '\', this.value)" ' +
       'style="width:100%;padding:5px 7px;background:#0d0d11;border:1px solid var(--line);border-radius:4px;color:var(--ink);font:inherit;font-size:11.5px;">';
+    const srcBtn = (r.sourceLines && r.sourceLines.length)
+      ? '<button onclick="MAT._toggleSource(\'' + r._uiId + '\')" title="Show the raw text extracted from the PDF for this row" style="background:transparent;border:1px solid ' + (hasMissing ? 'var(--gold)' : 'var(--line-strong)') + ';color:' + (hasMissing ? 'var(--gold-bright)' : 'var(--muted)') + ';border-radius:4px;padding:3px 6px;font-family:inherit;font-size:10.5px;cursor:pointer;white-space:nowrap;">📄 Source</button>'
+      : '';
     return `
       <tr id="row_${r._uiId}" style="${r._included ? "" : "opacity:.35;"}">
         <td><input type="checkbox" ${r._included ? "checked" : ""} onchange="MAT._toggleCandidate('${r._uiId}', this.checked)"></td>
@@ -22717,9 +22765,25 @@ const MAT = {
         <td>${numInput(r.price_per_sf_box, 'price_per_sf_box', '0.01')}</td>
         <td>${numInput(r.sf_per_box, 'sf_per_box', '0.01')}</td>
         <td>${numInput(r.boxes_per_pallet, 'boxes_per_pallet', '1')}</td>
-        <td><button onclick="MAT._deleteCandidate('${r._uiId}')" title="Delete row" style="background:transparent;border:1px solid var(--line-strong);color:#ff9090;border-radius:4px;padding:3px 8px;font-family:inherit;font-size:14px;cursor:pointer;">×</button></td>
+        <td style="white-space:nowrap;">${srcBtn}<button onclick="MAT._deleteCandidate('${r._uiId}')" title="Delete row" style="background:transparent;border:1px solid var(--line-strong);color:#ff9090;border-radius:4px;padding:3px 8px;font-family:inherit;font-size:14px;cursor:pointer;margin-left:4px;">×</button></td>
+      </tr>
+      <tr id="src_${r._uiId}" style="display:none;">
+        <td colspan="12" style="padding:0;">
+          <div style="background:#0d0d11;border:1px solid rgba(212,175,106,.3);border-radius:6px;margin:6px 0;padding:10px 14px;">
+            <div style="font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);font-weight:800;margin-bottom:6px;">
+              Raw PDF text for this row
+              <span style="color:var(--muted);font-weight:400;letter-spacing:0;text-transform:none;margin-left:8px;">Reference this to fill in any missing fields ↑</span>
+            </div>
+            <pre style="margin:0;font-family:'SF Mono',Menlo,Monaco,'Courier New',monospace;font-size:11px;color:var(--ink);white-space:pre-wrap;word-break:break-word;line-height:1.5;">${(r.sourceLines || []).map(escapeHtml).join("\n")}</pre>
+          </div>
+        </td>
       </tr>
     `;
+  },
+  _toggleSource(uiId){
+    const el = document.getElementById("src_" + uiId);
+    if(!el) return;
+    el.style.display = (el.style.display === "none" ? "" : "none");
   },
 
   _onCandidateEdit(uiId, field, value){
@@ -22948,37 +23012,87 @@ function _matFindNumericSplit(items){
    with spaces we get "7.71 " wide" (space between number and quote).
    Also handles the tile format `7.36" x 48.3"` used on SPC TILES rows
    — first dimension is treated as the "width" for that row. */
+/* Value-range based numeric extraction (Push 9.2 Phase B.5).
+   Instead of trying to match specific patterns like `N" wide`, this
+   just pulls ALL decimal numbers from the text and assigns them to
+   fields based on their VALUE MAGNITUDE. This works even when pdf.js
+   drops the quote glyph, splits `7.71` from `wide`, or uses fancy
+   Unicode quotes.
+
+   Assignment rules (order-independent, ranges chosen from the real
+   Floors@Work PDF data):
+     • Prices ($-prefixed OR sub-$10 decimals following $): first two
+       assigned to price_per_sf_pallet and price_per_sf_box.
+     • Bare 3-15 range → width (inches). Only accepted if it's the
+       FIRST bare number (typical column order in the PDF).
+     • Bare 10-50 decimal → sf_per_box.
+     • Bare 20-100 integer → boxes_per_pallet.
+
+   The rules are robust because these ranges don't overlap in practice:
+   a width will never be 30 (no plank is 30" wide) and a boxes-per-
+   pallet will never be 5 (no supplier packs one box per pallet). */
 function _matExtractNumerics(txt){
   const out = {};
-  /* Width regex is deliberately loose. pdf.js returns the double-quote
-     character inconsistently across rows — sometimes ASCII `"`,
-     sometimes Unicode `”` right-double-quotation-mark, sometimes
-     `″` prime, and sometimes it's just absent when pdf.js drops
-     the glyph. Allow ANY 0-3 non-letter chars between the number and
-     the word "wide". Same treatment for the tile-dimension fallback. */
-  let widthMatch = txt.match(/(\d+(?:\.\d+)?)[^A-Za-z\d\n]{0,3}wide/i);
-  if(widthMatch){
-    out.width = Number(widthMatch[1]);
-  } else {
-    // Fall back to tile dimension `N" x N"` — first number is width
-    const tileMatch = txt.match(/(\d+(?:\.\d+)?)[^A-Za-z\d\n]{0,3}x[^A-Za-z\d\n]{0,3}\d+(?:\.\d+)?/i);
-    if(tileMatch) out.width = Number(tileMatch[1]);
-  }
-  const prices = [];
-  const priceRegex = /\$\s*(\d+\.\d{2})/g;
+
+  /* Extract $-prefixed prices first — these are unambiguous. */
+  const dollarRegex = /\$\s*(\d+(?:\.\d{1,2})?)/g;
+  const dollarPrices = [];
   let m;
-  while((m = priceRegex.exec(txt)) !== null){ prices.push(Number(m[1])); }
-  if(prices.length >= 1) out.pricePallet = prices[0];
-  if(prices.length >= 2) out.priceBox    = prices[1];
-  // sf/box + boxes/pallet: two bare numbers appearing after the prices.
-  // Strip out width and prices, then look at remaining tokens.
-  const stripped = txt
-    .replace(/\d+(?:\.\d+)?\s*["″]\s*wide/gi, "")
-    .replace(/\$\s*\d+\.\d{2}/g, "")
-    .replace(/\d+(?:\.\d+)?\s*["″]\s*x\s*\d+(?:\.\d+)?\s*["″]?/gi, "");
-  const nums = stripped.match(/\d+\.?\d*/g) || [];
-  if(nums.length >= 1) out.sfPerBox       = Number(nums[0]);
-  if(nums.length >= 2) out.boxesPerPallet = Number(nums[1]);
+  while((m = dollarRegex.exec(txt)) !== null){
+    dollarPrices.push(Number(m[1]));
+  }
+  if(dollarPrices[0] !== undefined) out.pricePallet = dollarPrices[0];
+  if(dollarPrices[1] !== undefined) out.priceBox    = dollarPrices[1];
+
+  /* Strip out $-prefixed prices so we don't double-count. */
+  const stripped = txt.replace(/\$\s*\d+(?:\.\d{1,2})?/g, " ");
+
+  /* Extract ALL other numbers (with decimals). */
+  const numTokens = stripped.match(/\d+(?:\.\d+)?/g) || [];
+  const nums = numTokens.map(Number).filter(n => !isNaN(n));
+
+  /* Assign by value range. Iterate through numbers in order (which
+     usually matches the PDF's column order: width first, then SF/box,
+     then boxes/pallet). Track which fields have been assigned so we
+     don't overwrite. */
+  let assignedWidth = false, assignedSfPerBox = false, assignedBoxesPerPallet = false;
+  for(const n of nums){
+    if(!assignedWidth && n >= 3 && n <= 15){
+      out.width = n;
+      assignedWidth = true;
+      continue;
+    }
+    if(!assignedSfPerBox && n >= 10 && n <= 50 && !Number.isInteger(n)){
+      // SF/box is nearly always a decimal (e.g. 20.60, 17.94)
+      out.sfPerBox = n;
+      assignedSfPerBox = true;
+      continue;
+    }
+    if(!assignedSfPerBox && n >= 10 && n <= 50 && Number.isInteger(n)){
+      // Fallback: integer SF/box (e.g. 15, 32)
+      out.sfPerBox = n;
+      assignedSfPerBox = true;
+      continue;
+    }
+    if(!assignedBoxesPerPallet && n >= 20 && n <= 200 && Number.isInteger(n)){
+      // Boxes/pallet is always an integer, typically 32-200
+      out.boxesPerPallet = n;
+      assignedBoxesPerPallet = true;
+      continue;
+    }
+  }
+
+  /* Widths within the tile-dimension range (`7.36" x 48.3"`) — if we
+     didn't already assign a width from the general scan and the raw
+     text contains `x`, look at the first pre-`x` number. */
+  if(!assignedWidth){
+    const xMatch = txt.match(/(\d+(?:\.\d+)?)\s*[^A-Za-z\d]{0,3}x\s*\d/i);
+    if(xMatch){
+      const w = Number(xMatch[1]);
+      if(w >= 3 && w <= 24) out.width = w;
+    }
+  }
+
   return out;
 }
 
