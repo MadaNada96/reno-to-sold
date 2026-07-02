@@ -22386,8 +22386,8 @@ const MAT = {
         kind:  "success",
         title: n + " candidate row" + (n === 1 ? "" : "s") + " parsed",
         sub:   'From <a class="mat-import-card-link" href="' + escapeHtmlAttr(publicUrl) + '" target="_blank" rel="noopener">' + escapeHtml(file.name) + ' ↗</a>. '
-             + '<button class="mat-import-card-link" style="background:none;border:none;padding:0;font:inherit;text-decoration:underline;cursor:pointer;" onclick="MAT._openPreviewModal()">Review parsed rows</button>'
-             + '<br><span style="color:var(--muted);font-size:11px;">Phase B preview only — commit workflow lands in Push 9.2 Phase C.</span>',
+             + '<button class="mat-import-card-link" style="background:none;border:none;padding:0;font:inherit;text-decoration:underline;cursor:pointer;" onclick="MAT._openPreviewModal()">Review &amp; commit rows</button>'
+             + '<br><span style="color:var(--muted);font-size:11px;">Edit any field inline, uncheck rows to skip, then commit to your catalog.</span>',
       });
       // Stash for the preview modal
       MAT._lastParseResult = parseResult;
@@ -22609,72 +22609,246 @@ const MAT = {
     return { candidates, warnings };
   },
 
+  /* Push 9.2 Phase C: editable review + commit UI.
+     Each candidate is rendered as an editable row. Admin can edit any
+     field, delete rows, pick category. Bottom "Commit N rows" button
+     matches on product_family + size_spec to update existing rows or
+     insert new ones. */
   _openPreviewModal(){
     if(!MAT._lastParseResult){ return; }
+    // Give each candidate a UI id so we can track them
+    MAT._lastParseResult.candidates.forEach((c, i) => { c._uiId = "cand_" + i; c._included = true; });
     const modal = document.createElement("div");
     modal.className = "modal-bg show";
     modal.id = "matParsePreviewModal";
     modal.style.zIndex = 99999;
-    const rows = MAT._lastParseResult.candidates;
-    const byCat = {};
-    rows.forEach(r => { const k = r.category || "UNCATEGORIZED"; (byCat[k] = byCat[k] || []).push(r); });
-    const groups = Object.entries(byCat).sort();
     modal.innerHTML = `
-      <div class="modal" style="max-width:1100px;max-height:88vh;overflow-y:auto;" onclick="event.stopPropagation()">
-        <h3>
-          <span>Parsed rows preview — ${escapeHtml(MAT._lastParsePdfName || "")}</span>
+      <div class="modal" style="max-width:1300px;max-height:92vh;display:flex;flex-direction:column;padding:0;" onclick="event.stopPropagation()">
+        <h3 style="padding:18px 22px 12px;margin:0;flex-shrink:0;border-bottom:1px solid var(--line);">
+          <span>Review &amp; commit — ${escapeHtml(MAT._lastParsePdfName || "")}</span>
           <button class="ghost" onclick="MAT._closePreviewModal()">Close</button>
         </h3>
-        <div class="modal-body">
-          <div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6;">
-            <b style="color:var(--ink);">${rows.length} candidate row${rows.length===1?"":"s"}</b> extracted from the PDF.
-            <span style="color:var(--gold-bright);">Confidence:</span>
-            ${rows.filter(r => r.confidence === "high").length} high ·
-            ${rows.filter(r => r.confidence === "medium").length} medium ·
-            ${rows.filter(r => r.confidence === "low").length} low.
-            <br><b style="color:var(--gold-bright);">Push 9.2 Phase B:</b> preview only — no rows have been added to your catalog yet.
-            Review the extracted data below; if it looks accurate, Push 9.2 Phase C will add the "review + commit" step.
-          </div>
-          ${groups.map(([cat, rows]) => `
-            <div style="margin-bottom:22px;">
-              <div style="font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--gold);font-weight:800;margin-bottom:8px;">${escapeHtml(cat)} (${rows.length})</div>
-              <table class="inv-list-table" style="width:100%;font-size:12px;">
-                <thead><tr>
-                  <th style="width:16px;"></th>
-                  <th>Product family</th>
-                  <th>Size</th>
-                  <th>Colors</th>
-                  <th style="width:70px;text-align:right;">Width</th>
-                  <th style="width:80px;text-align:right;">$ / pallet</th>
-                  <th style="width:80px;text-align:right;">$ / box</th>
-                  <th style="width:70px;text-align:right;">SF/box</th>
-                  <th style="width:70px;text-align:right;">Boxes</th>
-                </tr></thead>
-                <tbody>
-                  ${rows.map(r => `
-                    <tr>
-                      <td>${_matConfidenceDot(r.confidence)}</td>
-                      <td style="font-weight:600;color:var(--ink);">${escapeHtml(r.product_family || "")}</td>
-                      <td style="color:var(--muted);">${escapeHtml(r.size_spec || "—")}</td>
-                      <td style="color:var(--muted);font-size:11px;">${(r.colors || []).map(c => escapeHtml(c)).join(", ") || "—"}</td>
-                      <td style="text-align:right;">${r.width_inches ? escapeHtml(String(r.width_inches)) + '"' : "—"}</td>
-                      <td style="text-align:right;color:var(--gold-bright);">${r.price_per_sf_pallet ? "$" + Number(r.price_per_sf_pallet).toFixed(2) : "—"}</td>
-                      <td style="text-align:right;color:var(--gold-bright);">${r.price_per_sf_box ? "$" + Number(r.price_per_sf_box).toFixed(2) : "—"}</td>
-                      <td style="text-align:right;">${r.sf_per_box ? escapeHtml(String(r.sf_per_box)) : "—"}</td>
-                      <td style="text-align:right;">${r.boxes_per_pallet ? escapeHtml(String(r.boxes_per_pallet)) : "—"}</td>
-                    </tr>
-                  `).join("")}
-                </tbody>
-              </table>
-            </div>
-          `).join("")}
-          ${rows.length === 0 ? `<div class="mat-empty"><h3>No rows parsed</h3><p>The parser didn't recognize any product families in this PDF. Check the console for extracted text and file feedback.</p></div>` : ""}
+        <div id="matReviewBody" class="modal-body" style="flex:1;overflow-y:auto;padding:18px 22px;"></div>
+        <div id="matReviewFooter" style="flex-shrink:0;padding:14px 22px;border-top:1px solid var(--line);display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--panel-2);">
+          <div id="matReviewCounts" style="flex:1;font-size:12px;color:var(--muted);"></div>
+          <button class="ghost" onclick="MAT._closePreviewModal()">Cancel</button>
+          <button class="primary" id="matCommitBtn" onclick="MAT._commitParsed()">Commit rows to catalog</button>
         </div>
+        <div id="matReviewStatus" style="flex-shrink:0;padding:0 22px 14px;font-size:12px;text-align:right;min-height:14px;color:var(--gold-bright);"></div>
       </div>
     `;
     modal.addEventListener("click", e => { if(e.target === modal) MAT._closePreviewModal(); });
     document.body.appendChild(modal);
+    MAT._renderReviewBody();
   },
+
+  _renderReviewBody(){
+    const body = document.getElementById("matReviewBody");
+    if(!body) return;
+    const rows = MAT._lastParseResult.candidates;
+    const byCat = {};
+    rows.forEach(r => { const k = r.category || "UNCATEGORIZED"; (byCat[k] = byCat[k] || []).push(r); });
+    const groups = Object.entries(byCat).sort();
+
+    const catOptions = MAT.CATEGORIES.map(c => c.key);
+    const catOptionsHtml = (selected) =>
+      ['<option value="">— pick —</option>']
+        .concat(catOptions.map(k => '<option value="' + k + '"' + (k === selected ? ' selected' : '') + '>' + escapeHtml(k) + '</option>'))
+        .join('');
+
+    body.innerHTML = `
+      <div style="font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.6;">
+        <b style="color:var(--ink);">${rows.length} candidate row${rows.length===1?"":"s"}</b> extracted from pages 1-3 of the PDF.
+        Review below — edit any field inline, uncheck rows you don't want to import, and click <b style="color:var(--gold-bright);">Commit rows to catalog</b> when ready.
+        <br><span style="color:var(--gold);">Smart re-import:</span> rows matching an existing collection (same product family + size) will UPDATE it instead of duplicating. New rows get inserted fresh.
+      </div>
+      ${groups.map(([cat, catRows]) => `
+        <div style="margin-bottom:24px;">
+          <div style="font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--gold);font-weight:800;margin-bottom:8px;">${escapeHtml(cat)} (${catRows.length})</div>
+          <table class="inv-list-table" style="width:100%;font-size:11.5px;">
+            <thead><tr>
+              <th style="width:24px;"></th>
+              <th style="width:16px;"></th>
+              <th style="width:130px;">Category</th>
+              <th style="min-width:180px;">Product family *</th>
+              <th style="min-width:130px;">Size spec</th>
+              <th style="min-width:160px;">Colors</th>
+              <th style="width:70px;text-align:right;">Width</th>
+              <th style="width:80px;text-align:right;">$/pallet</th>
+              <th style="width:80px;text-align:right;">$/box</th>
+              <th style="width:70px;text-align:right;">SF/box</th>
+              <th style="width:70px;text-align:right;">Boxes/pallet</th>
+              <th style="width:32px;"></th>
+            </tr></thead>
+            <tbody>
+              ${catRows.map(r => MAT._reviewRowHtml(r, catOptionsHtml)).join("")}
+            </tbody>
+          </table>
+        </div>
+      `).join("")}
+      ${rows.length === 0 ? `<div class="mat-empty"><h3>No rows to review</h3><p>All parsed rows have been removed. Close this modal to start over.</p></div>` : ""}
+    `;
+    MAT._updateReviewCounts();
+  },
+
+  _reviewRowHtml(r, catOptionsHtml){
+    const numInput = (val, id, step) =>
+      '<input type="number" step="' + step + '" value="' + (val == null ? "" : escapeHtmlAttr(val)) + '" ' +
+      'oninput="MAT._onCandidateEdit(\'' + r._uiId + '\', \'' + id + '\', this.value)" ' +
+      'style="width:100%;padding:5px 7px;text-align:right;background:#0d0d11;border:1px solid var(--line);border-radius:4px;color:var(--ink);font:inherit;font-size:11.5px;">';
+    const txtInput = (val, id) =>
+      '<input type="text" value="' + escapeHtmlAttr(val || "") + '" ' +
+      'oninput="MAT._onCandidateEdit(\'' + r._uiId + '\', \'' + id + '\', this.value)" ' +
+      'style="width:100%;padding:5px 7px;background:#0d0d11;border:1px solid var(--line);border-radius:4px;color:var(--ink);font:inherit;font-size:11.5px;">';
+    return `
+      <tr id="row_${r._uiId}" style="${r._included ? "" : "opacity:.35;"}">
+        <td><input type="checkbox" ${r._included ? "checked" : ""} onchange="MAT._toggleCandidate('${r._uiId}', this.checked)"></td>
+        <td>${_matConfidenceDot(r.confidence)}</td>
+        <td>
+          <select onchange="MAT._onCandidateEdit('${r._uiId}', 'category', this.value)" style="width:100%;padding:5px 7px;background:#0d0d11;border:1px solid var(--line);border-radius:4px;color:var(--ink);font:inherit;font-size:11.5px;">
+            ${catOptionsHtml(r.category)}
+          </select>
+        </td>
+        <td>${txtInput(r.product_family, 'product_family')}</td>
+        <td>${txtInput(r.size_spec, 'size_spec')}</td>
+        <td><input type="text" value="${escapeHtmlAttr((r.colors || []).join(", "))}" oninput="MAT._onCandidateEdit('${r._uiId}', 'colors', this.value)" style="width:100%;padding:5px 7px;background:#0d0d11;border:1px solid var(--line);border-radius:4px;color:var(--ink);font:inherit;font-size:11.5px;"></td>
+        <td>${numInput(r.width_inches, 'width_inches', '0.01')}</td>
+        <td>${numInput(r.price_per_sf_pallet, 'price_per_sf_pallet', '0.01')}</td>
+        <td>${numInput(r.price_per_sf_box, 'price_per_sf_box', '0.01')}</td>
+        <td>${numInput(r.sf_per_box, 'sf_per_box', '0.01')}</td>
+        <td>${numInput(r.boxes_per_pallet, 'boxes_per_pallet', '1')}</td>
+        <td><button onclick="MAT._deleteCandidate('${r._uiId}')" title="Delete row" style="background:transparent;border:1px solid var(--line-strong);color:#ff9090;border-radius:4px;padding:3px 8px;font-family:inherit;font-size:14px;cursor:pointer;">×</button></td>
+      </tr>
+    `;
+  },
+
+  _onCandidateEdit(uiId, field, value){
+    const r = MAT._lastParseResult.candidates.find(c => c._uiId === uiId);
+    if(!r) return;
+    if(field === "colors"){
+      r.colors = _matSplitColors(value);
+    } else if(["width_inches","price_per_sf_pallet","price_per_sf_box","sf_per_box","boxes_per_pallet"].includes(field)){
+      r[field] = value === "" ? null : Number(value);
+    } else {
+      r[field] = value;
+    }
+  },
+  _toggleCandidate(uiId, on){
+    const r = MAT._lastParseResult.candidates.find(c => c._uiId === uiId);
+    if(!r) return;
+    r._included = on;
+    const tr = document.getElementById("row_" + uiId);
+    if(tr) tr.style.opacity = on ? "" : ".35";
+    MAT._updateReviewCounts();
+  },
+  _deleteCandidate(uiId){
+    MAT._lastParseResult.candidates = MAT._lastParseResult.candidates.filter(c => c._uiId !== uiId);
+    MAT._renderReviewBody();
+  },
+  _updateReviewCounts(){
+    const rows = MAT._lastParseResult.candidates;
+    const included = rows.filter(r => r._included).length;
+    const el = document.getElementById("matReviewCounts");
+    if(el) el.innerHTML = '<b style="color:var(--ink);">' + included + '</b> of ' + rows.length + ' row' + (rows.length === 1 ? '' : 's') + ' will be committed';
+    const btn = document.getElementById("matCommitBtn");
+    if(btn){
+      btn.textContent = included === 0 ? "Nothing to commit" : "Commit " + included + " row" + (included === 1 ? "" : "s") + " to catalog";
+      btn.disabled = included === 0;
+    }
+  },
+
+  async _commitParsed(){
+    const statusEl = document.getElementById("matReviewStatus");
+    const btn = document.getElementById("matCommitBtn");
+    const rows = MAT._lastParseResult.candidates.filter(r => r._included);
+    if(rows.length === 0) return;
+    // Validate each row: must have category + product_family
+    const bad = rows.filter(r => !r.category || !(r.product_family || "").trim());
+    if(bad.length){
+      statusEl.style.color = "#ff7676";
+      statusEl.textContent = bad.length + " row" + (bad.length === 1 ? " is" : "s are") + " missing category or product family. Fill them in or uncheck to skip.";
+      return;
+    }
+    if(btn){ btn.disabled = true; btn.textContent = "Committing…"; }
+    statusEl.style.color = "var(--gold-bright)";
+
+    /* Load existing collections once so we can match on product_family + size_spec.
+       Matching: normalize whitespace + lowercase; exact string match after normalization. */
+    let existing = [];
+    try {
+      existing = await restFetch("supplier_materials?select=id,product_family,size_spec,active");
+    } catch(e){
+      console.error("[MAT] commit: pre-fetch failed:", e);
+      statusEl.style.color = "#ff7676";
+      statusEl.textContent = "Couldn't check for existing rows: " + (e.message || String(e));
+      if(btn){ btn.disabled = false; btn.textContent = "Commit rows to catalog"; }
+      return;
+    }
+    const norm = (s) => (s || "").replace(/\s+/g, " ").trim().toLowerCase();
+    const existingMap = new Map();
+    existing.forEach(r => {
+      const key = norm(r.product_family) + "||" + norm(r.size_spec);
+      existingMap.set(key, r);
+    });
+
+    let inserted = 0, updated = 0, failed = 0;
+    for(let i = 0; i < rows.length; i++){
+      const r = rows[i];
+      const key = norm(r.product_family) + "||" + norm(r.size_spec);
+      const existingRow = existingMap.get(key);
+      statusEl.textContent = "Committing " + (i + 1) + " of " + rows.length + "…";
+      const payload = {
+        supplier_id:         "00000000-0000-4000-8000-000000000001",
+        category:            r.category,
+        product_family:      (r.product_family || "").trim(),
+        size_spec:           r.size_spec ? r.size_spec.trim() : null,
+        width_inches:        r.width_inches,
+        colors:              r.colors || [],
+        price_per_sf_pallet: r.price_per_sf_pallet,
+        price_per_sf_box:    r.price_per_sf_box,
+        sf_per_box:          r.sf_per_box,
+        boxes_per_pallet:    r.boxes_per_pallet,
+        active:              true,
+        updated_at:          new Date().toISOString(),
+      };
+      try {
+        if(existingRow){
+          await dbUpdate("supplier_materials", { id: existingRow.id }, payload, { prefer: "return=minimal" });
+          updated++;
+        } else {
+          await dbInsert("supplier_materials", payload, { prefer: "return=minimal" });
+          inserted++;
+        }
+      } catch(e){
+        console.error("[MAT] commit row failed:", r, e);
+        failed++;
+      }
+    }
+
+    // Update the audit row so we can look up what was committed later.
+    if(MAT._lastParsePdfUrl){
+      try {
+        await dbUpdate(
+          "supplier_pdf_imports",
+          { pdf_url: MAT._lastParsePdfUrl },
+          { items_imported: inserted + updated, items_rejected: failed, notes: "Committed: " + inserted + " inserted, " + updated + " updated" + (failed ? ", " + failed + " failed" : "") + "." },
+          { prefer: "return=minimal" }
+        );
+      } catch(e){
+        console.warn("[MAT] commit: audit update failed (non-fatal):", e);
+      }
+    }
+
+    statusEl.style.color = failed ? "#f5c878" : "#5fce86";
+    statusEl.textContent = "✓ " + inserted + " inserted · " + updated + " updated" + (failed ? " · " + failed + " failed (see console)" : "");
+    // Refresh browse view + close modal after a beat
+    await MAT.loadCollections();
+    setTimeout(() => {
+      MAT._closePreviewModal();
+      MAT._render();
+    }, 1600);
+  },
+
   _closePreviewModal(){
     const m = document.getElementById("matParsePreviewModal");
     if(m) m.remove();
