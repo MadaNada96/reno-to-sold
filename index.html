@@ -22547,21 +22547,31 @@ const MAT = {
         continue;
       }
 
-      /* 5. Colors: line (may include numerics to the right). */
+      /* 5. Colors: line (may include numerics to the right).
+
+         Split logic uses the JOINED text rather than per-item pattern
+         matching. Rationale: pdf.js often breaks `7.71" wide` into two
+         separate items ("7.71\"" and "wide"), neither of which matches
+         a "N\" wide" pattern in isolation. Matching against the joined
+         string catches it every time. */
       if(/^Colors?\b/i.test(text)){
         if(!pending) pending = { raw: [] };
         pending.raw.push(text);
-        const numericIdx = _matFindNumericSplit(items);
-        let colorsText = text;
-        let numericItems = [];
-        if(numericIdx >= 0){
-          colorsText = items.slice(0, numericIdx).map(t => t.str).join(" ").trim();
-          numericItems = items.slice(numericIdx);
-        }
+        // Full line text; use `items` joined instead of `text` so we
+        // preserve the spacing pdf.js observed (helps regex alignment).
+        const full = items.map(t => t.str).join(" ").replace(/\s+/g, " ").trim();
+        /* Find where the numeric column starts: first occurrence of
+             - a $ price
+             - a width measurement like `N" wide` or `N" x N"`
+           Colors portion = everything BEFORE that; numeric portion =
+           everything from that point onward. */
+        const numericStart = full.search(/\$\s*\d|\d+(?:\.\d+)?\s*["″]\s*(?:wide|x\s*\d)/i);
+        let colorsText   = numericStart >= 0 ? full.slice(0, numericStart) : full;
+        const numericText = numericStart >= 0 ? full.slice(numericStart)    : "";
         const colorsRaw = colorsText.replace(/^Colors?\s*(?:Coming Soon|ON SALE)?\s*:?\s*/i, "").trim();
         pending.colors = _matSplitColors(colorsRaw);
-        if(numericItems.length){
-          const nums = _matExtractNumerics(numericItems.map(t => t.str).join(" "));
+        if(numericText){
+          const nums = _matExtractNumerics(numericText);
           _matMergeNums(pending, nums);
         }
         pending._justSawColors = true;
@@ -22884,20 +22894,39 @@ function _matInferCategoryFromFamily(text){
   return null;
 }
 
-/* Product family header detector. Requires BOTH:
-   1. Line starts with a thickness measurement (e.g. "12 mm", "6.5 mm").
-   2. Line contains at least one product-family keyword (NAF, LAMINATE,
-      VINYL, HARDWOOD, AQUAPLUS, AQUAWOOD, AQUATILE, etc.).
-   3. Line does NOT start with "Size:" or "Colors" (those get their
-      own handlers).
-   This strict combo prevents false positives on continuation lines,
-   Size/Colors lines that happen to have measurements, and any other
-   incidental "N mm" text. */
+/* Product family header detector. Handles TWO patterns:
+
+   Pattern A — Laminate / Vinyl style. Starts with thickness ("12 mm",
+   "6.5 mm", "7.0 mm") followed by product name. Common for pages 1-2.
+
+   Pattern B — Hardwood style. NO thickness prefix; the line is an
+   uppercase-heavy product name like "HANDSCRAPED EXOTIC WALNUT,
+   DISTRESSED GRADE" or "NAF T&G ENGINEERED WIREBRUSHED WHITE OAK".
+   Common for the hardwood sections on pages 2-3.
+
+   Both patterns require a keyword match so we don't false-positive on
+   Size / Colors / column-header lines. */
 function _matIsProductFamily(text){
   if(/^Size\s*:/i.test(text)) return false;
   if(/^Colors?\b/i.test(text)) return false;
-  if(!/^\s*\d+\.?\d*\s*mm\b/i.test(text)) return false;
-  return /\b(NAF|LAMINATE|VINYL|HARDWOOD|AQUAPLUS|AQUAWOOD|AQUATILE|AQUACOMMERCIAL|AQUALUUUZ|AQUASELECT|WATERPROOF|HANDSCRAPED|WIREBRUSHED|EMBOSSED|ENGINEERED|OAK|WALNUT|MAPLE|HICKORY|EXOTIC|ROYAL FLOORING|CLASSIC COLLECTION|VALINGE|CLICK)\b/i.test(text);
+  if(/^\$/.test(text)) return false;
+  if(text.length < 8) return false;
+
+  const flooringKeywords = /\b(NAF|LAMINATE|VINYL|HARDWOOD|AQUAPLUS|AQUAWOOD|AQUATILE|AQUACOMMERCIAL|AQUALUUUZ|AQUASELECT|WATERPROOF|HANDSCRAPED|WIREBRUSHED|EMBOSSED|ENGINEERED|OAK|WALNUT|MAPLE|HICKORY|EXOTIC|ROYAL FLOORING|CLASSIC COLLECTION|VALINGE|CLICK|T&G|COLLECTION|EUROPEAN|Vinyl|Classic|Royal)\b/i.test(text);
+  if(!flooringKeywords) return false;
+
+  // Pattern A: thickness prefix
+  if(/^\s*\d+\.?\d*\s*mm\b/i.test(text)) return true;
+
+  // Pattern B: uppercase-heavy line (>= 60% uppercase letters, plus
+  // hardwood-style keywords). Excludes normal-case size / colors lines.
+  const upperChars = (text.match(/[A-Z]/g) || []).length;
+  const totalLetters = (text.match(/[A-Za-z]/g) || []).length;
+  if(totalLetters > 0 && (upperChars / totalLetters) >= 0.6){
+    return /\b(NAF|T&G|ENGINEERED|HANDSCRAPED|WIREBRUSHED|OAK|WALNUT|HICKORY|MAPLE|EXOTIC|EUROPEAN)\b/.test(text);
+  }
+
+  return false;
 }
 
 /* Decorative-label filter — rotated left-side tier labels and column
