@@ -22576,13 +22576,21 @@ const MAT = {
          Some hardwood Size: lines contain the numeric columns on the
          same Y-bin (`Size: 6.5" x 18mm x RL, Wirebrushed  6.5" wide
          $3.69 $3.89 19.18 48`). If we detect that, split the size_spec
-         from the numerics and extract both. */
-      if(/^Size\s*:/i.test(text)){
+         from the numerics and extract both.
+
+         Also handles decorative-tier prefixes like `SPC TILES Size:`,
+         `LOOSE LAY Size:`, `Luxury Dry Back Size:` — the rotated tier
+         label appears BEFORE the "Size:" keyword in pdf.js's stream. */
+      if(/(?:^|\b)Size\s*:/i.test(text) && text.search(/Size\s*:/i) < 40){
         if(pending && pending.priceBox){ pushPending(); pending = { raw: [] }; }
         if(!pending) pending = { raw: [], _sourceLines: [] };
         if(!pending._sourceLines) pending._sourceLines = [];
-        // Split at first $ or width marker following the Size: content
-        const afterPrefix = text.replace(/^Size\s*:\s*/i, "");
+        // Find where "Size:" starts (may not be at line start due to
+        // decorative tier prefix) and take everything AFTER it.
+        const sizeIdx = text.search(/Size\s*:/i);
+        const afterPrefix = sizeIdx >= 0
+          ? text.slice(sizeIdx).replace(/^Size\s*:\s*/i, "")
+          : text.replace(/^Size\s*:\s*/i, "");
         const numericStart = afterPrefix.search(/\$\s*\d|(?:\d+(?:\.\d+)?[^A-Za-z\d\n]{0,3}wide)/i);
         if(numericStart >= 0){
           pending.size_spec = afterPrefix.slice(0, numericStart).trim().replace(/[,\s]+$/, "");
@@ -22597,26 +22605,24 @@ const MAT = {
         continue;
       }
 
-      /* 5. Colors: line (may include numerics to the right).
+      /* 5. Colors: line (may include numerics to the right, and may
+         have a decorative tier prefix before the "Colors:" keyword).
 
-         Split logic uses the JOINED text rather than per-item pattern
-         matching. Rationale: pdf.js often breaks `7.71" wide` into two
-         separate items ("7.71\"" and "wide"), neither of which matches
-         a "N\" wide" pattern in isolation. Matching against the joined
-         string catches it every time. */
-      if(/^Colors?\b/i.test(text)){
+         Handles tier prefixes: `LOOSE LAY Colors:`, `SPC TILES Colors:`,
+         `Luxury Dry Back Colors :`, `Colors Coming Soon:` — the rotated
+         tier label appears BEFORE "Colors" in pdf.js's stream. */
+      if(/(?:^|\b)Colors?\s*(?:Coming Soon|ON SALE)?\s*:/i.test(text) && text.search(/Colors?\b/i) < 40){
         if(!pending) pending = { raw: [], _sourceLines: [] };
         if(!pending._sourceLines) pending._sourceLines = [];
         pending.raw.push(text);
         pending._sourceLines.push(text);
         // Full line text; use `items` joined instead of `text` so we
         // preserve the spacing pdf.js observed (helps regex alignment).
-        const full = items.map(t => t.str).join(" ").replace(/\s+/g, " ").trim();
-        /* Find where the numeric column starts: first occurrence of
-             - a $ price
-             - a width measurement like `N" wide` or `N" x N"`
-           Colors portion = everything BEFORE that; numeric portion =
-           everything from that point onward. */
+        const rawFull = items.map(t => t.str).join(" ").replace(/\s+/g, " ").trim();
+        // Strip everything BEFORE "Colors" so the extraction starts
+        // cleanly regardless of whatever tier label came first.
+        const colorsIdx = rawFull.search(/Colors?\b/i);
+        const full = colorsIdx >= 0 ? rawFull.slice(colorsIdx) : rawFull;
         const numericStart = full.search(/\$\s*\d|\d+(?:\.\d+)?[^A-Za-z\d\n]{0,3}(?:wide|x[^A-Za-z\d\n]{0,3}\d)/i);
         let colorsText   = numericStart >= 0 ? full.slice(0, numericStart) : full;
         const numericText = numericStart >= 0 ? full.slice(numericStart)    : "";
@@ -23265,16 +23271,31 @@ function _matIsProductFamily(text){
    header. */
 function _matIsEndOfFlooringMarker(text){
   const t = text.toUpperCase().trim();
-  // Explicit section labels + first-line hints
-  if(/^(CLEANERS?|MOLDINGS?|UNDERLAY|NAF\s+ADHESIVES?|NAF\s+CLEANERS?)$/.test(t)) return true;
-  if(/^HUSSSH!?\b/.test(t)) return true;
-  if(/^HUSSSH\s+II\b/i.test(text)) return true;
+  // Section labels
+  if(/^(CLEANERS?|MOLDINGS?|UNDERLAY)$/.test(t)) return true;
+  // ANY occurrence of these markers — earlier fixes only matched
+  // start-of-line but the adhesive/HUSSSH lines have prefix content
+  // that has to be flushed before it contaminates the pending row.
+  if(/\bNAF\s+ADHESIVES?\b/i.test(text)) return true;
+  if(/\bNAF\s+CLEANERS?\b/i.test(text)) return true;
+  if(/\bHUSSSH!?\b/i.test(text)) return true;
+  if(/\bMapei\s+ECO\b/i.test(text)) return true;
   if(/PRICE\s*\/\s*PAIL/i.test(text)) return true;
-  if(/PRICE\s*\/\s*PIECE/i.test(text) && /LENGTH/i.test(text)) return true;
+  if(/PRICE\s*\/\s*PIECE/i.test(text)) return true;
   if(/MDF\s+PRIMED/i.test(text)) return true;
   if(/INTERIOR\s+HOLLOW\s+DOOR/i.test(text)) return true;
-  if(/AVAILABLE\s+FOR:\s+Laminate/i.test(text)) return true;   // NAF CLEANERS subtitle
-  if(/Mapei\s+ECO/i.test(text)) return true;                     // Adhesive product line
+  if(/AVAILABLE\s+FOR:\s+Laminate/i.test(text)) return true;
+  // Adhesive descriptor lines that come BEFORE the "NAF ADHESIVE" label
+  // and would otherwise contaminate the last hardwood row's pending
+  // via case 6/6b. Catching these here flushes state early:
+  //   "15.1L (4 Gal) — coverage 740 sqft. to 980 sqft."
+  //   "10 kg — coverage 150 sqft. to 175 sqft."
+  //   "(15.1L (4 Gal) — coverage 180 sqft. to 380 sqft.):- Standard,"
+  if(/\bcoverage\s+\d+\s*sqft/i.test(text)) return true;
+  if(/\d+(?:\.\d+)?L\s*\(\d+\s*Gal\)/i.test(text)) return true;
+  if(/^\(?\d+(?:\.\d+)?L\s*\(/i.test(text)) return true;
+  if(/\b\d+\s*kg\s*(?:—|-|$|\s+\d)/i.test(text)) return true;
+  if(/^\s*\d+\s+kg\s*$/i.test(text)) return true;
   return false;
 }
 
