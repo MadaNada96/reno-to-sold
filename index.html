@@ -21937,9 +21937,7 @@ const MAT = {
       return;
     }
     const tiles = collections.map(c => {
-      const priceLabel = c.price_per_sf_box
-        ? `$${Number(c.price_per_sf_box).toFixed(2)} / sf`
-        : "";
+      const priceLabel = _matPrimaryPriceLabel(c);
       const colorCount = (Array.isArray(c.colors) ? c.colors.length : 0);
       const colorLabel = colorCount === 0
         ? ""
@@ -21987,9 +21985,20 @@ const MAT = {
     const colorsHtml = (Array.isArray(c.colors) && c.colors.length)
       ? c.colors.map(col => `<span class="mat-color-chip">${escapeHtml(col)}</span>`).join("")
       : `<span style="color:var(--muted);font-size:12px;">No colors on record.</span>`;
+    /* Price table adapts to the unit. Flooring rows (unit='sf') show
+       pallet/box tiers; non-flooring shows per-unit price + optional
+       secondary tier (doors have cut vs pallet pricing). */
     const priceRows = [];
-    if(c.price_per_sf_pallet) priceRows.push(["Pallet price", `$${Number(c.price_per_sf_pallet).toFixed(2)} / sf`]);
-    if(c.price_per_sf_box)    priceRows.push(["Box price",    `$${Number(c.price_per_sf_box).toFixed(2)} / sf`]);
+    const unit = c.unit || "sf";
+    if(unit === "sf"){
+      if(c.price_per_sf_pallet) priceRows.push(["Pallet price", `$${Number(c.price_per_sf_pallet).toFixed(2)} / sf`]);
+      if(c.price_per_sf_box)    priceRows.push(["Box price",    `$${Number(c.price_per_sf_box).toFixed(2)} / sf`]);
+    } else {
+      const unitLabel = { each:"piece", "lin.ft":"lin.ft", pail:"pail", roll:"roll", set:"set" }[unit] || unit;
+      if(c.unit_price)      priceRows.push(["Price / " + unitLabel, `$${Number(c.unit_price).toFixed(2)}`]);
+      if(c.secondary_price) priceRows.push(["Cut / alt price",     `$${Number(c.secondary_price).toFixed(2)}`]);
+      if(c.unit_qty_label)  priceRows.push(["Quantity",             c.unit_qty_label]);
+    }
     const priceHtml = priceRows.length
       ? `<table class="mat-price-table">
           <thead><tr><th>Tier</th><th style="text-align:right;">Price</th></tr></thead>
@@ -22055,9 +22064,7 @@ const MAT = {
     const tiles = matches.map(c => {
       const cat = MAT._categoryByKey(c.category);
       const catLabel = cat ? cat.label : c.category;
-      const priceLabel = c.price_per_sf_box
-        ? `$${Number(c.price_per_sf_box).toFixed(2)} / sf`
-        : "";
+      const priceLabel = _matPrimaryPriceLabel(c);
       const img = c.image_url
         ? `<div class="mat-tile-img" style="background-image:url('${escapeHtmlAttr(c.image_url)}');"></div>`
         : `<div class="mat-tile-img no-image"><i class="ti ti-package" aria-hidden="true"></i></div>`;
@@ -22124,6 +22131,11 @@ const MAT = {
       size_spec: "",
       width_inches: "",
       colors: [],
+      unit: "sf",
+      unit_price: "",
+      unit_qty_label: "",
+      pallet_qty: "",
+      secondary_price: "",
       price_per_sf_pallet: "",
       price_per_sf_box: "",
       sf_per_box: "",
@@ -22135,12 +22147,23 @@ const MAT = {
     const catOptions = MAT.CATEGORIES.map(cat =>
       `<option value="${escapeHtmlAttr(cat.key)}"${cat.key === c.category ? " selected" : ""}>${escapeHtml(cat.label)}</option>`
     ).join("");
+    const unitList = [
+      { key: "sf",       label: "Per square foot (flooring)" },
+      { key: "each",     label: "Per piece (doors, vanities, toilets)" },
+      { key: "lin.ft",   label: "Per linear foot (moldings, baseboards)" },
+      { key: "pail",     label: "Per pail (adhesives, sealants)" },
+      { key: "roll",     label: "Per roll (underlay, wallcoverings)" },
+      { key: "set",      label: "Per set (step + riser + return kits)" },
+    ];
+    const unitOptions = unitList.map(u =>
+      `<option value="${escapeHtmlAttr(u.key)}"${u.key === (c.unit || "sf") ? " selected" : ""}>${escapeHtml(u.label)}</option>`
+    ).join("");
     const modal = document.createElement("div");
     modal.className = "modal-bg show";
     modal.id = "matFormModal";
     modal.style.zIndex = 99999;
     modal.innerHTML = `
-      <div class="modal" style="max-width:640px;" onclick="event.stopPropagation()">
+      <div class="modal" style="max-width:680px;" onclick="event.stopPropagation()">
         <h3>
           <span>${isEdit ? "Edit collection" : "Add collection"}</span>
           <button class="ghost" onclick="MAT._closeFormModal()">Close</button>
@@ -22156,36 +22179,69 @@ const MAT = {
               <input type="text" id="mat_form_family" value="${escapeHtmlAttr(c.product_family)}" placeholder="12mm Waterproof Laminate" style="width:100%;padding:9px 11px;">
             </div>
             <div style="grid-column:1 / -1;">
-              <label class="us-label">Size spec (raw text from PDF)</label>
+              <label class="us-label">Pricing unit *</label>
+              <select id="mat_form_unit" onchange="MAT._onUnitChange(this.value)" style="width:100%;padding:9px 11px;">${unitOptions}</select>
+              <div class="us-hint">Flooring = "Per square foot". Everything else uses per-piece / per-pail / per-roll / etc.</div>
+            </div>
+            <div style="grid-column:1 / -1;">
+              <label class="us-label">Size spec (raw text)</label>
               <input type="text" id="mat_form_size_spec" value="${escapeHtmlAttr(c.size_spec || "")}" placeholder="12mm X 196mm X 1216 mm" style="width:100%;padding:9px 11px;">
             </div>
-            <div>
+
+            <!-- ─── SF-mode fields (flooring) ───────────────────────── -->
+            <div class="mat-unit-sf-only">
               <label class="us-label">Width (inches)</label>
               <input type="number" step="0.01" id="mat_form_width_in" value="${escapeHtmlAttr(c.width_inches || "")}" placeholder="7.71" style="width:100%;padding:9px 11px;">
             </div>
-            <div>
+            <div class="mat-unit-sf-only">
               <label class="us-label">Colors (comma-separated)</label>
               <input type="text" id="mat_form_colors" value="${escapeHtmlAttr((c.colors || []).join(", "))}" placeholder="Misty Grey, Sahara, Space Grey" style="width:100%;padding:9px 11px;">
             </div>
-            <div>
+            <div class="mat-unit-sf-only">
               <label class="us-label">Pallet price / sf ($)</label>
               <input type="number" step="0.01" id="mat_form_price_pallet" value="${escapeHtmlAttr(c.price_per_sf_pallet || "")}" placeholder="1.39" style="width:100%;padding:9px 11px;">
             </div>
-            <div>
+            <div class="mat-unit-sf-only">
               <label class="us-label">Box price / sf ($)</label>
               <input type="number" step="0.01" id="mat_form_price_box" value="${escapeHtmlAttr(c.price_per_sf_box || "")}" placeholder="1.59" style="width:100%;padding:9px 11px;">
             </div>
-            <div>
+            <div class="mat-unit-sf-only">
               <label class="us-label">SF per box</label>
               <input type="number" step="0.01" id="mat_form_sf_box" value="${escapeHtmlAttr(c.sf_per_box || "")}" placeholder="20.60" style="width:100%;padding:9px 11px;">
             </div>
-            <div>
+            <div class="mat-unit-sf-only">
               <label class="us-label">Boxes per pallet</label>
               <input type="number" step="1" id="mat_form_boxes_pallet" value="${escapeHtmlAttr(c.boxes_per_pallet || "")}" placeholder="50" style="width:100%;padding:9px 11px;">
             </div>
+
+            <!-- ─── Non-SF fields (per-piece / per-pail / etc.) ────── -->
+            <div class="mat-unit-nonsf-only" style="display:none;">
+              <label class="us-label">Colors / variants (comma-separated)</label>
+              <input type="text" id="mat_form_colors_alt" value="${escapeHtmlAttr((c.colors || []).join(", "))}" placeholder="White, Beige, or leave blank" style="width:100%;padding:9px 11px;">
+            </div>
+            <div class="mat-unit-nonsf-only" style="display:none;">
+              <label class="us-label">Quantity descriptor</label>
+              <input type="text" id="mat_form_unit_qty_label" value="${escapeHtmlAttr(c.unit_qty_label || "")}" placeholder='e.g. "10 kg", "8&#39; length", "1 Set"' style="width:100%;padding:9px 11px;">
+              <div class="us-hint">Free text: "10 kg", "8' length", "1 Set". Optional.</div>
+            </div>
+            <div class="mat-unit-nonsf-only" style="display:none;">
+              <label class="us-label" id="mat_form_unit_price_label">Price per unit ($)</label>
+              <input type="number" step="0.01" id="mat_form_unit_price" value="${escapeHtmlAttr(c.unit_price || "")}" placeholder="16.00" style="width:100%;padding:9px 11px;">
+            </div>
+            <div class="mat-unit-nonsf-only" style="display:none;">
+              <label class="us-label">Secondary price ($) <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;">(optional)</span></label>
+              <input type="number" step="0.01" id="mat_form_secondary_price" value="${escapeHtmlAttr(c.secondary_price || "")}" placeholder="49.00" style="width:100%;padding:9px 11px;">
+              <div class="us-hint">Only for doors (cut price vs pallet price). Leave blank otherwise.</div>
+            </div>
+            <div class="mat-unit-nonsf-only" style="display:none;">
+              <label class="us-label">Units per pallet</label>
+              <input type="number" step="1" id="mat_form_pallet_qty" value="${escapeHtmlAttr(c.pallet_qty || "")}" placeholder="32" style="width:100%;padding:9px 11px;">
+              <div class="us-hint">Doors per pallet, rolls per pallet, etc.</div>
+            </div>
+
             <div style="grid-column:1 / -1;">
               <label class="us-label">Supplier page URL</label>
-              <input type="url" id="mat_form_supplier_url" value="${escapeHtmlAttr(c.supplier_url || "")}" placeholder="https://floorsatwork.com/12mm-waterproof-laminate.html" style="width:100%;padding:9px 11px;">
+              <input type="url" id="mat_form_supplier_url" value="${escapeHtmlAttr(c.supplier_url || "")}" placeholder="https://floorsatwork.com/..." style="width:100%;padding:9px 11px;">
             </div>
             <div style="grid-column:1 / -1;">
               <label class="us-label">Image URL (hotlink from supplier or Supabase)</label>
@@ -22207,6 +22263,30 @@ const MAT = {
     `;
     modal.addEventListener("click", e => { if(e.target === modal) MAT._closeFormModal(); });
     document.body.appendChild(modal);
+    // Set initial visibility based on the current unit
+    MAT._onUnitChange(c.unit || "sf");
+  },
+
+  /* Show/hide fields based on the unit picker. `sf` shows the flooring
+     fields (width, sf-based prices, sf/box, boxes/pallet). Anything else
+     shows the per-unit fields (unit_price, unit_qty_label, pallet_qty,
+     secondary_price for doors). Also relabels the "Price per unit" hint
+     with the current unit so the form reads naturally. */
+  _onUnitChange(unit){
+    const sfEls    = document.querySelectorAll(".mat-unit-sf-only");
+    const nonSfEls = document.querySelectorAll(".mat-unit-nonsf-only");
+    if(unit === "sf"){
+      sfEls.forEach(el => el.style.display = "");
+      nonSfEls.forEach(el => el.style.display = "none");
+    } else {
+      sfEls.forEach(el => el.style.display = "none");
+      nonSfEls.forEach(el => el.style.display = "");
+      const label = document.getElementById("mat_form_unit_price_label");
+      if(label){
+        const unitDisplay = { each:"piece", "lin.ft":"linear ft", pail:"pail", roll:"roll", set:"set" }[unit] || unit;
+        label.textContent = "Price per " + unitDisplay + " ($) *";
+      }
+    }
   },
   _closeFormModal(){
     const m = document.getElementById("matFormModal");
@@ -22220,24 +22300,51 @@ const MAT = {
       statusEl.textContent = "Product family name is required.";
       return;
     }
-    const colorsRaw = document.getElementById("mat_form_colors").value || "";
+    const unit = document.getElementById("mat_form_unit").value || "sf";
+    /* Colors input is different depending on unit — sf mode uses
+       #mat_form_colors, non-sf mode uses #mat_form_colors_alt.
+       Whichever one is visible carries the current value. */
+    const colorsRaw = (unit === "sf"
+      ? document.getElementById("mat_form_colors")
+      : document.getElementById("mat_form_colors_alt")
+    ).value || "";
     const colors = colorsRaw.split(",").map(s => s.trim()).filter(Boolean);
     const payload = {
       supplier_id:         "00000000-0000-4000-8000-000000000001",
       category:            document.getElementById("mat_form_category").value,
       product_family:      family,
       size_spec:           (document.getElementById("mat_form_size_spec").value || "").trim() || null,
-      width_inches:        _matNumOrNull(document.getElementById("mat_form_width_in").value),
       colors,
-      price_per_sf_pallet: _matNumOrNull(document.getElementById("mat_form_price_pallet").value),
-      price_per_sf_box:    _matNumOrNull(document.getElementById("mat_form_price_box").value),
-      sf_per_box:          _matNumOrNull(document.getElementById("mat_form_sf_box").value),
-      boxes_per_pallet:    _matNumOrNull(document.getElementById("mat_form_boxes_pallet").value),
+      unit,
       supplier_url:        (document.getElementById("mat_form_supplier_url").value || "").trim() || null,
       image_url:           (document.getElementById("mat_form_image_url").value || "").trim() || null,
       notes:               (document.getElementById("mat_form_notes").value || "").trim() || null,
       updated_at:          new Date().toISOString(),
     };
+    /* Unit-specific fields. Save only what's relevant to the current
+       unit so a row doesn't carry both flooring AND per-piece prices
+       (which would be confusing to read back). */
+    if(unit === "sf"){
+      payload.width_inches        = _matNumOrNull(document.getElementById("mat_form_width_in").value);
+      payload.price_per_sf_pallet = _matNumOrNull(document.getElementById("mat_form_price_pallet").value);
+      payload.price_per_sf_box    = _matNumOrNull(document.getElementById("mat_form_price_box").value);
+      payload.sf_per_box          = _matNumOrNull(document.getElementById("mat_form_sf_box").value);
+      payload.boxes_per_pallet    = _matNumOrNull(document.getElementById("mat_form_boxes_pallet").value);
+      payload.unit_price          = null;
+      payload.unit_qty_label      = null;
+      payload.pallet_qty          = null;
+      payload.secondary_price     = null;
+    } else {
+      payload.unit_price          = _matNumOrNull(document.getElementById("mat_form_unit_price").value);
+      payload.unit_qty_label      = (document.getElementById("mat_form_unit_qty_label").value || "").trim() || null;
+      payload.pallet_qty          = _matNumOrNull(document.getElementById("mat_form_pallet_qty").value);
+      payload.secondary_price     = _matNumOrNull(document.getElementById("mat_form_secondary_price").value);
+      payload.width_inches        = null;
+      payload.price_per_sf_pallet = null;
+      payload.price_per_sf_box    = null;
+      payload.sf_per_box          = null;
+      payload.boxes_per_pallet    = null;
+    }
     statusEl.style.color = "var(--gold-bright)";
     statusEl.textContent = existingId ? "Saving changes…" : "Adding collection…";
     try {
@@ -23029,6 +23136,28 @@ function _matNumOrNull(v){
   if(v === "" || v === null || v === undefined) return null;
   const n = Number(v);
   return isNaN(n) ? null : n;
+}
+
+/* Format a collection's primary display price given its unit. Returns
+   "$X.XX / <unit>" or "" if no price is set. Used by both the tile grid
+   and the search-result cards so pricing labels stay consistent across
+   flooring (sf) and non-flooring (each / pail / roll / etc.) rows. */
+function _matPrimaryPriceLabel(c){
+  const unit = c.unit || "sf";
+  if(unit === "sf"){
+    return c.price_per_sf_box
+      ? "$" + Number(c.price_per_sf_box).toFixed(2) + " / sf"
+      : "";
+  }
+  if(c.unit_price == null) return "";
+  const suffix = {
+    each:      "each",
+    "lin.ft":  "lin.ft",
+    pail:      "pail",
+    roll:      "roll",
+    set:       "set",
+  }[unit] || unit;
+  return "$" + Number(c.unit_price).toFixed(2) + " / " + suffix;
 }
 
 /* ── PDF parser helpers ─────────────────────────────────────────
