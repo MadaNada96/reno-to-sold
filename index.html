@@ -3695,6 +3695,12 @@
   /* Slogan only on dashboard; hide everywhere else. JS toggles
      [data-route] on documentElement. */
   html:not([data-route="dashboard"]) .brand-tagline{display:none;}
+  /* The submission status banner belongs ONLY to the estimator view. It's
+     injected into .app (a sibling of the route views), so without this it
+     lingers on the dashboard and every other page. Scope it to the estimator
+     route; renderEstimateStatusBanner still governs WHETHER it exists at all
+     (only for non-draft estimates). */
+  html:not([data-route="estimator"]) #estStatusBanner{display:none !important;}
 
   /* ====================================================================
      TRIM CALCULATOR — embedded standalone tool
@@ -21136,7 +21142,7 @@ async function renderMySubmissions(){
         const addr = s.propAddress || s.propName || "Untitled property";
         const sub = s.submission || {};
         const subDate = sub.submitted_at ? fmtDate(sub.submitted_at) : fmtDate(r.updated_at);
-        return '<button type="button" onclick="loadMySubmissionById(\'' + escapeHtml(r.id) + '\')" ' +
+        return '<button type="button" onclick="loadMySubmissionById(\'' + escapeHtml(r.client_id || r.id) + '\')" ' +
                   'style="text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;cursor:pointer;color:var(--ink);font-family:inherit;display:flex;align-items:center;gap:14px;">' +
                  '<div style="flex:1;min-width:0;">' +
                    '<div style="font-size:14px;font-weight:600;color:var(--ink-strong);">' + escapeHtml(addr) + '</div>' +
@@ -21179,16 +21185,20 @@ function loadMySubmissionById(id){
       return;
     }
     // No local copy — pull the snapshot from the cache and inject it.
-    const cloud = _mySubmissionsCache.find(r => r.id === id);
+    // Match by client_id (the app-wide estimate id), falling back to the DB
+    // primary key. CRITICAL: state._id must be the client_id, NOT the DB PK —
+    // keying a local/cloud copy by the PK mints a second cloud row on the next
+    // save (duplicate "submitted" estimate the admin's reopen never touches).
+    const cloud = _mySubmissionsCache.find(r => (r.client_id || r.id) === id);
     if(cloud && cloud.state){
       // Mirror loadEstimate's effect: set state, persist to local list,
       // re-render the estimator.
       state = JSON.parse(JSON.stringify(cloud.state));
-      state._id = id;
+      state._id = cloud.client_id || id;
       // Persist so the next click finds it locally (cleaner repeat UX)
       try {
         const updated = list.slice();
-        updated.unshift({ id, name: state.propName || "Untitled property",
+        updated.unshift({ id: state._id, name: state.propName || "Untitled property",
                           savedAt: new Date().toISOString(),
                           state: JSON.parse(JSON.stringify(state)) });
         persistSavedList(updated);
