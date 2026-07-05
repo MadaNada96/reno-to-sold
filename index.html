@@ -21811,8 +21811,9 @@ const MAT = {
   ],
 
   state: {
-    view:               "categories",  // "categories" | "collections" | "detail"
+    view:               "categories",  // "categories" | "collections" | "family" | "detail"
     activeCategoryKey:  null,
+    activeFamilyKey:    null,
     activeCollectionId: null,
     searchTerm:         "",
     collections:        [],
@@ -21892,6 +21893,8 @@ const MAT = {
     }
     if(MAT.state.view === "detail"){
       MAT._renderDetail();
+    } else if(MAT.state.view === "family"){
+      MAT._renderFamily();
     } else if(MAT.state.view === "collections"){
       MAT._renderCollectionGrid();
     } else {
@@ -21935,6 +21938,11 @@ const MAT = {
       titleEl.textContent = c ? c.product_family : "Collection";
       const catLabel = MAT._categoryLabel(c && c.category);
       subEl.textContent = catLabel ? catLabel + " · Supplier catalog" : "Supplier catalog";
+    } else if(MAT.state.view === "family"){
+      const cat = MAT._activeCategory();
+      titleEl.textContent = MAT.state.activeFamilyKey || "Collection";
+      const n = MAT._familyVariantCount(cat ? cat.key : null, MAT.state.activeFamilyKey);
+      subEl.textContent = (cat ? cat.label + " · " : "") + n + (n === 1 ? " variant" : " variants");
     } else if(MAT.state.view === "collections"){
       const cat = MAT._activeCategory();
       titleEl.textContent = cat ? cat.label : "Collections";
@@ -21948,24 +21956,39 @@ const MAT = {
   _renderBreadcrumb(){
     const el = document.getElementById("matBreadcrumb");
     if(!el) return;
+    const v = MAT.state.view;
     const crumbs = [];
     crumbs.push('<a onclick="MAT.goHome()">All materials</a>');
-    if(MAT.state.view === "collections" || MAT.state.view === "detail"){
+    if(v === "collections" || v === "family" || v === "detail"){
       const cat = MAT._activeCategory();
       if(cat){
         crumbs.push('<span class="sep">›</span>');
-        if(MAT.state.view === "collections"){
+        if(v === "collections"){
           crumbs.push('<span class="current">' + escapeHtml(cat.label) + '</span>');
         } else {
           crumbs.push('<a onclick="MAT.goToCategory(\'' + escapeHtmlAttr(cat.key) + '\')">' + escapeHtml(cat.label) + '</a>');
         }
       }
     }
-    if(MAT.state.view === "detail"){
-      const c = MAT._activeCollection();
-      if(c){
+    if(v === "family" || v === "detail"){
+      const cat = MAT._activeCategory();
+      const c = (v === "detail") ? MAT._activeCollection() : null;
+      const famName = (v === "family") ? MAT.state.activeFamilyKey : (c ? c.product_family : null);
+      const multi = famName ? (MAT._familyVariantCount(cat ? cat.key : null, famName) > 1) : false;
+      /* Family crumb: always in family view; in detail only when the family
+         has multiple variants (single-variant families would be redundant). */
+      if(famName && (v === "family" || multi)){
         crumbs.push('<span class="sep">›</span>');
-        crumbs.push('<span class="current">' + escapeHtml(c.product_family) + '</span>');
+        if(v === "family"){
+          crumbs.push('<span class="current">' + escapeHtml(famName) + '</span>');
+        } else {
+          crumbs.push('<a onclick="MAT.goToFamily(\'' + escapeHtmlAttr(cat.key) + '\', \'' + _matAttrJs(famName) + '\')">' + escapeHtml(famName) + '</a>');
+        }
+      }
+      if(v === "detail" && c){
+        crumbs.push('<span class="sep">›</span>');
+        const leaf = multi ? (c.size_spec || "Details") : c.product_family;
+        crumbs.push('<span class="current">' + escapeHtml(leaf) + '</span>');
       }
     }
     el.innerHTML = crumbs.join("");
@@ -21995,13 +22018,20 @@ const MAT = {
     body.innerHTML = `<div class="mat-grid">${tiles}</div>${MAT._addFabHtml()}`;
   },
 
-  /* Level 2: collections in a category. */
+  /* Level 2: FAMILY grid for a category (Push 9.5).
+     Previously this showed one tile per supplier_materials row, so a
+     family like "MDF Primed Baseboard" with 9 size rows rendered as 9
+     near-identical tiles (same name, same supplier photo, differing only
+     by a size badge). We now group rows by product_family and render one
+     tile per family. Families with a single variant link straight to the
+     detail view; multi-variant families open a family view listing each
+     size/variant. Exact-duplicate rows are collapsed by _dedupeVariants. */
   _renderCollectionGrid(){
     const body = document.getElementById("matBody");
     if(!body) return;
     const cat = MAT._activeCategory();
-    const collections = (MAT._collectionsByCategoryMap()[cat.key] || []);
-    if(collections.length === 0){
+    const families = MAT._familiesInCategory(cat.key);
+    if(families.length === 0){
       body.innerHTML = `
         <div class="mat-empty">
           <h3>No ${escapeHtml(cat.label)} collections yet</h3>
@@ -22012,12 +22042,74 @@ const MAT = {
       `;
       return;
     }
-    const tiles = collections.map(c => {
+    const tiles = families.map(fam => {
+      const rows = MAT._dedupeVariants(fam.rows);
+      const rep = rows[0];
+      const variantCount = rows.length;
+      const unit = rep.unit || "sf";
+      const imgUrl = _matImageUrlFor(rep);
+      const img = imgUrl
+        ? `<div class="mat-tile-img" style="background-image:url('${escapeHtmlAttr(imgUrl)}');"></div>`
+        : `<div class="mat-tile-img no-image"><i class="ti ti-package" aria-hidden="true"></i></div>`;
+      /* Only single-variant families get a style badge (e.g. door panel
+         count). Multi-variant families show a variant-count badge instead. */
+      const styleText = variantCount === 1 ? _matStyleBadgeText(rep) : null;
+      const styleOverlay = styleText
+        ? `<div class="mat-tile-style-badge">${escapeHtml(styleText)}</div>`
+        : "";
+      let overlay = "";
+      if(variantCount > 1){
+        overlay = `<div class="mat-tile-size-badge">${variantCount} SIZES</div>`;
+      } else if(unit !== "sf" && rep.size_spec){
+        overlay = `<div class="mat-tile-size-badge">${escapeHtml(rep.size_spec)}</div>`;
+      }
+      /* Sub-label: price (range prefixed "from" when multi-variant),
+         then a variant or color count. */
+      const priceLabel = _matPrimaryPriceLabel(rep);
+      const pricePart = priceLabel
+        ? (variantCount > 1 ? "from " + priceLabel : priceLabel)
+        : "";
+      const colorCount = rows.reduce((n,r) => n + (Array.isArray(r.colors) ? r.colors.length : 0), 0);
+      const descBits = [pricePart];
+      if(variantCount > 1)      descBits.push(variantCount + " sizes");
+      else if(colorCount > 0)   descBits.push(colorCount === 1 ? "1 color" : colorCount + " colors");
+      const sub = descBits.filter(Boolean).join(" · ");
+      const onclick = variantCount === 1
+        ? `MAT.goToCollection('${escapeHtmlAttr(rep.id)}')`
+        : `MAT.goToFamily('${escapeHtmlAttr(cat.key)}', '${_matAttrJs(fam.family)}')`;
+      return `
+        <div class="mat-tile" onclick="${onclick}">
+          <div class="mat-tile-img-wrap">${img}${styleOverlay}${overlay}</div>
+          <div class="mat-tile-body">
+            <div class="mat-tile-eyebrow">${escapeHtml(cat.label)}</div>
+            <div class="mat-tile-name">${escapeHtml(fam.family)}</div>
+            <div class="mat-tile-sub">${escapeHtml(sub)}</div>
+          </div>
+        </div>
+      `;
+    }).join("");
+    body.innerHTML = `<div class="mat-grid">${tiles}</div>${MAT._addFabHtml()}`;
+  },
+
+  /* Level 2b: variants within one family (Push 9.5). Reuses the same tile
+     markup as the old per-row grid, but scoped to a single family — so
+     "MDF Primed Baseboard" opens to its individual sizes, each linking to
+     the full detail view. */
+  _renderFamily(){
+    const body = document.getElementById("matBody");
+    if(!body) return;
+    const cat = MAT._activeCategory();
+    const fam = MAT._familiesInCategory(cat ? cat.key : null)
+                   .find(f => f.family === MAT.state.activeFamilyKey);
+    if(!fam){
+      body.innerHTML = `<div class="mat-empty"><h3>Collection not found</h3><p>Go back to browse.</p></div>`;
+      return;
+    }
+    const rows = MAT._dedupeVariants(fam.rows);
+    const tiles = rows.map(c => {
       const priceLabel = _matPrimaryPriceLabel(c);
       const colorCount = (Array.isArray(c.colors) ? c.colors.length : 0);
-      const colorLabel = colorCount === 0
-        ? ""
-        : (colorCount === 1 ? "1 color" : colorCount + " colors");
+      const colorLabel = colorCount === 0 ? "" : (colorCount === 1 ? "1 color" : colorCount + " colors");
       const sizeLabel = c.size_spec || "";
       const unit = c.unit || "sf";
       const bits = unit === "sf"
@@ -22027,25 +22119,22 @@ const MAT = {
       const img = imgUrl
         ? `<div class="mat-tile-img" style="background-image:url('${escapeHtmlAttr(imgUrl)}');"></div>`
         : `<div class="mat-tile-img no-image"><i class="ti ti-package" aria-hidden="true"></i></div>`;
-      /* Non-flooring tiles benefit from a prominent size badge overlaid
-         on the image — same-family tiles all use the same supplier
-         photo, so the size text is the actual differentiator. */
-      const sizeOverlay = (unit !== "sf" && c.size_spec)
+      const sizeOverlay = (c.size_spec)
         ? `<div class="mat-tile-size-badge">${escapeHtml(c.size_spec)}</div>`
         : "";
-      /* Style badge (Push 9.4.5) — top-left ribbon for doors so the
-         panel count (1/2/6) is instantly readable even when the tile
-         image is shared with sibling variants. */
       const styleText = _matStyleBadgeText(c);
       const styleOverlay = styleText
         ? `<div class="mat-tile-style-badge">${escapeHtml(styleText)}</div>`
         : "";
+      /* Variant tiles lead with the differentiator (size/color) so they
+         don't read as duplicates of one another. */
+      const variantName = sizeLabel || (colorCount ? c.colors[0] : c.product_family);
       return `
         <div class="mat-tile" onclick="MAT.goToCollection('${escapeHtmlAttr(c.id)}')">
           <div class="mat-tile-img-wrap">${img}${styleOverlay}${sizeOverlay}</div>
           <div class="mat-tile-body">
-            <div class="mat-tile-eyebrow">${escapeHtml(cat.label)}</div>
-            <div class="mat-tile-name">${escapeHtml(c.product_family)}</div>
+            <div class="mat-tile-eyebrow">${escapeHtml(fam.family)}</div>
+            <div class="mat-tile-name">${escapeHtml(variantName)}</div>
             <div class="mat-tile-sub">${escapeHtml(bits)}</div>
           </div>
         </div>
@@ -22207,6 +22296,16 @@ const MAT = {
   goToCategory(key){
     MAT.state.view = "collections";
     MAT.state.activeCategoryKey = key;
+    MAT.state.activeFamilyKey = null;
+    MAT.state.activeCollectionId = null;
+    MAT.state.searchTerm = "";
+    const s = document.getElementById("matSearch"); if(s) s.value = "";
+    MAT._render();
+  },
+  goToFamily(catKey, family){
+    MAT.state.view = "family";
+    MAT.state.activeCategoryKey = catKey;
+    MAT.state.activeFamilyKey = family;
     MAT.state.activeCollectionId = null;
     MAT.state.searchTerm = "";
     const s = document.getElementById("matSearch"); if(s) s.value = "";
@@ -22215,9 +22314,9 @@ const MAT = {
   goToCollection(id){
     MAT.state.view = "detail";
     MAT.state.activeCollectionId = id;
-    // Also set the active category so the breadcrumb is correct
+    // Also set the active category + family so the breadcrumb is correct
     const c = MAT.state.collections.find(x => x.id === id);
-    if(c) MAT.state.activeCategoryKey = c.category;
+    if(c){ MAT.state.activeCategoryKey = c.category; MAT.state.activeFamilyKey = c.product_family; }
     MAT.state.searchTerm = "";
     const s = document.getElementById("matSearch"); if(s) s.value = "";
     MAT._render();
@@ -23370,6 +23469,47 @@ const MAT = {
     });
     return map;
   },
+  /* Group a category's rows by product_family, preserving first-seen order.
+     Returns [{ family, rows:[...] }]. */
+  _familiesInCategory(catKey){
+    const rows = (MAT._collectionsByCategoryMap()[catKey] || []);
+    const order = [];
+    const byFam = {};
+    rows.forEach(r => {
+      const fam = (r.product_family || "(Unnamed)");
+      if(!byFam[fam]){ byFam[fam] = []; order.push(fam); }
+      byFam[fam].push(r);
+    });
+    return order.map(fam => ({ family: fam, rows: byFam[fam] }));
+  },
+  /* Collapse exact-duplicate variant rows (same size + unit + prices +
+     colors). The PDF parser occasionally emits the same variant twice;
+     this keeps the first and drops repeats so the UI doesn't show two
+     identical cards. */
+  _dedupeVariants(rows){
+    const seen = new Set();
+    const out = [];
+    (rows || []).forEach(r => {
+      const key = [
+        (r.size_spec || "").trim().toLowerCase(),
+        r.unit || "",
+        r.unit_price != null ? r.unit_price : "",
+        r.price_per_sf_box != null ? r.price_per_sf_box : "",
+        r.price_per_sf_pallet != null ? r.price_per_sf_pallet : "",
+        (Array.isArray(r.colors) ? r.colors.slice().sort().join(",") : "")
+      ].join("|");
+      if(seen.has(key)) return;
+      seen.add(key);
+      out.push(r);
+    });
+    return out;
+  },
+  /* # of deduped variants for a family — used by the breadcrumb to decide
+     whether to show a Family crumb (only when >1 variant). */
+  _familyVariantCount(catKey, family){
+    const fam = MAT._familiesInCategory(catKey).find(f => f.family === family);
+    return fam ? MAT._dedupeVariants(fam.rows).length : 0;
+  },
   _addFabHtml(){
     if(!isAdmin()) return "";
     return `<button class="mat-fab" onclick="MAT.openAddModal()"><i class="ti ti-plus" aria-hidden="true"></i>Add collection</button>`;
@@ -23379,6 +23519,18 @@ const MAT = {
     return `<button class="primary" onclick="MAT.openAddModal()" style="margin-top:6px;"><i class="ti ti-plus" aria-hidden="true" style="vertical-align:-2px;margin-right:4px;"></i>Add first collection</button>`;
   },
 };
+
+/* Escape a string for safe embedding inside a single-quoted JS string
+   that itself sits inside a double-quoted HTML attribute (e.g. an inline
+   onclick). Handles &, single quote and double quote — family names like
+   "NAF Oak Hardwood Unfinished Steps & Risers" pass through cleanly. */
+function _matAttrJs(s){
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;")
+    .replace(/\\/g, "\\\\")
+    .replace(/'/g, "\\'")
+    .replace(/"/g, "&quot;");
+}
 
 /* Parse form number field → number|null. Empty string / non-numeric → null. */
 function _matNumOrNull(v){
@@ -23460,8 +23612,8 @@ const _MAT_FAMILY_IMAGES = {
   "Interior Hollow MDF Primed Door Slab":           _MAT_DOOR_SLAB_IMG,
   "1 PANEL HOLLOW SMOOTH DOOR":                     _MAT_DOOR_SLAB_IMG,
   "2 PANEL HOLLOW SMOOTH DOOR":                     _MAT_DOOR_SLAB_IMG,
-  "6 PANEL HOLLOW TEXTURED DOOR":                   _MAT_DOOR_HOLLOW_IMG,
-  "6 PANEL HOLLOW SMOOTH DOOR":                     _MAT_DOOR_HOLLOW_IMG,
+  "6 PANEL HOLLOW TEXTURED DOOR":                   _MAT_DOOR_SLAB_IMG,
+  "6 PANEL HOLLOW SMOOTH DOOR":                     _MAT_DOOR_SLAB_IMG,
   "1 PANEL HOLLOW SHAKER DOOR":                     _MAT_DOOR_SLAB_IMG,
   "2 PANEL HOLLOW SHAKER DOOR":                     _MAT_DOOR_SLAB_IMG,
   "NAF DOOR JAMB - PINE KIT":                       _MAT_DOOR_HOLLOW_IMG,
@@ -23600,7 +23752,8 @@ function _matImageUrlFor(c){
        door image (rotated by panel count). */
     const pf = c.product_family.toUpperCase();
     if(/\bPANEL\b/.test(pf) && /HOLLOW/.test(pf) && /DOOR/.test(pf)){
-      if(/\b6\s*PANEL\b/.test(pf)) return _MAT_DOOR_HOLLOW_IMG;
+      // All door slabs (incl. 6-panel) use the real door photo; the
+      // style badge (1/2/6-PANEL) is what differentiates the tiles.
       return _MAT_DOOR_SLAB_IMG;
     }
     if(/DOOR\s*JAMB/i.test(pf)) return _MAT_DOOR_HOLLOW_IMG;
