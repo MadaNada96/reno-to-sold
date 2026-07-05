@@ -4074,11 +4074,18 @@
     display:flex; flex-wrap:wrap; gap:6px; margin:8px 0 18px;
   }
   .mat-color-chip{
+    display:inline-flex; align-items:center; gap:7px;
     padding:5px 11px; border-radius:999px;
     background:rgba(212,175,106,.10);
     color:var(--gold-bright);
     border:1px solid rgba(212,175,106,.25);
     font-size:11.5px; font-weight:600; letter-spacing:.02em;
+  }
+  .mat-color-chip.has-swatch{ padding-left:5px; }
+  .mat-color-swatch{
+    width:20px; height:20px; border-radius:50%;
+    background-size:cover; background-position:center;
+    border:1px solid rgba(255,255,255,.25); flex:0 0 auto;
   }
   .mat-supplier-link{
     display:inline-flex; align-items:center; gap:8px;
@@ -22174,7 +22181,11 @@ const MAT = {
       `<div><div class="mat-spec-label">${escapeHtml(k)}</div><div class="mat-spec-value">${escapeHtml(String(v))}</div></div>`
     ).join("");
     const colorsHtml = (Array.isArray(c.colors) && c.colors.length)
-      ? c.colors.map(col => `<span class="mat-color-chip">${escapeHtml(col)}</span>`).join("")
+      ? c.colors.map(col => {
+          const _u = _matColorPhotoUrl(col);
+          const _sw = _u ? `<span class="mat-color-swatch" style="background-image:url('${escapeHtmlAttr(_u)}');"></span>` : "";
+          return `<span class="mat-color-chip${_u ? ' has-swatch' : ''}">${_sw}${escapeHtml(col)}</span>`;
+        }).join("")
       : `<span style="color:var(--muted);font-size:12px;">No colors on record.</span>`;
     /* Price table adapts to the unit. Flooring rows (unit='sf') show
        pallet/box tiers; non-flooring shows per-unit price + optional
@@ -23554,6 +23565,146 @@ function _matNumOrNull(v){
 const _MAT_DOOR_SLAB_IMG = "https://floorsatwork.com/uploads/categories/interior-hollow-mdf-primed-door-slab.jpg";
 const _MAT_DOOR_HOLLOW_IMG = "https://floorsatwork.com/uploads/categories/interior-hollow-doors772426.jpg";
 
+/* ===== Real product photos scraped from floorsatwork.com (Push 9.5) =====
+   These are actual plank/product photos (uploads/products/*), not the
+   category brand banners. _MAT_FAMILY_PHOTO gives a hero photo per family;
+   _MAT_COLOR_PHOTO maps a normalized color name -> its swatch photo. */
+const _MAT_PRODUCT_BASE = "https://floorsatwork.com/uploads/products/";
+const _MAT_FAMILY_PHOTO = {
+  "12mm Waterproof Laminate": "erie056684.jpg",
+  "7mm NAF Aquaplus Gold with Underpad": "bayview.jpg",
+  "3mm NAF Aqua Commercial": "chevron.jpg",
+  "5mm NAF Aqua Commercial": "pluto.jpg",
+  "5mm NAF Aqua Luuuz": "barcelona.jpg",
+  "7mm AQUAPLUS GOLD with CORK VINYL": "siberia609343.jpg",
+  "7mm NAF AquaSelect": "collingwood.jpg",
+  "9mm NAF AQUA PLATINUM": "gemini850895.jpg",
+  "NAF HandScraped Solid Hardwood": "tan621601.jpg",
+  "NAF 18mm Designer Collection": "da-vinci.jpg",
+  "NAF 18mm Eng. Exotic Walnut": "tan655737.jpg",
+  "NAF 18mm Eng. Wirebrushed Hickory Hardwood": "bronze989154.jpg",
+  "NAF 18mm Eng. Maple Hardwood": "natural833418.jpg",
+  "NAF 18mm Eng. Oak Hardwood": "country-brown.jpg",
+  "NAF 18mm Regal Collection": "st-maarten.jpg",
+  "NAF Aquaplus Steps & Risers": "amazon-lighthouse.jpg",
+  "Husssh! Superior Acoustic Pad": "husssh-superior-acoustic-pad546738.jpg",
+  "MDF Primed Shoe Base": "colonial-baseshoe.jpg",
+  "MDF Primed Baseboard": "5-colonial-baseboard972863.jpg",
+  "NAF 18mm Elegant Collection": "montana496219.jpg",
+  "5mm Aqua Commercial Luxury Vinyl Tiles": "cobalt.jpg",
+  "NAF Oak Hardwood Unfinished Steps & Risers": "36-oak-square-edge-tread.jpg",
+  "8mm Royal Flooring Solutions": "buckingham.jpg",
+  "NAF Interior Doors": "6-panel-textured-hollow-door.jpg",
+  "1 PANEL HOLLOW SMOOTH DOOR": "1-panel-smooth-hollow-door-slab.jpg",
+  "1 PANEL HOLLOW SHAKER DOOR": "1-panel-smooth-hollow-door-slab.jpg",
+  "2 PANEL HOLLOW SMOOTH DOOR": "2-panel-smooth-hollow-door.jpg",
+  "2 PANEL HOLLOW SHAKER DOOR": "2-panel-smooth-hollow-door.jpg",
+  "6 PANEL HOLLOW TEXTURED DOOR": "6-panel-textured-hollow-door.jpg",
+  "6 PANEL HOLLOW SMOOTH DOOR": "6-panel-textured-hollow-door.jpg",
+  "NAF DOOR JAMB - PINE KIT": "naf-door-jamb-pine-kit781656.jpg",
+  "NAF DOOR JAMB PINE KIT": "naf-door-jamb-pine-kit781656.jpg",
+  "7mm NAF Aquatile": "gold.jpg",
+  "Muraspec Wallcoverings": "oakwood.jpg",
+  "NAF HDF Vanity Collection": "naf-hdf-vanity-24.jpg",
+  "12mm Waterproof Laminate PLUS": "electra.jpg",
+  "10mm NAF AquaWood WPC Vinyl": "volga600039.jpg",
+  "NAF 12mm Engineered Click": "cedar.jpg",
+  "NAF Toilets": "naf-toilet-1916314549.jpg",
+  "7mm NAF Classic": "bali.jpg",
+  "14mm Waterproof Laminate PRO": "horizon.jpg",
+};
+const _MAT_COLOR_PHOTO = {
+  "erie":"erie056684.jpg", "harrison":"harrison.jpg", "rainbow":"rainbow-2.jpg", "sandy":"sandy.jpg",
+  "simcoe":"simcoe.jpg", "stjoseph":"st-joseph.jpg", "superior":"superior.jpg", "molson":"molson.jpg",
+  "ontario":"ontario.jpg", "bayview":"bayview.jpg", "rosedale":"rosedale248493.jpg", "yorkville":"yorkville138409.jpg",
+  "leslie":"leslie053091.jpg", "dupont":"dupont801557.jpg", "summerhill":"summerhill985987.jpg", "lismore":"lismore.jpg",
+  "russellhill":"russell-hill.jpg", "lakeshore":"lakeshore.jpg", "chevron":"chevron.jpg", "graham":"graham.jpg",
+  "aecon":"aecon.jpg", "duca":"duca.jpg", "landmark":"landmark502761.jpg", "lego":"lego.jpg",
+  "nordstrom":"nordstrom.jpg", "pluto":"pluto.jpg", "saturn":"saturn.jpg", "mercury":"mercury.jpg",
+  "mars":"mars.jpg", "earth":"earth.jpg", "venus":"venus.jpg", "jupiter":"jupiter.jpg",
+  "barcelona":"barcelona.jpg", "prague":"prague.jpg", "newyork":"new-york.jpg", "shanghai":"shanghai.jpg",
+  "beijing":"beijing589559.jpg", "copenhagen":"copenhagen.jpg", "istanbul":"istanbul.jpg", "zurich":"zurich.jpg",
+  "frankfurt":"frankfurt.jpg", "siberia":"siberia609343.jpg", "amazon":"amazon.jpg", "shangrila":"shangri-la.jpg",
+  "collingwood":"collingwood.jpg", "tobermory":"tobermory.jpg", "bracebridge":"bracebridge292137.jpg", "davisville":"davisville.jpg",
+  "deerhurst":"deerhurst888410.jpg", "chaplin":"chaplin.jpg", "bay":"bay.jpg", "muskoka":"muskoka803922.jpg",
+  "wasaga":"wasaga.jpg", "saublebeach":"sauble-beach205019.jpg", "gemini":"gemini850895.jpg", "leo":"leo027610.jpg",
+  "capricorn":"capricorn.jpg", "pisces":"pisces822140.jpg", "virgo":"virgo123767.jpg", "libra":"libra.jpg",
+  "london":"london839077.jpg", "chelsea":"chelsea433527.jpg", "westminster":"westminster887668.jpg", "fulham":"fulham732623.jpg",
+  "mayfair":"mayfair.jpg", "soho":"soho.jpg", "tan":"tan621601.jpg", "natural":"natural095379.jpg",
+  "davinci":"da-vinci.jpg", "monet":"monet472905.jpg", "dali":"dali.jpg", "picasso":"picasso.jpg",
+  "bronze":"bronze989154.jpg", "coffee":"coffee.jpg", "greystone":"grey-stone103794.jpg", "purenatural":"pure-natural038080.jpg",
+  "cafehouse":"cafehouse.jpg", "downtowngrey":"downtown-grey008397.jpg", "meyerside":"meyerside.jpg", "timberwolf":"timberwolf.jpg",
+  "millstone":"millstone.jpg", "chestnut":"chestnut.jpg", "cappuccino":"cappuccino.jpg", "capri":"capri.jpg",
+  "originalmaple":"original-maple095675.jpg", "latte":"latte278659.jpg", "macchiato":"macchiato737438.jpg", "countrybrown":"country-brown.jpg",
+  "iron":"iron.jpg", "cascade":"cascade.jpg", "milan":"milan.jpg", "rome":"rome.jpg",
+  "purdy":"purdy419362.jpg", "dune":"dune.jpg", "sunlight":"sunlight.jpg", "oregonoak":"oregon-oak.jpg",
+  "florence":"florence802255.jpg", "naples":"naples.jpg", "stmaarten":"st-maarten.jpg", "jamaica":"jamaica.jpg",
+  "aruba":"aruba.jpg", "bermuda":"bermuda.jpg", "cancun":"cancun.jpg", "haiti":"haiti.jpg",
+  "hawaii":"hawaii.jpg", "stlucia":"st-lucia.jpg", "bahamas":"bahamas.jpg", "cuba":"cuba.jpg",
+  "dominica":"dominica.jpg", "stkitts":"st-kitts106981.jpg", "lisbon":"lisbon.jpg", "torino":"torino.jpg",
+  "venice":"venice.jpg", "guyana":"guyana.jpg", "puertorico":"puerto-rico.jpg", "suriname":"suriname.jpg",
+  "trinidad":"trinidad.jpg", "amazonlighthouse":"amazon-lighthouse.jpg", "americanwalnut":"american-walnut.jpg", "bloor":"bloor.jpg",
+  "foresthill":"forest-hill.jpg", "frenchoak":"french-oak.jpg", "icebergaquarius":"iceberg526177.jpg", "jordantulip":"jordan.jpg",
+  "leoelmwood":"leo-elmwood.jpg", "midland":"midland545621.jpg", "siberiabeijing":"siberia-beijing.jpg", "taurus":"taurus.jpg",
+  "yorkvillewilson":"yorkville.jpg", "hussshsuperioracousticpad":"husssh-superior-acoustic-pad546738.jpg", "colonialbaseshoe":"colonial-baseshoe.jpg", "bevelstepbaseshoe":"bevel-shoe-base235514.jpg",
+  "modernedgebaseshoe":"modern-edge-baseshoe.jpg", "flatstockbaseshoe":"flat-stock-baseshoe.jpg", "colonialbaseboard5":"5-colonial-baseboard972863.jpg", "bevelstepbaseboard5":"bevel-step-baseboard-5.jpg",
+  "modernedgebevel5":"modern-edge-bevel-5.jpg", "flatstock5":"flat-stock-5.jpg", "bevelstepbaseboard7":"bevel-step-baseboard-7.jpg", "modernedgebevel7":"modern-edge-bevel-7.jpg",
+  "flatstock7":"flat-stock-7.jpg", "montana":"montana496219.jpg", "georgia":"georgia.jpg", "florida":"florida.jpg",
+  "nevada":"nevada.jpg", "ohio":"ohio448511.jpg", "arizona":"arizona.jpg", "alaska":"alaska.jpg",
+  "colorado":"colorado207660.jpg", "kansas":"kansas.jpg", "cobalt":"cobalt.jpg", "graphite":"graphite726279.jpg",
+  "magnetite":"magnetite.jpg", "moonstone":"moonstone961958.jpg", "flint":"flint.jpg", "ivory":"ivory.jpg",
+  "36oaksquareedgetreadstandard":"36-oak-square-edge-tread.jpg", "42oaksquareedgetreadstandard":"42-oak-square-edge-tread.jpg", "48oaksquareedgetreadstandard":"48-oak-square-edge-tread.jpg", "42oaksquareedgerightsidefinished":"42-oak-square-edge-right-side-finished.jpg",
+  "48oaksquareedgerightsidefinished":"48-oak-square-edge-right-side-finished.jpg", "42oaksquareedgeleftsidefinished":"42-oak-square-edge-left-side-finished.jpg", "48oaksquareedgeleftsidefinished":"48-oak-square-edge-left-side-finished.jpg", "oaksquareedgepietreadrightsidefinished":"red-oak-square-edge-pie-tread-right.jpg",
+  "oaksquareedgepietreadleftsidefinished":"red-oak-square-edge-pie-tread-left.jpg", "oakriser8x48":"oak-riser-8-x-48.jpg", "buckingham":"buckingham.jpg", "whitehall":"whitehall.jpg",
+  "hampton":"hampton.jpg", "pavilion":"pavilion.jpg", "windsor":"windsor.jpg", "kensington":"kensington677447.jpg",
+  "leedscastle":"leeds-castle258734.jpg", "stjames":"st-james.jpg", "cornwall":"cornwall.jpg", "durham":"durham.jpg",
+  "rochester":"rochester.jpg", "edinburgh":"edinburgh.jpg", "6paneltexturedhollowdoorslab":"6-panel-textured-hollow-door.jpg", "2panelsmoothhollowdoorslab":"2-panel-smooth-hollow-door.jpg",
+  "1panelsmoothhollowdoorslab":"1-panel-smooth-hollow-door-slab.jpg", "nafdoorjambpinekit":"naf-door-jamb-pine-kit781656.jpg", "gold":"gold.jpg", "mica":"mica.png",
+  "onyx":"onyx.jpg", "chrome":"chrome.jpg", "carbon":"carbon.jpg", "oxide":"oxide.jpg",
+  "marble":"marble.jpg", "selenite":"selenite.jpg", "oakwood":"oakwood.jpg", "burnish":"burnish.jpg",
+  "antique":"antique.jpg", "tuscan":"tuscan.jpg", "knightwood":"knightwood.jpg", "santiago":"santiago.jpg",
+  "slate":"slate.jpg", "palermo":"palermo.jpg", "metropolitan":"metropolitan338796.jpg", "grecian":"grecian.jpg",
+  "bark":"bark.jpg", "lava":"lava.jpg", "orissa":"orissa.jpg", "celeste":"celeste.jpg",
+  "vita":"vita.jpg", "mulberrysilk":"mulberry-silk.jpg", "tweed":"tweed.jpg", "segmentsegmentlinen":"segment-segment-linen.jpg",
+  "karakash":"karakash.jpg", "andamansilk":"andaman-silk.jpg", "khotan":"khotan.jpg", "atlantatalis":"atlanta-talis.jpg",
+  "osaka":"osaka.jpg", "canton":"canton.jpg", "nagoya":"nagoya.jpg", "rohan":"rohan.jpg",
+  "waterbloom":"water-bloom.jpg", "insignia":"insignia.jpg", "symmetry":"symmetry.jpg", "trilogy":"trilogy.jpg",
+  "gilded":"gilded.jpg", "cosmia":"cosmia.jpg", "peru":"peru.jpg", "herringbone":"herringbone.jpg",
+  "novaro":"novaro.jpg", "jewel":"union-jewel.jpg", "karakashstripe":"karakash-stripe.jpg", "frequency":"frequency.jpg",
+  "accord":"accord.jpg", "jacana":"jacana.jpg", "nafhdfvanity24":"naf-hdf-vanity-24.jpg", "nafhdfvanity30":"naf-hdf-vanity-30640521.jpg",
+  "nafhdfvanity36":"naf-hdf-vanity-36620703.jpg", "nafhdfvanity42":"naf-hdf-vanity-42.jpg", "nafhdfvanity48":"naf-hdf-vanity-48.jpg", "nafhdfvanity60":"naf-hdf-vanity-60.jpg",
+  "electra":"electra.jpg", "aurora":"aurora726724.jpg", "ariel":"ariel201018.jpg", "luna":"luna250652.jpg",
+  "bianca":"bianca.jpg", "estella":"estella859459.jpg", "nova":"nova319699.jpg", "astra":"astra378039.jpg",
+  "equinox":"equinox.jpg", "halo":"halo.jpg", "volga":"volga600039.jpg", "thames":"thames971132.jpg",
+  "cedar":"cedar.jpg", "golden":"golden.jpg", "autumn":"autumn.jpg", "whiskey":"whiskey.jpg",
+  "toilet1916":"naf-toilet-1916314549.jpg", "toilet1938":"naf-toilet-1938.jpg", "toilet1981":"naf-toilet-1981.jpg", "toilet1994":"naf-toilet-1994.jpg",
+  "bali":"bali.jpg", "borabora":"bora-bora.jpg", "fiji":"fiji.jpg", "madagascar":"madagascar.jpg",
+  "maldives":"maldives554853.jpg", "malta":"malta088050.jpg", "santamaria":"santa-maria934880.jpg", "santorini":"santorini.jpg",
+  "puntacana":"punta-cana.jpg", "mykonos":"mykonos.jpg", "horizon":"horizon.jpg", "canyonmist":"canyon-mist.png",
+  "harbourmist":"harbour-mist.jpg", "palisade":"palisade.jpg", "mesataupe":"mesa-taupe.jpg", "silverdune":"silver-dune.jpg",
+  "summitoak":"summit-oak.jpg", "ravenwood":"ravenwood.jpg", "heritagemaple":"heritage-maple.jpg", "urbanwalnut":"urban-walnut.jpg",
+};
+
+/* Color-name normalization matching the scrape keys (lowercase, alnum only). */
+function _matColorKey(s){ return String(s==null?"":s).toLowerCase().replace(/[^a-z0-9]/g,""); }
+function _matColorPhotoUrl(colorName){
+  const slug = _MAT_COLOR_PHOTO[_matColorKey(colorName)];
+  return slug ? _MAT_PRODUCT_BASE + slug : null;
+}
+/* Prefer a REAL product photo over the brand banner: first a per-color swatch
+   (color names are shared between our catalog and the supplier site), then a
+   family hero photo. Returns null so the caller can fall back to the banner. */
+function _matRealPhotoFor(c){
+  if(c && Array.isArray(c.colors)){
+    for(const col of c.colors){ const u = _matColorPhotoUrl(col); if(u) return u; }
+  }
+  if(c && c.product_family){
+    const slug = _MAT_FAMILY_PHOTO[c.product_family];
+    if(slug) return _MAT_PRODUCT_BASE + slug;
+  }
+  return null;
+}
+
 /* Comprehensive family → image map (Push 9.4.6).
    Scraped systematically from every category page on floorsatwork.com.
    Keys use the site's friendly-case form (e.g. "7mm NAF Aquaplus Gold
@@ -23733,6 +23884,10 @@ function _matFuzzyFamilyUrl(query){
 
 function _matImageUrlFor(c){
   if(c.image_url) return c.image_url;
+  // Push 9.5 — prefer a real product photo (per-color swatch or family hero);
+  // fall through to the brand-banner map only when no real photo is known.
+  const _real = _matRealPhotoFor(c);
+  if(_real) return _real;
   if(c.product_family){
     // Fast path: exact match on the map
     const exact = _MAT_FAMILY_IMAGES[c.product_family];
