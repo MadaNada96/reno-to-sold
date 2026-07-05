@@ -9136,6 +9136,31 @@ function setTier(cat, tier){
 function openSavedModal(){
   renderSavedList();
   document.getElementById("savedModal").classList.add("show");
+  /* Pull the freshest statuses from the cloud before the agent acts. Without
+     this, a submission the admin just reopened still shows locally as
+     "Submitted" (the local copy is only replaced on sign-in), so the agent
+     can't tell it's editable. refreshSavedFromCloud updates localStorage from
+     the cloud, then we re-render the list. */
+  if(currentUser && supa){
+    refreshSavedFromCloud().then(() => {
+      try { if(document.getElementById("savedModal").classList.contains("show")) renderSavedList(); } catch(e){}
+    });
+  }
+}
+/* Replace the local Saved list with the current cloud copy (statuses can
+   change server-side when an admin reviews/reopens). Uses restFetch to avoid
+   the supabase-js from() hang the rest of the app documents. */
+async function refreshSavedFromCloud(){
+  if(!currentUser || !supa) return;
+  try {
+    const path = "estimates?select=client_id,name,state,updated_at" +
+      "&user_id=eq." + encodeURIComponent(currentUser.id) + "&type=eq.estimate";
+    const cloud = await restFetch(path);
+    if(!Array.isArray(cloud)) return;
+    const cloudList = cloud.filter(r => r.client_id).map(r => cloudToLocal(r));
+    cloudList.sort((a,b) => new Date(b.savedAt) - new Date(a.savedAt));
+    persistSavedList(cloudList);
+  } catch(e){ console.warn("refreshSavedFromCloud failed:", e); }
 }
 function closeSavedModal(){ document.getElementById("savedModal").classList.remove("show"); }
 function renderSavedList(){
@@ -15653,8 +15678,8 @@ function isAdmin(){ return !!(currentProfile && currentProfile.role === "admin" 
 function isEstimateLocked(){
   if(!state) return false;
   const s = state.status || "draft";
-  // draft and request_changes are the only editable states
-  return s !== "draft" && s !== "request_changes";
+  // draft, request_changes, and reopened are the editable states
+  return s !== "draft" && s !== "request_changes" && s !== "reopened";
 }
 
 /* Pretty label + color for a status pill. */
@@ -15663,6 +15688,7 @@ function statusPillData(status){
   const map = {
     draft:            { label: "Draft",                    bg: "#1a1a1a", color: "#8a8579", border: "#3a3a42" },
     submitted:        { label: "Submitted for Review",     bg: "#1e2533", color: "#8db4ff", border: "#4a6fb5" },
+    reopened:         { label: "Reopened — Editable",      bg: "#10312e", color: "#79d6c4", border: "#2e7e72" },
     priced:           { label: "Priced — Client Approval", bg: "#332715", color: "#f5c878", border: "#c98e2a" },
     client_approved:  { label: "Client Approved",          bg: "#0f2918", color: "#5fce86", border: "#2e7e4e" },
     approved:         { label: "Approved",                 bg: "#0a3920", color: "#5fce86", border: "#2e7e4e" },
@@ -15710,6 +15736,9 @@ function renderEstimateStatusBanner(){
   } else if(status === "approved"){
     const rev = state.admin_review || {};
     body = `Approved ${rev.decided_at ? "on " + new Date(rev.decided_at).toLocaleDateString("en-CA") : ""}. Final contract numbers. You can still print/email the PDF for your client.`;
+  } else if(status === "reopened"){
+    const rev = state.admin_review || {};
+    body = `Reno to Sold reopened this estimate for edits${rev.note ? ': "' + rev.note + '"' : "."}  Make your changes and submit it again.`;
   } else if(status === "request_changes"){
     const rev = state.admin_review || {};
     body = `Reno to Sold has requested changes${rev.note ? ': "' + rev.note + '"' : "."}  Edit the estimate and submit again.`;
@@ -15792,9 +15821,9 @@ function applyEstimateLock(){
     if(state && state.status === "priced"){
       submitBtn.innerHTML = icon + "Resubmit — Client Approved";
       submitBtn.title = "Confirm your client has approved this priced estimate and resubmit for final approval";
-    } else if(state && state.status === "request_changes"){
+    } else if(state && (state.status === "request_changes" || state.status === "reopened")){
       submitBtn.innerHTML = icon + "Re-Submit for Review";
-      submitBtn.title = "After making the requested changes, resubmit for review";
+      submitBtn.title = "After making your changes, resubmit for review";
     } else {
       submitBtn.innerHTML = icon + "Submit for Review";
       submitBtn.title = "Submit this estimate to Reno to Sold for final review and approval";
@@ -15841,7 +15870,7 @@ async function openSubmitForReviewModal(){
   }
 
   // Determine the action based on current status
-  const isResubmit = state.status === "priced" || state.status === "request_changes";
+  const isResubmit = state.status === "priced" || state.status === "request_changes" || state.status === "reopened";
   const isClientApproved = state.status === "priced";
   // Build the confirmation body
   const t = (typeof computeTotals === "function") ? computeTotals() : null;
@@ -19379,7 +19408,7 @@ async function reopenSubmission(estimateId){
     "Reopen this submission for the agent to edit?\n\n" +
     "Property: " + propAddr + "\n" +
     "Agent: " + agentName + "\n\n" +
-    "The estimate goes back to draft status. The agent will be able to make changes and resubmit. They'll get an email notification.",
+    "The estimate reopens as an editable saved estimate for the agent. They'll be able to make changes and submit it again, and they'll get an email notification.",
     { destructive: false, confirmLabel: "Reopen" }
   );
   if(!firstOk) return;
@@ -19388,7 +19417,7 @@ async function reopenSubmission(estimateId){
   try {
     // Build new state — reset status to draft + record this admin action
     const newState = JSON.parse(JSON.stringify(s));
-    newState.status = "draft";
+    newState.status = "reopened";
     newState.admin_review = {
       reviewer_id:    currentUser ? currentUser.id : null,
       reviewer_email: currentUser ? currentUser.email : null,
