@@ -3927,6 +3927,59 @@
     display:flex; align-items:center; justify-content:center;
     color:var(--gold); font-size:32px;
   }
+  /* Image wrapper — needed for the absolute-positioned size badge. */
+  .mat-tile-img-wrap{
+    position:relative;
+    width:100%;
+  }
+  /* Size badge overlay — shown on non-flooring tiles where the size
+     is the actual differentiator between tiles of the same family
+     (baseboards, moldings, doors). Big gold ribbon across the bottom
+     of the image so admin can identify at a glance without needing
+     to read the smaller sub-text below. */
+  .mat-tile-size-badge{
+    position:absolute;
+    left:0; right:0; bottom:0;
+    background:linear-gradient(180deg, rgba(10,10,10,.65), rgba(10,10,10,.92));
+    color:var(--gold-bright);
+    padding:8px 12px;
+    font-family:'SF Mono',Menlo,Monaco,'Courier New',monospace;
+    font-size:12.5px;
+    font-weight:700;
+    letter-spacing:.02em;
+    text-align:center;
+    border-top:1px solid rgba(212,175,106,.4);
+    text-shadow:0 1px 2px rgba(0,0,0,.6);
+  }
+  /* Style badge overlay (Push 9.4.5) — top-left ribbon on the image
+     for products where the family name IS the differentiator (doors:
+     "1-PANEL", "2-PANEL", "6-PANEL"). Even when the tile image is the
+     same across variants (Floors@Work only publishes one collection
+     photo per door line), this badge makes each tile instantly
+     scannable at a glance. Gold-on-black pill, sharp corners on the
+     top-left to match the tile border. */
+  .mat-tile-style-badge{
+    position:absolute;
+    top:10px; left:10px;
+    background:linear-gradient(180deg, rgba(0,0,0,.88), rgba(0,0,0,.94));
+    color:var(--gold-bright);
+    padding:6px 11px;
+    font-family:'SF Mono',Menlo,Monaco,'Courier New',monospace;
+    font-size:11px;
+    font-weight:800;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    border:1px solid rgba(212,175,106,.55);
+    border-radius:4px;
+    box-shadow:0 2px 6px rgba(0,0,0,.4);
+    text-shadow:0 1px 2px rgba(0,0,0,.6);
+    line-height:1;
+    z-index:2;
+    max-width:calc(100% - 20px);
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
   .mat-tile-body{
     padding:14px 16px 16px;
     display:flex; flex-direction:column; gap:4px;
@@ -3953,6 +4006,29 @@
     width:100%; aspect-ratio:1/1;
     background:#ffffff center/contain no-repeat;
     border:1px solid var(--line); border-radius:12px;
+    position:relative;  /* needed for detail-view style badge (Push 9.4.5) */
+    overflow:hidden;
+  }
+  /* Detail-view style badge — larger version of the tile badge, sits
+     on the hero image so admin knows at a glance which door variant
+     they're looking at. */
+  .mat-detail-style-badge{
+    position:absolute;
+    top:14px; left:14px;
+    background:linear-gradient(180deg, rgba(0,0,0,.9), rgba(0,0,0,.96));
+    color:var(--gold-bright);
+    padding:9px 14px;
+    font-family:'SF Mono',Menlo,Monaco,'Courier New',monospace;
+    font-size:12.5px;
+    font-weight:800;
+    letter-spacing:.16em;
+    text-transform:uppercase;
+    border:1px solid rgba(212,175,106,.6);
+    border-radius:5px;
+    box-shadow:0 3px 8px rgba(0,0,0,.5);
+    text-shadow:0 1px 2px rgba(0,0,0,.6);
+    line-height:1;
+    z-index:2;
   }
   .mat-detail-image.no-image{
     background:var(--panel-2);
@@ -21943,13 +22019,30 @@ const MAT = {
         ? ""
         : (colorCount === 1 ? "1 color" : colorCount + " colors");
       const sizeLabel = c.size_spec || "";
-      const bits = [priceLabel, colorLabel, sizeLabel].filter(Boolean).join(" · ");
-      const img = c.image_url
-        ? `<div class="mat-tile-img" style="background-image:url('${escapeHtmlAttr(c.image_url)}');"></div>`
+      const unit = c.unit || "sf";
+      const bits = unit === "sf"
+        ? [priceLabel, colorLabel, sizeLabel].filter(Boolean).join(" · ")
+        : [priceLabel, c.unit_qty_label].filter(Boolean).join(" · ");
+      const imgUrl = _matImageUrlFor(c);
+      const img = imgUrl
+        ? `<div class="mat-tile-img" style="background-image:url('${escapeHtmlAttr(imgUrl)}');"></div>`
         : `<div class="mat-tile-img no-image"><i class="ti ti-package" aria-hidden="true"></i></div>`;
+      /* Non-flooring tiles benefit from a prominent size badge overlaid
+         on the image — same-family tiles all use the same supplier
+         photo, so the size text is the actual differentiator. */
+      const sizeOverlay = (unit !== "sf" && c.size_spec)
+        ? `<div class="mat-tile-size-badge">${escapeHtml(c.size_spec)}</div>`
+        : "";
+      /* Style badge (Push 9.4.5) — top-left ribbon for doors so the
+         panel count (1/2/6) is instantly readable even when the tile
+         image is shared with sibling variants. */
+      const styleText = _matStyleBadgeText(c);
+      const styleOverlay = styleText
+        ? `<div class="mat-tile-style-badge">${escapeHtml(styleText)}</div>`
+        : "";
       return `
         <div class="mat-tile" onclick="MAT.goToCollection('${escapeHtmlAttr(c.id)}')">
-          ${img}
+          <div class="mat-tile-img-wrap">${img}${styleOverlay}${sizeOverlay}</div>
           <div class="mat-tile-body">
             <div class="mat-tile-eyebrow">${escapeHtml(cat.label)}</div>
             <div class="mat-tile-name">${escapeHtml(c.product_family)}</div>
@@ -21971,9 +22064,18 @@ const MAT = {
       return;
     }
     const cat = MAT._categoryByKey(c.category);
-    const img = c.image_url
-      ? `<div class="mat-detail-image" style="background-image:url('${escapeHtmlAttr(c.image_url)}');"></div>`
-      : `<div class="mat-detail-image no-image"><i class="ti ti-package" aria-hidden="true"></i></div>`;
+    const detailImgUrl = _matImageUrlFor(c);
+    /* Detail-view style badge overlay (Push 9.4.5) — mirrors the tile
+       badge so doors show "1-PANEL SMOOTH" / "6-PANEL TEXTURED" etc.
+       on the hero image. Falls through to null on tiles without a
+       style differentiator (baseboards, flooring). */
+    const detailStyleText = _matStyleBadgeText(c);
+    const detailStyleBadge = detailStyleText
+      ? `<div class="mat-detail-style-badge">${escapeHtml(detailStyleText)}</div>`
+      : "";
+    const img = detailImgUrl
+      ? `<div class="mat-detail-image" style="background-image:url('${escapeHtmlAttr(detailImgUrl)}');">${detailStyleBadge}</div>`
+      : `<div class="mat-detail-image no-image">${detailStyleBadge}<i class="ti ti-package" aria-hidden="true"></i></div>`;
     const specRows = [];
     if(c.size_spec)       specRows.push(["Size", c.size_spec]);
     if(c.width_inches)    specRows.push(["Width", c.width_inches + '"']);
@@ -22065,12 +22167,23 @@ const MAT = {
       const cat = MAT._categoryByKey(c.category);
       const catLabel = cat ? cat.label : c.category;
       const priceLabel = _matPrimaryPriceLabel(c);
-      const img = c.image_url
-        ? `<div class="mat-tile-img" style="background-image:url('${escapeHtmlAttr(c.image_url)}');"></div>`
+      const imgUrl = _matImageUrlFor(c);
+      const img = imgUrl
+        ? `<div class="mat-tile-img" style="background-image:url('${escapeHtmlAttr(imgUrl)}');"></div>`
         : `<div class="mat-tile-img no-image"><i class="ti ti-package" aria-hidden="true"></i></div>`;
+      /* Same badge treatment as the tile grid so search results match
+         browse visually — style badge (doors), size badge (non-sf). */
+      const unit = c.unit || "sf";
+      const sizeOverlay = (unit !== "sf" && c.size_spec)
+        ? `<div class="mat-tile-size-badge">${escapeHtml(c.size_spec)}</div>`
+        : "";
+      const styleText = _matStyleBadgeText(c);
+      const styleOverlay = styleText
+        ? `<div class="mat-tile-style-badge">${escapeHtml(styleText)}</div>`
+        : "";
       return `
         <div class="mat-tile" onclick="MAT.goToCollection('${escapeHtmlAttr(c.id)}')">
-          ${img}
+          <div class="mat-tile-img-wrap">${img}${styleOverlay}${sizeOverlay}</div>
           <div class="mat-tile-body">
             <div class="mat-tile-eyebrow">${escapeHtml(catLabel)}</div>
             <div class="mat-tile-name">${escapeHtml(c.product_family)}</div>
@@ -23272,6 +23385,253 @@ function _matNumOrNull(v){
   if(v === "" || v === null || v === undefined) return null;
   const n = Number(v);
   return isNaN(n) ? null : n;
+}
+
+/* Fallback image lookup for non-flooring rows where the parser doesn't
+   know a specific image URL. Uses family name + category to pick a
+   real Floors@Work product photo when possible; falls back to null (in
+   which case the tile shows the generic package icon).
+
+   Since baseboards and moldings only have one supplier photo each (the
+   supplier doesn't provide per-size images), tiles of the same family
+   share the same image — the SIZE text below the image is the actual
+   distinguisher. */
+/* Two known-good door images from floorsatwork.com. We rotate them
+   across door variants so tiles don't look identical, and pair with
+   the top-left style badge for immediate scan-ability. */
+const _MAT_DOOR_SLAB_IMG = "https://floorsatwork.com/uploads/categories/interior-hollow-mdf-primed-door-slab.jpg";
+const _MAT_DOOR_HOLLOW_IMG = "https://floorsatwork.com/uploads/categories/interior-hollow-doors772426.jpg";
+
+/* Comprehensive family → image map (Push 9.4.6).
+   Scraped systematically from every category page on floorsatwork.com.
+   Keys use the site's friendly-case form (e.g. "7mm NAF Aquaplus Gold
+   with Underpad"). The lookup pipeline normalizes both keys and query
+   strings so parser-cased names (e.g. "AQUA PLUS GOLD WITH UNDERPAD")
+   still match via keyword-overlap scoring. */
+const _MAT_FAMILY_IMAGES = {
+  /* ===== Laminate collections ===== */
+  "12mm Waterproof Laminate":                       "https://floorsatwork.com/uploads/categories/12mm-waterproof-laminate311405.jpg",
+  "12mm Waterproof Laminate PLUS":                  "https://floorsatwork.com/uploads/categories/waterproof-laminate-plus711273.jpg",
+  "14mm Waterproof Laminate PRO":                   "https://floorsatwork.com/uploads/categories/14mm-waterproof-laminate-pro.jpg",
+
+  /* ===== Vinyl collections ===== */
+  "10mm NAF AquaWood WPC Vinyl":                    "https://floorsatwork.com/uploads/categories/naf-aquawood-wpc-vinyl-collection.jpg",
+  "9mm NAF AQUA PLATINUM":                          "https://floorsatwork.com/uploads/categories/9mm-naf-aqua-platinum364390.jpg",
+  "8mm Royal Flooring Solutions":                   "https://floorsatwork.com/uploads/categories/8mm-royal-flooring-solutions272310.jpg",
+  "7mm NAF AquaSelect":                             "https://floorsatwork.com/uploads/categories/7mm-naf-aquaselect218166.jpg",
+  "7mm NAF Aquaplus Gold with Underpad":            "https://floorsatwork.com/uploads/categories/7mm-naf-aquaplus-gold-with-underpad511401.jpg",
+  "7mm AQUAPLUS GOLD with CORK VINYL":              "https://floorsatwork.com/uploads/categories/7mm-aquaplus-gold-with-cork-vinyl249322.jpg",
+  "7mm NAF Classic":                                "https://floorsatwork.com/uploads/categories/7mm-naf-classic523347.jpg",
+  "5mm NAF Aqua Luuuz":                             "https://floorsatwork.com/uploads/categories/naf-aqua-luuz679367.jpg",
+  "5mm Aqua Commercial Luxury Vinyl Tiles":         "https://floorsatwork.com/uploads/categories/5mm-aqua-commercial-luxury-vinyl-tiles.jpg",
+  "5mm NAF Aqua Commercial":                        "https://floorsatwork.com/uploads/categories/5mm-naf-aqua-commercial651117.jpg",
+  "3mm NAF Aqua Commercial":                        "https://floorsatwork.com/uploads/categories/3mm-naf-aqua-commercial.jpg",
+  "7mm NAF Aquatile":                               "https://floorsatwork.com/uploads/categories/7mm-naf-aquatile.jpg",
+
+  /* ===== Engineered Hardwood collections ===== */
+  "NAF 18mm Eng. Wirebrushed Hickory Hardwood":     "https://floorsatwork.com/uploads/categories/naf-18mm-eng-wirebrushed-hickory-hardwood.jpg",
+  "NAF 18mm Eng. Oak Hardwood":                     "https://floorsatwork.com/uploads/categories/18mm-eng-oak-hardwood602102.jpg",
+  "NAF 18mm Regal Collection":                      "https://floorsatwork.com/uploads/categories/18mm-regal-collection309400.jpg",
+  "NAF 18mm Designer Collection":                   "https://floorsatwork.com/uploads/categories/naf-18mm-designer-collection568157.jpg",
+  "NAF 18mm Eng. Exotic Walnut":                    "https://floorsatwork.com/uploads/categories/naf-18mm-eng-exotic-walnut777669.jpg",
+  "NAF 18mm Eng. Maple Hardwood":                   "https://floorsatwork.com/uploads/categories/18mm-eng-maple-hardwood058763.jpg",
+  "NAF 18mm Elegant Collection":                    "https://floorsatwork.com/uploads/categories/naf-18mm-elegant-collection.png",
+  "NAF 12mm Engineered Click":                      "https://floorsatwork.com/uploads/categories/naf-12mm-engineered-click957173.jpg",
+
+  /* ===== Solid Hardwood collections ===== */
+  "NAF HandScraped Solid Hardwood":                 "https://floorsatwork.com/uploads/categories/naf-handscraped-solid-hardwood907076.jpg",
+
+  /* ===== Accessories / Moldings ===== */
+  "NAF Aquaplus Steps & Risers":                    "https://floorsatwork.com/uploads/categories/naf-aquaplus-steps-risers833617.jpg",
+  "NAF Oak Hardwood Unfinished Steps & Risers":     "https://floorsatwork.com/uploads/categories/naf-unfinished-oak-hardwood-steps-risers525438.jpg",
+  "Husssh! Superior Acoustic Pad":                  "https://floorsatwork.com/uploads/categories/husssh-superior-acoustic-pad519138.jpg",
+  "Husssh! II Premium High Density Acoustic Pad":   "https://floorsatwork.com/uploads/categories/husssh-ii-premium-hight-density-acoustic-pad453436.jpg",
+  "LAMINATE MOLDINGS":                              "https://floorsatwork.com/uploads/categories/naf-aquaplus-steps-risers833617.jpg",
+  "AQUA PLUS, AQUALUUUZ & AQUATILES MOLDINGS":      "https://floorsatwork.com/uploads/categories/naf-aquaplus-steps-risers833617.jpg",
+
+  /* ===== Baseboards ===== */
+  "MDF Primed Baseboard":                           "https://floorsatwork.com/uploads/categories/mdf-primed-baseboard106986.jpg",
+  "MDF Primed Shoe Base":                           "https://floorsatwork.com/uploads/categories/mdf-primed-shoe-base056382.jpg",
+  "NAF Shoebase":                                   "https://floorsatwork.com/uploads/categories/mdf-primed-shoe-base056382.jpg",
+  "MDF Primed Casing":                              "https://floorsatwork.com/uploads/categories/mdf-primed-casing.jpg",
+
+  /* ===== Interior Doors ===== */
+  "Interior Hollow MDF Primed Door Slab":           _MAT_DOOR_SLAB_IMG,
+  "1 PANEL HOLLOW SMOOTH DOOR":                     _MAT_DOOR_SLAB_IMG,
+  "2 PANEL HOLLOW SMOOTH DOOR":                     _MAT_DOOR_SLAB_IMG,
+  "6 PANEL HOLLOW TEXTURED DOOR":                   _MAT_DOOR_HOLLOW_IMG,
+  "6 PANEL HOLLOW SMOOTH DOOR":                     _MAT_DOOR_HOLLOW_IMG,
+  "1 PANEL HOLLOW SHAKER DOOR":                     _MAT_DOOR_SLAB_IMG,
+  "2 PANEL HOLLOW SHAKER DOOR":                     _MAT_DOOR_SLAB_IMG,
+  "NAF DOOR JAMB - PINE KIT":                       _MAT_DOOR_HOLLOW_IMG,
+  "NAF DOOR JAMB PINE KIT":                         _MAT_DOOR_HOLLOW_IMG,
+
+  /* ===== HDF Vanity ===== */
+  "NAF HDF Vanity Collection":                      "https://floorsatwork.com/uploads/categories/naf-hdf-vanity-collection127517.jpg",
+
+  /* ===== Soft Coverings ===== */
+  "Muraspec Wallcoverings":                         "https://floorsatwork.com/uploads/categories/muraspec-wallcoverings123228.jpg",
+  "Fardis Wallcoverings":                           "https://floorsatwork.com/uploads/categories/fardis-wallcoverings.png",
+  "Decoprint Wallcoverings":                        "https://floorsatwork.com/uploads/categories/decoprint-wallcoverings.jpg",
+};
+const _MAT_CATEGORY_IMAGES = {
+  NAF_BASEBOARDS:     "https://floorsatwork.com/uploads/categories/mdf-primed-baseboard106986.jpg",
+  ACCESSORIES:        "https://floorsatwork.com/uploads/categories/naf-aquaplus-steps-risers833617.jpg",
+  NAF_INTERIOR_DOORS: _MAT_DOOR_HOLLOW_IMG,
+  NAF_HDF_VANITY:     "https://floorsatwork.com/uploads/categories/naf-hdf-vanity-collection127517.jpg",
+  TOILETS:            "https://floorsatwork.com/uploads/categories/naf-toilets663304.jpg",
+  SOFT_COVERINGS:     "https://floorsatwork.com/uploads/categories/muraspec-wallcoverings123228.jpg",
+};
+
+/* Normalize a family name for fuzzy matching.
+   - Uppercase, drop punctuation, collapse whitespace
+   - KEEP size tokens ("3mm", "5mm", "12mm") — they discriminate between
+     otherwise-identical family lines (3mm Aqua Commercial vs 5mm Aqua
+     Commercial share every other token).
+   - Drop brand prefix "NAF" (present on the site but not in PDF text).
+   - Drop noise tokens (WITH, AND, FOR, THE) that don't add identity.
+   - Split concatenated names: "AQUAPLUS" -> "AQUA PLUS", "AQUAWOOD" ->
+     "AQUA WOOD" so PDF-caps form ("AQUAPLUS") shares tokens with site
+     form ("Aqua Plus").
+   - Collapse 3+ letter repetitions (LUUUZ -> LUUZ) so typo variations
+     between PDF caps and site casing don't cause misses.
+   Returns a sorted, deduped keyword set as a space-joined string. */
+function _matNormalizeFamily(s){
+  if(!s) return "";
+  let t = s.toUpperCase()
+           .replace(/[^A-Z0-9 ]/g, " ")
+           // Split concatenated brand tokens (site's "Aquaplus" vs PDF's "AQUA PLUS")
+           .replace(/AQUAPLUS/g, "AQUA PLUS")
+           .replace(/AQUAWOOD/g, "AQUA WOOD")
+           .replace(/AQUATILE/g, "AQUA TILE")
+           .replace(/AQUALU+Z/g, "AQUA LUZ")
+           .replace(/AQUASELECT/g, "AQUA SELECT")
+           // Collapse 3+ consecutive letter repetitions to 2 (LUUUZ -> LUUZ, HUSSSH -> HUSSH)
+           .replace(/([A-Z])\1{2,}/g, "$1$1")
+           .replace(/\bNAF\b/g, " ")
+           .replace(/\b(WITH|AND|FOR|THE|A|AN)\b/g, " ")
+           .replace(/\s+/g, " ")
+           .trim();
+  const stop = new Set(["","&","-"]);
+  const tokens = Array.from(new Set(t.split(" ").filter(x => x && !stop.has(x))));
+  tokens.sort();
+  return tokens.join(" ");
+}
+
+/* Pre-computed normalized index of every mapped family. Built once at
+   module init so each lookup is O(N) instead of O(N²). Also computes
+   IDF (inverse document frequency) weights so rare tokens like "LUUZ"
+   outweigh common tokens like "7MM" during fuzzy scoring. */
+const _MAT_FAMILY_INDEX = (() => {
+  const entries = [];
+  const docFreq = {};   // token -> # of families it appears in
+  for(const key of Object.keys(_MAT_FAMILY_IMAGES)){
+    const tokens = _matNormalizeFamily(key).split(" ").filter(Boolean);
+    entries.push({ key, url: _MAT_FAMILY_IMAGES[key], tokens });
+    const seen = new Set();
+    for(const t of tokens){
+      if(seen.has(t)) continue;
+      seen.add(t);
+      docFreq[t] = (docFreq[t] || 0) + 1;
+    }
+  }
+  return { entries, docFreq, N: entries.length };
+})();
+
+/* IDF-weighted token score — rarer = higher weight. Common tokens like
+   MM, NAF, WOOD score low; unique brand names like LUUZ, WIREBRUSHED,
+   REGAL score high. This breaks ties in favor of the family that
+   shares the most identifying keywords, not the most common ones. */
+function _matTokenWeight(token){
+  const df = _MAT_FAMILY_INDEX.docFreq[token] || 0;
+  if(df === 0) return 0;
+  // log(N/df) — classic IDF. +1 smoothing so tokens in every family
+  // still contribute something (but far less than unique tokens).
+  return Math.log((_MAT_FAMILY_INDEX.N + 1) / (df + 1)) + 0.1;
+}
+
+/* Fuzzy family lookup — returns the URL whose family-key shares the
+   highest IDF-weighted token overlap with the query. Requires at least
+   one shared token AND a minimum weighted score to prevent false
+   matches on generic tokens (e.g. "COMMERCIAL", "COLLECTION"). */
+function _matFuzzyFamilyUrl(query){
+  const qTokens = _matNormalizeFamily(query).split(" ").filter(Boolean);
+  if(qTokens.length === 0) return null;
+  const qSet = new Set(qTokens);
+  let best = null, bestScore = 0, bestSharedCount = 0;
+  for(const entry of _MAT_FAMILY_INDEX.entries){
+    let score = 0, shared = 0;
+    for(const t of entry.tokens){
+      if(qSet.has(t)){ score += _matTokenWeight(t); shared++; }
+    }
+    if(score > bestScore){
+      bestScore = score;
+      bestSharedCount = shared;
+      best = entry;
+    }
+  }
+  if(!best) return null;
+  // Require at least 1 shared token AND a meaningful weighted score.
+  // Threshold 0.4 filters out lone generic-token matches (weight ~0.1
+  // for very common tokens) while accepting any rare-token hit.
+  if(bestSharedCount < 1 || bestScore < 0.4) return null;
+  return best.url;
+}
+
+function _matImageUrlFor(c){
+  if(c.image_url) return c.image_url;
+  if(c.product_family){
+    // Fast path: exact match on the map
+    const exact = _MAT_FAMILY_IMAGES[c.product_family];
+    if(exact) return exact;
+    /* Priority overrides — these must beat the fuzzy matcher because
+       family names like "MATCHING MOLDINGS FOR HANDSCRAPED" contain a
+       rare token ("HANDSCRAPED") that would otherwise pull them into
+       the solid-hardwood bucket. */
+    if(/MATCHING\s+MOLDINGS/i.test(c.product_family)){
+      return _MAT_FAMILY_IMAGES["LAMINATE MOLDINGS"];
+    }
+    // Fuzzy path: IDF-weighted shared-token scoring across the whole map
+    const fuzzy = _matFuzzyFamilyUrl(c.product_family);
+    if(fuzzy) return fuzzy;
+    /* Door-family safety net — even if fuzzy match somehow misses,
+       any family with PANEL + HOLLOW + DOOR tokens falls back to a
+       door image (rotated by panel count). */
+    const pf = c.product_family.toUpperCase();
+    if(/\bPANEL\b/.test(pf) && /HOLLOW/.test(pf) && /DOOR/.test(pf)){
+      if(/\b6\s*PANEL\b/.test(pf)) return _MAT_DOOR_HOLLOW_IMG;
+      return _MAT_DOOR_SLAB_IMG;
+    }
+    if(/DOOR\s*JAMB/i.test(pf)) return _MAT_DOOR_HOLLOW_IMG;
+  }
+  if(c.category && _MAT_CATEGORY_IMAGES[c.category]) return _MAT_CATEGORY_IMAGES[c.category];
+  return null;
+}
+
+/* Returns a short label to show as a top-left badge on the tile image
+   when the family name itself is the primary differentiator (doors:
+   1-PANEL vs 2-PANEL vs 6-PANEL). Returns null for tiles where the
+   size badge already carries the differentiation (baseboards,
+   moldings). */
+function _matStyleBadgeText(c){
+  if(!c || !c.product_family) return null;
+  const pf = c.product_family.toUpperCase();
+  // Doors — extract "N PANEL" and finish
+  const panelMatch = pf.match(/\b(\d+)\s*PANEL\b/);
+  const isDoor = /HOLLOW.*DOOR|DOOR.*HOLLOW/.test(pf) || (panelMatch && /DOOR/.test(pf));
+  if(isDoor && panelMatch){
+    const n = panelMatch[1];
+    let finish = "";
+    if(/TEXTURED/.test(pf))      finish = "TEXTURED";
+    else if(/SMOOTH/.test(pf))   finish = "SMOOTH";
+    else if(/SHAKER/.test(pf))   finish = "SHAKER";
+    return finish ? `${n}-PANEL ${finish}` : `${n}-PANEL`;
+  }
+  // Door jamb kit — no panel count but should still get a badge
+  if(/DOOR\s*JAMB/.test(pf)){
+    return "DOOR JAMB KIT";
+  }
+  return null;
 }
 
 /* Format a collection's primary display price given its unit. Returns
