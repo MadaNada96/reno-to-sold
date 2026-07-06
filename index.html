@@ -6680,11 +6680,27 @@ function migrateOldEstimate(m){
   delete m.sellerName; delete m.sellerPhone; delete m.sellerEmail;
 }
 async function deleteEstimate(id){
-  if(!(await brandedConfirm("Delete this estimate?", { confirmLabel: "Delete" }))) return;
-  const list = loadSavedList().filter(x=>x.id!==id);
-  persistSavedList(list);
+  if(!(await brandedConfirm("Delete this estimate? Any contractor bids linked to this property will be removed too.", { confirmLabel: "Delete" }))) return;
+  const list = loadSavedList();
+  const target = list.find(x => x.id === id);
+  const est = (target && target.state) || {};
+  const projKey = projectKeyForAddr(est.propAddress, est.propName);
+  const remaining = list.filter(x => x.id !== id);
+  persistSavedList(remaining);
   renderSavedList();
-  if(currentUser && supa){ deleteCloudEstimate(id); }
+  if(currentUser && supa){
+    deleteCloudEstimate(id);
+    // Cascade-delete linked contractor bids — but only if NO other saved
+    // estimate still shares this project (address/name) key, so bids that
+    // belong to a different estimate at the same address survive.
+    if(projKey){
+      const stillLinked = remaining.some(x => x.state &&
+        projectKeyForAddr(x.state.propAddress, x.state.propName) === projKey);
+      if(!stillLinked){
+        deleteBidsForProject(projKey).catch(e => console.warn("cascade bid delete failed:", e));
+      }
+    }
+  }
 }
 async function newEstimate(){
   if(!(await brandedConfirm("Start a new estimate? Unsaved changes will be lost.", { confirmLabel: "Start New" }))) return;
@@ -9151,16 +9167,17 @@ function openSavedModal(){
    change server-side when an admin reviews/reopens). Uses restFetch to avoid
    the supabase-js from() hang the rest of the app documents. */
 async function refreshSavedFromCloud(){
-  if(!currentUser || !supa) return;
+  if(!currentUser || !supa) return false;
   try {
     const path = "estimates?select=client_id,name,state,updated_at" +
       "&user_id=eq." + encodeURIComponent(currentUser.id) + "&type=eq.estimate";
     const cloud = await restFetch(path);
-    if(!Array.isArray(cloud)) return;
+    if(!Array.isArray(cloud)) return false;
     const cloudList = cloud.filter(r => r.client_id).map(r => cloudToLocal(r));
     cloudList.sort((a,b) => new Date(b.savedAt) - new Date(a.savedAt));
     persistSavedList(cloudList);
-  } catch(e){ console.warn("refreshSavedFromCloud failed:", e); }
+    return true;   // caller can trust the local Saved list is now authoritative
+  } catch(e){ console.warn("refreshSavedFromCloud failed:", e); return false; }
 }
 function closeSavedModal(){ document.getElementById("savedModal").classList.remove("show"); }
 function renderSavedList(){
@@ -13360,10 +13377,66 @@ async function loadReceivedBids(){
       "&order=created_at.desc&limit=500";
     const data = await restFetch(path);
     _receivedBidsCache = Array.isArray(data) ? data : [];
+    // Enforce "a bid only lives as long as its estimate": drop any bid whose
+    // property no longer has a matching saved estimate (e.g. the estimate was
+    // deleted on another device). Safe — only runs against an authoritative
+    // cloud estimate list.
+    try { await pruneOrphanedBids(); } catch(e){ console.warn("prune orphaned bids:", e); }
     renderReceivedBidsList();
   }catch(e){
     document.getElementById("rbList").innerHTML = "<div class='rb-empty'>Couldn't load bids: " + escapeHtml(e.message || String(e)) + "</div>";
   }
+}
+/* Delete every contractor bid whose project (address/name) key matches
+   projKey. Called when an estimate is deleted so its linked bids don't
+   linger. Best-effort per row; keeps the local cache + open modal in sync. */
+async function deleteBidsForProject(projKey){
+  if(!currentUser || !supa || !projKey) return;
+  try {
+    const path = "contractor_bids?user_id=eq." + encodeURIComponent(currentUser.id) +
+      "&select=bid_token,property_address,property_name";
+    const rows = await restFetch(path);
+    if(!Array.isArray(rows)) return;
+    const toDelete = rows.filter(b => bidProjectKey(b) === projKey);
+    for(const b of toDelete){
+      try { await dbDelete("contractor_bids", { user_id: currentUser.id, bid_token: b.bid_token }); }
+      catch(e){ console.warn("delete linked bid failed:", e); }
+    }
+    if(Array.isArray(_receivedBidsCache) && _receivedBidsCache.length){
+      const gone = new Set(toDelete.map(b => b.bid_token));
+      _receivedBidsCache = _receivedBidsCache.filter(b => !gone.has(b.bid_token));
+    }
+    const bidsModal = document.getElementById("receivedBidsModal");
+    if(bidsModal && bidsModal.classList.contains("show")){ try { renderReceivedBidsList(); } catch(e){} }
+    if(toDelete.length){ try { flash("Removed " + toDelete.length + " linked bid" + (toDelete.length===1?"":"s")); } catch(e){} }
+  } catch(e){ console.warn("deleteBidsForProject failed:", e); }
+}
+/* Sweep any bid whose property has no matching saved estimate. Runs on bids
+   dashboard load. Guarded on a CONFIRMED cloud estimate list (refreshSaved-
+   FromCloud returning true) so a failed/empty fetch can never wipe valid
+   bids. */
+async function pruneOrphanedBids(){
+  if(!currentUser || !supa) return;
+  if(!Array.isArray(_receivedBidsCache) || _receivedBidsCache.length === 0) return;
+  const ok = await refreshSavedFromCloud();
+  if(!ok) return;   // couldn't confirm the estimate list — do NOT delete anything
+  const estKeys = new Set(
+    loadSavedList()
+      .map(e => e.state ? projectKeyForAddr(e.state.propAddress, e.state.propName) : "")
+      .filter(Boolean)
+  );
+  const orphans = _receivedBidsCache.filter(b => {
+    const k = bidProjectKey(b);
+    return k && !estKeys.has(k);
+  });
+  if(orphans.length === 0) return;
+  for(const b of orphans){
+    try { await dbDelete("contractor_bids", { user_id: currentUser.id, bid_token: b.bid_token }); }
+    catch(e){ console.warn("delete orphan bid failed:", e); }
+  }
+  const gone = new Set(orphans.map(b => b.bid_token));
+  _receivedBidsCache = _receivedBidsCache.filter(b => !gone.has(b.bid_token));
+  console.log("[bids] pruned " + orphans.length + " orphaned bid(s) with no matching estimate");
 }
 function renderReceivedBidsList(){
   const filter = _receivedBidsTab;
