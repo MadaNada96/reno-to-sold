@@ -17238,6 +17238,7 @@ function initSupabase(){
       // their own user_id. The cloud copy of the actual data is safe.
       clearUserScopedLocalStorage("sign-out");
       try { localStorage.removeItem(LAST_USER_ID_KEY); } catch(e){}
+      try { unsubscribeFromMyEstimates(); } catch(e){}
       setCurrentUser(null);
       currentProfile = null;
       teardownServerPricing();
@@ -18995,7 +18996,8 @@ async function changeMyPassword(){
 */
 
 let submissionsList = [];                // cached rows
-let submissionsRealtimeChannel = null;   // Realtime subscription handle
+let submissionsRealtimeChannel = null;   // Realtime subscription handle (admin queue)
+let myEstimatesRealtimeChannel = null;   // Realtime subscription handle (agent's own rows)
 
 async function openSubmissionsModal(){
   if(!isAdmin()){
@@ -19237,6 +19239,64 @@ function unsubscribeFromSubmissions(){
     try { supa.removeChannel(submissionsRealtimeChannel); } catch(e){}
     submissionsRealtimeChannel = null;
   }
+}
+
+/* ===== Agent-facing live sync =====
+   Subscribes to changes on THIS user's own estimate rows so admin actions
+   (reopen / price / approve / reject) update the open estimator + Saved list
+   INSTANTLY, with no page refresh. RLS already scopes Realtime delivery to
+   rows the user can SELECT (their own), so no explicit filter is needed —
+   same pattern as subscribeToSubmissions. Idempotent: guarded on the channel
+   handle so repeat calls (init + SIGNED_IN both run bootstrapCloudSync) are
+   no-ops. */
+function subscribeToMyEstimates(){
+  if(!supa || !currentUser || myEstimatesRealtimeChannel) return;
+  try {
+    myEstimatesRealtimeChannel = supa.channel("my-estimates-feed")
+      .on("postgres_changes",
+          { event: "UPDATE", schema: "public", table: "estimates" },
+          (payload) => { handleMyEstimateChange(payload); })
+      .subscribe((status) => {
+        if(status === "CHANNEL_ERROR" || status === "TIMED_OUT"){
+          console.warn("My-estimates Realtime status:", status);
+        }
+      });
+  } catch(e){ console.warn("My-estimates realtime subscribe failed:", e); }
+}
+function unsubscribeFromMyEstimates(){
+  if(myEstimatesRealtimeChannel){
+    try { supa.removeChannel(myEstimatesRealtimeChannel); } catch(e){}
+    myEstimatesRealtimeChannel = null;
+  }
+}
+async function handleMyEstimateChange(payload){
+  try {
+    const rowNew = payload && payload.new;
+    if(!rowNew || rowNew.type !== "estimate" || !rowNew.client_id) return;
+    // Keep the Saved list current so any open list reflects the new status.
+    try {
+      await refreshSavedFromCloud();
+      const savedModal = document.getElementById("savedModal");
+      if(savedModal && savedModal.classList.contains("show")) renderSavedList();
+    } catch(e){}
+    // If this change is to the estimate currently open in the estimator AND
+    // its status changed while the agent had it LOCKED (i.e. an admin action,
+    // not the agent's own in-progress edit), live-apply the fresh state so the
+    // banner + lock update immediately. The isEstimateLocked() guard prevents
+    // clobbering unsaved edits on a draft/reopened estimate.
+    if(state && state._id === rowNew.client_id && rowNew.state){
+      const newStatus = rowNew.state.status;
+      if(newStatus && newStatus !== state.status && isEstimateLocked()){
+        const fresh = (typeof freshState === "function") ? freshState() : {};
+        deepMerge(fresh, rowNew.state);
+        fresh._id = state._id;
+        state = fresh;
+        try { migrateOldEstimate(state); } catch(e){}
+        try { renderAll(); } catch(e){}
+        try { flash("Reno to Sold updated this estimate"); } catch(e){}
+      }
+    }
+  } catch(e){ console.warn("handleMyEstimateChange failed:", e); }
 }
 
 /* Generate and download a PDF of the submission, using the agent's
@@ -25070,6 +25130,10 @@ async function bootstrapCloudSync(showMigratePrompt){
   // pullCloudContractors directly with the migrate prompt flag.
   try{ await pullCloudContractors(showMigratePrompt); }
   catch(e){ console.error("Contractors cloud sync failed:", e); }
+
+  // Live-sync this user's own estimates so admin status changes (reopen etc.)
+  // land instantly without a refresh. Idempotent — safe to call every sync.
+  try { subscribeToMyEstimates(); } catch(e){ console.warn("subscribeToMyEstimates failed:", e); }
 }
 
 /* ---------- PDF Floor Plan Import ----------
