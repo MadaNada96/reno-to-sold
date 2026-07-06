@@ -6690,16 +6690,12 @@ async function deleteEstimate(id){
   renderSavedList();
   if(currentUser && supa){
     deleteCloudEstimate(id);
-    // Cascade-delete linked contractor bids — but only if NO other saved
-    // estimate still shares this project (address/name) key, so bids that
-    // belong to a different estimate at the same address survive.
-    if(projKey){
-      const stillLinked = remaining.some(x => x.state &&
-        projectKeyForAddr(x.state.propAddress, x.state.propName) === projKey);
-      if(!stillLinked){
-        deleteBidsForProject(projKey).catch(e => console.warn("cascade bid delete failed:", e));
-      }
-    }
+    // Cascade-delete linked contractor bids. ID-linked bids are removed
+    // exactly by this estimate's client_id; legacy address-linked bids are
+    // removed only if no OTHER estimate still shares this address.
+    const stillLinked = !!projKey && remaining.some(x => x.state &&
+      projectKeyForAddr(x.state.propAddress, x.state.propName) === projKey);
+    deleteBidsForEstimate(id, projKey, stillLinked).catch(e => console.warn("cascade bid delete failed:", e));
   }
 }
 async function newEstimate(){
@@ -13284,6 +13280,14 @@ function currentProjectKey(){
 function bidProjectKey(b){
   return projectKeyForAddr(b.property_address, b.property_name);
 }
+/* Does a bid belong to a given estimate? Prefers the stable estimate_client_id
+   link; falls back to the street-address project key for legacy bids created
+   before the ID link existed. clientId = the estimate's client_id (state._id
+   or a submission row's client_id); projKey = its address key. */
+function bidBelongsToEstimate(b, clientId, projKey){
+  if(b && b.estimate_client_id) return !!clientId && b.estimate_client_id === clientId;
+  return !!projKey && bidProjectKey(b) === projKey;
+}
 /* Local currency parser/formatter (owner side). Mirrors the bid response
    IIFE so legacy data ("1234") or already-formatted data ("$1,234.50") all
    display consistently as $X,XXX.XX. Returns "" for empty / non-numeric. */
@@ -13377,27 +13381,30 @@ async function loadReceivedBids(){
       "&order=created_at.desc&limit=500";
     const data = await restFetch(path);
     _receivedBidsCache = Array.isArray(data) ? data : [];
-    // Enforce "a bid only lives as long as its estimate": drop any bid whose
-    // property no longer has a matching saved estimate (e.g. the estimate was
-    // deleted on another device). Safe — only runs against an authoritative
-    // cloud estimate list.
-    try { await pruneOrphanedBids(); } catch(e){ console.warn("prune orphaned bids:", e); }
+    // Link legacy bids to estimates by id, then drop any bid whose estimate no
+    // longer exists — enforcing "a bid only lives as long as its estimate."
+    try { await reconcileBidLinks(); } catch(e){ console.warn("reconcile bid links:", e); }
     renderReceivedBidsList();
   }catch(e){
     document.getElementById("rbList").innerHTML = "<div class='rb-empty'>Couldn't load bids: " + escapeHtml(e.message || String(e)) + "</div>";
   }
 }
-/* Delete every contractor bid whose project (address/name) key matches
-   projKey. Called when an estimate is deleted so its linked bids don't
-   linger. Best-effort per row; keeps the local cache + open modal in sync. */
-async function deleteBidsForProject(projKey){
-  if(!currentUser || !supa || !projKey) return;
+/* Delete the contractor bids linked to a deleted estimate. Bids created after
+   the ID link carry estimate_client_id → deleted exactly (no address guess).
+   Legacy bids (no id) fall back to the address key, but only when NO other
+   estimate still shares that address (projKeyStillUsed=false). */
+async function deleteBidsForEstimate(clientId, projKey, projKeyStillUsed){
+  if(!currentUser || !supa) return;
+  if(!clientId && !projKey) return;
   try {
     const path = "contractor_bids?user_id=eq." + encodeURIComponent(currentUser.id) +
-      "&select=bid_token,property_address,property_name";
+      "&select=bid_token,estimate_client_id,property_address,property_name";
     const rows = await restFetch(path);
     if(!Array.isArray(rows)) return;
-    const toDelete = rows.filter(b => bidProjectKey(b) === projKey);
+    const toDelete = rows.filter(b => {
+      if(b.estimate_client_id) return !!clientId && b.estimate_client_id === clientId;
+      return !!projKey && !projKeyStillUsed && bidProjectKey(b) === projKey;  // legacy
+    });
     for(const b of toDelete){
       try { await dbDelete("contractor_bids", { user_id: currentUser.id, bid_token: b.bid_token }); }
       catch(e){ console.warn("delete linked bid failed:", e); }
@@ -13409,34 +13416,59 @@ async function deleteBidsForProject(projKey){
     const bidsModal = document.getElementById("receivedBidsModal");
     if(bidsModal && bidsModal.classList.contains("show")){ try { renderReceivedBidsList(); } catch(e){} }
     if(toDelete.length){ try { flash("Removed " + toDelete.length + " linked bid" + (toDelete.length===1?"":"s")); } catch(e){} }
-  } catch(e){ console.warn("deleteBidsForProject failed:", e); }
+  } catch(e){ console.warn("deleteBidsForEstimate failed:", e); }
 }
-/* Sweep any bid whose property has no matching saved estimate. Runs on bids
-   dashboard load. Guarded on a CONFIRMED cloud estimate list (refreshSaved-
-   FromCloud returning true) so a failed/empty fetch can never wipe valid
-   bids. */
-async function pruneOrphanedBids(){
+/* Runs when the (admin-only) Bids dashboard loads. Two jobs against ONE
+   authoritative fetch of every estimate the admin can read (all users):
+     1. Backfill — stamp estimate_client_id onto legacy bids whose address
+        matches exactly one estimate (unambiguous only).
+     2. Prune — delete bids whose estimate no longer exists (by id, or by
+        address for still-legacy bids).
+   Cross-user safe: checks against ALL estimates, not just the admin's own
+   saved list, so bids for agents' estimates are never wrongly deleted.
+   Guarded: if the estimates fetch fails, it does nothing. */
+async function reconcileBidLinks(){
   if(!currentUser || !supa) return;
   if(!Array.isArray(_receivedBidsCache) || _receivedBidsCache.length === 0) return;
-  const ok = await refreshSavedFromCloud();
-  if(!ok) return;   // couldn't confirm the estimate list — do NOT delete anything
-  const estKeys = new Set(
-    loadSavedList()
-      .map(e => e.state ? projectKeyForAddr(e.state.propAddress, e.state.propName) : "")
-      .filter(Boolean)
-  );
-  const orphans = _receivedBidsCache.filter(b => {
-    const k = bidProjectKey(b);
-    return k && !estKeys.has(k);
-  });
-  if(orphans.length === 0) return;
-  for(const b of orphans){
-    try { await dbDelete("contractor_bids", { user_id: currentUser.id, bid_token: b.bid_token }); }
-    catch(e){ console.warn("delete orphan bid failed:", e); }
+  let allEst;
+  try { allEst = await restFetch("estimates?type=eq.estimate&select=client_id,state&limit=2000"); }
+  catch(e){ return; }
+  if(!Array.isArray(allEst)) return;
+  const liveIds = new Set();
+  const byKey = {};
+  for(const e of allEst){
+    if(e.client_id) liveIds.add(e.client_id);
+    const k = e.state ? projectKeyForAddr(e.state.propAddress, e.state.propName) : "";
+    if(k && e.client_id){ (byKey[k] = byKey[k] || []).push(e.client_id); }
   }
-  const gone = new Set(orphans.map(b => b.bid_token));
-  _receivedBidsCache = _receivedBidsCache.filter(b => !gone.has(b.bid_token));
-  console.log("[bids] pruned " + orphans.length + " orphaned bid(s) with no matching estimate");
+  const liveKeys = new Set(Object.keys(byKey));
+  // 1) Backfill legacy bids with an UNAMBIGUOUS address match.
+  for(const b of _receivedBidsCache){
+    if(b.estimate_client_id) continue;
+    const k = bidProjectKey(b);
+    const matches = k ? (byKey[k] || []) : [];
+    if(matches.length === 1){
+      try {
+        await dbUpdate("contractor_bids", { user_id: currentUser.id, bid_token: b.bid_token }, { estimate_client_id: matches[0] });
+        b.estimate_client_id = matches[0];
+      } catch(e){ console.warn("backfill bid link failed:", e); }
+    }
+  }
+  // 2) Prune bids whose estimate is gone.
+  const orphans = _receivedBidsCache.filter(b => {
+    if(b.estimate_client_id) return !liveIds.has(b.estimate_client_id);
+    const k = bidProjectKey(b);
+    return k && !liveKeys.has(k);
+  });
+  if(orphans.length){
+    for(const b of orphans){
+      try { await dbDelete("contractor_bids", { user_id: currentUser.id, bid_token: b.bid_token }); }
+      catch(e){ console.warn("delete orphan bid failed:", e); }
+    }
+    const gone = new Set(orphans.map(b => b.bid_token));
+    _receivedBidsCache = _receivedBidsCache.filter(b => !gone.has(b.bid_token));
+    console.log("[bids] pruned " + orphans.length + " orphaned bid(s) with no matching estimate");
+  }
 }
 function renderReceivedBidsList(){
   const filter = _receivedBidsTab;
@@ -13444,8 +13476,9 @@ function renderReceivedBidsList(){
   // Apply the project filter first (if scope = project AND we have a key),
   // then the status tab filter. The snapshot uses the project-scoped cache
   // too so it reflects "this project" rather than your entire history.
-  const projectScoped = (_receivedBidsScope === "project" && projKey)
-    ? (_receivedBidsCache || []).filter(b => bidProjectKey(b) === projKey)
+  const projClientId = state && state._id;
+  const projectScoped = (_receivedBidsScope === "project" && (projKey || projClientId))
+    ? (_receivedBidsCache || []).filter(b => bidBelongsToEstimate(b, projClientId, projKey))
     : (_receivedBidsCache || []);
   const list = projectScoped.filter(b => filter === "all" || b.status === filter);
   const root = document.getElementById("rbList");
@@ -13934,6 +13967,15 @@ async function sendContractorBidEmail(){
       throw new Error("No categories are selected for this bid. Toggle some categories on first.");
     }
 
+    // Link every bid in this batch to the current estimate by its stable
+    // client_id. Auto-save first (silently) so an unsaved estimate still
+    // has an id to anchor the bids to.
+    if(!state._id){
+      try { saveEstimate({ silent:true }); } catch(e){ console.warn("auto-save before bid failed:", e); }
+      await new Promise(r => setTimeout(r, 60));
+    }
+    const estimateClientId = state._id || null;
+
     // ----- 1. Generate the PDF ONCE (it's identical for every recipient) -----
     // Uses the SAME iframe-clone approach as the Print/PDF button, so the
     // emailed PDF matches the Print output exactly (full-width layout, no
@@ -13965,6 +14007,7 @@ async function sendContractorBidEmail(){
         property_name:      (state.propName || "").trim() || null,
         property_address:   (state.propAddress || "").trim() || null,
         property_sqft:      state.propSqft ? (parseInt(state.propSqft, 10) || null) : null,
+        estimate_client_id: estimateClientId,   // stable link to the estimate
         scope_data:         scopeData,
         status:             "pending"
       };
@@ -19901,14 +19944,15 @@ function refreshSubmissionBidsList(){
 async function fetchSubmissionBids(row){
   if(!row || !currentUser) return [];
   const s = row.state || {};
+  const targetId  = row.client_id || s._id || null;   // stable estimate link
   const targetKey = projectKeyForAddr(s.propAddress, s.propName);
-  if(!targetKey) return []; // no address to match against
+  if(!targetId && !targetKey) return []; // nothing to match against
   const path = "contractor_bids?user_id=eq." + encodeURIComponent(currentUser.id) +
     "&order=created_at.desc&limit=200";
   const all = await restFetch(path);
   if(!Array.isArray(all)) return [];
-  // Match by project key, same as the Bids view
-  return all.filter(b => projectKeyForAddr(b.property_address, b.property_name) === targetKey);
+  // Match by estimate_client_id (exact); legacy bids fall back to address key.
+  return all.filter(b => bidBelongsToEstimate(b, targetId, targetKey));
 }
 
 function renderSubmissionDetail(){
