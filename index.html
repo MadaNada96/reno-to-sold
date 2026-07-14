@@ -6707,6 +6707,14 @@ async function newEstimate(){
 /* ---------- Calculations ---------- */
 function num(v){ const n = parseFloat(v); return isFinite(n) && n>0 ? n : 0; }
 
+/* Miscellaneous line items are typically single lump-sum lines
+   ("Stairs — $5,000"), so the Qty field shows a "1" placeholder and a
+   blank / zero qty is treated as 1 (honouring that hint) instead of silently
+   zeroing the whole line. Used by EVERY misc line-total computation —
+   estimator card, client PDF, contractor bid, and margin snapshot — so the
+   four surfaces never disagree. */
+function miscQty(it){ const q = num(it && it.qty); return q > 0 ? q : 1; }
+
 function paintingSqft(){
   const s = state.painting;
   return s.scope === "custom" ? num(s.sqft) : num(state.propSqft);
@@ -6967,7 +6975,7 @@ function computeCategory(cat, priceSet){
     // material to keep the rate-based convention consistent.
     if(s && Array.isArray(s.items)){
       s.items.forEach(it => {
-        const t = num(it.qty) * num(it.clientRate);
+        const t = miscQty(it) * num(it.clientRate);
         if(isFinite(t)) material += t;
       });
     }
@@ -8346,10 +8354,6 @@ function renderMiscellaneous(){
   return `
     <div class="footnote" style="margin-bottom:14px;background:rgba(212,175,106,.08);border:1px solid rgba(212,175,106,.30);border-radius:8px;padding:10px 12px;line-height:1.55;">
       <b style="color:var(--gold-bright)">Use this for anything that doesn't fit a category:</b> permits, surveys, change orders, demo allowances, dumpster fees, custom one-off items. Each line is its own price &mdash; <b>qty × $/unit</b>.
-      ${internal ? `
-        <br><br>
-        <span style="color:var(--gold-bright);font-weight:600;">Internal Mode visible:</span> the optional &ldquo;Contractor cost actual&rdquo; field lets you record what a contractor will charge for each item. Snapshot uses this for margin tracking when no bid has been submitted yet.
-      ` : ""}
     </div>
     <div id="misc-items">${items.map((it,i) => renderMiscItem(it,i,internal)).join("")}</div>
     <button class="add-btn no-print" onclick="addMiscItem()">+ Add item</button>
@@ -8375,12 +8379,12 @@ function renderMiscellaneous(){
    placeholder if the user hasn't named it yet) on the left and its qty ×
    rate total on the right. Stays in sync via updateMiscItemTotal. */
 function renderMiscSummaryRow(it, i){
-  const lineTotal = num(it.qty) * num(it.clientRate);
+  const lineTotal = miscQty(it) * num(it.clientRate);
   const name = (it.name || "").trim() || ("Item #" + (i+1));
   return `<div class="breakdown misc-summary-row" data-misc-idx="${i}"><span style="color:var(--ink);">${escapeHtml(name)}</span><span style="font-variant-numeric:tabular-nums;color:var(--ink);">${fmt(lineTotal)}</span></div>`;
 }
 function renderMiscItem(it, i, internal){
-  const lineTotal = num(it.qty) * num(it.clientRate);
+  const lineTotal = miscQty(it) * num(it.clientRate);
   // Unit pill toggle — closed set of common GTA renovation units. Defaults
   // to "ea". The class `misc-item-card` hides browser spinner arrows on the
   // qty + rate number inputs (see CSS rule alongside .price-edit-row).
@@ -8419,20 +8423,44 @@ function renderMiscItem(it, i, internal){
           <label>Line total <span style="color:var(--muted);font-weight:400;">(auto)</span></label>
           <div id="misc-line-total-${i}" style="padding:9px 12px;background:#19170f;border:1px solid var(--gold-deep);border-radius:8px;color:var(--gold-bright);font-weight:700;font-variant-numeric:tabular-nums;">${fmt(lineTotal)}</div>
         </div>
-        ${internal ? `
-          <div style="grid-column:1/-1;border-top:1px dashed var(--line);padding-top:10px;margin-top:4px;">
-            <label style="color:var(--gold-bright);">Contractor cost actual ($/unit) <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;">&mdash; Internal Mode only, optional override for margin tracking</span></label>
-            <input type="number" min="0" step="any" value="${it.contractorCostOverride !== null ? escapeHtmlAttr(it.contractorCostOverride) : ''}" placeholder="${(it.contractorCostOverride===null) ? 'pull from contractor bid when submitted' : '0.00'}" oninput="state.miscellaneous.items[${i}].contractorCostOverride=(this.value===''?null:this.value);renderTotals()">
-          </div>
-        ` : ""}
       </div>
     </div>
   `;
 }
+/* Repaint the Miscellaneous card's Subtotal + discount + header total directly
+   from current state. Runs IN ADDITION to renderTotals() (and always after it)
+   so the misc subtotal is guaranteed to reflect the running sum of the item
+   line totals the moment an item is added, edited, or removed — independent of
+   the shared cross-category totals loop. Mirrors renderTotals()'s misc branch:
+   the Subtotal shown is the POST-discount figure so the discount line above it
+   actually moves the bottom number. */
+function syncMiscSubtotal(){
+  const bd = document.getElementById("cat-breakdown-miscellaneous");
+  if(!bd) return;
+  const items = (state.miscellaneous && Array.isArray(state.miscellaneous.items)) ? state.miscellaneous.items : [];
+  const catSub = items.reduce((a, it) => a + miscQty(it) * num(it.clientRate), 0);
+  let discRate = 0, projDiscount = 0;
+  try { const t = computeTotals(); if(t.subtotal > 0){ discRate = t.discount / t.subtotal; projDiscount = t.discount; } } catch(_){}
+  const hasDisc = !!(state.enabled && state.enabled.miscellaneous) && catSub > 0 && projDiscount > 0;
+  const catDisc = catSub * discRate;
+  const catNet  = catSub - (hasDisc ? catDisc : 0);
+  const bdT = bd.querySelector(".bd-t");
+  if(bdT) bdT.textContent = fmt(catNet);
+  const discRow = bd.querySelector(".bd-discount-row");
+  if(discRow){
+    discRow.style.display = hasDisc ? "" : "none";
+    if(hasDisc){
+      const bdD = discRow.querySelector(".bd-d");
+      if(bdD) bdD.textContent = "-" + fmt(catDisc);
+    }
+  }
+  const hdr = document.getElementById("cat-total-miscellaneous");
+  if(hdr && state.enabled && state.enabled.miscellaneous){ hdr.textContent = fmt(catNet); hdr.style.color = ""; }
+}
 function updateMiscItemTotal(i){
   const it = state.miscellaneous.items[i];
   if(!it) return;
-  const t = num(it.qty) * num(it.clientRate);
+  const t = miscQty(it) * num(it.clientRate);
   // 1. Refresh the per-item "Line total" pill on the item card
   const el = document.getElementById("misc-line-total-"+i);
   if(el) el.textContent = fmt(t);
@@ -8450,6 +8478,9 @@ function updateMiscItemTotal(i){
   //    custom breakdown plus the category card header total and any other
   //    cross-category totals (savings card, quote summary, etc.)
   renderTotals();
+  // 4. Guarantee the misc Subtotal repaints even if the shared loop above
+  //    didn't reach this card. Runs last so it wins.
+  syncMiscSubtotal();
 }
 function addMiscItem(){
   if(!state.miscellaneous || typeof state.miscellaneous !== "object") state.miscellaneous = { items: [] };
@@ -8458,19 +8489,21 @@ function addMiscItem(){
     id: "misc_" + Date.now() + "_" + Math.floor(Math.random()*1e6).toString(36),
     name: "",
     description: "",
-    qty: "",
+    qty: "1",
     unit: "ea",
     clientRate: "",
     contractorCostOverride: null
   });
   renderCatBodyOnly("miscellaneous");
   renderTotals();
+  syncMiscSubtotal();
 }
 function removeMiscItem(i){
   if(!state.miscellaneous || !Array.isArray(state.miscellaneous.items)) return;
   state.miscellaneous.items.splice(i, 1);
   renderCatBodyOnly("miscellaneous");
   renderTotals();
+  syncMiscSubtotal();
 }
 function escapeHtmlAttr(s){
   return String(s == null ? "" : s)
@@ -10140,7 +10173,7 @@ function renderContractorSheet(){
     miscItems.forEach((it, i) => {
       const name = (it.name || "").trim();
       if(!name) return;
-      const qty = num(it.qty) || 0;
+      const qty = miscQty(it);
       const unit = (it.unit || "ea").trim();
       const desc = (it.description || "").trim();
       anyEnabled = true;
@@ -11135,10 +11168,10 @@ function buildEstimateLineItems(){
     items.forEach(it => {
       const name = (it.name || "").trim();
       if(!name) return;  // skip blank rows
-      const qty = num(it.qty) || 0;
+      const qty = miscQty(it);
       const rate = num(it.clientRate) || 0;
       const total = qty * rate;
-      if(qty <= 0 && total <= 0) return;
+      if(total <= 0) return;   // skip lines with no price (qty defaults to 1 via miscQty)
       rows.push({
         desc: name,
         subdesc: (it.description || "").trim(),
@@ -11709,10 +11742,10 @@ function buildEstimateSummary(){
     items.forEach(it => {
       const name = (it.name || "").trim();
       if(!name) return;
-      const qty = num(it.qty) || 0;
+      const qty = miscQty(it);
       const rate = num(it.clientRate) || 0;
       const total = qty * rate;
-      if(qty <= 0 && total <= 0) return;
+      if(total <= 0) return;   // skip lines with no price (qty defaults to 1 via miscQty)
       const unit = (it.unit || "ea").trim();
       const desc = (it.description || "").trim();
       // Each item gets a single bullet: "Name — Qty Unit @ $rate (= $total)".
@@ -14880,7 +14913,7 @@ function exportPricingSnapshot(){
   if(state && state.enabled && state.enabled.miscellaneous){
     const items = (state.miscellaneous && state.miscellaneous.items) || [];
     const detailedItems = items.map(it => {
-      const qty       = num(it.qty) || 0;
+      const qty       = miscQty(it);
       const cRate     = num(it.clientRate) || 0;
       const clientTot = qty * cRate;
       const hasOverride = (it.contractorCostOverride !== null) && (it.contractorCostOverride !== "");
