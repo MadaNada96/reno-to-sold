@@ -3256,6 +3256,71 @@
   .view{display:none;}
   .view.active{display:block;}
 
+  /* ===== ESTIMATOR PICKER =====
+     #estimatorPicker is the first child of #view-estimator. When
+     #view-estimator carries .show-picker we hide every OTHER direct child
+     (the whole editor) and show only the picker. When .show-picker is
+     absent the picker hides and the editor shows normally. */
+  #estimatorPicker{ display:none; }
+  #view-estimator.show-picker #estimatorPicker{ display:block; }
+  #view-estimator.show-picker > *:not(#estimatorPicker){ display:none !important; }
+
+  .ep-head{
+    display:flex; align-items:flex-end; justify-content:space-between;
+    gap:16px; flex-wrap:wrap; margin:8px 0 22px;
+  }
+  .ep-title{ font-size:24px; font-weight:800; color:var(--ink-strong); letter-spacing:.01em; }
+  .ep-sub{ font-size:13px; color:var(--muted); margin-top:4px; }
+  .ep-new-btn{
+    display:inline-flex; align-items:center; gap:8px;
+    background:var(--gold-grad); color:#1a1508; border:none;
+    font-family:inherit; font-weight:700; font-size:13.5px; letter-spacing:.03em;
+    padding:11px 18px; border-radius:10px; cursor:pointer;
+    box-shadow:var(--gold-glow); transition:transform .12s ease, box-shadow .12s ease;
+  }
+  .ep-new-btn:hover{ transform:translateY(-1px); box-shadow:0 6px 22px rgba(212,175,106,.28); }
+  .ep-new-btn i{ font-size:16px; }
+
+  .ep-grid{
+    display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr));
+    gap:14px;
+  }
+  /* Saved-estimate card */
+  .ep-card{
+    position:relative; text-align:left;
+    background:var(--panel); border:1px solid var(--line);
+    border-radius:14px; padding:16px 16px 14px; cursor:pointer;
+    display:flex; flex-direction:column; gap:8px; min-height:132px;
+    transition:border-color .14s ease, transform .14s ease, box-shadow .14s ease;
+  }
+  .ep-card:hover{ border-color:var(--gold-deep); transform:translateY(-2px); box-shadow:var(--gold-glow); }
+  .ep-card-name{ font-size:15.5px; font-weight:700; color:var(--ink-strong); line-height:1.25;
+    padding-right:26px; word-break:break-word; }
+  .ep-card-addr{ font-size:12px; color:var(--gold-bright); line-height:1.35; }
+  .ep-card-seller{ font-size:11.5px; color:var(--muted); line-height:1.35; }
+  .ep-card-foot{ margin-top:auto; display:flex; align-items:center; justify-content:space-between; gap:8px; padding-top:8px; }
+  .ep-card-total{ font-size:17px; font-weight:800; color:var(--gold-bright); font-variant-numeric:tabular-nums; }
+  .ep-card-date{ font-size:10.5px; color:var(--muted); }
+  .ep-card-del{
+    position:absolute; top:10px; right:10px;
+    width:26px; height:26px; border-radius:7px;
+    background:transparent; border:1px solid var(--line-strong); color:var(--muted);
+    cursor:pointer; font-size:13px; line-height:1; display:flex; align-items:center; justify-content:center;
+    opacity:0; transition:opacity .14s ease, color .14s ease, border-color .14s ease;
+  }
+  .ep-card:hover .ep-card-del{ opacity:1; }
+  .ep-card-del:hover{ color:var(--danger); border-color:var(--danger); }
+  /* "New estimate" tile — dashed, sits first in the grid */
+  .ep-card.ep-card-new{
+    align-items:center; justify-content:center; text-align:center;
+    border-style:dashed; border-color:var(--line-strong); background:transparent; color:var(--muted);
+    gap:6px;
+  }
+  .ep-card.ep-card-new:hover{ border-color:var(--gold); color:var(--gold-bright); }
+  .ep-card-new .ep-new-plus{ font-size:26px; line-height:1; }
+  .ep-card-new .ep-new-label{ font-size:13px; font-weight:700; letter-spacing:.03em; }
+  .ep-empty{ grid-column:1/-1; color:var(--muted); font-style:italic; padding:20px 4px; }
+
   /* ----- Sidebar — expanded state ----- */
   .app-sidebar{
     width:200px;flex-shrink:0;background:var(--panel);border:1px solid var(--line);
@@ -4276,7 +4341,7 @@
 
       <div class="sb-section">Workspace</div>
 
-      <button class="sb-item" data-route="estimator" data-label="Estimator" onclick="navigateTo('estimator')">
+      <button class="sb-item" data-route="estimator" data-label="Estimator" onclick="openEstimatorHome()">
         <i class="ti ti-calculator" aria-hidden="true"></i>
         <span class="sb-item-label">Estimator</span>
       </button>
@@ -4546,8 +4611,30 @@
            on the estimator. -->
       <div id="view-estimator" class="view">
 
+        <!-- ============================================================
+             ESTIMATOR PICKER — the "home" screen for the estimator.
+             Shown when the user opens Estimator from the dashboard/sidebar
+             so they choose an existing estimate or explicitly start a new
+             one, instead of dropping straight into a blank estimate.
+             Toggled via the .show-picker class on #view-estimator, which
+             hides every OTHER direct child (the editor) — same pattern as
+             the contractor bid-response mode. ============================ -->
+        <div id="estimatorPicker" class="no-print">
+          <div class="ep-head">
+            <div>
+              <div class="ep-title">Your estimates</div>
+              <div class="ep-sub">Open a saved estimate to keep working on it, or start a new one.</div>
+            </div>
+            <button class="ep-new-btn" onclick="startNewEstimateFromPicker()">
+              <i class="ti ti-plus" aria-hidden="true"></i> New estimate
+            </button>
+          </div>
+          <div class="ep-grid" id="epGrid"></div>
+        </div>
+
         <!-- Workflow toolbar (was Row 2 of the old brand bar). -->
         <div class="toolbar-row-2 no-print">
+          <button onclick="openEstimatorHome()" title="Back to your saved estimates">&larr; All estimates</button>
           <button onclick="newEstimate()">+ New</button>
           <button onclick="saveEstimate()">Save</button>
           <button onclick="openSavedModal()">Saved</button>
@@ -6350,6 +6437,9 @@ function loadEstimate(id){
   deepMerge(merged, e.state || {});
   migrateOldEstimate(merged);
   state = merged; state._id = id;
+  // Loading an estimate always means we're now editing it — leave the picker.
+  estimatorView = "editor";
+  try { applyEstimatorView(); } catch(e){}
   renderAll();
   closeSavedModal();
 }
@@ -6730,7 +6820,133 @@ async function deleteEstimate(id){
 async function newEstimate(){
   if(!(await brandedConfirm("Start a new estimate? Unsaved changes will be lost.", { confirmLabel: "Start New" }))) return;
   state = freshState();
+  estimatorView = "editor";
+  applyEstimatorView();
   renderAll();
+}
+
+/* ============================================================
+   ESTIMATOR PICKER — "home" screen for the Estimator route.
+   ============================================================
+   estimatorView is either "picker" (the card grid of saved estimates)
+   or "editor" (the live estimate form). Opening Estimator from the
+   sidebar lands on the picker; opening a card or starting a new estimate
+   flips to the editor. The editor's "← All estimates" button flips back. */
+let estimatorView = "picker";
+
+/* Toggle the .show-picker class on #view-estimator per estimatorView, and
+   (re)render the card grid when showing the picker. Safe to call anytime —
+   no-ops if the estimator view isn't in the DOM yet. */
+function applyEstimatorView(){
+  const view = document.getElementById("view-estimator");
+  if(!view) return;
+  const showPicker = (estimatorView !== "editor");
+  view.classList.toggle("show-picker", showPicker);
+  if(showPicker) renderEstimatorPicker();
+}
+
+/* Open the Estimator "home" (picker). Wired to the sidebar Estimator item. */
+function openEstimatorHome(){
+  estimatorView = "picker";
+  navigateTo("estimator");   // renderRoute() calls applyEstimatorView()
+}
+
+/* Reveal the editor (used after a card is opened or a new estimate starts). */
+function showEstimatorEditor(){
+  estimatorView = "editor";
+  applyEstimatorView();
+}
+
+/* Compute an estimate's grand total WITHOUT permanently loading it, by
+   briefly swapping the global `state` computeTotals() reads from. computeTotals
+   is pure (reads state + prices, mutates nothing), so this is side-effect free.
+   Returns null on any error so a bad save never breaks the card grid. */
+function estimateTotalFor(savedState){
+  const prev = state;
+  try {
+    const merged = freshState();
+    deepMerge(merged, savedState || {});
+    try { migrateOldEstimate(merged); } catch(_){}
+    state = merged;
+    return computeTotals().total;
+  } catch(e){
+    return null;
+  } finally {
+    state = prev;
+  }
+}
+
+/* Build the card grid from the saved-estimates list (localStorage, kept in
+   sync with the cloud `estimates` table by the existing sync code). */
+function renderEstimatorPicker(){
+  const grid = document.getElementById("epGrid");
+  if(!grid) return;
+  let list = [];
+  try { list = loadSavedList() || []; } catch(e){ list = []; }
+  // Newest first by savedAt.
+  list = list.slice().sort((a,b) => new Date(b.savedAt||0) - new Date(a.savedAt||0));
+
+  // Leading "New estimate" tile — always present for quick access.
+  let html = `
+    <button type="button" class="ep-card ep-card-new" onclick="startNewEstimateFromPicker()">
+      <span class="ep-new-plus">+</span>
+      <span class="ep-new-label">Start a new estimate</span>
+    </button>`;
+
+  list.forEach(e => {
+    const st = e.state || {};
+    const name = (e.name || st.propName || "Untitled property").trim() || "Untitled property";
+    const addr = (st.propAddress || "").trim();
+    const s0 = (Array.isArray(st.sellers) && st.sellers[0]) ? st.sellers[0] : {};
+    const seller = ((s0.name || st.sellerName) || "").trim();
+    const allCount = Array.isArray(st.sellers) ? st.sellers.length : (seller ? 1 : 0);
+    const sellerLine = seller ? (seller + (allCount > 1 ? ` +${allCount-1} more` : "")) : "";
+    const status = st.status || "draft";
+    const statusPill = (status !== "draft" && typeof renderStatusPill === "function") ? renderStatusPill(status) : "";
+    const total = estimateTotalFor(st);
+    const totalTxt = (total != null && isFinite(total)) ? fmt(total) : "—";
+    const dateTxt = e.savedAt ? new Date(e.savedAt).toLocaleDateString(undefined, {month:"short", day:"numeric", year:"numeric"}) : "";
+    const id = e.id;
+    html += `
+      <div class="ep-card" onclick="openEstimateFromPicker('${id}')" title="Open this estimate">
+        <button class="ep-card-del no-print" title="Delete this estimate"
+          onclick="event.stopPropagation();deleteEstimateFromPicker('${id}')">&times;</button>
+        <div class="ep-card-name">${escapeHtml(name)}</div>
+        ${addr ? `<div class="ep-card-addr">${escapeHtml(addr)}</div>` : ""}
+        ${sellerLine ? `<div class="ep-card-seller">${escapeHtml(sellerLine)}</div>` : ""}
+        ${statusPill ? `<div style="margin-top:2px;">${statusPill}</div>` : ""}
+        <div class="ep-card-foot">
+          <span class="ep-card-total">${totalTxt}</span>
+          ${dateTxt ? `<span class="ep-card-date">${escapeHtml(dateTxt)}</span>` : ""}
+        </div>
+      </div>`;
+  });
+
+  if(!list.length){
+    html += `<div class="ep-empty">No saved estimates yet — start your first one above.</div>`;
+  }
+  grid.innerHTML = html;
+}
+
+/* Open a saved estimate from a picker card → load it into state and show the editor. */
+function openEstimateFromPicker(id){
+  loadEstimate(id);          // loads state + renderAll()
+  showEstimatorEditor();
+}
+
+/* Start a fresh estimate from the picker (no confirm — the picker is a clean
+   entry point) and drop into the editor. */
+function startNewEstimateFromPicker(){
+  state = freshState();
+  showEstimatorEditor();
+  renderAll();
+}
+
+/* Delete from a picker card. deleteEstimate() handles its own confirmation
+   prompt + cloud cascade; we just refresh the grid afterwards. */
+async function deleteEstimateFromPicker(id){
+  try { await deleteEstimate(id); } catch(e){}
+  renderEstimatorPicker();
 }
 
 /* ---------- Calculations ---------- */
@@ -9830,6 +10046,7 @@ async function openContractorBid(){
       { destructive: false, confirmLabel: "Open Estimator" }
     );
     if(goToEstimator){
+      try { estimatorView = "picker"; } catch(_){}
       navigateTo("estimator");
     }
     return;
@@ -9857,6 +10074,7 @@ function closeContractorBid(){
   // Sync URL — if user's currently on /#/bids, take them back to estimator
   try {
     if(typeof getCurrentRoute === "function" && getCurrentRoute() === "bids"){
+      try { estimatorView = "editor"; } catch(_){}
       navigateTo("estimator");
     }
   } catch(e){}
@@ -19546,6 +19764,8 @@ async function handleMyEstimateChange(payload){
       await refreshSavedFromCloud();
       const savedModal = document.getElementById("savedModal");
       if(savedModal && savedModal.classList.contains("show")) renderSavedList();
+      const evx = document.getElementById("view-estimator");
+      if(evx && evx.classList.contains("show-picker")) renderEstimatorPicker();
     } catch(e){}
     // If this change is to the estimate currently open in the estimator AND
     // its status changed while the agent had it LOCKED (i.e. an admin action,
@@ -20948,6 +21168,9 @@ function renderRoute(){
   // Per-route side-effects
   if(route === "dashboard"){
     renderDashboard();
+  } else if(route === "estimator"){
+    // Show the picker "home" or the editor depending on estimatorView.
+    try { applyEstimatorView(); } catch(e){ console.error("route estimator:", e); }
   } else if(route === "my-submissions"){
     renderMySubmissions();
   } else if(route === "trim"){
@@ -21130,7 +21353,7 @@ function dashboardCards(){
   const allCards = [
     { key: "estimator", title: "Estimator", icon: "ti-calculator",
       desc: "Build a renovation estimate. Save, print, email, or submit for review.",
-      action: () => navigateTo("estimator") },
+      action: () => openEstimatorHome() },
 
     { key: "trim", requireFeature: "trim_calculator",
       title: "Trim calculator", icon: "ti-ruler-measure",
@@ -21563,6 +21786,7 @@ function loadMySubmissionById(id){
       } catch(e){ console.warn("persist cloud-only submission failed:", e); }
       try { migrateOldEstimate(state); } catch(e){}
       try { renderAll(); } catch(e){ console.error("renderAll after cloud-only load:", e); }
+      try { estimatorView = "editor"; } catch(_){}
       navigateTo("estimator");
       return;
     }
@@ -21957,7 +22181,8 @@ function openTrimCalcFromEstimate(){
 /* Called from the trim view's "← Back to Estimator" button. */
 function tcBackToEstimate(){
   if(_linkedTrimEstimateId){
-    // Estimate is already loaded — just navigate
+    // Estimate is already loaded — just navigate back to the editor
+    try { estimatorView = "editor"; } catch(_){}
     navigateTo('estimator');
   } else {
     navigateTo('dashboard');
@@ -22045,6 +22270,7 @@ async function tcPushToEstimate(){
   try { if(typeof renderAll === "function") renderAll(); } catch(e){ console.error("renderAll on tcPush:", e); }
 
   // Navigate to estimator and flash a summary
+  try { estimatorView = "editor"; } catch(_){}
   navigateTo('estimator');
   const propLbl = state.propName || state.propAddress || "estimate";
   const bits = [];
@@ -25382,6 +25608,11 @@ async function bootstrapCloudSync(showMigratePrompt){
   if(document.getElementById("savedModal").classList.contains("show")){
     renderSavedList();
   }
+  // Refresh the estimator picker grid too, if it's the current view.
+  try {
+    const ev = document.getElementById("view-estimator");
+    if(ev && ev.classList.contains("show-picker")) renderEstimatorPicker();
+  } catch(e){}
 
   // Sync the Expense Tracker — it lives in the SAME estimates table,
   // distinguished by type='tracker' (projects) and type='tracker_meta'
@@ -28761,6 +28992,7 @@ function backToEstimator(){
   /* Also update the URL so back-button + tab bookmarking stays in
      sync with what's on screen. If the router doesn't exist (older
      embeds), the DOM changes above still work. */
+  try { estimatorView = "editor"; } catch(_){}
   try { if(typeof navigateTo === "function") navigateTo("estimator"); } catch(e){}
 }
 function openFromEstimator(ctx){
