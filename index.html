@@ -5687,7 +5687,14 @@ const DEFAULT_PRICES = {
       //             glass enclosure.
       refresh: { labour: 1800, material: 2700 },
       convert: { labour: 3425, material: 4570 },
-      new:     { labour: 4500, material: 7670 }
+      new:     { labour: 4500, material: 7670 },
+      // Curbless (zero-threshold / barrier-free) upgrade — NEW BUILD only.
+      // Fixed per-bathroom add-on ON TOP of the "new" shower price. Covers the
+      // GTA 2026 premium over a standard curbed shower: linear drain (~$650
+      // more than a centre drain), recessing + sloping the subfloor between
+      // joists, and continuous waterproofing across the zero-threshold entry.
+      // ~$2,200 total (mid-range of the GTA $800–$2,500 upcharge band).
+      curbless: { labour: 1400, material: 800 }
     }
   },
   potlights: {
@@ -6006,6 +6013,15 @@ function defaultBath(){
     doubleVanity:false,
     standUpShower:false,
     showerType:"convert",
+    // Curbless (zero-threshold) shower upgrade — only chargeable on a NEW BUILD
+    // shower (showerType==="new"). Fixed add-on priced from bathroom.standUpShower.curbless.
+    curbless:false,
+    // "Tile all bathroom walls" — full floor-to-ceiling wall tile for the whole
+    // room, not just the tub/shower surround. When on, the room dimensions below
+    // drive the "Wall tiling required (sqft)" figure (2×(L+W)×height) and that
+    // SUPERSEDES the tub/shower surround auto-estimate (no double counting).
+    tileAllWalls:false,
+    roomLength:"", roomWidth:"", roomHeight:8,
     // Custom stand-up shower footprint (used to compute floor + wall tile sqft)
     showerWidth:4, showerDepth:3, showerHeight:8,
     // Custom tub dimensions (used to compute tub-surround wall tile sqft)
@@ -6045,6 +6061,13 @@ function migrateFlatShowerPrice(p){
   // Backfill the "refresh" tier on older saves that only have convert + new
   if(p && p.bathroom && p.bathroom.standUpShower && !p.bathroom.standUpShower.refresh){
     p.bathroom.standUpShower.refresh = { labour: 1800, material: 2700 };
+  }
+  // Backfill the "curbless" upgrade tier on saves/snapshots from before it
+  // existed (deepMerge over DEFAULT_PRICES normally covers this, but pricing
+  // snapshots on old submissions are loaded WITHOUT a merge — see the snapshot
+  // restore paths — so backfill here keeps the pricing editor + compute safe).
+  if(p && p.bathroom && p.bathroom.standUpShower && !p.bathroom.standUpShower.curbless){
+    p.bathroom.standUpShower.curbless = { labour: 1400, material: 800 };
   }
   // Freestanding tub — new price entry per size tier. Backfill defaults if missing.
   if(p && p.bathroom){
@@ -6375,6 +6398,12 @@ function migrateOldEstimate(m){
       if(typeof b.tubLength      !== "number" || !isFinite(b.tubLength))      b.tubLength      = 5;
       if(typeof b.tubEndWall     !== "number" || !isFinite(b.tubEndWall))     b.tubEndWall     = 3;
       if(typeof b.tubWallHeight  !== "number" || !isFinite(b.tubWallHeight))  b.tubWallHeight  = 8;
+      // Curbless upgrade + tile-all-walls — backfill on older saves.
+      if(typeof b.curbless     !== "boolean") b.curbless     = false;
+      if(typeof b.tileAllWalls !== "boolean") b.tileAllWalls = false;
+      if(b.roomLength == null) b.roomLength = "";
+      if(b.roomWidth  == null) b.roomWidth  = "";
+      if(typeof b.roomHeight !== "number" || !isFinite(b.roomHeight)) b.roomHeight = 8;
     });
   }
   // Flooring: removal & disposal is now ALWAYS included — force flag on older saves
@@ -6906,8 +6935,10 @@ function computeCategory(cat, priceSet){
       }
       const ft = num(b.floorTileSqft);
       if(p.floorTile){ labour += ft * p.floorTile.labour; material += ft * p.floorTile.material; }
-      // Wall tile zeroes out when freestanding tub is selected (no tub surround).
-      if(!b.freestandingTub){
+      // Wall tile zeroes out when freestanding tub is selected (no tub surround)
+      // — UNLESS "Tile all bathroom walls" is on, in which case the whole-room
+      // wall tile applies regardless of the tub type.
+      if(!b.freestandingTub || b.tileAllWalls){
         const wt = num(b.wallTileSqft);
         if(p.wallTile){ labour += wt * p.wallTile.labour; material += wt * p.wallTile.material; }
       }
@@ -6931,6 +6962,11 @@ function computeCategory(cat, priceSet){
         if(sR){
           labour += sR.labour;
           material += sR.material;
+        }
+        // Curbless (zero-threshold) upgrade — NEW BUILD only, fixed add-on.
+        if(showerType === "new" && b.curbless && p.standUpShower.curbless){
+          labour   += p.standUpShower.curbless.labour   || 0;
+          material += p.standUpShower.curbless.material || 0;
         }
       }
     });
@@ -8902,7 +8938,11 @@ function bathroomIncludesPanel(b, i){
   // New stand-up shower plumbing rough-in — only for "new build" scope.
   if(b.standUpShower && (b.showerType || "convert") === "new"){
     newItems.push("New stand-up shower plumbing rough-in");
+    // Curbless (zero-threshold) upgrade — new build only.
+    if(b.curbless) newItems.push("Curbless (zero-threshold) shower base &mdash; linear drain, sloped subfloor");
   }
+  // Whole-room wall tile when "Tile all bathroom walls" is on.
+  if(b.tileAllWalls) newItems.push("All bathroom walls tiled (floor to ceiling)");
   // Tub wall tiles only when there's a DROP-IN tub against the wall.
   // Freestanding tubs don't have a surround so no wall tile is included.
   if(layoutHasTub && !b.newTub && !b.freestandingTub && !convertingTubToShower) newItems.push("Tub wall tiles");
@@ -8971,8 +9011,9 @@ function renderBathrooms(){
     const hasTub = (layoutHasTub || b.newTub) && !b.freestandingTub;
     // Wall tile only applies when there's a tub surround or stand-up shower.
     // If a freestanding tub is selected for this bathroom, hide wall tile
-    // input entirely (compute already treats it as zero).
-    const showsWallTile = pieces !== "2" && !b.freestandingTub;
+    // input entirely (compute already treats it as zero) — UNLESS "Tile all
+    // bathroom walls" is on, which always needs the wall-tile field visible.
+    const showsWallTile = (pieces !== "2" && !b.freestandingTub) || b.tileAllWalls;
     return `
     <div class="bath-row">
       <div style="margin-bottom:10px;">
@@ -8992,10 +9033,34 @@ function renderBathrooms(){
         </div>
         ${showsWallTile ? `
         <div>
-          <label>Wall tiling required (sqft)</label>
+          <label>Wall tiling required (sqft)${b.tileAllWalls ? ` <span style="color:var(--gold-bright);font-weight:400;font-size:11px;text-transform:none;letter-spacing:0;">&mdash; auto from room size</span>` : ""}</label>
           <input type="number" min="0" value="${b.wallTileSqft||""}" oninput="state.bathroom.rooms[${i}].wallTileSqft=this.value;renderTotals()">
         </div>` : ""}
       </div>
+      <label class="check-row">
+        <input type="checkbox" ${b.tileAllWalls?'checked':''} onchange="state.bathroom.rooms[${i}].tileAllWalls=this.checked;applyTubTileAuto(${i});renderBathBody()">
+        <span>Tile all bathroom walls <span style="color:var(--muted);font-weight:400;font-size:12px;">(full floor-to-ceiling wall tile for the whole room, not just the tub/shower surround)</span></span>
+      </label>
+      ${b.tileAllWalls ? `
+        <div class="shower-size-row" style="margin-left:25px;">
+          <div class="ssr-title">Bathroom dimensions <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;font-size:11px;">(auto-computes total wall tile: 2 &times; (length + width) &times; wall height)</span></div>
+          <div class="ssr-grid">
+            <div>
+              <label>Length (ft)</label>
+              <input type="number" step="0.5" min="1" max="40" value="${b.roomLength||''}" placeholder="e.g. 8" onchange="state.bathroom.rooms[${i}].roomLength=this.value;applyTubTileAuto(${i});renderBathBody()">
+            </div>
+            <div>
+              <label>Width (ft)</label>
+              <input type="number" step="0.5" min="1" max="40" value="${b.roomWidth||''}" placeholder="e.g. 5" onchange="state.bathroom.rooms[${i}].roomWidth=this.value;applyTubTileAuto(${i});renderBathBody()">
+            </div>
+            <div>
+              <label>Wall height (ft)</label>
+              <input type="number" step="0.5" min="6" max="14" value="${b.roomHeight||8}" onchange="state.bathroom.rooms[${i}].roomHeight=this.value;applyTubTileAuto(${i});renderBathBody()">
+            </div>
+          </div>
+          <div class="footnote" style="margin-top:6px;">Enter the room's floor length &times; width and the wall height. Total wall area = <b>perimeter &times; height</b> (door/window openings are not deducted, keeping the estimate conservative). This value fills the <b>Wall tiling required (sqft)</b> field above and replaces the tub/shower surround estimate.</div>
+        </div>
+      ` : ""}
       ${hasTub ? `
         <div class="shower-size-row">
           <div class="ssr-title">Tub size <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;font-size:11px;">(used to auto-compute wall tile sqft for the tub surround)</span></div>
@@ -9024,7 +9089,7 @@ function renderBathrooms(){
         <!-- Freestanding tub — mutually exclusive with "Add new tub". Hides
              wall tile + tub-dimension inputs in this bathroom. -->
         <label class="check-row">
-          <input type="checkbox" ${b.freestandingTub?'checked':''} onchange="state.bathroom.rooms[${i}].freestandingTub=this.checked;if(this.checked){state.bathroom.rooms[${i}].newTub=false;state.bathroom.rooms[${i}].wallTileSqft='';}renderBathBody()">
+          <input type="checkbox" ${b.freestandingTub?'checked':''} onchange="state.bathroom.rooms[${i}].freestandingTub=this.checked;if(this.checked)state.bathroom.rooms[${i}].newTub=false;applyTubTileAuto(${i});renderBathBody()">
           <span>Add <b>freestanding</b> tub <span style="color:var(--muted);font-weight:400;font-size:12px;">(floor-mount &mdash; no wall tile required)</span></span>
         </label>
         ${b.freestandingTub ? `
@@ -9055,7 +9120,7 @@ function renderBathrooms(){
               {value:"refresh", label:"Refresh existing"},
               {value:"convert", label:"Convert from tub"},
               {value:"new",     label:"New build"}
-            ], "state.bathroom.rooms["+i+"].showerType=this.value;renderBathBody()")}
+            ], "state.bathroom.rooms["+i+"].showerType=this.value;if(this.value!=='new')state.bathroom.rooms["+i+"].curbless=false;renderBathBody()")}
             <div class="footnote" style="margin-top:6px;margin-bottom:8px;">
               <b style="color:var(--gold-bright)">Refresh</b>: re-tile + new fixtures &amp; glass, reuse plumbing &amp; structure.
               <b style="color:var(--gold-bright)">Convert</b>: reuse existing tub plumbing, build curb + waterproof + tile.
@@ -9079,6 +9144,12 @@ function renderBathrooms(){
               </div>
               <div class="footnote" style="margin-top:6px;">Defaults to a 4&prime;&times;3&prime;&times;8&prime; stand-up shower. Adjust based on what exists or what we're building.</div>
             </div>
+            ${(b.showerType || "convert") === "new" ? `
+              <label class="check-row" style="margin-top:10px;">
+                <input type="checkbox" ${b.curbless?'checked':''} onchange="state.bathroom.rooms[${i}].curbless=this.checked;renderTotals()">
+                <span>Make it curbless <span style="color:var(--muted);font-weight:400;font-size:12px;">(zero-threshold / barrier-free &mdash; linear drain, recessed &amp; sloped subfloor, continuous waterproofing)</span></span>
+              </label>
+            ` : ""}
           </div>
         ` : ""}
         ${state.bathroom.rooms.length>1 ? `<button class="ghost danger no-print" onclick="removeBath(${i})" style="align-self:flex-end;margin-top:4px;">Remove this bathroom</button>`:""}
@@ -9121,10 +9192,27 @@ function showerFloorSqft(b){
   const d = num(b.showerDepth) || 3;
   return w * d;
 }
+/* Whole-room wall area for the "Tile all bathroom walls" option:
+   perimeter × height = 2 × (length + width) × wall height.
+   Gross area — door/window openings are NOT deducted, keeping the estimate
+   conservative (slightly high) and consistent with how the tub/shower
+   surround is modelled. Returns 0 until length + width are entered. */
+function roomAllWallSqft(b){
+  const L = num(b && b.roomLength);
+  const W = num(b && b.roomWidth);
+  const H = num(b && b.roomHeight) || 8;
+  if(L <= 0 || W <= 0) return 0;
+  return 2 * (L + W) * H;
+}
 /* Recompute wall-tile sqft for a single bathroom based on what's in it.
-   Adds tub surround if there's a tub (pieces 3 or 4 or newTub),
-   plus shower 3-wall surround if standUpShower is on. */
+   • "Tile all bathroom walls" ON  → whole-room wall area (perimeter × height).
+     This SUPERSEDES the surround estimate: tiling every wall already covers
+     the tub/shower surfaces, so we don't add the surround on top.
+   • Otherwise → tub surround (pieces 3/4 or newTub) + shower 3-wall surround.
+     Freestanding tubs have no surround, so wall tile is 0 in that case. */
 function autoBathWallTileSqft(b){
+  if(b && b.tileAllWalls) return Math.round(roomAllWallSqft(b));
+  if(b && b.freestandingTub) return 0;
   let sqft = 0;
   const hasTub = (b.pieces === "3" || b.pieces === "4" || b.newTub);
   if(hasTub) sqft += tubSurroundSqft(b);
@@ -9611,6 +9699,11 @@ function renderPricingEditor(){
       <div class="lbl">New shower (framing + plumbing)</div>
       <div>${priceInput("bathroom.standUpShower.new.labour", prices.bathroom.standUpShower.new.labour, 50)}</div>
       <div>${priceInput("bathroom.standUpShower.new.material", prices.bathroom.standUpShower.new.material, 50)}</div>
+    </div>
+    <div class="price-edit-row">
+      <div class="lbl">Curbless upgrade <span style="color:var(--muted);font-weight:400;font-size:11px;">(new build only &mdash; fixed add-on: linear drain, sloped subfloor, waterproofing)</span></div>
+      <div>${priceInput("bathroom.standUpShower.curbless.labour", (prices.bathroom.standUpShower.curbless||{labour:1400}).labour, 50)}</div>
+      <div>${priceInput("bathroom.standUpShower.curbless.material", (prices.bathroom.standUpShower.curbless||{material:800}).material, 50)}</div>
     </div>`;
 
   // Pot lights
@@ -10045,7 +10138,7 @@ function renderContractorSheet(){
       items.push({ hdr:true, html:`Bathroom #${i+1}` });
       items.push({ sub:true, html:`Pieces: <b>${bathroomLabel(b.pieces)}</b>` });
       if(num(b.floorTileSqft)) items.push({ sub:true, html:`Floor tile: <b>${b.floorTileSqft} sqft</b>` });
-      if(num(b.wallTileSqft))  items.push({ sub:true, html:`Wall tile: <b>${b.wallTileSqft} sqft</b>` });
+      if(num(b.wallTileSqft))  items.push({ sub:true, html:`Wall tile: <b>${b.wallTileSqft} sqft</b>${b.tileAllWalls ? ' &mdash; <b>all bathroom walls, floor to ceiling</b>' : ''}` });
       // Tub surround tile suppressed when freestanding tub is selected.
       const hasTub_ = (b.pieces === "3" || b.pieces === "4" || b.newTub) && !b.freestandingTub;
       if(hasTub_){
@@ -10069,6 +10162,7 @@ function renderContractorSheet(){
                              "convert existing tub, reuse tub plumbing";
         const sw = (num(b.showerWidth)||4), sd = (num(b.showerDepth)||3), sh = (num(b.showerHeight)||8);
         items.push({ sub:true, html:`Stand-up shower: <b>included</b> &mdash; ${showerNote} (waterproofing, new tile, new fixtures, new glass enclosure). Size: <b>${sw}&prime; &times; ${sd}&prime; &times; ${sh}&prime; high</b>.` });
+        if(st === "new" && b.curbless) items.push({ sub:true, html:`Curbless (zero-threshold) upgrade: <b>included</b> &mdash; linear drain, recessed &amp; sloped subfloor, continuous waterproofing.` });
       }
       // Per-bathroom "Existing (re-used)" disclosure — mirrors on-screen panel.
       const layoutHasTub_ = (b.pieces === "3" || b.pieces === "4");
@@ -10978,13 +11072,14 @@ function buildEstimateLineItems(){
           material: ft * p.floorTile.material
         });
       }
-      // Wall tile is suppressed when freestanding tub is selected (no surround).
-      if(!b.freestandingTub){
+      // Wall tile is suppressed when freestanding tub is selected (no surround),
+      // UNLESS "Tile all bathroom walls" is on (whole-room tile applies).
+      if(!b.freestandingTub || b.tileAllWalls){
         const wt = num(b.wallTileSqft);
         if(p.wallTile && wt > 0){
           addRow(rows, {
             desc: `${lbl} — Wall tile`,
-            subdesc: "Tub surround / shower walls — supply & install",
+            subdesc: b.tileAllWalls ? "All bathroom walls, floor to ceiling — supply & install" : "Tub surround / shower walls — supply & install",
             qty: wt, unit: "sqft",
             labour: wt * p.wallTile.labour,
             material: wt * p.wallTile.material
@@ -11036,6 +11131,16 @@ function buildEstimateLineItems(){
             subdesc: `${sw}′ × ${sd}′ × ${sh}′ high — waterproofing, tile, fixtures, glass enclosure`,
             qty: 1, unit: "ea",
             labour: sR.labour, material: sR.material
+          });
+        }
+        // Curbless (zero-threshold) upgrade — NEW BUILD only, fixed add-on.
+        if(st === "new" && b.curbless && p.standUpShower.curbless){
+          addRow(rows, {
+            desc: `${lbl} — Curbless (zero-threshold) shower upgrade`,
+            subdesc: "Barrier-free entry — linear drain, recessed & sloped subfloor, continuous waterproofing",
+            qty: 1, unit: "ea",
+            labour: p.standUpShower.curbless.labour || 0,
+            material: p.standUpShower.curbless.material || 0
           });
         }
       }
@@ -11198,8 +11303,9 @@ function computeBathroomRoom(b, priceSet){
   if(baseRow){ L += baseRow.labour; M += baseRow.material; }
   const ft = num(b.floorTileSqft);
   if(p.floorTile && ft > 0){ L += ft * p.floorTile.labour; M += ft * p.floorTile.material; }
-  // Wall tile is ZERO when freestanding tub is selected (no tub surround).
-  if(!b.freestandingTub){
+  // Wall tile is ZERO when freestanding tub is selected (no tub surround),
+  // UNLESS "Tile all bathroom walls" is on (whole-room tile applies regardless).
+  if(!b.freestandingTub || b.tileAllWalls){
     const wt = num(b.wallTileSqft);
     if(p.wallTile && wt > 0){ L += wt * p.wallTile.labour; M += wt * p.wallTile.material; }
   }
@@ -11213,8 +11319,14 @@ function computeBathroomRoom(b, priceSet){
   }
   if(b.doubleVanity && p.doubleVanity){ L += p.doubleVanity.labour; M += p.doubleVanity.material; }
   if(b.standUpShower && p.standUpShower){
-    const sR = p.standUpShower[b.showerType || "convert"] || p.standUpShower.convert;
+    const showerType = b.showerType || "convert";
+    const sR = p.standUpShower[showerType] || p.standUpShower.convert;
     if(sR){ L += sR.labour; M += sR.material; }
+    // Curbless (zero-threshold) upgrade — NEW BUILD only, fixed add-on.
+    if(showerType === "new" && b.curbless && p.standUpShower.curbless){
+      L += p.standUpShower.curbless.labour   || 0;
+      M += p.standUpShower.curbless.material || 0;
+    }
   }
   return { labour:L, material:M };
 }
@@ -11603,8 +11715,12 @@ function buildEstimateSummary(){
       const pieces = b.pieces || "4";
       bullets.push(`Layout: <b>${bathroomLabel(pieces)}</b> — full refresh (fixtures, toilet, vanity, faucet, mirror, light, accessories)`);
       if(num(b.floorTileSqft)) bullets.push(`Floor tile — ${b.floorTileSqft} sqft`);
-      // Wall tile suppressed when freestanding tub is selected (no surround).
-      if(!b.freestandingTub && num(b.wallTileSqft)) bullets.push(`Wall tile (shower/tub surround) — ${b.wallTileSqft} sqft`);
+      // Wall tile suppressed when freestanding tub is selected (no surround),
+      // unless "Tile all bathroom walls" is on (whole-room tile).
+      if((!b.freestandingTub || b.tileAllWalls) && num(b.wallTileSqft)){
+        const wtLbl = b.tileAllWalls ? "Wall tile (all walls, floor to ceiling)" : "Wall tile (shower/tub surround)";
+        bullets.push(`${wtLbl} — ${b.wallTileSqft} sqft`);
+      }
       if(b.newTub && !b.freestandingTub) bullets.push("New drop-in tub installed (replaces existing)");
       if(b.freestandingTub){
         const size = b.freestandingTubSize || "standard";
@@ -11627,6 +11743,7 @@ function buildEstimateSummary(){
         const sw = (num(b.showerWidth)||4), sd = (num(b.showerDepth)||3), sh = (num(b.showerHeight)||8);
         bullets.push(`Stand-up shower (${stLbl}) — ${sw}′ × ${sd}′ × ${sh}′ high, new tile, fixtures, glass walls &amp; door`);
         if(st === "new") bullets.push("New stand-up shower plumbing rough-in");
+        if(st === "new" && b.curbless) bullets.push("Curbless (zero-threshold) upgrade — linear drain, recessed &amp; sloped subfloor, continuous waterproofing");
       }
 
       // Closing "Existing (re-used)" disclosure — mirrors the on-screen
@@ -15583,7 +15700,7 @@ function scopeItemsFor(cat){
       items.push({ hdr:true, html:`Bathroom #${i+1}` });
       items.push({ sub:true, html:`<b>${bathroomLabel(b.pieces)}</b>` });
       if(num(b.floorTileSqft)) items.push({ sub:true, html:`Floor tile: <b>${b.floorTileSqft} sqft</b>` });
-      if(num(b.wallTileSqft))  items.push({ sub:true, html:`Wall tile: <b>${b.wallTileSqft} sqft</b>` });
+      if(num(b.wallTileSqft))  items.push({ sub:true, html:`Wall tile: <b>${b.wallTileSqft} sqft</b>${b.tileAllWalls ? ' &mdash; <b>all bathroom walls, floor to ceiling</b>' : ''}` });
       if(b.newTub)             items.push({ sub:true, html:`+ New tub` });
       if(b.doubleVanity)       items.push({ sub:true, html:`+ Double vanity` });
       if(b.standUpShower){
@@ -15593,7 +15710,9 @@ function scopeItemsFor(cat){
                                      "convert from tub";
         const sw = (num(b.showerWidth)||4), sd = (num(b.showerDepth)||3);
         items.push({ sub:true, html:`+ Stand-up shower (${t}) — ${sw}&prime;&times;${sd}&prime;` });
+        if(st === "new" && b.curbless) items.push({ sub:true, html:`+ Curbless (zero-threshold) upgrade` });
       }
+      if(b.tileAllWalls) items.push({ sub:true, html:`+ All bathroom walls tiled` });
     });
   }
   else if(cat === "potlights"){
