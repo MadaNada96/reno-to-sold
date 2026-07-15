@@ -6886,12 +6886,9 @@ function renderEstimatorPicker(){
   // Newest first by savedAt.
   list = list.slice().sort((a,b) => new Date(b.savedAt||0) - new Date(a.savedAt||0));
 
-  // Leading "New estimate" tile — always present for quick access.
-  let html = `
-    <button type="button" class="ep-card ep-card-new" onclick="startNewEstimateFromPicker()">
-      <span class="ep-new-plus">+</span>
-      <span class="ep-new-label">Start a new estimate</span>
-    </button>`;
+  // New estimates are started from the "+ New estimate" button in the header,
+  // so the grid shows only the saved-estimate cards.
+  let html = "";
 
   list.forEach(e => {
     const st = e.state || {};
