@@ -6071,7 +6071,7 @@ function freshState(){
     // fills it in via the bid link, just like other categories. The Internal
     // Mode override is for cases where there's no bid yet but Mo wants to
     // pre-set a contractor cost for margin tracking.
-    miscellaneous: { items: [] },
+    miscellaneous: { items: [], bypassDiscount: false },
     // INVOICES — array of invoice records tied to this estimate. Pre-populated
     // by the active milestone schedule (10/40/40/10 by default, or
     // 10/40/20/20/10 when kitchen is in scope — see getMilestoneSchedule()),
@@ -6788,6 +6788,7 @@ function migrateOldEstimate(m){
   if(typeof m.enabled.miscellaneous !== "boolean") m.enabled.miscellaneous = false;
   if(!m.miscellaneous || typeof m.miscellaneous !== "object") m.miscellaneous = { items: [] };
   if(!Array.isArray(m.miscellaneous.items)) m.miscellaneous.items = [];
+  if(typeof m.miscellaneous.bypassDiscount !== "boolean") m.miscellaneous.bypassDiscount = false;
   m.miscellaneous.items.forEach((it, idx) => {
     if(!it.id || typeof it.id !== "string") it.id = "misc_" + Date.now() + "_" + idx + "_" + Math.floor(Math.random()*1e6).toString(36);
     if(typeof it.name        !== "string") it.name        = "";
@@ -7513,6 +7514,14 @@ function updateWallRemovalLive(){
   } catch(_){}
 }
 
+/* True when the Miscellaneous category is enabled AND its "bypass discounts"
+   toggle is on — meaning misc items are excluded from any listing/custom
+   discount applied to the estimate. */
+function miscBypassActive(){
+  return !!(state && state.enabled && state.enabled.miscellaneous
+    && state.miscellaneous && state.miscellaneous.bypassDiscount);
+}
+
 function computeTotals(){
   let L = 0, M = 0;
   const perCat = {};
@@ -7522,33 +7531,41 @@ function computeTotals(){
     L += r.labour; M += r.material;
   });
   const sub = L + M;
+  // When "bypass discounts" is on for Miscellaneous, exclude the misc total
+  // from the base the discount is calculated + allocated against, so those
+  // items are never reduced by a listing/custom discount.
+  const miscR = perCat.miscellaneous || { labour:0, material:0 };
+  const miscTotal = miscR.labour + miscR.material;
+  const discountableBase = miscBypassActive() ? Math.max(0, sub - miscTotal) : sub;
   const d = state.discount || {};
   let listingDisc = 0, customDisc = 0;
   if(d.enabled){
     if(d.listing){
       const pct = num(prices.listingDiscount && prices.listingDiscount.percent);
-      listingDisc = sub * (Math.min(pct,100)/100);
+      listingDisc = discountableBase * (Math.min(pct,100)/100);
     }
     if(d.customEnabled){
       if(d.customType === "percent"){
         const pct = num(d.customValue);
-        customDisc = sub * (Math.min(pct,100)/100);
+        customDisc = discountableBase * (Math.min(pct,100)/100);
       } else {
-        customDisc = num(d.customValue);
+        // Flat custom discount — capped to the discountable base so it can
+        // never eat into bypassed misc items.
+        customDisc = Math.min(num(d.customValue), discountableBase);
       }
     }
   }
   let discount = listingDisc + customDisc;
-  discount = Math.min(discount, sub);
-  // proportionally scale if combined > sub
-  if(listingDisc + customDisc > sub && listingDisc + customDisc > 0){
-    const scale = sub / (listingDisc + customDisc);
+  discount = Math.min(discount, discountableBase);
+  // proportionally scale if combined > discountable base
+  if(listingDisc + customDisc > discountableBase && listingDisc + customDisc > 0){
+    const scale = discountableBase / (listingDisc + customDisc);
     listingDisc *= scale; customDisc *= scale;
   }
   const afterDisc = sub - discount;
   const hst = afterDisc * 0.13;
   const total = afterDisc + hst;
-  return { perCat, labour:L, material:M, subtotal:sub, listingDisc, customDisc, discount, afterDisc, hst, total };
+  return { perCat, labour:L, material:M, subtotal:sub, discountableBase, listingDisc, customDisc, discount, afterDisc, hst, total };
 }
 
 function fmt(n){
@@ -7862,16 +7879,22 @@ function renderTotals(){
   }
 
   // Overall discount rate (used to allocate a proportional share per category).
-  // discRate is 0..1; e.g. a 10% discount across the whole subtotal gives 0.10.
-  const _discRate = (t.subtotal > 0) ? (t.discount / t.subtotal) : 0;
+  // discRate is 0..1; e.g. a 10% discount across the discountable base gives 0.10.
+  // The base excludes misc items when "bypass discounts" is on, so the remaining
+  // categories absorb the whole discount and misc is left untouched.
+  const _discBase = (t.discountableBase != null ? t.discountableBase : t.subtotal);
+  const _discRate = (_discBase > 0) ? (t.discount / _discBase) : 0;
   const _discPct  = _discRate * 100;
+  const _bypassMisc = miscBypassActive();
   // Per-category totals
   Object.keys(CATEGORY_META).forEach(cat => {
     const r = t.perCat[cat];
     const catSub = r.labour + r.material;
+    // Misc is excluded from discount allocation when bypass is on.
+    const catExcluded = (cat === "miscellaneous" && _bypassMisc);
     // Allocated share of the overall discount that "belongs" to this category.
-    const catDisc = catSub * _discRate;
-    const hasDisc = state.enabled[cat] && catSub > 0 && t.discount > 0;
+    const catDisc = catExcluded ? 0 : catSub * _discRate;
+    const hasDisc = state.enabled[cat] && catSub > 0 && t.discount > 0 && !catExcluded;
     // The headline figure on the closed category card AND the Subtotal row
     // inside the breakdown should be the POST-discount price — so the
     // discount line above it actually changes the bottom number. Labour and
@@ -8661,6 +8684,17 @@ function renderCatBody(cat){
 }
 
 /* ---------- Miscellaneous helpers ---------- */
+/* Toggle "bypass discounts" for the misc section. Excluding misc from the
+   discount changes the allocation for EVERY other category (they now absorb
+   the whole discount), so a full renderTotals() is required — then re-sync the
+   misc card's own subtotal/discount rows. */
+function setMiscBypassDiscount(on){
+  if(!state.miscellaneous || typeof state.miscellaneous !== "object") state.miscellaneous = { items: [] };
+  state.miscellaneous.bypassDiscount = !!on;
+  renderTotals();
+  try { syncMiscSubtotal(); } catch(e){}
+}
+
 function renderMiscellaneous(){
   const m = state.miscellaneous || (state.miscellaneous = { items: [] });
   const items = Array.isArray(m.items) ? m.items : (m.items = []);
@@ -8669,6 +8703,10 @@ function renderMiscellaneous(){
     <div class="footnote" style="margin-bottom:14px;background:rgba(212,175,106,.08);border:1px solid rgba(212,175,106,.30);border-radius:8px;padding:10px 12px;line-height:1.55;">
       <b style="color:var(--gold-bright)">Use this for anything that doesn't fit a category:</b> permits, surveys, change orders, demo allowances, dumpster fees, custom one-off items. Each line is its own price &mdash; <b>qty × $/unit</b>.
     </div>
+    <label class="check-row" style="margin-bottom:12px;">
+      <input type="checkbox" ${m.bypassDiscount?'checked':''} onchange="setMiscBypassDiscount(this.checked)">
+      <span>Bypass discounts <span style="color:var(--muted);font-weight:400;font-size:12px;">(exclude these items from any listing or custom discount applied to the estimate &mdash; e.g. permits &amp; pass-through fees)</span></span>
+    </label>
     <div id="misc-items">${items.map((it,i) => renderMiscItem(it,i,internal)).join("")}</div>
     <button class="add-btn no-print" onclick="addMiscItem()">+ Add item</button>
     <!--
@@ -8754,8 +8792,14 @@ function syncMiscSubtotal(){
   const items = (state.miscellaneous && Array.isArray(state.miscellaneous.items)) ? state.miscellaneous.items : [];
   const catSub = items.reduce((a, it) => a + miscQty(it) * num(it.clientRate), 0);
   let discRate = 0, projDiscount = 0;
-  try { const t = computeTotals(); if(t.subtotal > 0){ discRate = t.discount / t.subtotal; projDiscount = t.discount; } } catch(_){}
-  const hasDisc = !!(state.enabled && state.enabled.miscellaneous) && catSub > 0 && projDiscount > 0;
+  try {
+    const t = computeTotals();
+    const base = (t.discountableBase != null ? t.discountableBase : t.subtotal);
+    if(base > 0){ discRate = t.discount / base; projDiscount = t.discount; }
+  } catch(_){}
+  // Misc gets no discount when "bypass discounts" is on.
+  const bypass = miscBypassActive();
+  const hasDisc = !bypass && !!(state.enabled && state.enabled.miscellaneous) && catSub > 0 && projDiscount > 0;
   const catDisc = catSub * discRate;
   const catNet  = catSub - (hasDisc ? catDisc : 0);
   const bdT = bd.querySelector(".bd-t");
@@ -12302,12 +12346,16 @@ function renderClientEstimate(){
     // discount line appears between the pre-discount "Labour & Material"
     // row and a new post-discount "Subtotal" row. So the client sees
     // every step: original total, savings, final price for that scope.
-    const _esDiscRate = (totals.subtotal > 0) ? (totals.discount / totals.subtotal) : 0;
+    const _esDiscBase = (totals.discountableBase != null ? totals.discountableBase : totals.subtotal);
+    const _esDiscRate = (_esDiscBase > 0) ? (totals.discount / _esDiscBase) : 0;
     const _esDiscPct  = _esDiscRate * 100;
     const _esDiscPctLabel = _esDiscPct.toFixed(_esDiscPct < 1 ? 2 : 1).replace(/\.0+$/,"");
     const hasDiscount = totals.discount && totals.discount > 0;
-    const renderDiscRow = (catSub) => {
-      if(!hasDiscount || catSub <= 0) return "";
+    const _esBypassMisc = miscBypassActive();
+    // Misc items are excluded from the per-category discount rows when bypass is on.
+    const _esCatExcluded = (cat) => (cat === "miscellaneous" && _esBypassMisc);
+    const renderDiscRow = (catSub, cat) => {
+      if(!hasDiscount || catSub <= 0 || _esCatExcluded(cat)) return "";
       const catDisc = catSub * _esDiscRate;
       return `
         <div class="es-cat-total es-cat-disc">
@@ -12316,8 +12364,8 @@ function renderClientEstimate(){
         </div>
       `;
     };
-    const renderNetRow = (catSub, label) => {
-      if(!hasDiscount || catSub <= 0) return "";
+    const renderNetRow = (catSub, label, cat) => {
+      if(!hasDiscount || catSub <= 0 || _esCatExcluded(cat)) return "";
       const catDisc = catSub * _esDiscRate;
       const net = catSub - catDisc;
       return `
@@ -12337,19 +12385,19 @@ function renderClientEstimate(){
             <div class="es-subblock-title">${escapeHtml(sb.title)}</div>
             ${renderBullets(sb.bullets)}
             ${renderTotalRow(`${sb.title} — Labour & Material`, sb.total)}
-            ${renderDiscRow(sb.total)}
-            ${renderNetRow(sb.total, `${sb.title} — Subtotal`)}
+            ${renderDiscRow(sb.total, sec.cat)}
+            ${renderNetRow(sb.total, `${sb.title} — Subtotal`, sec.cat)}
           </div>
         `).join("");
         // Category-level rollup under all sub-blocks: combined L&M, discount, net.
         body += renderTotalRow(`${sec.title} — Combined Labour & Material`, sec.total);
-        body += renderDiscRow(sec.total);
-        body += renderNetRow(sec.total, `${sec.title} — Combined Subtotal`);
+        body += renderDiscRow(sec.total, sec.cat);
+        body += renderNetRow(sec.total, `${sec.title} — Combined Subtotal`, sec.cat);
       } else {
         body += renderBullets(sec.bullets || []);
         body += renderTotalRow("Total Labour & Material", sec.total);
-        body += renderDiscRow(sec.total);
-        body += renderNetRow(sec.total, "Subtotal (after discount)");
+        body += renderDiscRow(sec.total, sec.cat);
+        body += renderNetRow(sec.total, "Subtotal (after discount)", sec.cat);
       }
       html += `
         <div class="es-category-block">
