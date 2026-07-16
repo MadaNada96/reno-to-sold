@@ -26779,11 +26779,16 @@ function nextInvoiceNumber(){
   return "RTS-INV-" + String(next).padStart(4, "0");
 }
 
-/* Compute current contract value (post-discount, pre-HST). */
+/* Compute current contract value (post-discount, PRE-HST).
+   Milestone invoices bill a percentage of THIS value and then add HST once on
+   top (createMilestoneInvoice). Using the tax-inclusive total here would apply
+   HST twice — a % of an already-taxed number, then taxed again. It also keeps
+   the "Contract" figure comparable with "Invoiced"/"Collected", which sum the
+   pre-HST inv.amount values. */
 function invoiceContractValue(){
   try{
     const t = computeTotals();
-    return Math.round((t.total || 0) * 100) / 100;
+    return Math.round((t.afterDisc || 0) * 100) / 100;
   }catch(e){ return 0; }
 }
 
