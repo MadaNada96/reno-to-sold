@@ -21191,9 +21191,14 @@ function closeAllToolOverlays(){
     document.body.classList.remove("show-contractor");
   } catch(e){}
   try {
-    // Invoicing modal — remove .show
+    // Invoicing modal — remove .show. If the user drilled into another
+    // project's invoicing and is now navigating away (rather than clicking
+    // Done), restore their original active estimate.
     const invModal = document.getElementById("invoicingModal");
-    if(invModal) invModal.classList.remove("show");
+    if(invModal && invModal.classList.contains("show")){
+      invModal.classList.remove("show");
+      try { if(typeof restoreBorrowedInvoicingEstimate === "function") restoreBorrowedInvoicingEstimate(); } catch(e){}
+    }
   } catch(e){}
   try {
     // Bids dashboard — remove .show
@@ -27257,8 +27262,25 @@ async function openInvoicing(){
   document.getElementById("invoicingModal").classList.add("show");
 }
 
+/* Put the user's workspace back to the estimate they were on before they
+   drilled into another project's invoicing (borrow-and-restore). Their invoice
+   edits on the borrowed project were saved to THAT project along the way; this
+   just restores their active estimate. No-op when nothing was borrowed.
+   Called both from closeInvoicing() (Done / backdrop) and from the router's
+   closeAllToolOverlays() (navigating away without closing the modal). */
+function restoreBorrowedInvoicingEstimate(){
+  if(!_invoicingBorrowedSnapshot) return;
+  const snap = _invoicingBorrowedSnapshot;
+  _invoicingBorrowedSnapshot = null;
+  try {
+    state = snap;
+    if(typeof renderAll === "function") renderAll();
+  } catch(e){}
+}
+
 function closeInvoicing(){
   document.getElementById("invoicingModal").classList.remove("show");
+  restoreBorrowedInvoicingEstimate();
   // Sync URL — if user's currently on /#/invoicing, take them back to
   // the dashboard. Otherwise leave the URL alone (Invoicing modal was
   // opened inline from a project).
@@ -27280,6 +27302,14 @@ let _invAllFilter = {
   status: "all",                    // "all" | "draft" | "sent" | "paid" | "overdue"
   year:   "all"                     // "all" or 4-digit year string
 };
+/* Borrow-and-restore: when the user drills into ANOTHER project's invoicing
+   from the All Projects cards, we temporarily load that estimate so the
+   invoicing tools (which all read the global `state`) operate on it — but we
+   snapshot the estimate they were actually working on first, and restore it
+   when the invoicing modal closes. This way browsing another project's
+   invoices never permanently switches their active workspace. Null when not
+   borrowed. */
+let _invoicingBorrowedSnapshot = null;
 
 function setInvoicingScope(scope){
   _invoicingScope = (scope === "all") ? "all" : "current";
@@ -27554,6 +27584,12 @@ function renderInvoicingAllProjects(){
 function openProjectInvoicing(estId){
   const liveId = state && state._id;
   if(estId && estId !== liveId && estId !== "_live" && typeof loadEstimate === "function"){
+    // Snapshot the estimate the user was actually working on (once, on the
+    // first borrow) so closeInvoicing() can restore it — drilling into another
+    // project's invoices shouldn't permanently swap their workspace.
+    if(!_invoicingBorrowedSnapshot){
+      try { _invoicingBorrowedSnapshot = JSON.parse(JSON.stringify(state)); } catch(e){ _invoicingBorrowedSnapshot = null; }
+    }
     loadEstimate(estId);   // no-ops safely if the id isn't in the saved list
   }
   _invoicingScope = "current";
