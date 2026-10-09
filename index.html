@@ -13466,11 +13466,12 @@ async function pullCloudContractors(showMigratePrompt){
   }
 
   // Pull + merge (newer wins per client_id)
-  const { data: cloud, error } = await supa.from("estimates")
-    .select("client_id,name,state,updated_at")
-    .eq("user_id", currentUser.id)
-    .eq("type", "contractor");
-  if(error){ console.error("Contractor pull failed:", error); return; }
+  let cloud = null;
+  try {
+    cloud = await restFetch("estimates?select=client_id,name,state,updated_at" +
+      "&user_id=eq." + encodeURIComponent(currentUser.id) + "&type=eq.contractor");
+  } catch(error){ console.error("Contractor pull failed:", error); return; }
+  if(!Array.isArray(cloud)){ console.error("Contractor pull returned no array"); return; }
 
   /* SECURITY HARDENING — cloud is source of truth for contractors.
      Same fix as the main estimates list: never auto-push local-only
@@ -17135,8 +17136,63 @@ function getStoredAuthToken(){
   } catch(e){ return null; }
 }
 
+/* ============================================================
+   AUTH TOKEN REFRESH (2026-10 data-loss fix)
+   ============================================================
+   restFetch reads the access token straight from localStorage. If
+   supabase-js's auto-refresh stalls (it hangs on this site — see the
+   many notes in this file), that token expires after ~1 hour and every
+   cloud read/write fails with 401 "JWT expired". Reads then came back
+   empty and saves failed silently. This refreshes the token directly
+   against the Supabase Auth REST endpoint, no supabase-js involved. */
+let _authRefreshPromise = null;
+function _authStorageKey(){
+  const ref = (SUPABASE_URL.match(/https?:\/\/([^.]+)\./) || [])[1];
+  return ref ? ("sb-" + ref + "-auth-token") : null;
+}
+async function refreshStoredAuthToken(force){
+  const key = _authStorageKey();
+  if(!key) return null;
+  let stored = null;
+  try { stored = JSON.parse(localStorage.getItem(key) || "null"); } catch(e){}
+  if(!stored || !stored.refresh_token) return null;
+  const nowSec = Math.floor(Date.now() / 1000);
+  if(!force && stored.expires_at && stored.expires_at - nowSec > 90) return stored.access_token;
+  if(_authRefreshPromise) return _authRefreshPromise;
+  _authRefreshPromise = (async () => {
+    try {
+      const r = await fetch(SUPABASE_URL.replace(/\/$/, "") + "/auth/v1/token?grant_type=refresh_token", {
+        method: "POST",
+        headers: { "apikey": SUPABASE_ANON_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: stored.refresh_token })
+      });
+      const data = await r.json().catch(() => null);
+      if(!r.ok || !data || !data.access_token){
+        console.warn("[auth] Token refresh failed:", r.status, data && (data.error_description || data.msg || data.error));
+        return null;
+      }
+      // Re-read in case supabase-js refreshed in the meantime, then merge.
+      let latest = stored;
+      try { latest = JSON.parse(localStorage.getItem(key) || "null") || stored; } catch(e){}
+      const merged = Object.assign({}, latest, data);
+      if(!merged.expires_at && data.expires_in) merged.expires_at = Math.floor(Date.now()/1000) + data.expires_in;
+      localStorage.setItem(key, JSON.stringify(merged));
+      console.log("[auth] Access token refreshed via REST");
+      return merged.access_token;
+    } catch(e){
+      console.warn("[auth] Token refresh threw:", e);
+      return null;
+    } finally {
+      setTimeout(() => { _authRefreshPromise = null; }, 0);
+    }
+  })();
+  return _authRefreshPromise;
+}
+
 async function restFetch(path, opts){
   opts = opts || {};
+  // Make sure the token isn't expired/about to expire before using it.
+  try { await refreshStoredAuthToken(false); } catch(e){}
   const token = getStoredAuthToken();
   const headers = Object.assign({
     "apikey": SUPABASE_ANON_KEY,
@@ -17158,6 +17214,11 @@ async function restFetch(path, opts){
   }
   if(!r.ok){
     const msg = (data && data.message) || (data && data.error) || text || ("HTTP " + r.status);
+    // Expired/invalid JWT → force one refresh and retry once.
+    if(r.status === 401 && !opts._retried && token){
+      const fresh = await refreshStoredAuthToken(true).catch(() => null);
+      if(fresh) return restFetch(path, Object.assign({}, opts, { _retried: true }));
+    }
     const err = new Error(msg);
     err.status = r.status;
     throw err;
@@ -25430,6 +25491,25 @@ async function onAuthClick(){
       console.log("[auth] User cancelled sign-out");
       return;
     }
+    /* SIGN-OUT SAFETY CHECK (2026-10 data-loss fix)
+       Sign-out wipes this browser's copy of every estimate. Before
+       that happens, make sure each local estimate exists in the cloud;
+       upload any that don't. If some still can't be confirmed, warn
+       and let the user cancel. */
+    try {
+      const unsynced = await ensureLocalEstimatesInCloud();
+      if(unsynced.length){
+        const goAhead = await brandedConfirm(
+          unsynced.length + " estimate" + (unsynced.length===1?"":"s") +
+          " couldn't be confirmed in the cloud:\n\n" +
+          unsynced.slice(0, 8).map(e => "• " + (e.name || "Untitled")).join("\n") +
+          (unsynced.length > 8 ? "\n…" : "") +
+          "\n\nSigning out now will remove " + (unsynced.length===1?"it":"them") +
+          " from this device. Cancel, check your connection, and try again.",
+          { confirmLabel: "Sign Out Anyway" });
+        if(!goAhead){ console.log("[auth] Sign-out cancelled — unsynced estimates"); return; }
+      }
+    } catch(e){ console.error("[auth] Pre-sign-out sync check failed:", e); }
     console.log("[auth] Signing out...");
     /* INSTANT SIGN-OUT — skip supa.auth.signOut() entirely.
        Background: supabase-js's signOut hangs (same hang we see on
@@ -25534,9 +25614,33 @@ async function upsertCloudEstimate(entry){
         }
       }
     }
+    return true;
   }catch(e){
     console.error("Cloud upsert failed:", e);
+    /* Never fail silently — an estimate that isn't in the cloud is
+       wiped from this browser on sign-out. */
+    try { flash("⚠ Not synced to cloud — check connection before signing out"); } catch(_){}
+    return false;
   }
+}
+
+/* Upload any locally-saved estimates that aren't in the cloud yet.
+   Returns the list of local estimates that are STILL not confirmed. */
+async function ensureLocalEstimatesInCloud(){
+  const local = loadSavedList();
+  if(!local.length || !currentUser) return [];
+  const listCloudIds = async () => {
+    const rows = await restFetch("estimates?select=client_id" +
+      "&user_id=eq." + encodeURIComponent(currentUser.id) + "&type=eq.estimate");
+    return new Set((Array.isArray(rows) ? rows : []).map(r => r.client_id));
+  };
+  let ids;
+  try { ids = await listCloudIds(); } catch(e){ return local; }
+  const missing = local.filter(e => e && e.id && !ids.has(e.id));
+  if(!missing.length) return [];
+  for(const e of missing){ await upsertCloudEstimate(e); }
+  try { ids = await listCloudIds(); } catch(e){ return missing; }
+  return missing.filter(e => !ids.has(e.id));
 }
 
 async function deleteCloudEstimate(clientId){
@@ -25683,11 +25787,27 @@ async function bootstrapCloudSync(showMigratePrompt){
   // Filter by type='estimate' so tracker rows (type='tracker' or
   // 'tracker_meta') in the same table don't leak into the estimator's
   // Saved list. The tracker sync runs separately at the end of this function.
-  const { data: cloud, error } = await supa.from("estimates")
-    .select("client_id,name,state,updated_at")
-    .eq("user_id", currentUser.id)
-    .eq("type", "estimate");
-  if(error){ console.error(error); return; }
+  /* 2026-10 fix: use restFetch, NOT supa.from() — supa.from hangs on
+     this site, which left the Saved list empty after sign-in (sign-out
+     had already cleared localStorage). Retries a few times. If the
+     cloud can't be reached we do NOT touch the local list. */
+  let cloud = null;
+  for(let attempt = 0; attempt < 3 && cloud === null; attempt++){
+    try {
+      const rows = await restFetch(
+        "estimates?select=client_id,name,state,updated_at" +
+        "&user_id=eq." + encodeURIComponent(currentUser.id) +
+        "&type=eq.estimate");
+      if(Array.isArray(rows)) cloud = rows;
+    } catch(e){
+      console.error("[sync] Estimate pull failed (attempt " + (attempt+1) + "):", e);
+      await new Promise(r => setTimeout(r, 800 * (attempt + 1)));
+    }
+  }
+  if(cloud === null){
+    try { flash("⚠ Couldn't load saved estimates — refresh the page"); } catch(_){}
+    return;
+  }
 
   /* ============================================================
      SECURITY HARDENING — multi-tenant data isolation
@@ -28445,11 +28565,12 @@ async function bootstrapCloudSync(ctx, showMigratePrompt){
   }
 
   // Pull tracker projects + tracker_meta from the cloud
-  const { data: cloudRows, error } = await cloudCtx.supa.from("estimates")
-    .select("client_id,name,state,updated_at,type")
-    .eq("user_id", cloudCtx.user.id)
-    .in("type", ["tracker","tracker_meta"]);
-  if(error){ console.error("Tracker pull failed:", error); return; }
+  let cloudRows = null;
+  try {
+    cloudRows = await restFetch("estimates?select=client_id,name,state,updated_at,type" +
+      "&user_id=eq." + encodeURIComponent(cloudCtx.user.id) + "&type=in.(tracker,tracker_meta)");
+  } catch(error){ console.error("Tracker pull failed:", error); return; }
+  if(!Array.isArray(cloudRows)){ console.error("Tracker pull returned no array"); return; }
 
   const cloudProjects = (cloudRows||[]).filter(r => r.type === "tracker");
   const metaRow = (cloudRows||[]).find(r => r.type === "tracker_meta" && r.client_id === CUSTOM_CATS_CLIENT_ID);
