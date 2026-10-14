@@ -207,6 +207,12 @@
     .bk-pref select{grid-column:2 / 4;}
     .decl-box{margin-left:0;}
   }
+  /* property details + includes */
+  .prop-grid{display:grid;grid-template-columns:2fr 1fr 1fr;gap:12px;margin-top:14px;}
+  #ptype{margin-bottom:2px;}
+  .incl-list{margin-top:12px;display:flex;flex-direction:column;gap:8px;}
+  .incl-list details.incl{margin-top:0;}
+  @media (max-width:560px){ .prop-grid{grid-template-columns:1fr 1fr;} .prop-grid > div:first-child{grid-column:1 / -1;} }
 </style>
 </head>
 <body>
@@ -236,11 +242,25 @@
     <div class="main">
       <!-- ===== Property ===== -->
       <div class="panel">
-        <h2>1 &middot; Property size</h2>
+        <h2>1 &middot; Property details</h2>
         <div class="panel-body">
-          <label for="sqft">Total finished sqft</label>
-          <input type="number" id="sqft" min="0" step="10" inputmode="numeric" placeholder="e.g. 1600" oninput="PP.set('sqft', this.value)">
-          <div class="hint">Finished living space, including a finished basement.</div>
+          <label>Property type</label>
+          <div class="ptg" id="ptype"></div>
+          <div class="prop-grid">
+            <div>
+              <label for="sqft">Total finished sqft</label>
+              <input type="number" id="sqft" min="0" step="10" inputmode="numeric" placeholder="e.g. 1600" oninput="PP.set('sqft', this.value)">
+            </div>
+            <div>
+              <label for="beds">Bedrooms</label>
+              <input type="number" id="beds" min="0" step="1" inputmode="numeric" placeholder="e.g. 3" oninput="PP.set('beds', this.value)">
+            </div>
+            <div>
+              <label for="baths">Bathrooms</label>
+              <input type="number" id="baths" min="0" step="0.5" inputmode="decimal" placeholder="e.g. 2.5" oninput="PP.set('baths', this.value)">
+            </div>
+          </div>
+          <div id="bsmtRow"></div>
         </div>
       </div>
 
@@ -250,12 +270,13 @@
         <div class="panel-body">
           <div class="pkgs" id="pkgs"></div>
           <div class="hint">Each package includes everything in the one before it.</div>
+          <div class="incl-list" id="inclList"></div>
         </div>
       </div>
 
       <!-- ===== Options ===== -->
       <div class="panel" id="optsPanel">
-        <h2>3 &middot; Options</h2>
+        <h2>3 &middot; Add-ons</h2>
         <div class="panel-body" id="opts"></div>
       </div>
     </div>
@@ -312,6 +333,18 @@ const PP_FLOORS = [
   ["engineered","Engineered Hardwood","Real hardwood veneer on a stable core — a premium look buyers notice."],
   ["hardwood","Solid Hardwood","Top-end finish for high-value listings."]
 ];
+const PP_PTYPES = [["condo","Condo"],["townhouse","Townhouse"],["semi","Semi-detached"],["detached","Detached"]];
+const PP_FLOOR_SCOPE = [
+  ["Removal", "Removal and disposal of your existing flooring."],
+  ["New floor", "Supply and installation of the floor you choose — luxury vinyl plank, waterproof laminate, engineered hardwood or solid hardwood — with the waste allowance included."],
+  ["Baseboards", "New baseboards supplied and installed throughout the flooring area."],
+  ["Area", "Priced on the flooring area. Tiled areas you're keeping, like bathrooms, aren't included."]
+];
+const PP_KB_SCOPE = [
+  ["Kitchen", "Demolition and disposal of the existing kitchen (cabinet removal, countertop tear-out, haul-away and dump fees). New semi-custom or custom cabinets including sink, faucet, plumbing adjustments and all hardware; standard or premium quartz countertops; backsplash in tile or matching quartz; optional island and under-cabinet LED lighting."],
+  ["Bathrooms", "Demolition and disposal of the existing bathroom (tile removal, fixture tear-out, haul-away). Full refresh with a new toilet, vanity, mirror, light fixture, faucet and accessories, plus new floor tile. Tub surround or stand-up shower tile with waterproofing and a glass enclosure where applicable. Options include a new or freestanding tub, double vanity or a new stand-up shower."],
+  ["How it's priced", "Kitchens and bathrooms are designed to your layout and priced in the Reno to Sold agent portal."]
+];
 const PP_PACKAGES = [
   { id:1, name:"Clean & Declutter", tag:"Show-ready in days", svc:["cleaning"] },
   { id:2, name:"Clean + Paint", tag:"Fresh, neutral, move-in ready", svc:["cleaning","painting"] },
@@ -328,7 +361,7 @@ const PP_CLEAN_SCOPE = [
 const PP = {
   rates: JSON.parse(JSON.stringify(PP_DEFAULT_RATES)),
   live: false,
-  s: { sqft:"", pkg:2, level:"walls", doors:"", ceilings:true, floor:"vinyl", carpet:false, carpetSqft:"", declutter:false },
+  s: { ptype:"", beds:"", baths:"", bsmt:false, sqft:"", pkg:2, level:"walls", doors:"", ceilings:true, floor:"vinyl", carpet:false, carpetSqft:"", declutter:false },
 
   async loadRates(){
     try {
@@ -403,6 +436,18 @@ const PP = {
 
   render(){
     const s = this.s;
+    // property type + basement
+    document.getElementById("ptype").innerHTML = PP_PTYPES.map(([k, l]) =>
+      `<button type="button" class="${s.ptype === k ? "on" : ""}" onclick="PP.set('ptype','${k}',true)">${l}</button>`).join("");
+    document.getElementById("bsmtRow").innerHTML = s.ptype === "condo" ? "" : `
+      <label class="chk" style="margin-top:12px"><input type="checkbox" ${s.bsmt ? "checked" : ""} onchange="PP.set('bsmt', this.checked, true)"> The basement is included in the total sqft</label>
+      <div class="hint" style="margin-top:2px">${s.bsmt ? "Great — cleaning, painting and flooring are priced on the full sqft above, basement included." : "Leave unticked if the sqft above is the main floors only (or there's no basement)."}</div>`;
+    // what's included explainers
+    document.getElementById("inclList").innerHTML = [
+      ["What's included in the deep clean", PP_CLEAN_SCOPE],
+      ["What's included in flooring", PP_FLOOR_SCOPE],
+      ["What's included in kitchen &amp; bath", PP_KB_SCOPE]
+    ].map(([t, rows]) => `<details class="incl"><summary>${t}</summary>${rows.map(([h, d]) => `<p><b>${h}:</b> ${d}</p>`).join("")}</details>`).join("");
     // package cards
     document.getElementById("pkgs").innerHTML = PP_PACKAGES.map(p => {
       const q = this.compute(p.id);
@@ -423,7 +468,6 @@ const PP = {
     const pk = PP_PACKAGES.find(p => p.id === s.pkg);
     let o = `
       <div class="opt">
-        <div class="opt-t">Deep cleaning</div>
         <label class="chk"><input type="checkbox" ${s.carpet ? "checked" : ""} onchange="PP.set('carpet', this.checked, true)"> Add carpet cleaning <em>(extra)</em></label>
         ${s.carpet ? `<div class="sub-in"><label for="cs">Carpeted area (sqft)</label><input type="number" id="cs" min="0" value="${s.carpetSqft}" placeholder="e.g. 400" oninput="PP.set('carpetSqft', this.value)"></div>` : ""}
         <label class="chk"><input type="checkbox" ${s.declutter ? "checked" : ""} onchange="PP.set('declutter', this.checked, true)"> Add decluttering <em>(priced after a photo review)</em></label>
@@ -432,7 +476,6 @@ const PP = {
           <div class="hint" style="margin-top:2px">Our team reviews them and prices the decluttering before your walkthrough.</div>
           ${PPB.photoGrid()}
         </div>` : ""}
-        <details class="incl"><summary>What's included in the deep clean</summary>${PP_CLEAN_SCOPE.map(([t, d]) => `<p><b>${t}:</b> ${d}</p>`).join("")}</details>
       </div>`;
     if(pk.svc.includes("painting")){
       o += `
@@ -536,6 +579,11 @@ const PPB = {
   photos: [],         // [{file, url(preview)}]
   sending: false,
 
+  propLine(o){
+    o = o || {};
+    const t = (PP_PTYPES.find(x => x[0] === o.ptype) || [, "Type not given"])[1];
+    return [t, o.beds ? o.beds + " bed" : "", o.baths ? o.baths + " bath" : "", o.sqft ? o.sqft + " sqft" + (o.ptype === "condo" ? "" : (o.bsmt ? " (basement included)" : " (basement not included)")) : ""].filter(Boolean).join(" · ");
+  },
   photoGrid(){
     return `<div class="ph-grid">
       ${this.photos.map((p, i) => `<div class="ph"><img src="${p.url}" alt="Photo ${i+1}"><button type="button" aria-label="Remove photo" onclick="PPB.removePhoto(${i})">×</button></div>`).join("")}
@@ -573,7 +621,7 @@ const PPB = {
     return `
       <div class="bk-h"><b>Book a walkthrough</b><button type="button" class="bk-x" aria-label="Close" onclick="PPB.close()">×</button></div>
       <div class="bk-b">
-        <div class="bk-sum">Package ${pk.id} · ${pk.name} · <b>${PP.rg(q.sub)}</b> + HST</div>
+        <div class="bk-sum">Package ${pk.id} · ${pk.name} · <b>${PP.rg(q.sub)}</b> + HST<br>${PPB.propLine(PP.s)}</div>
 
         <div class="bk-sec">1 · Your details</div>
         <div class="bk-2">
@@ -642,6 +690,7 @@ const PPB = {
     if(!/.+@.+\..+/.test(email)) return this.err("Please add a valid email.");
     if(phone.replace(/\D/g, "").length < 10) return this.err("Please add a phone number.");
     if(!addr) return this.err("Please add the property address.");
+    if(!PP.s.ptype || !PP.n(PP.s.beds) || !PP.n(PP.s.baths)) return this.err("Please add the property type, bedrooms and bathrooms (step 1 on the page).");
     if(this.prefs.length !== 3) return this.err("Please pick 3 different days.");
     const allowed = rtsBookableDays();
     if(this.prefs.some(p => !allowed.includes(p.date))) return this.err("One of the days is no longer available — please pick again.");
@@ -702,7 +751,8 @@ const PPB = {
   async notify(row){
     const body = [
       `New walkthrough request from the website (renotosold.homes/packages).`, ``,
-      `Name: ${row.name} (${row.role})`, `Email: ${row.email}`, `Phone: ${row.phone}`, `Property: ${row.address}`, ``,
+      `Name: ${row.name} (${row.role})`, `Email: ${row.email}`, `Phone: ${row.phone}`, `Property: ${row.address}`,
+      `Details: ${PPB.propLine(row.quote.options)}`, ``,
       `Preferred times:`, ...row.preferences.map((p, i) => `  ${i+1}. ${rtsNiceDay(p.date, true)}, ${p.window}`), ``,
       `Package ${row.quote.packageId} — ${row.quote.packageName} · ${row.quote.sqft} sqft`,
       `Range shown: ${PP.fmt(row.quote.low)} – ${PP.fmt(row.quote.high)} + HST`,

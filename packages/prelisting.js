@@ -454,6 +454,23 @@ const PL_APPLIANCE_ITEMS = [
   ["microwave","Microwave / hood fan"], ["washer","Washer"], ["dryer","Dryer"]
 ];
 
+const PL_FLOOR_SCOPE = [
+  ["Removal", "Removal and disposal of the existing flooring."],
+  ["New floor", "Supply and installation of the chosen floor — luxury vinyl plank, waterproof laminate, engineered hardwood or solid hardwood — with the waste allowance included."],
+  ["Baseboards", "New baseboards supplied and installed throughout the flooring area."],
+  ["Area", "Priced on the flooring area. Tiled areas being kept, like bathrooms, aren't included."]
+];
+const PL_KB_SCOPE = [
+  ["Kitchen", "Demolition and disposal of the existing kitchen (cabinet removal, countertop tear-out, haul-away and dump fees). New semi-custom or custom cabinets including sink, faucet, plumbing adjustments and all hardware; standard or premium quartz countertops; backsplash in tile or matching quartz; optional island and under-cabinet LED lighting."],
+  ["Bathrooms", "Demolition and disposal of the existing bathroom (tile removal, fixture tear-out, haul-away). Full refresh with a new toilet, vanity, mirror, light fixture, faucet and accessories, plus new floor tile. Tub surround or stand-up shower tile with waterproofing and a glass enclosure where applicable. Options include a new or freestanding tub, double vanity or a new stand-up shower."],
+  ["How it's priced", "Designed to the home's layout in the Kitchen & Bath step (Package 4), using the same setup as the estimator."]
+];
+const PL_PTYPES = [["condo","Condo"],["townhouse","Townhouse"],["semi","Semi-detached"],["detached","Detached"]];
+function plPropLine(q){
+  const t = (PL_PTYPES.find(x => x[0] === q.propType) || [, ""])[1];
+  return [t, num(q.beds) ? num(q.beds) + " bed" : "", num(q.baths) ? num(q.baths) + " bath" : "",
+    num(q.propSqft) ? num(q.propSqft) + " sqft" + (q.propType && q.propType !== "condo" ? (q.basementIncluded ? " (basement included)" : " (basement not included)") : "") : ""].filter(Boolean).join(" · ");
+}
 function plUid(){ return "pk_" + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 function plClone(o){ return o == null ? o : JSON.parse(JSON.stringify(o)); }
 function plEsc(s){ return escapeHtml(s == null ? "" : String(s)); }
@@ -482,6 +499,7 @@ function plNewQuote(){
     owner_brokerage: (currentProfile && currentProfile.brokerage) || "",
     status: "draft", packageId: null,
     propName: "", propAddress: "", propSqft: "", targetListDate: "",
+    propType: "", beds: "", baths: "", basementIncluded: false,
     sellers: [ { name:"", phone:"", email:"" } ],
     readiness: {}, notes: "",
     cleaning: { sqft:"", carpet:false, carpetSqft:"", declutter:false },
@@ -737,7 +755,7 @@ function plQuoteTableHtml(q, opts){
   return `
     <div style="border:1px solid #e6dcc3;border-radius:10px;padding:18px 20px;background:#fffdf7;margin:6px 0 16px;">
       <div style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:#a8853f;font-weight:700;">Pre-Listing Package ${pk.id} &middot; ${plEsc(pk.name)}</div>
-      <div style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:13px;color:#555;margin-top:4px;">${plEsc(q.propAddress || q.propName || "")}${num(q.propSqft) ? " &middot; " + num(q.propSqft) + " sqft" : ""}</div>
+      <div style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:13px;color:#555;margin-top:4px;">${plEsc(q.propAddress || q.propName || "")}${plPropLine(q) ? " &middot; " + plEsc(plPropLine(q)) : ""}</div>
       <div style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:26px;font-weight:800;color:#0a0a0a;margin:12px 0 2px;">${plMoneyRange(qt.range)}</div>
       <div style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;color:#555;">Plus HST. The exact amount is provided at the walkthrough and is <b>guaranteed to be within this range</b>.</div>
       <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:14px;">${rows}${tbd}</table>
@@ -756,7 +774,7 @@ function plPlainQuote(q){
   if(!qt || !pk) return "";
   return [
     `Pre-Listing Package ${pk.id} — ${pk.name}`,
-    `${q.propAddress || q.propName || ""}${num(q.propSqft) ? " · " + num(q.propSqft) + " sqft" : ""}`,
+    `${q.propAddress || q.propName || ""}${plPropLine(q) ? " · " + plPropLine(q) : ""}`,
     `Price range: ${plMoneyRange(qt.range)} + HST`,
     ...qt.lines.map(l => `  • ${l.label}: ${plMoneyRange(l.range)}`),
     ...(qt.tbd || []).map(t => `  • ${t}`),
@@ -866,7 +884,7 @@ const PL = {
           <div><span>Phone</span><b><a href="tel:${plEsc((r.phone || "").replace(/[^0-9+]/g, ""))}" style="color:var(--gold-bright)">${plEsc(r.phone || "")}</a></b></div>
         </div>
         ${q.packageId ? `<div class="pl-q-lines" style="margin-top:14px;">
-          <div><span><b>Package ${q.packageId} · ${plEsc(q.packageName || "")}</b> · ${plEsc(String(q.sqft || ""))} sqft</span><b>${fmt(q.low)} – ${fmt(q.high)}</b></div>
+          <div><span><b>Package ${q.packageId} · ${plEsc(q.packageName || "")}</b> · ${plEsc(plPropLine({ propType:(q.options||{}).ptype, beds:(q.options||{}).beds, baths:(q.options||{}).baths, basementIncluded:(q.options||{}).bsmt, propSqft:q.sqft }))}</span><b>${fmt(q.low)} – ${fmt(q.high)}</b></div>
           ${(q.lines || []).map(l => `<div><span>${plEsc(l.label)}</span><b>${fmt(l.low)} – ${fmt(l.high)}</b></div>`).join("")}
           ${(q.tbd || []).map(t => `<div class="tbd"><span>${plEsc(t)}</span><b>TBD</b></div>`).join("")}
         </div>` : ""}
@@ -921,7 +939,8 @@ const PL = {
     const r = this.curReq; if(!r) return;
     const o = (r.quote && r.quote.options) || {};
     const q = plNewQuote();
-    Object.assign(q, { propAddress: r.address || "", propSqft: String(o.sqft || (r.quote && r.quote.sqft) || ""), packageId: o.pkg || (r.quote && r.quote.packageId) || null, notes: r.notes || "" });
+    Object.assign(q, { propAddress: r.address || "", propSqft: String(o.sqft || (r.quote && r.quote.sqft) || ""), packageId: o.pkg || (r.quote && r.quote.packageId) || null, notes: r.notes || "",
+      propType: o.ptype || "", beds: o.beds || "", baths: o.baths || "", basementIncluded: !!o.bsmt });
     const isAgent = /agent/i.test(r.role || "");
     q.sellers = [ isAgent ? { name:"", phone:"", email:"" } : { name:r.name || "", phone:r.phone || "", email:r.email || "" } ];
     q.notes = (isAgent ? `Website request from agent ${r.name} (${r.email}, ${r.phone}).` : "") + (r.notes ? " " + r.notes : "");
@@ -1002,7 +1021,7 @@ const PL = {
         <button class="pl-row" type="button" onclick="PL.openQuote('${q.id}')">
           <div class="pl-row-main">
             <div class="pl-row-addr">${plEsc(q.propAddress || q.propName || "Untitled property")}</div>
-            <div class="pl-row-sub">${pk ? "Package " + pk.id + " · " + plEsc(pk.name) : "No package selected"}${admin && q.owner_name ? " · " + plEsc(q.owner_name) : ""}</div>
+            <div class="pl-row-sub">${pk ? "Package " + pk.id + " · " + plEsc(pk.name) : "No package selected"}${q.propType ? " · " + plEsc((PL_PTYPES.find(x => x[0] === q.propType) || [,""])[1]) : ""}${admin && q.owner_name ? " · " + plEsc(q.owner_name) : ""}</div>
           </div>
           <div class="pl-row-range">${qt ? plMoneyRange(qt.range) : "—"}</div>
           <div class="pl-row-meta">
@@ -1139,7 +1158,9 @@ const PL = {
     const need = k => order.indexOf(k) < to;
     if(need("property")){
       if(!(q.propAddress || "").trim()) return "Add the property address to continue.";
+      if(!q.propType) return "Choose the property type to continue.";
       if(!num(q.propSqft)) return "Add the total property square footage to continue.";
+      if(!num(q.beds) || !num(q.baths)) return "Add the number of bedrooms and bathrooms to continue.";
     }
     if(need("package") && !q.packageId) return "Choose a package to continue.";
     if(need("scope") && q.packageId >= 2 && q.painting.level === "full" && !num(q.painting.doorCount))
@@ -1198,7 +1219,7 @@ const PL = {
       <div class="pl-sum-note">${qt && qt.subtotal > 0 ? "Plus HST · guaranteed range" : "Enter the property sqft to price this package."}</div>
       ${qt && qt.lines.length ? `<div class="pl-sum-lines">${qt.lines.map(l => `<div><span>${plEsc(l.label)}</span><b>${plMoneyRange(l.range)}</b></div>`).join("")}</div>` : ""}
       ${qt && qt.tbd && qt.tbd.length ? `<div class="pl-sum-tbd">${qt.tbd.map(t => `<div>${plEsc(t)}</div>`).join("")}</div>` : ""}
-      ${q.propAddress ? `<div class="pl-sum-addr">${plEsc(q.propAddress)}${num(q.propSqft) ? " · " + num(q.propSqft) + " sqft" : ""}</div>` : ""}
+      ${q.propAddress ? `<div class="pl-sum-addr">${plEsc(q.propAddress)}<br>${plEsc(plPropLine(q))}</div>` : ""}
       ${rd.answered ? `<div class="pl-sum-score"><span>Readiness</span><b class="pl-heat ${rd.heat.toLowerCase()}">${rd.score}/100${isAdmin() ? " · " + rd.heat : ""}</b></div>` : ""}`;
   },
   renderMobileBarInner(){
@@ -1239,10 +1260,19 @@ const PL = {
           <input type="text" id="plAddr" autocomplete="off" value="${plEsc(q.propAddress)}" placeholder="Start typing a GTA address…" oninput="PL.set('propAddress', this.value); PL.acInput(this.value)">
           <div class="pl-ac-list" id="plAcList"></div>
         </div>
-        <div class="pl-f2">
-          <div class="pl-field"><label>Total property sqft <span class="pl-req">required</span></label>
-            <input type="number" min="0" inputmode="numeric" value="${plEsc(q.propSqft)}" placeholder="e.g. 1600" oninput="PL.set('propSqft', this.value)">
-            <div class="pl-hint">Finished living space, including a finished basement.</div></div>
+        <div class="pl-field"><label>Property type <span class="pl-req">required</span></label>
+          <div class="pl-pills">${PL_PTYPES.map(([k, l]) => `<button type="button" class="${q.propType === k ? "on" : ""}" onclick="PL.set('propType','${k}',true)">${l}</button>`).join("")}</div></div>
+        <div class="pl-f3">
+          <div class="pl-field"><label>Finished sqft <span class="pl-req">required</span></label>
+            <input type="number" min="0" inputmode="numeric" value="${plEsc(q.propSqft)}" placeholder="e.g. 1600" oninput="PL.set('propSqft', this.value)"></div>
+          <div class="pl-field"><label>Bedrooms <span class="pl-req">required</span></label>
+            <input type="number" min="0" step="1" inputmode="numeric" value="${plEsc(q.beds)}" placeholder="e.g. 3" oninput="PL.set('beds', this.value)"></div>
+          <div class="pl-field"><label>Bathrooms <span class="pl-req">required</span></label>
+            <input type="number" min="0" step="0.5" inputmode="decimal" value="${plEsc(q.baths)}" placeholder="e.g. 2.5" oninput="PL.set('baths', this.value)"></div>
+        </div>
+        ${q.propType !== "condo" ? `<label class="pl-check" style="margin-top:0"><input type="checkbox" ${q.basementIncluded ? "checked" : ""} onchange="PL.set('basementIncluded', this.checked, true)">
+          <span><b>The basement is included in the total sqft</b> <em>${q.basementIncluded ? "cleaning, painting and flooring are priced on the full sqft, basement included" : "leave unticked if the sqft is the main floors only, or there's no basement"}</em></span></label>` : ""}
+        <div class="pl-f2" style="margin-top:6px;">
           <div class="pl-field"><label>Target listing date</label>
             <input type="date" value="${plEsc(q.targetListDate)}" onchange="PL.set('targetListDate', this.value)"></div>
         </div>
@@ -1323,6 +1353,12 @@ const PL = {
               <div class="pl-pkg-price" id="plPkgPrice${p.id}">${this.packagePriceLabel(p.id)}</div>
             </button>`).join("")}
         </div>
+      </section>
+      <section class="pl-card">
+        <div class="pl-card-h"><h3>What's included</h3></div>
+        <details class="pl-incl"><summary>What's included in the deep clean</summary>${cleaningScopeHtml(false)}</details>
+        <details class="pl-incl"><summary>What's included in flooring</summary>${PL_FLOOR_SCOPE.map(([h, d]) => `<div class="cln-group"><div class="cln-group-t">${h}</div><div class="pl-hint" style="color:var(--ink);font-size:12.5px;">${d}</div></div>`).join("")}</details>
+        <details class="pl-incl"><summary>What's included in kitchen &amp; bath</summary>${PL_KB_SCOPE.map(([h, d]) => `<div class="cln-group"><div class="cln-group-t">${h}</div><div class="pl-hint" style="color:var(--ink);font-size:12.5px;">${d}</div></div>`).join("")}</details>
       </section>
       <section class="pl-card pl-card-quiet">
         <div class="pl-card-h"><h3>Appliance refresh</h3><p>Not a package — available with any of them through our Canadian Appliance Source partnership. You can request it from the quote page.</p></div>
@@ -1541,7 +1577,7 @@ const PL = {
     return `
       <section class="pl-card pl-quote">
         <div class="pl-q-eyebrow">Package ${pk.id} · ${plEsc(pk.name)}</div>
-        <div class="pl-q-addr">${plEsc(q.propAddress)}${num(q.propSqft) ? " · " + num(q.propSqft) + " sqft" : ""}</div>
+        <div class="pl-q-addr">${plEsc(q.propAddress)} · ${plEsc(plPropLine(q))}</div>
         <div class="pl-q-range">${plMoneyRange(qt.range)}</div>
         <div class="pl-q-guarantee"><i class="ti ti-shield-check" aria-hidden="true"></i> Plus HST. The exact amount is provided at the walkthrough and is <b>guaranteed to be within this range</b>.</div>
         <div class="pl-q-lines">
@@ -1665,7 +1701,7 @@ const PL = {
       const pk = plPackage(q.packageId);
       const who = q.submission.by_name || q.submission.by_email;
       const intro = `New pre-listing walkthrough request from ${who}${q.submission.brokerage ? " (" + q.submission.brokerage + ")" : ""}.\n\n` +
-        `Property: ${q.propAddress}\nPreferred walkthrough times:\n${prefs.map((p, i) => "  " + (i+1) + ". " + plNiceDay(p.date, true) + ", " + p.window).join("\n")}\nReadiness score: ${rd.score}/100 (${rd.heat})${q.targetListDate ? "\nTarget listing date: " + q.targetListDate : ""}${q.photos.length ? "\nPhotos attached to the quote: " + q.photos.length : ""}${q.notes ? "\n\nAgent notes: " + q.notes : ""}\n\nOpen the Pre-Listing Packages tool to schedule the walkthrough.`;
+        `Property: ${q.propAddress}\n${plPropLine(q)}\nPreferred walkthrough times:\n${prefs.map((p, i) => "  " + (i+1) + ". " + plNiceDay(p.date, true) + ", " + p.window).join("\n")}\nReadiness score: ${rd.score}/100 (${rd.heat})${q.targetListDate ? "\nTarget listing date: " + q.targetListDate : ""}${q.photos.length ? "\nPhotos attached to the quote: " + q.photos.length : ""}${q.notes ? "\n\nAgent notes: " + q.notes : ""}\n\nOpen the Pre-Listing Packages tool to schedule the walkthrough.`;
       await plSendEmail({
         to: [COMPANY_INFO.email || "renotosold@gmail.com"], cc: [],
         subject: `Walkthrough request — ${q.propAddress} — Package ${pk.id}`,
