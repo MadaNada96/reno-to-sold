@@ -151,6 +151,62 @@
   .ptg button.on{background:var(--gold-grad);color:#1a1405;border-color:var(--gold);}
 
   .hint{font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5;}
+  /* login + declutter photos */
+  .login-cta{border:1px solid var(--gold-deep);color:var(--gold-bright);font-weight:700;margin-top:12px;}
+  .login-cta:hover{background:rgba(212,175,106,.08);}
+  .decl-box{margin:4px 0 10px 25px;padding:12px 14px;border:1px dashed var(--gold-deep);border-radius:10px;background:rgba(212,175,106,.04);}
+  .decl-t{font-size:13px;font-weight:700;color:var(--ink);}
+  .ph-grid{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
+  .ph{position:relative;width:78px;height:78px;border-radius:8px;overflow:hidden;border:1px solid var(--line-strong);}
+  .ph img{width:100%;height:100%;object-fit:cover;display:block;}
+  .ph button{position:absolute;top:3px;right:3px;width:22px;height:22px;padding:0;border-radius:50%;border:none;background:rgba(0,0,0,.75);color:#fff;font-size:15px;line-height:1;}
+  .ph-add{width:78px;height:78px;border-radius:8px;border:1px dashed var(--line-strong);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);text-transform:none;letter-spacing:0;margin:0;}
+  .ph-add:hover{border-color:var(--gold-deep);color:var(--gold-bright);}
+  .ph-add input{display:none;}
+  .ph-add span{font-size:22px;line-height:1;}
+  .ph-add small{font-size:10.5px;margin-top:3px;}
+  /* booking modal */
+  .bk-bg{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;padding:16px;}
+  .bk{background:var(--panel);border:1px solid var(--gold-deep);border-radius:14px;width:100%;max-width:620px;max-height:calc(100vh - 32px);display:flex;flex-direction:column;box-shadow:var(--shadow);}
+  .bk-h{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line);}
+  .bk-h b{font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold-bright);}
+  .bk-x{border:none;font-size:22px;line-height:1;padding:2px 8px;}
+  .bk-b{padding:16px 18px;overflow:auto;}
+  .bk-b label{margin-top:10px;}
+  .bk-b textarea, .bk-b select{width:100%;padding:10px 12px;border:1px solid var(--line-strong);border-radius:8px;font:inherit;background:#0d0d11;color:var(--ink);font-size:14px;}
+  .bk-b input[type=email], .bk-b input[type=tel]{width:100%;padding:10px 12px;border:1px solid var(--line-strong);border-radius:8px;font:inherit;background:#0d0d11;color:var(--ink);font-size:14px;}
+  .bk-2{display:grid;grid-template-columns:1fr 1fr;gap:0 12px;}
+  .bk-sum{font-size:12.5px;color:var(--muted);background:var(--panel-2);border-radius:8px;padding:9px 12px;}
+  .bk-sum b{color:var(--gold-bright);}
+  .bk-sec{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);font-weight:700;margin:18px 0 6px;border-top:1px solid var(--line);padding-top:14px;}
+  .bk-sec span{color:var(--muted);text-transform:none;letter-spacing:0;font-weight:500;margin-left:6px;}
+  .bk-days{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin:10px 0;}
+  .bk-day{display:flex;flex-direction:column;align-items:center;gap:1px;padding:8px 4px;border-radius:10px;background:var(--panel-2);border:1px solid var(--line-strong);}
+  .bk-day small{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;}
+  .bk-day b{font-size:17px;color:var(--ink-strong);}
+  .bk-day.on{background:var(--gold-grad);border-color:var(--gold);}
+  .bk-day.on b, .bk-day.on small{color:#1a1405;}
+  .bk-day:disabled{opacity:.35;cursor:not-allowed;}
+  .bk-pref{display:grid;grid-template-columns:26px minmax(0,1fr) 150px 30px;gap:8px;align-items:center;padding:7px 0;border-bottom:1px dashed var(--line);}
+  .bk-n{width:24px;height:24px;border-radius:50%;background:var(--gold-grad);color:#1a1405;font-weight:800;font-size:12px;display:flex;align-items:center;justify-content:center;}
+  .bk-d{font-size:13.5px;font-weight:600;}
+  .bk-pref select{padding:7px 8px;font-size:13px;}
+  .bk-rm{padding:0;width:28px;height:28px;font-size:16px;}
+  .bk-empty{font-size:12px;color:var(--muted);padding:6px 0;}
+  .bk-err{color:var(--danger);font-size:12.5px;margin-top:10px;min-height:1em;}
+  .bk-f{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--line);}
+  .bk-done{text-align:center;font-size:14px;line-height:1.6;}
+  .bk-done ul{list-style:none;padding:0;margin:0 0 10px;color:var(--gold-bright);font-weight:600;}
+  .bk-done a{color:var(--gold-bright);}
+  .bk-check{width:52px;height:52px;border-radius:50%;background:var(--gold-grad);color:#1a1405;font-size:28px;font-weight:900;display:flex;align-items:center;justify-content:center;margin:4px auto 10px;}
+  button.cta{width:100%;font-size:14px;}
+  @media (max-width:560px){
+    .bk-2{grid-template-columns:1fr;}
+    .bk-days{grid-template-columns:repeat(3,minmax(0,1fr));}
+    .bk-pref{grid-template-columns:24px minmax(0,1fr) 30px;}
+    .bk-pref select{grid-column:2 / 4;}
+    .decl-box{margin-left:0;}
+  }
 </style>
 </head>
 <body>
@@ -231,7 +287,8 @@
    ===================================================================== */
 const PP_SUPABASE_URL  = "https://icrnvnmvcdpmhnjorefs.supabase.co";
 const PP_SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imljcm52bm12Y2RwbWhuam9yZWZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2ODQwMDgsImV4cCI6MjA5NDI2MDAwOH0.YoeBndWsky8vAW6mLeMziPeH2j2C6c_3VdAvOG_i0kA";
-const PP_CONTACT = { email:"renotosold@gmail.com", phone:"416-832-3779" };
+const PP_CONTACT = { email:"renotosold@gmail.com", phone:"647-500-0270" };
+const PP_LOGIN_URL = "../";   // main portal login (sign-up with paid subscription coming soon)
 
 // Fallback rates — mirror DEFAULT_PRICES in the portal's index.html.
 const PP_DEFAULT_RATES = {
@@ -339,7 +396,7 @@ const PP = {
       const f = sq*t.labour + sq*w*t.material + sq*(F.removal.labour+F.removal.material) + this.lf(sq)*(F.baseboards.labour+F.baseboards.material);
       lines.push(["Flooring — " + (PP_FLOORS.find(x => x[0] === s.floor) || PP_FLOORS[0])[1], f]);
     }
-    if(pk.svc.includes("kitchen")) tbd.push("Kitchen & bathroom renovation — designed and priced with you in the portal");
+    if(pk.svc.includes("kitchen")) tbd.push("Kitchen & bathroom renovation — log in to design and price");
     const sub = lines.reduce((a, l) => a + l[1], 0);
     return { lines, tbd, sub };
   },
@@ -370,6 +427,11 @@ const PP = {
         <label class="chk"><input type="checkbox" ${s.carpet ? "checked" : ""} onchange="PP.set('carpet', this.checked, true)"> Add carpet cleaning <em>(extra)</em></label>
         ${s.carpet ? `<div class="sub-in"><label for="cs">Carpeted area (sqft)</label><input type="number" id="cs" min="0" value="${s.carpetSqft}" placeholder="e.g. 400" oninput="PP.set('carpetSqft', this.value)"></div>` : ""}
         <label class="chk"><input type="checkbox" ${s.declutter ? "checked" : ""} onchange="PP.set('declutter', this.checked, true)"> Add decluttering <em>(priced after a photo review)</em></label>
+        ${s.declutter ? `<div class="decl-box">
+          <div class="decl-t">Upload photos of the areas to declutter</div>
+          <div class="hint" style="margin-top:2px">Our team reviews them and prices the decluttering before your walkthrough.</div>
+          ${PPB.photoGrid()}
+        </div>` : ""}
         <details class="incl"><summary>What's included in the deep clean</summary>${PP_CLEAN_SCOPE.map(([t, d]) => `<p><b>${t}:</b> ${d}</p>`).join("")}</details>
       </div>`;
     if(pk.svc.includes("painting")){
@@ -396,7 +458,10 @@ const PP = {
       </div>`;
     }
     if(pk.svc.includes("kitchen")){
-      o += `<div class="opt"><div class="opt-t">Kitchen &amp; bathrooms</div><div class="hint" style="margin-top:0">Cabinets, countertops, backsplash, island and bathroom layouts are designed with you — agents can price them instantly in the Reno to Sold portal, or we'll quote them at the walkthrough.</div></div>`;
+      o += `<div class="opt"><div class="opt-t">Kitchen &amp; bathrooms</div>
+        <div class="hint" style="margin-top:0">Design the kitchen and bathrooms — cabinets, countertops, backsplash, island, tubs, showers and tile — and price them instantly in the Reno to Sold agent portal.</div>
+        <a class="cta login-cta" href="${PP_LOGIN_URL}">Log in to design kitchen &amp; bath →</a>
+        <div class="q-small" style="text-align:center">New to Reno to Sold? Agent sign-up is coming soon.</div></div>`;
     }
     document.getElementById("opts").innerHTML = o;
     this.renderQuote();
@@ -420,23 +485,257 @@ const PP = {
       el.innerHTML = `<div class="q-pkg">Package ${pk.id} · ${pk.name}</div><div class="q-empty">Enter the property's square footage to see your guaranteed price range.</div>`;
       return;
     }
-    const mail = encodeURIComponent(
-      `Hi Reno to Sold,\n\nI'd like to book a walkthrough for a pre-listing package.\n\n` +
-      `Package ${pk.id} — ${pk.name}\nProperty size: ${this.n(s.sqft)} sqft\nPrice range shown: ${this.rg(q.sub)} + HST\n` +
-      q.lines.map(l => `• ${l[0]}: ${this.rg(l[1])}`).join("\n") + (q.tbd.length ? "\n" + q.tbd.map(t => "• " + t).join("\n") : "") +
-      `\n\nProperty address:\nBest time to reach me:\nPhone:\n\nThank you!`);
     el.innerHTML = `
       <div class="q-pkg">Package ${pk.id} · ${pk.name}</div>
       <div class="q-range">${this.rg(q.sub)}</div>
       <div class="q-note">Plus HST. The exact amount is provided at the walkthrough and is <b>guaranteed to be within this range</b>.</div>
       <div class="q-lines">${q.lines.map(l => `<div class="totrow"><span>${l[0]}</span><span class="v">${this.rg(l[1])}</span></div>`).join("")}
         ${q.tbd.map(t => `<div class="totrow tbd"><span>${t}</span><span class="v">TBD</span></div>`).join("")}</div>
-      <a class="btn-gold cta" href="mailto:${PP_CONTACT.email}?subject=${encodeURIComponent("Walkthrough request — Package " + pk.id)}&body=${mail}">Book a walkthrough</a>
+      <button type="button" class="btn-gold cta" onclick="PPB.open()">Book a walkthrough</button>
       <a class="cta ghost" href="tel:${PP_CONTACT.phone.replace(/\D/g, "")}">Call ${PP_CONTACT.phone}</a>
-      <a class="agent-link" href="../#/packages">Agent? Open the full tool in the portal →</a>
+      <a class="agent-link" href="${PP_LOGIN_URL}">Agent? Log in to the full tool →</a>
       <div class="q-small">Save quotes, send them to your seller and book walkthroughs.</div>`;
   }
 };
+
+/* =====================================================================
+   Walkthrough booking — visitor picks 3 preferred times (each on a
+   different business day, earliest = 2 business days from today).
+   Admin confirms one in the portal (Pre-listing packages → Website
+   requests), which emails the visitor.
+   Stored in public.walkthrough_requests (insert-only for the public).
+   Photos go to the package-photos bucket under public/<request id>/.
+   ===================================================================== */
+// Ontario statutory holidays + Civic Holiday (no walkthroughs). Extend yearly.
+const RTS_HOLIDAYS = [
+  "2026-01-01","2026-02-16","2026-04-03","2026-05-18","2026-07-01","2026-08-03","2026-09-07","2026-10-12","2026-12-25","2026-12-28",
+  "2027-01-01","2027-02-15","2027-03-26","2027-05-24","2027-07-01","2027-08-02","2027-09-06","2027-10-11","2027-12-27","2027-12-28"
+];
+const RTS_WINDOWS = ["9 – 11 AM", "11 AM – 1 PM", "1 – 3 PM", "3 – 5 PM"];
+const RTS_LEAD_BUSINESS_DAYS = 2;   // earliest walkthrough = this many business days out
+const RTS_DAYS_SHOWN = 15;          // business days offered in the picker
+
+function rtsYmd(d){ return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0"); }
+function rtsIsBusinessDay(d){ const w = d.getDay(); return w !== 0 && w !== 6 && !RTS_HOLIDAYS.includes(rtsYmd(d)); }
+function rtsBookableDays(){
+  const out = [];
+  const d = new Date(); d.setHours(12,0,0,0);
+  let lead = 0;
+  while(lead < RTS_LEAD_BUSINESS_DAYS){ d.setDate(d.getDate()+1); if(rtsIsBusinessDay(d)) lead++; }
+  // d is now the earliest allowed day
+  while(out.length < RTS_DAYS_SHOWN){ if(rtsIsBusinessDay(d)) out.push(rtsYmd(d)); d.setDate(d.getDate()+1); }
+  return out;
+}
+function rtsNiceDay(ymd, long){
+  const d = new Date(ymd + "T12:00");
+  return d.toLocaleDateString("en-CA", long ? { weekday:"long", month:"long", day:"numeric" } : { weekday:"short", month:"short", day:"numeric" });
+}
+
+const PPB = {
+  prefs: [],          // [{date, window}]
+  photos: [],         // [{file, url(preview)}]
+  sending: false,
+
+  photoGrid(){
+    return `<div class="ph-grid">
+      ${this.photos.map((p, i) => `<div class="ph"><img src="${p.url}" alt="Photo ${i+1}"><button type="button" aria-label="Remove photo" onclick="PPB.removePhoto(${i})">×</button></div>`).join("")}
+      <label class="ph-add"><input type="file" accept="image/*" multiple onchange="PPB.addPhotos(this.files); this.value='';"><span>＋</span><small>Add photos</small></label>
+    </div>`;
+  },
+  addPhotos(files){
+    [...(files || [])].slice(0, 20 - this.photos.length).forEach(f => {
+      if(/^image\//.test(f.type)) this.photos.push({ file:f, url: URL.createObjectURL(f) });
+    });
+    this.refreshPhotos();
+  },
+  removePhoto(i){ const p = this.photos.splice(i, 1)[0]; if(p) URL.revokeObjectURL(p.url); this.refreshPhotos(); },
+  refreshPhotos(){
+    document.querySelectorAll(".decl-box .ph-grid, .bk-photos .ph-grid").forEach(el => { el.outerHTML = this.photoGrid(); });
+  },
+
+  open(){
+    const q = PP.compute(PP.s.pkg);
+    if(!q.sub){ alert("Enter the property's square footage first so we can include your price range."); return; }
+    this.prefs = [];
+    const ov = document.createElement("div");
+    ov.className = "bk-bg"; ov.id = "bkModal";
+    ov.innerHTML = `<div class="bk" role="dialog" aria-label="Book a walkthrough">${this.formHtml()}</div>`;
+    ov.addEventListener("click", e => { if(e.target === ov) this.close(); });
+    document.body.appendChild(ov);
+    document.body.style.overflow = "hidden";
+  },
+  close(){ const m = document.getElementById("bkModal"); if(m) m.remove(); document.body.style.overflow = ""; },
+
+  formHtml(){
+    const days = rtsBookableDays();
+    const pk = PP_PACKAGES.find(p => p.id === PP.s.pkg);
+    const q = PP.compute(PP.s.pkg);
+    return `
+      <div class="bk-h"><b>Book a walkthrough</b><button type="button" class="bk-x" aria-label="Close" onclick="PPB.close()">×</button></div>
+      <div class="bk-b">
+        <div class="bk-sum">Package ${pk.id} · ${pk.name} · <b>${PP.rg(q.sub)}</b> + HST</div>
+
+        <div class="bk-sec">1 · Your details</div>
+        <div class="bk-2">
+          <div><label for="bkName">Name</label><input type="text" id="bkName" autocomplete="name"></div>
+          <div><label for="bkRole">I am</label><select id="bkRole"><option>A real estate agent</option><option>A homeowner</option><option>Other</option></select></div>
+          <div><label for="bkEmail">Email</label><input type="email" id="bkEmail" autocomplete="email"></div>
+          <div><label for="bkPhone">Phone</label><input type="tel" id="bkPhone" autocomplete="tel"></div>
+        </div>
+        <label for="bkAddr">Property address</label><input type="text" id="bkAddr" placeholder="Street, city">
+
+        <div class="bk-sec">2 · Pick 3 times that work for you</div>
+        <div class="hint" style="margin-top:0">Choose three different days. We'll confirm one of them by email. Earliest available: <b>${rtsNiceDay(days[0], true)}</b>.</div>
+        <div class="bk-days" id="bkDays">${this.daysHtml(days)}</div>
+        <div id="bkPrefs">${this.prefsHtml()}</div>
+
+        <div class="bk-sec">3 · Photos <span>${PP.s.declutter ? "recommended for decluttering" : "optional"}</span></div>
+        <div class="bk-photos">${this.photoGrid()}</div>
+
+        <label for="bkNotes" style="margin-top:12px">Notes <span style="text-transform:none;letter-spacing:0;font-weight:400">(optional)</span></label>
+        <textarea id="bkNotes" rows="3" placeholder="Access, parking, anything we should know…"></textarea>
+        <div class="bk-err" id="bkErr"></div>
+      </div>
+      <div class="bk-f">
+        <button type="button" onclick="PPB.close()">Cancel</button>
+        <button type="button" class="btn-gold" id="bkSend" onclick="PPB.submit()">Request walkthrough</button>
+      </div>`;
+  },
+  daysHtml(days){
+    days = days || rtsBookableDays();
+    const picked = this.prefs.map(p => p.date);
+    return days.map(d => {
+      const on = picked.includes(d);
+      const full = !on && picked.length >= 3;
+      const dt = new Date(d + "T12:00");
+      return `<button type="button" class="bk-day ${on ? "on" : ""}" ${full ? "disabled" : ""} onclick="PPB.toggleDay('${d}')">
+        <small>${dt.toLocaleDateString("en-CA", { weekday:"short" })}</small><b>${dt.getDate()}</b><small>${dt.toLocaleDateString("en-CA", { month:"short" })}</small></button>`;
+    }).join("");
+  },
+  prefsHtml(){
+    if(!this.prefs.length) return `<div class="bk-empty">Tap 3 days above.</div>`;
+    return this.prefs.map((p, i) => `
+      <div class="bk-pref">
+        <span class="bk-n">${i + 1}</span>
+        <span class="bk-d">${rtsNiceDay(p.date, true)}</span>
+        <select aria-label="Time for choice ${i + 1}" onchange="PPB.prefs[${i}].window=this.value">
+          ${RTS_WINDOWS.map(w => `<option ${p.window === w ? "selected" : ""}>${w}</option>`).join("")}
+        </select>
+        <button type="button" class="bk-rm" aria-label="Remove" onclick="PPB.toggleDay('${p.date}')">×</button>
+      </div>`).join("") + (this.prefs.length < 3 ? `<div class="bk-empty">${3 - this.prefs.length} more day${3 - this.prefs.length === 1 ? "" : "s"} to pick.</div>` : "");
+  },
+  toggleDay(d){
+    const i = this.prefs.findIndex(p => p.date === d);
+    if(i >= 0) this.prefs.splice(i, 1);
+    else if(this.prefs.length < 3) this.prefs.push({ date:d, window: RTS_WINDOWS[0] });
+    this.prefs.sort((a, b) => a.date.localeCompare(b.date));
+    document.getElementById("bkDays").innerHTML = this.daysHtml();
+    document.getElementById("bkPrefs").innerHTML = this.prefsHtml();
+  },
+
+  err(t){ const e = document.getElementById("bkErr"); if(e){ e.textContent = t; e.scrollIntoView({ block:"nearest" }); } },
+  async submit(){
+    if(this.sending) return;
+    const v = id => (document.getElementById(id) || {}).value || "";
+    const name = v("bkName").trim(), email = v("bkEmail").trim(), phone = v("bkPhone").trim(), addr = v("bkAddr").trim();
+    if(!name) return this.err("Please add your name.");
+    if(!/.+@.+\..+/.test(email)) return this.err("Please add a valid email.");
+    if(phone.replace(/\D/g, "").length < 10) return this.err("Please add a phone number.");
+    if(!addr) return this.err("Please add the property address.");
+    if(this.prefs.length !== 3) return this.err("Please pick 3 different days.");
+    const allowed = rtsBookableDays();
+    if(this.prefs.some(p => !allowed.includes(p.date))) return this.err("One of the days is no longer available — please pick again.");
+
+    this.sending = true;
+    const btn = document.getElementById("bkSend");
+    btn.disabled = true; btn.textContent = "Sending…";
+    const id = (crypto.randomUUID ? crypto.randomUUID() : ("10000000-1000-4000-8000-100000000000").replace(/[018]/g, c => (c ^ Math.random()*16 >> c/4).toString(16)));
+    const pk = PP_PACKAGES.find(p => p.id === PP.s.pkg);
+    const q = PP.compute(PP.s.pkg);
+    const r = PP.range(q.sub);
+    const quote = {
+      packageId: pk.id, packageName: pk.name, sqft: PP.n(PP.s.sqft), options: JSON.parse(JSON.stringify(PP.s)),
+      low: r.low, high: r.high, rangePct: PP.rates.rangePct,
+      lines: q.lines.map(l => ({ label:l[0], amount: Math.round(l[1]), low: PP.range(l[1]).low, high: PP.range(l[1]).high })), tbd: q.tbd
+    };
+    try {
+      // photos first (best effort — a failed photo never blocks the request)
+      const photos = [];
+      for(const p of this.photos){
+        try { photos.push(await this.upload(id, p.file)); } catch(e){ console.warn("photo upload failed", e); }
+      }
+      const row = { id, source:"website", status:"new", name, email, phone, role: v("bkRole"), address: addr,
+        preferences: this.prefs, quote, photos, notes: v("bkNotes").trim() };
+      const res = await fetch(PP_SUPABASE_URL + "/rest/v1/walkthrough_requests", {
+        method:"POST",
+        headers:{ "apikey":PP_SUPABASE_ANON, "Authorization":"Bearer " + PP_SUPABASE_ANON, "Content-Type":"application/json", "Prefer":"return=minimal" },
+        body: JSON.stringify(row)
+      });
+      if(!res.ok) throw new Error(await res.text() || ("HTTP " + res.status));
+      this.notify(row).catch(() => {});
+      this.done(row);
+    } catch(e){
+      console.error(e);
+      this.sending = false;
+      btn.disabled = false; btn.textContent = "Request walkthrough";
+      this.err(`Sorry — we couldn't send your request. Please call ${PP_CONTACT.phone} or email ${PP_CONTACT.email}.`);
+    }
+  },
+  async upload(id, file){
+    const blob = await new Promise((res, rej) => {
+      const img = new Image(), u = URL.createObjectURL(file);
+      img.onload = () => {
+        const sc = Math.min(1, 1600 / Math.max(img.width, img.height));
+        const c = document.createElement("canvas"); c.width = Math.round(img.width*sc); c.height = Math.round(img.height*sc);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(u);
+        c.toBlob(b => b ? res(b) : rej(new Error("encode")), "image/jpeg", 0.82);
+      };
+      img.onerror = rej; img.src = u;
+    });
+    const path = "public/" + id + "/" + Date.now() + "-" + Math.random().toString(36).slice(2,6) + ".jpg";
+    const r = await fetch(PP_SUPABASE_URL + "/storage/v1/object/package-photos/" + path, {
+      method:"POST", headers:{ "apikey":PP_SUPABASE_ANON, "Authorization":"Bearer " + PP_SUPABASE_ANON, "Content-Type":"image/jpeg" }, body: blob
+    });
+    if(!r.ok) throw new Error(await r.text());
+    return PP_SUPABASE_URL + "/storage/v1/object/public/package-photos/" + path;
+  },
+  async notify(row){
+    const body = [
+      `New walkthrough request from the website (renotosold.homes/packages).`, ``,
+      `Name: ${row.name} (${row.role})`, `Email: ${row.email}`, `Phone: ${row.phone}`, `Property: ${row.address}`, ``,
+      `Preferred times:`, ...row.preferences.map((p, i) => `  ${i+1}. ${rtsNiceDay(p.date, true)}, ${p.window}`), ``,
+      `Package ${row.quote.packageId} — ${row.quote.packageName} · ${row.quote.sqft} sqft`,
+      `Range shown: ${PP.fmt(row.quote.low)} – ${PP.fmt(row.quote.high)} + HST`,
+      ...row.quote.lines.map(l => `  • ${l.label}: ${PP.fmt(l.low)} – ${PP.fmt(l.high)}`),
+      ...row.quote.tbd.map(t => `  • ${t}`),
+      row.photos.length ? `\nPhotos: ${row.photos.length} uploaded` : "",
+      row.notes ? `\nNotes: ${row.notes}` : "", ``,
+      `Confirm a time in the portal: Pre-listing packages → All package quotes → Website requests.`
+    ].join("\n");
+    await fetch(PP_SUPABASE_URL + "/functions/v1/email-estimate", {
+      method:"POST",
+      headers:{ "apikey":PP_SUPABASE_ANON, "Authorization":"Bearer " + PP_SUPABASE_ANON, "Content-Type":"application/json" },
+      body: JSON.stringify({ to:[PP_CONTACT.email], cc:[], subject:`Walkthrough request — ${row.address}`, body })
+    });
+  },
+  done(row){
+    const m = document.querySelector("#bkModal .bk");
+    if(m) m.innerHTML = `
+      <div class="bk-h"><b>Request sent</b><button type="button" class="bk-x" aria-label="Close" onclick="PPB.close()">×</button></div>
+      <div class="bk-b bk-done">
+        <div class="bk-check">✓</div>
+        <p>Thanks, ${row.name.split(/\s+/)[0]}! We received your walkthrough request for <b>${row.address.replace(/</g,"&lt;")}</b>.</p>
+        <p>Your preferred times:</p>
+        <ul>${row.preferences.map(p => `<li>${rtsNiceDay(p.date, true)}, ${p.window}</li>`).join("")}</ul>
+        <p>We'll email <b>${row.email.replace(/</g,"&lt;")}</b> to confirm one of these, usually within one business day. Questions? Call <a href="tel:${PP_CONTACT.phone.replace(/\D/g,"")}">${PP_CONTACT.phone}</a>.</p>
+      </div>
+      <div class="bk-f"><button type="button" class="btn-gold" onclick="PPB.close()">Done</button></div>`;
+    this.sending = false;
+    this.photos.forEach(p => URL.revokeObjectURL(p.url)); this.photos = [];
+    PP.render();
+  }
+};
+
 PP.render();
 PP.loadRates();
 </script>

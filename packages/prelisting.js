@@ -240,6 +240,32 @@
   .pl-kb-host .cat{margin-bottom:12px;}
   .pl-ro-sec + .pl-ro-sec{margin-top:14px;}
 
+  /* walkthrough time picker + preferences */
+  .pl-bk-days{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin-bottom:10px;}
+  .pl-bk-day{display:flex;flex-direction:column;align-items:center;gap:1px;padding:8px 4px;border-radius:10px;background:var(--panel-2);border:1px solid var(--line-strong);}
+  .pl-bk-day small{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;}
+  .pl-bk-day b{font-size:17px;color:var(--ink-strong);}
+  .pl-bk-day.on{background:var(--gold-grad);border-color:var(--gold);}
+  .pl-bk-day.on b, .pl-bk-day.on small{color:#1a1405;}
+  .pl-bk-day:disabled{opacity:.35;cursor:not-allowed;}
+  .pl-bk-pref{display:grid;grid-template-columns:26px minmax(0,1fr) 150px;gap:8px;align-items:center;padding:7px 0;border-bottom:1px dashed var(--line);}
+  .pl-bk-n{width:24px;height:24px;border-radius:50%;background:var(--gold-grad);color:#1a1405;font-weight:800;font-size:12px;display:flex;align-items:center;justify-content:center;}
+  .pl-bk-d{font-size:13.5px;font-weight:600;}
+  .pl-bk-pref select{padding:7px 8px;font-size:13px;}
+  .pl-prefs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:8px;}
+  .pl-pref{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;padding:10px 12px;border-radius:10px;background:var(--panel);border:1px solid var(--line-strong);font-weight:400;}
+  .pl-pref b{font-size:13px;color:var(--ink-strong);}
+  .pl-pref span{font-size:12px;color:var(--muted);}
+  .pl-pref em{font-style:normal;font-size:11px;color:var(--gold-bright);font-weight:600;margin-top:4px;}
+  .pl-pref:hover{border-color:var(--gold-deep);background:var(--panel);}
+  .pl-pref.on{border-color:#2e7e4e;background:rgba(95,206,134,.08);}
+  .pl-pref.on em{color:#5fce86;}
+  @media (max-width:640px){
+    .pl-bk-days{grid-template-columns:repeat(3,minmax(0,1fr));}
+    .pl-bk-pref{grid-template-columns:24px minmax(0,1fr);}
+    .pl-bk-pref select{grid-column:2;}
+    .pl-prefs{grid-template-columns:minmax(0,1fr);}
+  }
   /* send modal */
   .pl-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:2000;display:flex;align-items:center;justify-content:center;padding:16px;}
   .pl-modal{background:var(--panel);border:1px solid var(--line-strong);border-radius:12px;width:100%;max-width:560px;max-height:calc(100vh - 32px);display:flex;flex-direction:column;box-shadow:var(--shadow);}
@@ -296,6 +322,75 @@ const PL_DEFAULT_SETTINGS = {
   casEmail: "",                       // rep email (appliance requests go here)
   ccEmail:  "renotosold@gmail.com"    // cc'd on every appliance request
 };
+
+/* ---------- Walkthrough booking rules (same as the public page) ----------
+   The requester picks 3 preferred times, each on a different business day;
+   the earliest day is 2 business days out. Admin confirms one. */
+const PL_HOLIDAYS = [   // Ontario statutory holidays + Civic Holiday — extend yearly
+  "2026-01-01","2026-02-16","2026-04-03","2026-05-18","2026-07-01","2026-08-03","2026-09-07","2026-10-12","2026-12-25","2026-12-28",
+  "2027-01-01","2027-02-15","2027-03-26","2027-05-24","2027-07-01","2027-08-02","2027-09-06","2027-10-11","2027-12-27","2027-12-28"
+];
+const PL_WINDOWS = ["9 – 11 AM", "11 AM – 1 PM", "1 – 3 PM", "3 – 5 PM"];
+const PL_LEAD_BUSINESS_DAYS = 2;
+const PL_DAYS_SHOWN = 15;
+function plYmd(d){ return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0"); }
+function plIsBusinessDay(d){ const w = d.getDay(); return w !== 0 && w !== 6 && !PL_HOLIDAYS.includes(plYmd(d)); }
+function plBookableDays(){
+  const out = [], d = new Date(); d.setHours(12,0,0,0);
+  let lead = 0;
+  while(lead < PL_LEAD_BUSINESS_DAYS){ d.setDate(d.getDate()+1); if(plIsBusinessDay(d)) lead++; }
+  while(out.length < PL_DAYS_SHOWN){ if(plIsBusinessDay(d)) out.push(plYmd(d)); d.setDate(d.getDate()+1); }
+  return out;
+}
+function plNiceDay(ymd, long){
+  return new Date(ymd + "T12:00").toLocaleDateString("en-CA", long ? { weekday:"long", month:"long", day:"numeric" } : { weekday:"short", month:"short", day:"numeric" });
+}
+/* Opens the 3-preference picker. Resolves with [{date, window} x3] or null. */
+function plPickTimes(title, intro){
+  return new Promise(resolve => {
+    let prefs = [];
+    const days = plBookableDays();
+    const ov = document.createElement("div");
+    ov.className = "pl-modal-bg"; ov.id = "plTimesModal";
+    const finish = (val) => { ov.remove(); resolve(val); };
+    const draw = () => {
+      const picked = prefs.map(p => p.date);
+      ov.querySelector("#plBkDays").innerHTML = days.map(d => {
+        const on = picked.includes(d), dis = !on && picked.length >= 3, dt = new Date(d + "T12:00");
+        return `<button type="button" class="pl-bk-day ${on ? "on" : ""}" ${dis ? "disabled" : ""} data-d="${d}"><small>${dt.toLocaleDateString("en-CA",{weekday:"short"})}</small><b>${dt.getDate()}</b><small>${dt.toLocaleDateString("en-CA",{month:"short"})}</small></button>`;
+      }).join("");
+      ov.querySelector("#plBkPrefs").innerHTML = prefs.map((p, i) => `
+        <div class="pl-bk-pref"><span class="pl-bk-n">${i+1}</span><span class="pl-bk-d">${plNiceDay(p.date, true)}</span>
+          <select data-i="${i}" aria-label="Time for choice ${i+1}">${PL_WINDOWS.map(w => `<option ${p.window === w ? "selected" : ""}>${w}</option>`).join("")}</select></div>`).join("")
+        + (prefs.length < 3 ? `<div class="pl-hint">${3 - prefs.length} more day${3 - prefs.length === 1 ? "" : "s"} to pick.</div>` : "");
+      ov.querySelector("#plBkOk").disabled = prefs.length !== 3;
+    };
+    ov.innerHTML = `
+      <div class="pl-modal" role="dialog" aria-label="${plEsc(title)}">
+        <div class="pl-modal-h"><b>${plEsc(title)}</b><button type="button" data-x aria-label="Close">✕</button></div>
+        <div class="pl-modal-b">
+          <div class="pl-hint" style="margin:0 0 10px;">${intro} Earliest available: <b>${plNiceDay(days[0], true)}</b>.</div>
+          <div class="pl-bk-days" id="plBkDays"></div>
+          <div id="plBkPrefs"></div>
+        </div>
+        <div class="pl-modal-f"><button type="button" data-x>Cancel</button><button type="button" class="primary" id="plBkOk" disabled>Submit</button></div>
+      </div>`;
+    ov.addEventListener("click", e => {
+      if(e.target === ov || e.target.closest("[data-x]")) return finish(null);
+      const b = e.target.closest(".pl-bk-day");
+      if(b && !b.disabled){
+        const d = b.getAttribute("data-d"), i = prefs.findIndex(p => p.date === d);
+        if(i >= 0) prefs.splice(i, 1); else if(prefs.length < 3) prefs.push({ date:d, window: PL_WINDOWS[0] });
+        prefs.sort((a, c) => a.date.localeCompare(c.date));
+        draw();
+      }
+      if(e.target.id === "plBkOk" && prefs.length === 3) finish(prefs);
+    });
+    ov.addEventListener("change", e => { const i = e.target.getAttribute && e.target.getAttribute("data-i"); if(i != null) prefs[+i].window = e.target.value; });
+    document.body.appendChild(ov);
+    draw();
+  });
+}
 
 const PL_PACKAGES = [
   { id:1, name:"Clean & Declutter", services:["cleaning"],
@@ -718,7 +813,15 @@ const PL = {
   render(){
     const body = document.getElementById("plBody");
     if(!body) return;
+    if(this.mode === "request"){ this.renderTopActions(); body.innerHTML = this.renderRequest(); return; }
     if(this.step !== "kb" || this.mode !== "edit") this.release();
+    this.renderTopActions();
+    if(this.mode === "list") body.innerHTML = this.renderList();
+    else if(this.mode === "settings") body.innerHTML = this.renderSettings();
+    else body.innerHTML = this.renderEditor();
+    if(this.mode === "edit" && this.step === "kb") this.host();
+  },
+  renderTopActions(){
     const hdrActions = document.getElementById("plTopActions");
     if(hdrActions){
       hdrActions.innerHTML = `
@@ -726,10 +829,117 @@ const PL = {
         ${this.mode !== "list" ? `<button onclick="PL.showList()"><i class="ti ti-list" aria-hidden="true"></i> ${isAdmin() ? "All package quotes" : "My package quotes"}</button>` : ""}
         ${isAdmin() && this.mode !== "settings" ? `<button onclick="PL.showSettings()"><i class="ti ti-settings" aria-hidden="true"></i> Package settings</button>` : ""}`;
     }
-    if(this.mode === "list") body.innerHTML = this.renderList();
-    else if(this.mode === "settings") body.innerHTML = this.renderSettings();
-    else body.innerHTML = this.renderEditor();
-    if(this.mode === "edit" && this.step === "kb") this.host();
+  },
+
+  /* ---- website walkthrough requests (public page → admin) ---- */
+  webList: [],
+  renderWebList(){
+    const filterBar = `
+      <div class="pl-filter">
+        ${[["active","Open requests",this.list.filter(q => q.status === "walkthrough_requested" || q.status === "walkthrough_scheduled").length],["requests","Needs scheduling",this.list.filter(q => q.status === "walkthrough_requested").length],["web","Website requests",(this.webList || []).filter(r => r.status === "new").length],["all","All quotes",this.list.length]].map(([k,l,c]) =>
+          `<button class="${this.listFilter===k?'on':''}" onclick="PL.setFilter('${k}')">${l}<span>${c}</span></button>`).join("")}
+      </div>`;
+    const rows = this.webList || [];
+    if(!rows.length) return filterBar + `<div class="pl-empty"><div class="pl-empty-t">No website requests yet</div><div>Walkthrough requests from renotosold.homes/packages appear here.</div></div>`;
+    const stl = { new:["req","New — needs a time"], confirmed:["sched","Confirmed"], closed:["closed","Closed"] };
+    return filterBar + `<div class="pl-list">${rows.map(r => {
+      const q = r.quote || {}; const st = stl[r.status] || stl.new;
+      const c = r.confirmed;
+      return `<button class="pl-row" type="button" onclick="PL.openRequest('${r.id}')">
+        <div class="pl-row-main"><div class="pl-row-addr">${plEsc(r.address || "—")}</div>
+          <div class="pl-row-sub">${plEsc(r.name || "")} · ${plEsc(r.role || "")}${q.packageId ? " · Package " + q.packageId : ""}${c ? " · " + plEsc(plNiceDay(c.date)) + " " + plEsc(c.window) : ""}</div></div>
+        <div class="pl-row-range">${q.low ? fmt(q.low) + " – " + fmt(q.high) : "—"}</div>
+        <div class="pl-row-meta"><span class="pl-status ${st[0]}">${st[1]}</span></div>
+      </button>`; }).join("")}</div>`;
+  },
+  openRequest(id){ this.release(); this.curReq = (this.webList || []).find(r => r.id === id) || null; if(!this.curReq) return; this.mode = "request"; this.render(); window.scrollTo({ top:0, behavior:"smooth" }); },
+  renderRequest(){
+    const r = this.curReq; if(!r) return "";
+    const q = r.quote || {}; const c = r.confirmed;
+    return `
+      <section class="pl-card pl-quote">
+        <div class="pl-q-eyebrow">Website walkthrough request · ${new Date(r.created_at).toLocaleString("en-CA", { month:"short", day:"numeric", hour:"numeric", minute:"2-digit" })}</div>
+        <div class="pl-q-addr" style="font-size:15px;color:var(--ink);margin-top:6px;"><b>${plEsc(r.address || "")}</b></div>
+        <div class="pl-admin-grid" style="margin-top:12px;">
+          <div><span>Name</span><b>${plEsc(r.name || "")}</b><div class="pl-hint">${plEsc(r.role || "")}</div></div>
+          <div><span>Email</span><b><a href="mailto:${plEsc(r.email || "")}" style="color:var(--gold-bright)">${plEsc(r.email || "")}</a></b></div>
+          <div><span>Phone</span><b><a href="tel:${plEsc((r.phone || "").replace(/[^0-9+]/g, ""))}" style="color:var(--gold-bright)">${plEsc(r.phone || "")}</a></b></div>
+        </div>
+        ${q.packageId ? `<div class="pl-q-lines" style="margin-top:14px;">
+          <div><span><b>Package ${q.packageId} · ${plEsc(q.packageName || "")}</b> · ${plEsc(String(q.sqft || ""))} sqft</span><b>${fmt(q.low)} – ${fmt(q.high)}</b></div>
+          ${(q.lines || []).map(l => `<div><span>${plEsc(l.label)}</span><b>${fmt(l.low)} – ${fmt(l.high)}</b></div>`).join("")}
+          ${(q.tbd || []).map(t => `<div class="tbd"><span>${plEsc(t)}</span><b>TBD</b></div>`).join("")}
+        </div>` : ""}
+        <div class="pl-admin-notes"><span>${c ? "Confirmed time" : "Preferred times — pick one to confirm"}</span>
+          <div class="pl-prefs">${(r.preferences || []).map((p, i) => {
+            const on = c && c.date === p.date && c.window === p.window;
+            return `<button type="button" class="pl-pref ${on ? "on" : ""}" onclick="PL.confirmRequest(${i})"><b>${plNiceDay(p.date, true)}</b><span>${plEsc(p.window)}</span><em>${on ? "Confirmed" : "Confirm &amp; email " + plEsc((r.name || "").split(/\s+/)[0] || "them")}</em></button>`; }).join("")}</div>
+        </div>
+        ${r.notes ? `<div class="pl-admin-notes"><span>Notes</span>${plEsc(r.notes)}</div>` : ""}
+        ${(r.photos || []).length ? `<div class="pl-admin-notes"><span>Photos (${r.photos.length})</span><div class="pl-photos" style="margin-top:6px;">${r.photos.map((u, i) => `<div class="pl-photo"><a href="${plEsc(u)}" target="_blank" rel="noopener"><img src="${plEsc(u)}" alt="Photo ${i+1}" loading="lazy"></a></div>`).join("")}</div></div>` : ""}
+        <div class="pl-field" style="margin-top:12px;"><label>Message to include in the confirmation <span class="pl-opt">optional</span></label>
+          <input type="text" id="plReqNote" value="${plEsc(r.admin_note || "")}" placeholder="e.g. Please leave the side door unlocked"></div>
+        <div class="pl-actions">
+          <button type="button" class="primary" onclick="PL.quoteFromRequest()"><i class="ti ti-file-plus" aria-hidden="true"></i> Create package quote from this</button>
+          ${r.status !== "closed" ? `<button type="button" onclick="PL.setRequestStatus('closed')">Close request</button>` : `<button type="button" onclick="PL.setRequestStatus('new')">Reopen</button>`}
+          <button type="button" class="pl-danger" onclick="PL.deleteRequest()">Delete</button>
+          <button type="button" onclick="PL.listFilter='web'; PL.showList()">Back to website requests</button>
+        </div>
+      </section>`;
+  },
+  async confirmRequest(i){
+    const r = this.curReq, p = r && (r.preferences || [])[i];
+    if(!p) return;
+    const note = ((document.getElementById("plReqNote") || {}).value || "").trim();
+    const confirmed = { date:p.date, window:p.window, by: currentUser ? currentUser.email : "", at: new Date().toISOString() };
+    try {
+      await dbUpdate("walkthrough_requests", { id:r.id }, { status:"confirmed", confirmed, admin_note: note || null, updated_at: new Date().toISOString() }, { prefer:"return=minimal" });
+    } catch(e){ brandedAlert("Couldn't save: " + (e && e.message ? e.message : e)); return; }
+    Object.assign(r, { status:"confirmed", confirmed, admin_note: note });
+    this.render();
+    flash("Walkthrough confirmed");
+    try {
+      const nice = plNiceDay(p.date, true);
+      const body = `Hi ${(r.name || "").split(/\s+/)[0] || "there"},\n\nThanks for your request. Your pre-listing walkthrough for ${r.address} is confirmed for ${nice}, ${p.window}.${note ? "\n\n" + note : ""}\n\nWe'll confirm the exact amount at the walkthrough — guaranteed to be within the range you were quoted.\n\nQuestions? Reply to this email or call 647-500-0270.\n\nReno to Sold`;
+      const rts = plSettings().ccEmail || COMPANY_INFO.email || "renotosold@gmail.com";
+      await plSendEmail({ to:[r.email], cc:[rts], subject:`Walkthrough confirmed — ${nice}, ${p.window}`, body });
+    } catch(e){ console.warn("[PL] confirmation email failed:", e && e.message); brandedAlert("The time is saved, but the confirmation email didn't send. Please email " + r.email + " directly."); }
+  },
+  async setRequestStatus(st){
+    const r = this.curReq; if(!r) return;
+    try { await dbUpdate("walkthrough_requests", { id:r.id }, { status:st, updated_at:new Date().toISOString() }, { prefer:"return=minimal" }); r.status = st; this.render(); }
+    catch(e){ brandedAlert("Couldn't update: " + (e && e.message ? e.message : e)); }
+  },
+  async deleteRequest(){
+    const r = this.curReq; if(!r) return;
+    if(!(await brandedConfirm("Delete this website request? This can't be undone.", { title:"Delete request", confirmLabel:"Delete" }))) return;
+    try { await dbDelete("walkthrough_requests", { id:r.id }); } catch(e){ brandedAlert("Couldn't delete: " + (e && e.message ? e.message : e)); return; }
+    this.webList = (this.webList || []).filter(x => x.id !== r.id);
+    this.listFilter = "web"; this.showList();
+  },
+  quoteFromRequest(){
+    const r = this.curReq; if(!r) return;
+    const o = (r.quote && r.quote.options) || {};
+    const q = plNewQuote();
+    Object.assign(q, { propAddress: r.address || "", propSqft: String(o.sqft || (r.quote && r.quote.sqft) || ""), packageId: o.pkg || (r.quote && r.quote.packageId) || null, notes: r.notes || "" });
+    const isAgent = /agent/i.test(r.role || "");
+    q.sellers = [ isAgent ? { name:"", phone:"", email:"" } : { name:r.name || "", phone:r.phone || "", email:r.email || "" } ];
+    q.notes = (isAgent ? `Website request from agent ${r.name} (${r.email}, ${r.phone}).` : "") + (r.notes ? " " + r.notes : "");
+    q.cleaning.carpet = !!o.carpet; q.cleaning.carpetSqft = o.carpetSqft || ""; q.cleaning.declutter = !!o.declutter;
+    q.painting.level = o.level === "full" ? "full" : "walls"; q.painting.doorCount = o.doors || ""; q.painting.ceilings = o.ceilings !== false;
+    q.flooring.type = o.floor || "vinyl";
+    q.photos = (r.photos || []).map(u => ({ url:u, name:"", at:r.created_at, by:r.email }));
+    if(r.confirmed) q.walkthrough = { date:r.confirmed.date, window:r.confirmed.window, note:r.admin_note || "", by:r.confirmed.by, at:r.confirmed.at };
+    q.walkthroughPrefs = r.preferences || [];
+    q.status = r.confirmed ? "walkthrough_scheduled" : "walkthrough_requested";
+    q.source = { type:"website", requestId:r.id };
+    q.quote = plComputeQuote(q);
+    this.cur = q; this.mode = "edit"; this.step = "property";
+    this._log("Created from website request", r.name + " · " + r.email);
+    this._setHash(q.id);
+    this.save(true);
+    this.render();
+    window.scrollTo({ top:0, behavior:"smooth" });
   },
 
   /* ---- list ---- */
@@ -750,6 +960,10 @@ const PL = {
     if(!isAdmin() && currentUser) all = all.filter(q => !q.owner_id || q.owner_id === currentUser.id);
     all.sort((a,b) => new Date(b.updated_at||0) - new Date(a.updated_at||0));
     this.list = all;
+    if(isAdmin()){
+      try { this.webList = await restFetch("walkthrough_requests?select=*&order=created_at.desc&limit=200") || []; }
+      catch(e){ this.webList = this.webList || []; console.warn("[PL] website requests:", e && e.message); }
+    }
     if(this.mode === "list"){
       const body = document.getElementById("plBody");
       if(body) body.innerHTML = this.renderList();
@@ -758,6 +972,7 @@ const PL = {
   setFilter(f){ this.listFilter = f; const b = document.getElementById("plBody"); if(b) b.innerHTML = this.renderList(); },
   renderList(){
     const admin = isAdmin();
+    if(admin && this.listFilter === "web") return this.renderWebList();
     let rows = this.list.slice();
     const counts = {
       active: rows.filter(q => q.status === "walkthrough_requested" || q.status === "walkthrough_scheduled").length,
@@ -769,7 +984,7 @@ const PL = {
     }
     const filterBar = admin ? `
       <div class="pl-filter">
-        ${[["active","Open requests",counts.active],["requests","Needs scheduling",counts.requests],["all","All quotes",this.list.length]].map(([k,l,c]) =>
+        ${[["active","Open requests",counts.active],["requests","Needs scheduling",counts.requests],["web","Website requests",(this.webList || []).filter(r => r.status === "new").length],["all","All quotes",this.list.length]].map(([k,l,c]) =>
           `<button class="${this.listFilter===k?'on':''}" onclick="PL.setFilter('${k}')">${l}<span>${c}</span></button>`).join("")}
       </div>` : "";
     const empty = this.loading ? `<div class="pl-empty">Loading package quotes…</div>` : `
@@ -942,7 +1157,7 @@ const PL = {
     const st = PL_STATUS[q.status] || PL_STATUS.draft;
     const lockedBanner = (q.status !== "draft") ? `
       <div class="pl-banner ${st.cls}">
-        <div><b>${st.label}</b>${q.submission ? " · submitted " + new Date(q.submission.submitted_at).toLocaleDateString("en-CA", { month:"short", day:"numeric" }) : ""}${q.walkthrough && q.walkthrough.date ? " · walkthrough " + plEsc(new Date(q.walkthrough.date + "T12:00").toLocaleDateString("en-CA", { weekday:"short", month:"short", day:"numeric" })) : ""}</div>
+        <div><b>${st.label}</b>${q.submission ? " · submitted " + new Date(q.submission.submitted_at).toLocaleDateString("en-CA", { month:"short", day:"numeric" }) : ""}${q.walkthrough && q.walkthrough.date ? " · walkthrough " + plEsc(new Date(q.walkthrough.date + "T12:00").toLocaleDateString("en-CA", { weekday:"short", month:"short", day:"numeric" })) + (q.walkthrough.window ? ", " + plEsc(q.walkthrough.window) : "") : (Array.isArray(q.walkthroughPrefs) && q.status === "walkthrough_requested" ? " · preferred: " + q.walkthroughPrefs.map(p => plEsc(plNiceDay(p.date)) + " " + plEsc(p.window)).join(" / ") : "")}</div>
         <div class="pl-banner-sub">${this.locked() ? "This quote is with Reno to Sold and can no longer be edited. You can still send it to your seller or generate an estimate." : (isAdmin() ? "Admin view — you can edit this quote and update its status below." : "")}</div>
       </div>` : "";
     return `
@@ -1367,7 +1582,12 @@ const PL = {
         </div>
         ${q.notes ? `<div class="pl-admin-notes"><span>Agent notes</span>${plEsc(q.notes)}</div>` : ""}
         ${q.photos && q.photos.length ? `<div class="pl-admin-notes"><span>Photos (${q.photos.length})</span><div class="pl-photos" style="margin-top:6px;">${q.photos.map((ph, i) => `<div class="pl-photo"><a href="${plEsc(ph.url)}" target="_blank" rel="noopener"><img src="${plEsc(ph.url)}" alt="Property photo ${i + 1}" loading="lazy"></a></div>`).join("")}</div></div>` : (q.cleaning && q.cleaning.declutter ? `<div class="pl-admin-notes"><span>Photos</span>Decluttering requested but no photos uploaded yet.</div>` : "")}
-        <div class="pl-f2" style="margin-top:12px;">
+        ${Array.isArray(q.walkthroughPrefs) && q.walkthroughPrefs.length ? `
+        <div class="pl-admin-notes"><span>Agent's preferred times — pick one to confirm</span>
+          <div class="pl-prefs">${q.walkthroughPrefs.map((p, i) => `<button type="button" class="pl-pref ${w.date === p.date && w.window === p.window ? "on" : ""}" onclick="PL.confirmPref(${i})"><b>${plNiceDay(p.date, true)}</b><span>${p.window}</span><em>${w.date === p.date && w.window === p.window ? "Confirmed" : "Confirm &amp; notify agent"}</em></button>`).join("")}</div>
+        </div>` : ""}
+        <div class="pl-sub-h" style="margin-top:14px;">${Array.isArray(q.walkthroughPrefs) && q.walkthroughPrefs.length ? "Or set a different date" : "Walkthrough date"}</div>
+        <div class="pl-f2">
           <div class="pl-field"><label>Walkthrough date</label><input type="date" id="plWtDate" value="${plEsc(w.date || "")}"></div>
           <div class="pl-field"><label>Note to agent <span class="pl-opt">optional</span></label><input type="text" id="plWtNote" value="${plEsc(w.note || "")}" placeholder="e.g. 10am, use lockbox"></div>
         </div>
@@ -1422,8 +1642,11 @@ const PL = {
     if(rd.answered < rd.total){
       if(!(await brandedConfirm(`You've answered ${rd.answered} of ${rd.total} readiness questions. Submit anyway?`, { title:"Submit for walkthrough", confirmLabel:"Submit", destructive:false }))){ this.go("readiness"); return; }
     }
+    const prefs = await plPickTimes("Pick 3 walkthrough times", "Choose three different days that work for you and your seller. Reno to Sold will confirm one of them.");
+    if(!prefs) return;
     this.release();
     q.quote = plComputeQuote(q);
+    q.walkthroughPrefs = prefs;
     q.status = "walkthrough_requested";
     q.submission = {
       submitted_at: new Date().toISOString(),
@@ -1433,7 +1656,7 @@ const PL = {
       brokerage: (currentProfile && currentProfile.brokerage) || "",
       quote_at_submission: plClone(q.quote)
     };
-    this._log("Submitted for walkthrough");
+    this._log("Submitted for walkthrough", "Preferred: " + prefs.map(p => plNiceDay(p.date) + " " + p.window).join(" · "));
     await this.save(true);
     this.render();
     flash("Submitted — Reno to Sold will confirm your walkthrough");
@@ -1442,7 +1665,7 @@ const PL = {
       const pk = plPackage(q.packageId);
       const who = q.submission.by_name || q.submission.by_email;
       const intro = `New pre-listing walkthrough request from ${who}${q.submission.brokerage ? " (" + q.submission.brokerage + ")" : ""}.\n\n` +
-        `Property: ${q.propAddress}\nReadiness score: ${rd.score}/100 (${rd.heat})${q.targetListDate ? "\nTarget listing date: " + q.targetListDate : ""}${q.photos.length ? "\nPhotos attached to the quote: " + q.photos.length : ""}${q.notes ? "\n\nAgent notes: " + q.notes : ""}\n\nOpen the Pre-Listing Packages tool to schedule the walkthrough.`;
+        `Property: ${q.propAddress}\nPreferred walkthrough times:\n${prefs.map((p, i) => "  " + (i+1) + ". " + plNiceDay(p.date, true) + ", " + p.window).join("\n")}\nReadiness score: ${rd.score}/100 (${rd.heat})${q.targetListDate ? "\nTarget listing date: " + q.targetListDate : ""}${q.photos.length ? "\nPhotos attached to the quote: " + q.photos.length : ""}${q.notes ? "\n\nAgent notes: " + q.notes : ""}\n\nOpen the Pre-Listing Packages tool to schedule the walkthrough.`;
       await plSendEmail({
         to: [COMPANY_INFO.email || "renotosold@gmail.com"], cc: [],
         subject: `Walkthrough request — ${q.propAddress} — Package ${pk.id}`,
@@ -1451,22 +1674,27 @@ const PL = {
       });
     } catch(e){ console.warn("[PL] submit notification failed:", e && e.message); }
   },
-  async scheduleWalkthrough(){
+  confirmPref(i){
+    const p = (this.cur.walkthroughPrefs || [])[i];
+    if(p) this.scheduleWalkthrough(p);
+  },
+  async scheduleWalkthrough(pref){
     if(!isAdmin()) return;
     const q = this.cur;
-    const date = (document.getElementById("plWtDate") || {}).value || "";
+    const date = pref ? pref.date : ((document.getElementById("plWtDate") || {}).value || "");
+    const win  = pref ? pref.window : "";
     const note = (document.getElementById("plWtNote") || {}).value || "";
     if(!date){ brandedAlert("Pick a walkthrough date first."); return; }
-    q.walkthrough = { date, note, by: currentUser ? currentUser.email : "", at: new Date().toISOString() };
+    q.walkthrough = { date, window: win, note, by: currentUser ? currentUser.email : "", at: new Date().toISOString() };
     if(q.status === "draft" || q.status === "walkthrough_requested") q.status = "walkthrough_scheduled";
-    this._log("Walkthrough scheduled for " + date, note);
+    this._log("Walkthrough scheduled for " + plNiceDay(date) + (win ? ", " + win : ""), note);
     await this.save(true);
     this.render();
     flash("Walkthrough saved");
     if(q.owner_email){
       try {
         const nice = new Date(date + "T12:00").toLocaleDateString("en-CA", { weekday:"long", month:"long", day:"numeric" });
-        const body = `Hi ${(q.owner_name || "").split(/\s+/)[0] || "there"},\n\nYour pre-listing walkthrough for ${q.propAddress} is scheduled for ${nice}.${note ? "\n\n" + note : ""}\n\nWe'll confirm the exact amount at the walkthrough — guaranteed to be within your quoted range.\n\nReno to Sold`;
+        const body = `Hi ${(q.owner_name || "").split(/\s+/)[0] || "there"},\n\nYour pre-listing walkthrough for ${q.propAddress} is confirmed for ${nice}${win ? ", " + win : ""}.${note ? "\n\n" + note : ""}\n\nWe'll confirm the exact amount at the walkthrough — guaranteed to be within your quoted range.\n\nReno to Sold`;
         await plSendEmail({ to:[q.owner_email], cc:[], subject:`Walkthrough scheduled — ${q.propAddress}`, body });
       } catch(e){ console.warn("[PL] agent notification failed:", e && e.message); }
     }
