@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Reno to Sold &mdash; Pre-Listing Packages</title>
+<meta name="description" content="Pick a pre-listing renovation package and get an instant, guaranteed price range — 2026 GTA pricing from Reno to Sold.">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<meta name="theme-color" content="#0a0a0a">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Cormorant+Garamond:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+
+  :root{
+    --bg:#0a0a0a; --panel:#15151a; --panel-2:#1c1c22;
+    --ink:#f5f1e6; --ink-strong:#ffffff; --muted:#8a8579;
+    --line:#2a2a30; --line-strong:#3a3a42;
+    --gold:#d4af6a; --gold-bright:#e8c989; --gold-deep:#a8853f;
+    --gold-grad:linear-gradient(135deg,#e8c989 0%,#d4af6a 45%,#a8853f 100%);
+    --danger:#e26d6d;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.5);
+    --gold-glow:0 0 0 1px rgba(212,175,106,.25), 0 6px 20px rgba(212,175,106,.08);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;font-family:'Montserrat',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);letter-spacing:.01em;}
+  body{background:radial-gradient(ellipse at top,#161616 0%,#0a0a0a 60%) fixed;}
+  .app{max-width:1000px;margin:0 auto;padding:24px;}
+
+  /* ===== Brand header ===== */
+  .brandbar{background:#000;border:1px solid var(--line-strong);border-radius:14px;padding:22px 28px;margin-bottom:16px;box-shadow:var(--shadow);position:relative;overflow:hidden;}
+  .brandbar::before{content:"";position:absolute;inset:0;background:linear-gradient(120deg,transparent 40%,rgba(212,175,106,.04) 60%,transparent 80%);pointer-events:none;}
+  .brandbar-row{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;position:relative;}
+  .logo{display:flex;align-items:center;flex:1;min-width:0;}
+  .logo-img{display:block;width:100%;max-width:420px;height:auto;max-height:110px;object-fit:contain;object-position:left center;}
+  .logo-fallback{font-weight:900;font-size:30px;letter-spacing:.04em;color:var(--ink-strong);}
+  .logo-fallback .to{font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:600;color:var(--gold);}
+  .logo-fallback .sold{color:var(--gold);}
+  .brand-sub{text-align:right;}
+  .brand-sub .tag{font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--gold-deep);font-weight:700;}
+  .brand-sub .ttl{font-size:13px;color:var(--muted);margin-top:3px;}
+
+  .brand-tagline{text-align:center;font-family:'Cormorant Garamond',serif;margin:0 0 20px;line-height:1.15;}
+  .brand-tagline .bt-line{display:block;font-size:26px;color:var(--ink);}
+  .brand-tagline .bt-sub{font-size:20px;margin-top:2px;}
+  .brand-tagline .bt-accent{color:var(--gold-bright);font-weight:600;}
+
+  /* ===== Panels ===== */
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);margin-bottom:16px;}
+  .panel h2{font-size:12px;margin:0;padding:14px 20px;border-bottom:1px solid var(--line);font-weight:700;display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--gold-bright);text-transform:uppercase;letter-spacing:.18em;}
+  .panel-body{padding:18px 20px;}
+
+  label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:6px;font-weight:600;}
+  input[type="text"],input[type="number"]{width:100%;padding:10px 12px;border:1px solid var(--line-strong);border-radius:8px;font:inherit;background:#0d0d11;color:var(--ink);font-size:14px;}
+  input[type="number"]:focus,input[type="text"]:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 2px rgba(212,175,106,.15);}
+  button{font:inherit;cursor:pointer;border:1px solid var(--line-strong);background:transparent;color:var(--ink);padding:9px 16px;border-radius:8px;transition:all .15s;font-weight:500;font-size:13px;letter-spacing:.03em;}
+  button:hover{border-color:var(--line-strong);background:#232328;}
+  .btn-gold{background:var(--gold-grad);color:#1a1405;border:1px solid var(--gold);font-weight:700;}
+  .btn-gold:hover{filter:brightness(1.06);background:var(--gold-grad);}
+
+    .pill{display:inline-block;font-size:10px;padding:3px 9px;border-radius:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;}
+  .pill-d{background:rgba(212,175,106,.18);color:var(--gold-bright);border:1px solid rgba(212,175,106,.35);}
+  .pill-w{background:rgba(245,241,230,.08);color:var(--ink);border:1px solid rgba(245,241,230,.2);}
+
+  /* ===== Totals ===== */
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .stat{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:14px;}
+  .stat .s-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:600;}
+  .stat .s-val{font-size:22px;font-weight:800;margin-top:4px;font-variant-numeric:tabular-nums;}
+  .stat .s-val small{font-size:12px;font-weight:600;color:var(--muted);}
+
+  .totrow{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px dashed var(--line);}
+  .totrow:last-child{border-bottom:none;}
+  .totrow .v{font-variant-numeric:tabular-nums;font-weight:700;}
+  .order-box{background:linear-gradient(135deg,rgba(212,175,106,.14),rgba(212,175,106,.05));border:1px solid rgba(212,175,106,.4);border-radius:12px;padding:18px 20px;margin-top:4px;}
+  .order-box .big{font-size:34px;font-weight:900;color:var(--gold-bright);font-variant-numeric:tabular-nums;line-height:1;}
+  .order-box .big small{font-size:15px;color:var(--ink);font-weight:600;}
+  .order-box .sub{font-size:12px;color:var(--muted);margin-top:6px;}
+
+  .quote-grand{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:14px 0 4px;border-top:2px solid var(--line-strong);margin-top:6px;}
+  .quote-grand .lbl{font-size:13px;text-transform:uppercase;letter-spacing:.12em;color:var(--ink);font-weight:700;}
+  .quote-grand .v{font-size:26px;font-weight:900;color:var(--gold-bright);font-variant-numeric:tabular-nums;}
+  .range{font-size:12px;color:var(--muted);text-align:right;margin-top:2px;}
+
+  .footnote{text-align:center;font-size:11px;color:var(--muted);margin-top:18px;line-height:1.6;}
+  .footnote b{color:var(--gold-bright);}
+
+  /* ===== Pre-Listing Packages page ===== */
+  .layout{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:16px;align-items:start;}
+  .side{position:sticky;top:16px;}
+  .pkgs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
+  .pkg{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;padding:14px 16px;border-radius:12px;background:var(--panel-2);border:1px solid var(--line-strong);font-weight:400;}
+  .pkg:hover{border-color:var(--gold-deep);background:var(--panel-2);}
+  .pkg.on{border-color:var(--gold);box-shadow:var(--gold-glow);background:linear-gradient(180deg,rgba(212,175,106,.10),rgba(212,175,106,.02));}
+  .pkg-n{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--gold);font-weight:700;}
+  .pkg-name{font-size:15px;font-weight:800;color:var(--ink-strong);}
+  .pkg-tag{font-size:12px;color:var(--muted);}
+  .pkg ul{list-style:none;margin:8px 0 0;padding:0;font-size:12.5px;line-height:1.8;}
+  .pkg li{color:var(--muted);opacity:.5;}
+  .pkg li.on{color:var(--ink);opacity:1;}
+  .pkg-price{margin-top:8px;font-size:18px;font-weight:900;color:var(--gold-bright);font-variant-numeric:tabular-nums;}
+  .pkg-price small{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-right:4px;}
+  .pkg-price em{font-style:normal;font-size:11.5px;color:var(--muted);font-weight:600;}
+  .opt{padding:2px 0 16px;margin-bottom:14px;border-bottom:1px dashed var(--line);}
+  .opt:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0;}
+  .opt-t{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold-bright);font-weight:700;margin-bottom:10px;}
+  .opt-t span{color:var(--muted);text-transform:none;letter-spacing:0;font-weight:500;margin-left:6px;}
+  label.chk{display:flex;gap:9px;align-items:center;text-transform:none;letter-spacing:0;font-size:13.5px;color:var(--ink);font-weight:500;margin:8px 0;cursor:pointer;}
+  label.chk input{accent-color:var(--gold);width:16px;height:16px;}
+  label.chk em{font-style:normal;color:var(--muted);font-weight:400;font-size:12.5px;}
+  .sub-in{margin:6px 0 8px 25px;max-width:220px;}
+  .sub-in.two{display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:none;margin-left:0;margin-top:12px;}
+  details.incl{margin-top:10px;border:1px solid var(--line);border-radius:8px;background:var(--panel-2);padding:0 14px;}
+  details.incl summary{cursor:pointer;padding:10px 0;font-size:12px;font-weight:700;color:var(--gold-bright);}
+  details.incl p{font-size:12.5px;color:var(--muted);line-height:1.6;margin:0 0 10px;}
+  details.incl b{color:var(--ink);}
+  .floors{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}
+  .floor{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;padding:11px 13px;border-radius:10px;background:var(--panel-2);border:1px solid var(--line-strong);font-weight:400;}
+  .floor b{font-size:13px;color:var(--ink-strong);}
+  .floor span{font-size:11.5px;color:var(--muted);line-height:1.4;}
+  .floor:hover{border-color:var(--gold-deep);background:var(--panel-2);}
+  .floor.on{border-color:var(--gold);background:rgba(212,175,106,.08);}
+  .floor.on b{color:var(--gold-bright);}
+  .quote{border-color:var(--gold-deep);box-shadow:var(--gold-glow);background:#000;}
+  .q-pkg{font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--gold);font-weight:700;}
+  .q-range{font-size:28px;font-weight:900;color:var(--gold-bright);margin:10px 0 4px;font-variant-numeric:tabular-nums;line-height:1.1;}
+  .q-note{font-size:12px;color:var(--ink);line-height:1.5;}
+  .q-empty{font-size:13px;color:var(--muted);margin-top:10px;line-height:1.5;}
+  .q-lines{margin:12px 0 14px;font-size:12.5px;}
+  .totrow.tbd{color:var(--muted);font-style:italic;}
+  .q-lines .v{white-space:nowrap;}
+  .cta{display:block;text-align:center;text-decoration:none;padding:12px 16px;border-radius:8px;font-size:14px;margin-top:8px;}
+  .cta.ghost{border:1px solid var(--line-strong);color:var(--ink);font-weight:600;}
+  .cta.ghost:hover{border-color:var(--gold-deep);}
+  .agent-link{display:block;margin-top:16px;padding-top:12px;border-top:1px solid var(--line);color:var(--gold-bright);font-size:12.5px;font-weight:600;text-decoration:none;}
+  .q-small{font-size:11px;color:var(--muted);margin-top:3px;}
+  @media (max-width:860px){
+    .layout{grid-template-columns:minmax(0,1fr);}
+    .side{position:static;}
+  }
+  @media (max-width:560px){
+    .pkgs,.floors,.sub-in.two{grid-template-columns:minmax(0,1fr);}
+    .brand-tagline .bt-line{font-size:22px;}
+  }
+
+  /* ===== Pill toggle group ===== */
+  .ptg{display:flex;flex-wrap:wrap;gap:8px;}
+  .ptg button{border:1px solid var(--line-strong);background:var(--panel-2);color:var(--muted);font-weight:700;font-size:13px;padding:9px 16px;border-radius:999px;letter-spacing:.04em;}
+  .ptg button:hover{border-color:var(--gold-deep);color:var(--ink);background:var(--panel-2);}
+  .ptg button.on{background:var(--gold-grad);color:#1a1405;border-color:var(--gold);}
+
+  .hint{font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5;}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ===== Brand header ===== -->
+  <div class="brandbar">
+    <div class="brandbar-row">
+      <div class="logo">
+        <img src="../RENO_to_SOLD_logo_only.png" alt="Reno to Sold" class="logo-img"
+             onerror="this.style.display='none';document.getElementById('logoFallback').style.display='block';">
+        <span id="logoFallback" class="logo-fallback" style="display:none;">RENO <span class="to">to</span> <span class="sold">SOLD</span></span>
+      </div>
+      <div class="brand-sub">
+        <div class="tag">Pre-Listing Packages</div>
+        <div class="ttl">Instant guaranteed price range</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="brand-tagline">
+    <span class="bt-line">Prep <span class="bt-accent">smart.</span> List <span class="bt-accent">fast.</span></span>
+    <span class="bt-line bt-sub">Sell for <span class="bt-accent">more.</span></span>
+  </div>
+
+  <div class="layout">
+    <div class="main">
+      <!-- ===== Property ===== -->
+      <div class="panel">
+        <h2>1 &middot; Property size</h2>
+        <div class="panel-body">
+          <label for="sqft">Total finished sqft</label>
+          <input type="number" id="sqft" min="0" step="10" inputmode="numeric" placeholder="e.g. 1600" oninput="PP.set('sqft', this.value)">
+          <div class="hint">Finished living space, including a finished basement.</div>
+        </div>
+      </div>
+
+      <!-- ===== Package ===== -->
+      <div class="panel">
+        <h2>2 &middot; Choose a package</h2>
+        <div class="panel-body">
+          <div class="pkgs" id="pkgs"></div>
+          <div class="hint">Each package includes everything in the one before it.</div>
+        </div>
+      </div>
+
+      <!-- ===== Options ===== -->
+      <div class="panel" id="optsPanel">
+        <h2>3 &middot; Options</h2>
+        <div class="panel-body" id="opts"></div>
+      </div>
+    </div>
+
+    <!-- ===== Quote ===== -->
+    <aside class="side">
+      <div class="panel quote">
+        <h2>Your price range</h2>
+        <div class="panel-body" id="quote"></div>
+      </div>
+    </aside>
+  </div>
+
+  <p class="footnote" id="rateNote">Prices based on Reno to Sold's 2026 GTA rates. All prices plus HST.</p>
+  <p class="footnote" style="letter-spacing:.18em;text-transform:uppercase;font-size:10px;color:var(--gold-deep);">Reno to Sold &middot; Renovate Smart &middot; Sell For More</p>
+</div>
+
+<script>
+/* =====================================================================
+   Reno to Sold — Pre-Listing Packages (public page, /packages/)
+   ---------------------------------------------------------------------
+   Standalone like /trim/: no login, nothing saved. Uses the same
+   formulas as the Pre-Listing Packages tool inside the portal.
+   Rates load live from Supabase (rpc public_package_rates — see
+   supabase/migrations/prelisting_packages.sql) and fall back to the
+   built-in 2026 rates below if that call isn't available.
+   Saving, emailing, walkthrough booking and estimates live in the
+   portal: ../#/packages
+   ===================================================================== */
+const PP_SUPABASE_URL  = "https://icrnvnmvcdpmhnjorefs.supabase.co";
+const PP_SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imljcm52bm12Y2RwbWhuam9yZWZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2ODQwMDgsImV4cCI6MjA5NDI2MDAwOH0.YoeBndWsky8vAW6mLeMziPeH2j2C6c_3VdAvOG_i0kA";
+const PP_CONTACT = { email:"renotosold@gmail.com", phone:"416-832-3779" };
+
+// Fallback rates — mirror DEFAULT_PRICES in the portal's index.html.
+const PP_DEFAULT_RATES = {
+  rangePct: 15,
+  cleaning: { deep:{ rate:1.15 }, carpet:{ rate:5 }, declutter:{ rate:0 } },
+  painting: {
+    walls:   { labour:2.25, material:1.00 },   // standard 2 coats — includes baseboards & trims in packages
+    ceiling: { labour:0.90, material:0.35 },   // flat ceilings
+    door:    { labour:80,   material:30 }      // per interior door
+  },
+  flooring: {
+    vinyl:{ labour:2.50, material:3.00 }, laminate:{ labour:2.75, material:4.00 },
+    engineered:{ labour:4.50, material:6.00 }, hardwood:{ labour:5.50, material:8.50 },
+    removal:{ labour:2.00, material:0.50 }, baseboards:{ labour:4.00, material:2.50 }
+  }
+};
+const PP_WASTE = { vinyl:1.07, laminate:1.08, engineered:1.10, hardwood:1.12 };
+const PP_FLOORS = [
+  ["vinyl","Vinyl (Luxury Vinyl Plank)","Waterproof, durable and budget-friendly — the most popular pre-listing choice."],
+  ["laminate","Waterproof Laminate","Realistic wood look with a harder-wearing surface."],
+  ["engineered","Engineered Hardwood","Real hardwood veneer on a stable core — a premium look buyers notice."],
+  ["hardwood","Solid Hardwood","Top-end finish for high-value listings."]
+];
+const PP_PACKAGES = [
+  { id:1, name:"Clean & Declutter", tag:"Show-ready in days", svc:["cleaning"] },
+  { id:2, name:"Clean + Paint", tag:"Fresh, neutral, move-in ready", svc:["cleaning","painting"] },
+  { id:3, name:"Clean + Paint + Floors", tag:"The biggest visual lift", svc:["cleaning","painting","flooring"] },
+  { id:4, name:"Full Pre-Listing Refresh", tag:"Kitchen & bath included", svc:["cleaning","painting","flooring","kitchen"] }
+];
+const PP_CLEAN_SCOPE = [
+  ["Kitchen", "Cabinet and drawer fronts, handles, outlets and switches; all countertops and the stove top; inside the sink and backsplash; appliances inside and out; inside and outside cupboards and drawers."],
+  ["Bathrooms", "Vanity, fixtures and mirrors; sink, toilet (in, around and behind), tub and shower; tiles and grout; glass shower doors; baseboards and floors; full dust removal and disinfecting."],
+  ["Floors & baseboards", "Dust, dirt, hair and debris removal including light fixtures, vents and baseboards; spot cleaning and build-up removal."],
+  ["Windows (interior)", "Interior glass, window sills and borders."]
+];
+
+const PP = {
+  rates: JSON.parse(JSON.stringify(PP_DEFAULT_RATES)),
+  live: false,
+  s: { sqft:"", pkg:2, level:"walls", doors:"", ceilings:true, floor:"vinyl", carpet:false, carpetSqft:"", declutter:false },
+
+  async loadRates(){
+    try {
+      const r = await fetch(PP_SUPABASE_URL + "/rest/v1/rpc/public_package_rates", {
+        method:"POST",
+        headers:{ "apikey":PP_SUPABASE_ANON, "Authorization":"Bearer " + PP_SUPABASE_ANON, "Content-Type":"application/json" },
+        body:"{}"
+      });
+      if(!r.ok) return;
+      const d = await r.json();
+      if(!d || typeof d !== "object") return;
+      const R = this.rates;
+      const pick = (o, path) => path.split(".").reduce((a,k) => a && a[k], o);
+      const numOk = v => typeof v === "number" && isFinite(v) && v >= 0;
+      if(numOk(d.rangePct)) R.rangePct = d.rangePct;
+      ["deep","carpet","declutter"].forEach(k => { const v = pick(d, "cleaning."+k+".rate"); if(numOk(v)) R.cleaning[k].rate = v; });
+      ["walls","ceiling","door"].forEach(k => ["labour","material"].forEach(f => { const v = pick(d, "painting."+k+"."+f); if(numOk(v)) R.painting[k][f] = v; }));
+      Object.keys(R.flooring).forEach(k => ["labour","material"].forEach(f => { const v = pick(d, "flooring."+k+"."+f); if(numOk(v)) R.flooring[k][f] = v; }));
+      this.live = true;
+      const n = document.getElementById("rateNote");
+      if(n) n.textContent = "Prices use Reno to Sold's current rates. All prices plus HST.";
+      this.render();
+    } catch(e){ /* keep built-in rates */ }
+  },
+
+  set(k, v, full){ this.s[k] = v; full ? this.render() : this.renderPrices(); },
+
+  n(v){ const x = parseFloat(v); return isFinite(x) && x > 0 ? x : 0; },
+  fmt(v){ return "$" + String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, ","); },
+  range(a){
+    const p = this.rates.rangePct;
+    return { low: Math.floor(a/50)*50, high: Math.ceil(a*(1+p/100)/50)*50 };
+  },
+  rg(a){ const r = this.range(a); return this.fmt(r.low) + " – " + this.fmt(r.high); },
+  lf(sq){ return sq > 0 ? Math.round(sq*0.30/5)*5 : 0; },
+
+  // Same math as the portal's computeCategory() for the package services
+  compute(pkgId){
+    const s = this.s, R = this.rates, sq = this.n(s.sqft);
+    const pk = PP_PACKAGES.find(p => p.id === pkgId);
+    const lines = [], tbd = [];
+    if(!pk || !sq) return { lines, tbd, sub:0 };
+    // cleaning
+    let c = sq * R.cleaning.deep.rate;
+    if(s.carpet){
+      if(R.cleaning.carpet.rate > 0) c += this.n(s.carpetSqft) * R.cleaning.carpet.rate;
+      else tbd.push("Carpet cleaning — priced at walkthrough");
+    }
+    if(s.declutter && !(R.cleaning.declutter.rate > 0)) tbd.push("Decluttering — priced after photo review");
+    if(s.declutter && R.cleaning.declutter.rate > 0) c += sq * R.cleaning.declutter.rate;
+    lines.push(["Deep cleaning" + (s.declutter ? " & decluttering" : ""), c]);
+    // painting
+    if(pk.svc.includes("painting")){
+      const P = R.painting;
+      let p = sq * (P.walls.labour + P.walls.material);
+      if(s.level === "full"){
+        if(s.ceilings) p += sq * (P.ceiling.labour + P.ceiling.material);
+        p += this.n(s.doors) * (P.door.labour + P.door.material);
+      }
+      lines.push(["Painting", p]);
+    }
+    // flooring
+    if(pk.svc.includes("flooring")){
+      const F = R.flooring, t = F[s.floor] || F.vinyl, w = PP_WASTE[s.floor] || 1.10;
+      const f = sq*t.labour + sq*w*t.material + sq*(F.removal.labour+F.removal.material) + this.lf(sq)*(F.baseboards.labour+F.baseboards.material);
+      lines.push(["Flooring — " + (PP_FLOORS.find(x => x[0] === s.floor) || PP_FLOORS[0])[1], f]);
+    }
+    if(pk.svc.includes("kitchen")) tbd.push("Kitchen & bathroom renovation — designed and priced with you in the portal");
+    const sub = lines.reduce((a, l) => a + l[1], 0);
+    return { lines, tbd, sub };
+  },
+
+  render(){
+    const s = this.s;
+    // package cards
+    document.getElementById("pkgs").innerHTML = PP_PACKAGES.map(p => {
+      const q = this.compute(p.id);
+      const svc = ["cleaning","painting","flooring","kitchen"].map(k => {
+        const on = p.svc.includes(k);
+        const l = { cleaning:"Deep cleaning", painting:"Painting", flooring:"Flooring", kitchen:"Kitchen & bath (optional)" }[k];
+        return `<li class="${on ? "on" : ""}">${on ? "✓" : "–"}&nbsp; ${l}</li>`;
+      }).join("");
+      return `<button type="button" class="pkg ${s.pkg === p.id ? "on" : ""}" onclick="PP.set('pkg', ${p.id}, true)">
+        <span class="pkg-n">Package ${p.id}</span>
+        <span class="pkg-name">${p.name}</span>
+        <span class="pkg-tag">${p.tag}</span>
+        <ul>${svc}</ul>
+        <span class="pkg-price" data-pkg="${p.id}">${q.sub > 0 ? `<small>From</small> ${this.fmt(this.range(q.sub).low)}${p.id === 4 ? '<em> + kitchen &amp; bath</em>' : ""}` : '<small>Enter sqft for pricing</small>'}</span>
+      </button>`;
+    }).join("");
+    // options
+    const pk = PP_PACKAGES.find(p => p.id === s.pkg);
+    let o = `
+      <div class="opt">
+        <div class="opt-t">Deep cleaning</div>
+        <label class="chk"><input type="checkbox" ${s.carpet ? "checked" : ""} onchange="PP.set('carpet', this.checked, true)"> Add carpet cleaning <em>(extra)</em></label>
+        ${s.carpet ? `<div class="sub-in"><label for="cs">Carpeted area (sqft)</label><input type="number" id="cs" min="0" value="${s.carpetSqft}" placeholder="e.g. 400" oninput="PP.set('carpetSqft', this.value)"></div>` : ""}
+        <label class="chk"><input type="checkbox" ${s.declutter ? "checked" : ""} onchange="PP.set('declutter', this.checked, true)"> Add decluttering <em>(priced after a photo review)</em></label>
+        <details class="incl"><summary>What's included in the deep clean</summary>${PP_CLEAN_SCOPE.map(([t, d]) => `<p><b>${t}:</b> ${d}</p>`).join("")}</details>
+      </div>`;
+    if(pk.svc.includes("painting")){
+      o += `
+      <div class="opt">
+        <div class="opt-t">Painting <span>standard 2 coats, premium paint, full prep</span></div>
+        <div class="ptg">
+          <button type="button" class="${s.level === "walls" ? "on" : ""}" onclick="PP.set('level','walls',true)">Walls, baseboards &amp; trims</button>
+          <button type="button" class="${s.level === "full" ? "on" : ""}" onclick="PP.set('level','full',true)">Full interior (+ doors &amp; ceilings)</button>
+        </div>
+        ${s.level === "full" ? `
+          <div class="sub-in two">
+            <div><label for="dc">Interior doors</label><input type="number" id="dc" min="0" value="${s.doors}" placeholder="e.g. 10" oninput="PP.set('doors', this.value)"></div>
+            <div><label class="chk" style="margin-top:22px;"><input type="checkbox" ${s.ceilings ? "checked" : ""} onchange="PP.set('ceilings', this.checked, true)"> Include ceilings</label></div>
+          </div>` : ""}
+        <div class="hint">Flat ceilings. Vaulted or 10 ft+ ceilings are extra and quoted at the walkthrough.</div>
+      </div>`;
+    }
+    if(pk.svc.includes("flooring")){
+      o += `
+      <div class="opt">
+        <div class="opt-t">Flooring <span>removal, new floor and new baseboards included</span></div>
+        <div class="floors">${PP_FLOORS.map(([k, l, d]) => `<button type="button" class="floor ${s.floor === k ? "on" : ""}" onclick="PP.set('floor','${k}',true)"><b>${l}</b><span>${d}</span></button>`).join("")}</div>
+      </div>`;
+    }
+    if(pk.svc.includes("kitchen")){
+      o += `<div class="opt"><div class="opt-t">Kitchen &amp; bathrooms</div><div class="hint" style="margin-top:0">Cabinets, countertops, backsplash, island and bathroom layouts are designed with you — agents can price them instantly in the Reno to Sold portal, or we'll quote them at the walkthrough.</div></div>`;
+    }
+    document.getElementById("opts").innerHTML = o;
+    this.renderQuote();
+  },
+
+  renderPrices(){
+    PP_PACKAGES.forEach(p => {
+      const el = document.querySelector(`.pkg-price[data-pkg="${p.id}"]`);
+      if(!el) return;
+      const q = this.compute(p.id);
+      el.innerHTML = q.sub > 0 ? `<small>From</small> ${this.fmt(this.range(q.sub).low)}${p.id === 4 ? '<em> + kitchen &amp; bath</em>' : ""}` : '<small>Enter sqft for pricing</small>';
+    });
+    this.renderQuote();
+  },
+
+  renderQuote(){
+    const s = this.s, q = this.compute(s.pkg);
+    const pk = PP_PACKAGES.find(p => p.id === s.pkg);
+    const el = document.getElementById("quote");
+    if(!q.sub){
+      el.innerHTML = `<div class="q-pkg">Package ${pk.id} · ${pk.name}</div><div class="q-empty">Enter the property's square footage to see your guaranteed price range.</div>`;
+      return;
+    }
+    const mail = encodeURIComponent(
+      `Hi Reno to Sold,\n\nI'd like to book a walkthrough for a pre-listing package.\n\n` +
+      `Package ${pk.id} — ${pk.name}\nProperty size: ${this.n(s.sqft)} sqft\nPrice range shown: ${this.rg(q.sub)} + HST\n` +
+      q.lines.map(l => `• ${l[0]}: ${this.rg(l[1])}`).join("\n") + (q.tbd.length ? "\n" + q.tbd.map(t => "• " + t).join("\n") : "") +
+      `\n\nProperty address:\nBest time to reach me:\nPhone:\n\nThank you!`);
+    el.innerHTML = `
+      <div class="q-pkg">Package ${pk.id} · ${pk.name}</div>
+      <div class="q-range">${this.rg(q.sub)}</div>
+      <div class="q-note">Plus HST. The exact amount is provided at the walkthrough and is <b>guaranteed to be within this range</b>.</div>
+      <div class="q-lines">${q.lines.map(l => `<div class="totrow"><span>${l[0]}</span><span class="v">${this.rg(l[1])}</span></div>`).join("")}
+        ${q.tbd.map(t => `<div class="totrow tbd"><span>${t}</span><span class="v">TBD</span></div>`).join("")}</div>
+      <a class="btn-gold cta" href="mailto:${PP_CONTACT.email}?subject=${encodeURIComponent("Walkthrough request — Package " + pk.id)}&body=${mail}">Book a walkthrough</a>
+      <a class="cta ghost" href="tel:${PP_CONTACT.phone.replace(/\D/g, "")}">Call ${PP_CONTACT.phone}</a>
+      <a class="agent-link" href="../#/packages">Agent? Open the full tool in the portal →</a>
+      <div class="q-small">Save quotes, send them to your seller and book walkthroughs.</div>`;
+  }
+};
+PP.render();
+PP.loadRates();
+</script>
+</body>
+</html>
