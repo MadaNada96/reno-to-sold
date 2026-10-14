@@ -13112,37 +13112,35 @@ async function upsertCloudContractor(c){
        any duplicates. The previous .maybeSingle() approach silently
        errored when duplicates existed, causing the code to INSERT a
        new row — runaway duplication on every save. */
-    const { data: rows, error: selErr } = await supa.from("estimates")
-      .select("id, updated_at")
-      .eq("user_id", currentUser.id)
-      .eq("client_id", c.id)
-      .eq("type", "contractor")
-      .order("updated_at", { ascending: false });
-    if(selErr) throw selErr;
+    // restFetch/dbInsert/dbUpdate — supa.from() hangs (verified 2026-10).
+    const rows = await restFetch("estimates?select=id,updated_at" +
+      "&user_id=eq." + encodeURIComponent(currentUser.id) +
+      "&client_id=eq." + encodeURIComponent(c.id) +
+      "&type=eq.contractor&order=updated_at.desc");
 
     const payload = contractorToCloudRow(c);
-    if(!rows || rows.length === 0){
-      const { error } = await supa.from("estimates").insert(payload);
-      if(error) throw error;
+    if(!Array.isArray(rows) || rows.length === 0){
+      await dbInsert("estimates", payload, { prefer: "return=minimal" });
     } else {
-      const { error } = await supa.from("estimates").update(payload).eq("id", rows[0].id);
-      if(error) throw error;
+      await dbUpdate("estimates", { id: rows[0].id }, payload, { prefer: "return=minimal" });
       // Self-heal: if there are stray duplicates, clean them up now
       if(rows.length > 1){
         const dupeIds = rows.slice(1).map(r => r.id);
         console.warn("[contractors] Cleaning up " + dupeIds.length + " duplicate cloud rows for contractor " + c.id);
-        await supa.from("estimates").delete().in("id", dupeIds);
+        for(const d of dupeIds){ try { await dbDelete("estimates", { id: d }); } catch(e){} }
       }
     }
-  }catch(e){ console.error("Contractor cloud upsert failed:", e); }
+  }catch(e){
+    console.error("Contractor cloud upsert failed:", e);
+    try { flash("⚠ Contractor not synced to cloud"); } catch(_){}
+  }
 }
 async function deleteCloudContractor(id){
   if(!currentUser || !supa || !id) return;
   try{
-    await supa.from("estimates").delete()
-      .eq("user_id", currentUser.id)
-      .eq("client_id", id)
-      .eq("type", "contractor");
+    await restFetch("estimates?user_id=eq." + encodeURIComponent(currentUser.id) +
+      "&client_id=eq." + encodeURIComponent(id) + "&type=eq.contractor",
+      { method: "DELETE", headers: { "Prefer": "return=minimal" } });
   }catch(e){ console.error("Contractor cloud delete failed:", e); }
 }
 /* On sign-in: pull cloud contractors, merge with local last-write-wins,
@@ -13171,11 +13169,12 @@ async function pullCloudContractors(showMigratePrompt){
   }
 
   // Pull + merge (newer wins per client_id)
-  const { data: cloud, error } = await supa.from("estimates")
-    .select("client_id,name,state,updated_at")
-    .eq("user_id", currentUser.id)
-    .eq("type", "contractor");
-  if(error){ console.error("Contractor pull failed:", error); return; }
+  let cloud = null;
+  try {
+    cloud = await restFetch("estimates?select=client_id,name,state,updated_at" +
+      "&user_id=eq." + encodeURIComponent(currentUser.id) + "&type=eq.contractor");
+  } catch(error){ console.error("Contractor pull failed:", error); return; }
+  if(!Array.isArray(cloud)){ console.error("Contractor pull returned no array"); return; }
 
   /* SECURITY HARDENING — cloud is source of truth for contractors.
      Same fix as the main estimates list: never auto-push local-only
@@ -15899,6 +15898,8 @@ const OFFICE_EMAIL = "renotosold@gmail.com";
 const OFFICE_COMPANY = "Reno to Sold Inc.";
 
 /* ---------- Supabase cross-device sync ---------- */
+window.RTS_BUILD = "2026-10-14-sync-fix-v5-packages";
+console.log("[build] " + window.RTS_BUILD);
 const SUPABASE_URL = "https://icrnvnmvcdpmhnjorefs.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imljcm52bm12Y2RwbWhuam9yZWZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2ODQwMDgsImV4cCI6MjA5NDI2MDAwOH0.YoeBndWsky8vAW6mLeMziPeH2j2C6c_3VdAvOG_i0kA";
 let supa = null;
@@ -16859,8 +16860,63 @@ function getStoredAuthToken(){
   } catch(e){ return null; }
 }
 
+/* ============================================================
+   AUTH TOKEN REFRESH (2026-10 data-loss fix)
+   ============================================================
+   restFetch reads the access token straight from localStorage. If
+   supabase-js's auto-refresh stalls (it hangs on this site — see the
+   many notes in this file), that token expires after ~1 hour and every
+   cloud read/write fails with 401 "JWT expired". Reads then came back
+   empty and saves failed silently. This refreshes the token directly
+   against the Supabase Auth REST endpoint, no supabase-js involved. */
+let _authRefreshPromise = null;
+function _authStorageKey(){
+  const ref = (SUPABASE_URL.match(/https?:\/\/([^.]+)\./) || [])[1];
+  return ref ? ("sb-" + ref + "-auth-token") : null;
+}
+async function refreshStoredAuthToken(force){
+  const key = _authStorageKey();
+  if(!key) return null;
+  let stored = null;
+  try { stored = JSON.parse(localStorage.getItem(key) || "null"); } catch(e){}
+  if(!stored || !stored.refresh_token) return null;
+  const nowSec = Math.floor(Date.now() / 1000);
+  if(!force && stored.expires_at && stored.expires_at - nowSec > 90) return stored.access_token;
+  if(_authRefreshPromise) return _authRefreshPromise;
+  _authRefreshPromise = (async () => {
+    try {
+      const r = await fetch(SUPABASE_URL.replace(/\/$/, "") + "/auth/v1/token?grant_type=refresh_token", {
+        method: "POST",
+        headers: { "apikey": SUPABASE_ANON_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: stored.refresh_token })
+      });
+      const data = await r.json().catch(() => null);
+      if(!r.ok || !data || !data.access_token){
+        console.warn("[auth] Token refresh failed:", r.status, data && (data.error_description || data.msg || data.error));
+        return null;
+      }
+      // Re-read in case supabase-js refreshed in the meantime, then merge.
+      let latest = stored;
+      try { latest = JSON.parse(localStorage.getItem(key) || "null") || stored; } catch(e){}
+      const merged = Object.assign({}, latest, data);
+      if(!merged.expires_at && data.expires_in) merged.expires_at = Math.floor(Date.now()/1000) + data.expires_in;
+      localStorage.setItem(key, JSON.stringify(merged));
+      console.log("[auth] Access token refreshed via REST");
+      return merged.access_token;
+    } catch(e){
+      console.warn("[auth] Token refresh threw:", e);
+      return null;
+    } finally {
+      setTimeout(() => { _authRefreshPromise = null; }, 0);
+    }
+  })();
+  return _authRefreshPromise;
+}
+
 async function restFetch(path, opts){
   opts = opts || {};
+  // Make sure the token isn't expired/about to expire before using it.
+  try { await refreshStoredAuthToken(false); } catch(e){}
   const token = getStoredAuthToken();
   const headers = Object.assign({
     "apikey": SUPABASE_ANON_KEY,
@@ -16882,6 +16938,11 @@ async function restFetch(path, opts){
   }
   if(!r.ok){
     const msg = (data && data.message) || (data && data.error) || text || ("HTTP " + r.status);
+    // Expired/invalid JWT → force one refresh and retry once.
+    if(r.status === 401 && !opts._retried && token){
+      const fresh = await refreshStoredAuthToken(true).catch(() => null);
+      if(fresh) return restFetch(path, Object.assign({}, opts, { _retried: true }));
+    }
     const err = new Error(msg);
     err.status = r.status;
     throw err;
@@ -17467,9 +17528,15 @@ function initSupabase(){
            to the DOM because bootstrapServerPricing was blocking. */
         applyAuthGate();                  // ← security gate FIRST
         applyFeatureGates();              // hide UI for features the user doesn't have
-        await bootstrapServerPricing();   // pull global pricing + subscribe
-        // Background-sync after a tick so UI is responsive
+        /* Time-limited: bootstrapServerPricing uses supa.from, which can
+           hang right after a Google sign-in redirect. If it does, the
+           cloud sync below must still run. */
+        // Start the cloud sync FIRST so saved estimates never wait on pricing.
         setTimeout(() => bootstrapCloudSync(false), 250);
+        await Promise.race([
+          bootstrapServerPricing().catch(e => console.warn("bootstrapServerPricing failed:", e)),
+          new Promise(r => setTimeout(r, 6000))
+        ]);
 
         /* RECOVERY-FLOW BACKSTOP: don't rely on the onAuthStateChange
            listener to fire setTimeout(maybeShowPasswordSetupPrompt) —
@@ -17525,9 +17592,12 @@ function initSupabase(){
          flow for the bug this fixes. */
       applyAuthGate();
       applyFeatureGates();
-      await bootstrapServerPricing();
+      bootstrapCloudSync(true);   // start FIRST — never behind pricing
+      await Promise.race([
+        bootstrapServerPricing().catch(e => console.warn("bootstrapServerPricing failed:", e)),
+        new Promise(r => setTimeout(r, 6000))
+      ]);
       flash("Signed in as " + session.user.email);
-      bootstrapCloudSync(true);
       /* First-time password setup prompt — only on recovery, never
          on routine sign-ins.
          Why removed for SIGNED_IN: the prompt was firing every time
@@ -18139,10 +18209,13 @@ async function bootstrapServerPricing(){
      of truth). If we ARE the admin and the server is empty, push
      our local prices up to seed it. */
   try{
-    const { data, error } = await supa.from("app_pricing_client")
-      .select("prices,updated_at")
-      .eq("id", "current")
-      .maybeSingle();
+    // restFetch — supa.from() hangs on page load (verified 2026-10), which
+    // meant agents never received the admin's global pricing.
+    let data = null, error = null;
+    try {
+      const rows = await restFetch("app_pricing_client?select=prices,updated_at&id=eq.current");
+      data = (Array.isArray(rows) && rows[0]) || null;
+    } catch(e){ error = e; }
     if(error){
       // RLS or table-missing — silently skip; local pricing keeps working.
       console.warn("Server pricing fetch skipped:", error.message);
@@ -18157,9 +18230,9 @@ async function bootstrapServerPricing(){
       // users get them. Idempotent — runs every load but ON CONFLICT
       // means only the first one actually writes.
       try{
-        await supa.from("app_pricing_client")
-          .update({ prices: prices, updated_at: new Date().toISOString(), updated_by: currentUser.id })
-          .eq("id", "current");
+        await dbUpdate("app_pricing_client", { id: "current" },
+          { prices: prices, updated_at: new Date().toISOString(), updated_by: currentUser.id },
+          { prefer: "return=minimal" });
         console.log("Seeded server client pricing from local admin prices.");
       }catch(e){ console.warn("Server pricing seed failed:", e); }
     } else if(!isAdmin() && hasServerPricing){
@@ -18221,17 +18294,16 @@ async function pushServerPricing(which){
   try {
     const now = new Date().toISOString();
     if(which === "client" || which === "both"){
-      await supa.from("app_pricing_client")
-        .update({ prices: prices, updated_at: now, updated_by: currentUser.id })
-        .eq("id", "current");
+      await dbUpdate("app_pricing_client", { id: "current" },
+        { prices: prices, updated_at: now, updated_by: currentUser.id }, { prefer: "return=minimal" });
     }
     if((which === "contractor" || which === "both") && typeof contractorPrices !== "undefined" && contractorPrices){
-      await supa.from("app_pricing_contractor")
-        .update({ prices: contractorPrices, updated_at: now, updated_by: currentUser.id })
-        .eq("id", "current");
+      await dbUpdate("app_pricing_contractor", { id: "current" },
+        { prices: contractorPrices, updated_at: now, updated_by: currentUser.id }, { prefer: "return=minimal" });
     }
   } catch(e) {
     console.warn("pushServerPricing failed:", e);
+    try { flash("⚠ Pricing not saved to server — try again"); } catch(_){}
   }
 }
 
@@ -19214,8 +19286,7 @@ async function saveUserSettingsProfile(){
     /* Direct update against profiles. RLS allows self-updates; the
        prevent_privilege_escalation trigger blocks anything sensitive.
        We only send whitelisted columns from the UI anyway. */
-    const { error } = await supa.from("profiles").update(updates).eq("id", currentUser.id);
-    if(error) throw error;
+    await dbUpdate("profiles", { id: currentUser.id }, updates, { prefer: "return=minimal" });
     // Refresh local cache so header + PDFs pick up the change immediately
     currentProfile = { ...currentProfile, ...updates };
     try { renderUserIdentity(); } catch(e){}
@@ -21303,6 +21374,22 @@ function renderDashboard(){
 
   // Populate live stats from any caches that are already warm.
   try { updateDashboardStats(); } catch(e){ console.warn("updateDashboardStats:", e); }
+  /* Safety net (2026-10): signed in but no saved estimates in this
+     browser? Pull straight from the cloud and update the counts. */
+  try {
+    if(currentUser && supa && loadSavedList().length === 0 && typeof refreshSavedFromCloud === "function"){
+      refreshSavedFromCloud().then(ok => {
+        if(ok){
+          console.log("[sync] Dashboard safety-net loaded " + loadSavedList().length + " estimate(s)");
+          try { updateDashboardStats(); } catch(e){}
+          try {
+            const ev = document.getElementById("view-estimator");
+            if(ev && ev.classList.contains("show-picker")) renderEstimatorPicker();
+          } catch(e){}
+        }
+      });
+    }
+  } catch(e){}
   // Kick off async cloud loads so admins see fresh submission/bid/user counts within a beat.
   try { refreshDashboardStatsAsync(); } catch(e){ console.warn("refreshDashboardStatsAsync:", e); }
 }
@@ -25177,6 +25264,25 @@ async function onAuthClick(){
       console.log("[auth] User cancelled sign-out");
       return;
     }
+    /* SIGN-OUT SAFETY CHECK (2026-10 data-loss fix)
+       Sign-out wipes this browser's copy of every estimate. Before
+       that happens, make sure each local estimate exists in the cloud;
+       upload any that don't. If some still can't be confirmed, warn
+       and let the user cancel. */
+    try {
+      const unsynced = await ensureLocalEstimatesInCloud();
+      if(unsynced.length){
+        const goAhead = await brandedConfirm(
+          unsynced.length + " estimate" + (unsynced.length===1?"":"s") +
+          " couldn't be confirmed in the cloud:\n\n" +
+          unsynced.slice(0, 8).map(e => "• " + (e.name || "Untitled")).join("\n") +
+          (unsynced.length > 8 ? "\n…" : "") +
+          "\n\nSigning out now will remove " + (unsynced.length===1?"it":"them") +
+          " from this device. Cancel, check your connection, and try again.",
+          { confirmLabel: "Sign Out Anyway" });
+        if(!goAhead){ console.log("[auth] Sign-out cancelled — unsynced estimates"); return; }
+      }
+    } catch(e){ console.error("[auth] Pre-sign-out sync check failed:", e); }
     console.log("[auth] Signing out...");
     /* INSTANT SIGN-OUT — skip supa.auth.signOut() entirely.
        Background: supabase-js's signOut hangs (same hang we see on
@@ -25281,9 +25387,33 @@ async function upsertCloudEstimate(entry){
         }
       }
     }
+    return true;
   }catch(e){
     console.error("Cloud upsert failed:", e);
+    /* Never fail silently — an estimate that isn't in the cloud is
+       wiped from this browser on sign-out. */
+    try { flash("⚠ Not synced to cloud — check connection before signing out"); } catch(_){}
+    return false;
   }
+}
+
+/* Upload any locally-saved estimates that aren't in the cloud yet.
+   Returns the list of local estimates that are STILL not confirmed. */
+async function ensureLocalEstimatesInCloud(){
+  const local = loadSavedList();
+  if(!local.length || !currentUser) return [];
+  const listCloudIds = async () => {
+    const rows = await restFetch("estimates?select=client_id" +
+      "&user_id=eq." + encodeURIComponent(currentUser.id) + "&type=eq.estimate");
+    return new Set((Array.isArray(rows) ? rows : []).map(r => r.client_id));
+  };
+  let ids;
+  try { ids = await listCloudIds(); } catch(e){ return local; }
+  const missing = local.filter(e => e && e.id && !ids.has(e.id));
+  if(!missing.length) return [];
+  for(const e of missing){ await upsertCloudEstimate(e); }
+  try { ids = await listCloudIds(); } catch(e){ return missing; }
+  return missing.filter(e => !ids.has(e.id));
 }
 
 async function deleteCloudEstimate(clientId){
@@ -25307,12 +25437,12 @@ async function deleteCloudEstimate(clientId){
 async function cloudFetchSettings(){
   if(!currentUser || !supa) return null;
   try{
-    const { data, error } = await supa.from("user_settings")
-      .select("client_prices,contractor_prices,updated_at")
-      .eq("user_id", currentUser.id)
-      .maybeSingle();
-    if(error){ console.error("Fetch settings failed:", error); return null; }
-    return data || null;
+    /* restFetch, not supa.from — supa.from hangs on this site (notably
+       right after a Google sign-in redirect), which blocked the whole
+       cloud sync and left Saved estimates empty. */
+    const rows = await restFetch("user_settings?select=client_prices,contractor_prices,updated_at" +
+      "&user_id=eq." + encodeURIComponent(currentUser.id));
+    return (Array.isArray(rows) && rows[0]) || null;
   }catch(e){ console.error("Fetch settings failed:", e); return null; }
 }
 
@@ -25320,20 +25450,15 @@ async function cloudPushPrices(which){
   // which = "client" | "contractor" | "both"
   if(!currentUser || !supa) return;
   try{
-    const { data: existing } = await supa.from("user_settings")
-      .select("user_id")
-      .eq("user_id", currentUser.id)
-      .maybeSingle();
+    const existing = await restFetch("user_settings?select=user_id&user_id=eq." + encodeURIComponent(currentUser.id));
     const payload = { updated_at: new Date().toISOString() };
     if(which === "client" || which === "both") payload.client_prices = prices;
     if((which === "contractor" || which === "both") && contractorPrices) payload.contractor_prices = contractorPrices;
-    if(existing){
-      const { error } = await supa.from("user_settings").update(payload).eq("user_id", currentUser.id);
-      if(error) throw error;
+    if(Array.isArray(existing) && existing.length){
+      await dbUpdate("user_settings", { user_id: currentUser.id }, payload, { prefer: "return=minimal" });
     } else {
       payload.user_id = currentUser.id;
-      const { error } = await supa.from("user_settings").insert(payload);
-      if(error) throw error;
+      await dbInsert("user_settings", payload, { prefer: "return=minimal" });
     }
   }catch(e){
     console.error("Push prices failed:", e);
@@ -25344,6 +25469,9 @@ async function cloudPushPrices(which){
 async function bootstrapCloudSync(showMigratePrompt){
   if(!currentUser || !supa) return;
 
+  /* 2026-10 fix: the pricing sync below is wrapped and time-limited so
+     that if any part of it stalls, saved estimates STILL load. */
+  const _pricingSync = async () => {
   // ---- Pricing sync ----
   // Last-write-wins by timestamp. The local PRICES_TS_KEY records when the
   // user last edited prices on this device; the cloud row carries its own
@@ -25413,6 +25541,10 @@ async function bootstrapCloudSync(showMigratePrompt){
   // Listing-discount label can move if prices changed
   const lbl = document.getElementById("listingPctLabel");
   if(lbl) lbl.textContent = num(prices.listingDiscount && prices.listingDiscount.percent) || 0;
+  };
+  console.log("[sync] bootstrapCloudSync started for " + (currentUser && currentUser.email));
+  // Background — saved estimates must NEVER wait on pricing.
+  _pricingSync().catch(e => console.error("[sync] Pricing sync failed:", e));
 
   // First-time-on-this-device prompt to upload any local-only estimates
   const migrateKey = "reno_cloud_migrated_" + currentUser.id;
@@ -25430,11 +25562,27 @@ async function bootstrapCloudSync(showMigratePrompt){
   // Filter by type='estimate' so tracker rows (type='tracker' or
   // 'tracker_meta') in the same table don't leak into the estimator's
   // Saved list. The tracker sync runs separately at the end of this function.
-  const { data: cloud, error } = await supa.from("estimates")
-    .select("client_id,name,state,updated_at")
-    .eq("user_id", currentUser.id)
-    .eq("type", "estimate");
-  if(error){ console.error(error); return; }
+  /* 2026-10 fix: use restFetch, NOT supa.from() — supa.from hangs on
+     this site, which left the Saved list empty after sign-in (sign-out
+     had already cleared localStorage). Retries a few times. If the
+     cloud can't be reached we do NOT touch the local list. */
+  let cloud = null;
+  for(let attempt = 0; attempt < 3 && cloud === null; attempt++){
+    try {
+      const rows = await restFetch(
+        "estimates?select=client_id,name,state,updated_at" +
+        "&user_id=eq." + encodeURIComponent(currentUser.id) +
+        "&type=eq.estimate");
+      if(Array.isArray(rows)) cloud = rows;
+    } catch(e){
+      console.error("[sync] Estimate pull failed (attempt " + (attempt+1) + "):", e);
+      await new Promise(r => setTimeout(r, 800 * (attempt + 1)));
+    }
+  }
+  if(cloud === null){
+    try { flash("⚠ Couldn't load saved estimates — refresh the page"); } catch(_){}
+    return;
+  }
 
   /* ============================================================
      SECURITY HARDENING — multi-tenant data isolation
@@ -25466,6 +25614,8 @@ async function bootstrapCloudSync(showMigratePrompt){
     .map(r => cloudToLocal(r));
   cloudList.sort((a,b) => new Date(b.savedAt) - new Date(a.savedAt));
   persistSavedList(cloudList);
+  console.log("[sync] Loaded " + cloudList.length + " saved estimate(s) from cloud");
+  try { if(typeof updateDashboardStats === "function") updateDashboardStats(); } catch(e){}
   // Refresh UI if the saved list modal is open
   if(document.getElementById("savedModal").classList.contains("show")){
     renderSavedList();
@@ -27916,49 +28066,44 @@ async function upsertCloudProject(p){
     /* Same critical fix as upsertCloudEstimate: .maybeSingle() silently
        errored on duplicates, causing exponential row growth. Use an
        ordered select + self-healing dedupe. */
-    const { data: rows, error: selErr } = await cloudCtx.supa.from("estimates")
-      .select("id, updated_at")
-      .eq("user_id", cloudCtx.user.id)
-      .eq("client_id", p.id)
-      .eq("type", "tracker")
-      .order("updated_at", { ascending: false });
-    if(selErr) throw selErr;
+    // restFetch/dbInsert/dbUpdate — supa.from() hangs (verified 2026-10).
+    const rows = await restFetch("estimates?select=id,updated_at" +
+      "&user_id=eq." + encodeURIComponent(cloudCtx.user.id) +
+      "&client_id=eq." + encodeURIComponent(p.id) +
+      "&type=eq.tracker&order=updated_at.desc");
 
     const payload = localProjToCloud(p);
-    if(!rows || rows.length === 0){
-      const { error } = await cloudCtx.supa.from("estimates").insert(payload);
-      if(error) throw error;
+    if(!Array.isArray(rows) || rows.length === 0){
+      await dbInsert("estimates", payload, { prefer: "return=minimal" });
     } else {
-      const { error } = await cloudCtx.supa.from("estimates").update(payload).eq("id", rows[0].id);
-      if(error) throw error;
+      await dbUpdate("estimates", { id: rows[0].id }, payload, { prefer: "return=minimal" });
       if(rows.length > 1){
         const dupeIds = rows.slice(1).map(r => r.id);
         console.warn("[tracker] Cleaning up " + dupeIds.length + " duplicate cloud rows for project " + p.id);
-        await cloudCtx.supa.from("estimates").delete().in("id", dupeIds);
+        for(const d of dupeIds){ try { await dbDelete("estimates", { id: d }); } catch(e){} }
       }
     }
-  }catch(e){ console.error("Tracker cloud upsert failed:", e); }
+  }catch(e){
+    console.error("Tracker cloud upsert failed:", e);
+    try { toast("⚠ Project not synced to cloud"); } catch(_){}
+  }
 }
 async function deleteCloudProject(clientId){
   if(!cloudReady() || !clientId) return;
   try{
-    await cloudCtx.supa.from("estimates").delete()
-      .eq("user_id", cloudCtx.user.id)
-      .eq("client_id", clientId)
-      .eq("type", "tracker");
+    await restFetch("estimates?user_id=eq." + encodeURIComponent(cloudCtx.user.id) +
+      "&client_id=eq." + encodeURIComponent(clientId) + "&type=eq.tracker",
+      { method: "DELETE", headers: { "Prefer": "return=minimal" } });
   }catch(e){ console.error("Tracker cloud delete failed:", e); }
 }
 async function upsertCloudCustomCategories(){
   if(!cloudReady()) return;
   try{
     /* Same critical fix as the other upserts. */
-    const { data: rows, error: selErr } = await cloudCtx.supa.from("estimates")
-      .select("id, updated_at")
-      .eq("user_id", cloudCtx.user.id)
-      .eq("client_id", CUSTOM_CATS_CLIENT_ID)
-      .eq("type", "tracker_meta")
-      .order("updated_at", { ascending: false });
-    if(selErr) throw selErr;
+    const rows = await restFetch("estimates?select=id,updated_at" +
+      "&user_id=eq." + encodeURIComponent(cloudCtx.user.id) +
+      "&client_id=eq." + encodeURIComponent(CUSTOM_CATS_CLIENT_ID) +
+      "&type=eq.tracker_meta&order=updated_at.desc");
     const payload = {
       user_id: cloudCtx.user.id,
       client_id: CUSTOM_CATS_CLIENT_ID,
@@ -27967,14 +28112,14 @@ async function upsertCloudCustomCategories(){
       state: { categories: DB.customCategories || [] },
       updated_at: new Date().toISOString()
     };
-    if(!rows || rows.length === 0){
-      await cloudCtx.supa.from("estimates").insert(payload);
+    if(!Array.isArray(rows) || rows.length === 0){
+      await dbInsert("estimates", payload, { prefer: "return=minimal" });
     } else {
-      await cloudCtx.supa.from("estimates").update(payload).eq("id", rows[0].id);
+      await dbUpdate("estimates", { id: rows[0].id }, payload, { prefer: "return=minimal" });
       if(rows.length > 1){
         const dupeIds = rows.slice(1).map(r => r.id);
         console.warn("[tracker_meta] Cleaning up " + dupeIds.length + " duplicate custom-categories rows");
-        await cloudCtx.supa.from("estimates").delete().in("id", dupeIds);
+        for(const d of dupeIds){ try { await dbDelete("estimates", { id: d }); } catch(e){} }
       }
     }
   }catch(e){ console.error("Custom categories cloud upsert failed:", e); }
@@ -28002,11 +28147,12 @@ async function bootstrapCloudSync(ctx, showMigratePrompt){
   }
 
   // Pull tracker projects + tracker_meta from the cloud
-  const { data: cloudRows, error } = await cloudCtx.supa.from("estimates")
-    .select("client_id,name,state,updated_at,type")
-    .eq("user_id", cloudCtx.user.id)
-    .in("type", ["tracker","tracker_meta"]);
-  if(error){ console.error("Tracker pull failed:", error); return; }
+  let cloudRows = null;
+  try {
+    cloudRows = await restFetch("estimates?select=client_id,name,state,updated_at,type" +
+      "&user_id=eq." + encodeURIComponent(cloudCtx.user.id) + "&type=in.(tracker,tracker_meta)");
+  } catch(error){ console.error("Tracker pull failed:", error); return; }
+  if(!Array.isArray(cloudRows)){ console.error("Tracker pull returned no array"); return; }
 
   const cloudProjects = (cloudRows||[]).filter(r => r.type === "tracker");
   const metaRow = (cloudRows||[]).find(r => r.type === "tracker_meta" && r.client_id === CUSTOM_CATS_CLIENT_ID);
