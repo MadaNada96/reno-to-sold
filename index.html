@@ -56,6 +56,17 @@
   #bidResponseView{ display:none; }
 </style>
 <script>
+// Brokerage invitation links: #accept_invite=<id> — remember it, then
+// clear the hash so the router starts clean. Processed after sign-in.
+(function(){
+  try{
+    const m = (location.hash || "").match(/accept_invite=([0-9a-f-]{36})/i);
+    if(m){
+      sessionStorage.setItem("rts_accept_invite", m[1]);
+      history.replaceState(null, "", location.pathname + location.search);
+    }
+  }catch(e){}
+})();
 // Apply bid-response mode BEFORE the body renders so nothing flashes.
 (function(){
   try{
@@ -4282,14 +4293,19 @@
 
       <div class="sb-section">Workspace</div>
 
-      <button class="sb-item" data-route="estimator" data-label="Detailed renovation estimator" onclick="navigateTo('estimator')">
-        <i class="ti ti-calculator" aria-hidden="true"></i>
-        <span class="sb-item-label">Detailed renovation estimator</span>
+      <button class="sb-item" data-route="brokerage" data-feature="brokerage_admin" data-label="Agents & seats" onclick="navigateTo('brokerage')" style="display:none;">
+        <i class="ti ti-users-group" aria-hidden="true"></i>
+        <span class="sb-item-label">Agents &amp; seats</span>
       </button>
 
       <button class="sb-item" data-route="packages" data-feature="prelisting_packages" data-label="Pre-listing packages" onclick="navigateTo('packages')">
         <i class="ti ti-home-check" aria-hidden="true"></i>
         <span class="sb-item-label">Pre-listing packages</span>
+      </button>
+
+      <button class="sb-item" data-route="estimator" data-feature="estimator" data-label="Detailed renovation estimator" onclick="navigateTo('estimator')">
+        <i class="ti ti-calculator" aria-hidden="true"></i>
+        <span class="sb-item-label">Detailed renovation estimator</span>
       </button>
 
       <button class="sb-item" data-route="trim" data-feature="trim_calculator" data-label="Trim calculator" onclick="navigateTo('trim')">
@@ -4337,6 +4353,11 @@
       <button class="sb-item" data-feature="pricing_editor" data-label="Pricing" onclick="openSettings(); closeMobileSidebar();">
         <i class="ti ti-tag" aria-hidden="true"></i>
         <span class="sb-item-label">Pricing</span>
+      </button>
+
+      <button class="sb-item" data-feature="billing" data-label="Manage billing" onclick="openBillingPortal(); closeMobileSidebar();" style="display:none;">
+        <i class="ti ti-credit-card" aria-hidden="true"></i>
+        <span class="sb-item-label">Manage billing</span>
       </button>
 
       <div class="sb-footer">
@@ -4387,6 +4408,7 @@
            estimate to attach the LF values to. -->
       <!-- Pre-Listing Packages — filled by packages/prelisting.js -->
       <div id="view-packages" class="view"></div>
+      <div id="view-brokerage" class="view"></div>
 
       <div id="view-trim" class="view">
         <div id="tcLinkBanner" style="display:none;background:linear-gradient(135deg,rgba(212,175,106,.14),rgba(212,175,106,.05));border:1px solid rgba(212,175,106,.35);border-radius:12px;padding:14px 18px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;">
@@ -15898,7 +15920,7 @@ const OFFICE_EMAIL = "renotosold@gmail.com";
 const OFFICE_COMPANY = "Reno to Sold Inc.";
 
 /* ---------- Supabase cross-device sync ---------- */
-window.RTS_BUILD = "2026-10-17-v6-signup-polish";
+window.RTS_BUILD = "2026-10-18-v7-brokerage-dashboard";
 console.log("[build] " + window.RTS_BUILD);
 const SUPABASE_URL = "https://icrnvnmvcdpmhnjorefs.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imljcm52bm12Y2RwbWhuam9yZWZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2ODQwMDgsImV4cCI6MjA5NDI2MDAwOH0.YoeBndWsky8vAW6mLeMziPeH2j2C6c_3VdAvOG_i0kA";
@@ -15974,7 +15996,15 @@ function canUse(feature){
   // Submit-for-review is AGENT-ONLY. Admins never submit — they
   // review. This MUST come before the admin-gets-everything rule
   // below, otherwise the toolbar Submit button leaks into admin view.
-  if(feature === "submit_for_review") return currentProfile.role === "agent";
+  // Brokerage account owner: brokerage tools always; agent tools only
+  // if they've assigned themselves a seat.
+  if(feature === "brokerage_admin") return currentProfile.role === "brokerage" && !!currentProfile.brokerage_id;
+  if(feature === "billing"){
+    if(currentProfile.role === "brokerage") return !!currentProfile.brokerage_id;
+    return currentProfile.role === "agent" && currentProfile.plan === "individual";
+  }
+  if(currentProfile.role === "brokerage" && !currentProfile.uses_seat) return false;
+  if(feature === "submit_for_review") return currentProfile.role === "agent" || currentProfile.role === "brokerage";
   // Admin has everything else
   if(currentProfile.role === "admin") return true;
   // Estimator is granted to everyone by default
@@ -18039,12 +18069,14 @@ function profileImageStepKind(){
   const p = currentProfile || {};
   if(p.role === "brokerage" && p.brokerage_id) return "brokerage";
   if(p.role === "agent" && p.plan === "individual") return "agent";
+  if(p.role === "agent" && p.plan === "brokerage_agent") return "brokerage_agent";
   return null;
 }
 let _firstRunImageFile = null;
 function showProfileImageStep(kind){
   const modal = document.getElementById("pwSetupModal");
   if(!modal) return;
+  if(kind === "brokerage_agent"){ showCompleteProfileStep(); return; }
   _firstRunImageFile = null;
   const isB = kind === "brokerage";
   const title = isB ? "Add your brokerage logo" : "Add your photo or logo";
@@ -18425,6 +18457,7 @@ function applyAuthGate(){
      If reason is empty (user is good) → hide the overlay.        */
   const reason = accountLockoutReason();
   let overlay = document.getElementById("authLockoutOverlay");
+  if(reason !== "not_signed_in"){ try { maybeAcceptBrokerageInvite(); } catch(e){} }
   if(!reason){
     if(overlay) overlay.style.display = "none";
     return;
@@ -18479,10 +18512,18 @@ function applyAuthGate(){
       body:  "Your account has been suspended. Contact Reno to Sold at renotosold@gmail.com to resolve."
     },
     expired: {
-      title: "Subscription expired",
-      body:  "Your annual subscription has ended. Contact Reno to Sold at renotosold@gmail.com to renew."
+      title: (currentProfile && currentProfile.role === "brokerage") ? "Brokerage plan ended" : "Subscription expired",
+      body:  (currentProfile && currentProfile.role === "brokerage")
+        ? "Your brokerage's Reno to Sold subscription has ended. Contact Reno to Sold at renotosold@gmail.com or 647-500-0270 to restart it — your agents' work is kept safe."
+        : "Your subscription has ended. Contact Reno to Sold at renotosold@gmail.com to renew."
     }
   };
+  if(reason === "expired" && currentProfile && (currentProfile.plan === "individual" ||
+     currentProfile.plan === "brokerage_agent" || currentProfile.subscription_status === "detached")){
+    overlay.innerHTML = renderContinueOnYourOwn();
+    fillContinueCount();
+    return;
+  }
   const m = msgMap[reason];
   /* Sign-out from the lockout screen: wipe the sb-* localStorage keys
      and reload. Note: we DO NOT call supa.auth.signOut() — it uses
@@ -21081,7 +21122,7 @@ async function confirmSubmissionDecision(){
 /* PRE-LISTING PACKAGES — the whole tool lives in packages/prelisting.js
    (loaded at the bottom of this file). Only small hooks stay here. */
 
-const VALID_ROUTES = ["dashboard", "estimator", "my-submissions", "bids", "invoicing", "tracker", "trim", "materials", "packages"];
+const VALID_ROUTES = ["dashboard", "estimator", "my-submissions", "bids", "invoicing", "tracker", "trim", "materials", "packages", "brokerage"];
 const DEFAULT_ROUTE = "dashboard";
 /* Tool routes — these use existing overlay/modal code rather than
    .view containers. The router opens/closes them via helper hooks
@@ -21154,6 +21195,11 @@ function renderRoute(){
     history.replaceState({route:"dashboard"}, "", "#/dashboard");
     return renderRoute();
   }
+  if(currentProfile && ((route === "brokerage" && !canUse("brokerage_admin")) ||
+                        (route === "estimator" && !canUse("estimator")))){
+    history.replaceState({route:"dashboard"}, "", "#/dashboard");
+    return renderRoute();
+  }
   // Mark documentElement so CSS can show/hide route-specific elements
   // (e.g. slogan visible only on dashboard).
   document.documentElement.setAttribute("data-route", route);
@@ -21184,6 +21230,8 @@ function renderRoute(){
     renderDashboard();
   } else if(route === "my-submissions"){
     renderMySubmissions();
+  } else if(route === "brokerage"){
+    try { renderBrokeragePage(); } catch(e){ console.error("route brokerage:", e); }
   } else if(route === "packages"){
     // Tool lives in packages/prelisting.js (see loader at the bottom of this file)
     if(typeof PL !== "undefined"){ try { PL.open(); } catch(e){ console.error("route packages:", e); } }
@@ -21296,7 +21344,15 @@ function renderUserIdentity(){
   const avatarImg  = document.getElementById("uicAvatarImg");
 
   const role = currentProfile.role || "agent";
-  const isAgentRole = role === "agent";
+  const isAgentRole = role === "agent" || role === "brokerage";
+  // Load the user's brokerage (name/logo) once, then re-render
+  if(currentProfile.brokerage_id && (!window._myBrokerage || window._myBrokerage.id !== currentProfile.brokerage_id) && !window._myBrokerageLoading){
+    window._myBrokerageLoading = true;
+    restFetch("brokerages?select=id,name,logo_url,status,seat_limit,tier,billing_interval,trial_ends_at,current_period_end,cancel_at_period_end&id=eq." + encodeURIComponent(currentProfile.brokerage_id))
+      .then(rows => { window._myBrokerage = (rows && rows[0]) || null; })
+      .catch(e => console.warn("brokerage load failed", e))
+      .finally(() => { window._myBrokerageLoading = false; if(window._myBrokerage) { try { renderUserIdentity(); } catch(e){} } });
+  }
 
   // Name — always the user's full name (fallback to email prefix)
   const name = currentProfile.full_name || (currentUser.email || "").split("@")[0] || "Member";
@@ -21329,7 +21385,9 @@ function renderUserIdentity(){
   // Avatar — agent only, only if avatar_url exists. No broken/missing
   // image fallback; just hide the avatar wrapper.
   if(avatarWrap && avatarImg){
-    const url = isAgentRole && currentProfile.avatar_url ? currentProfile.avatar_url : "";
+    const brkLogo = window._myBrokerage && window._myBrokerage.logo_url ? window._myBrokerage.logo_url : "";
+    const url = role === "brokerage" ? (brkLogo || currentProfile.avatar_url || "")
+              : (isAgentRole && currentProfile.avatar_url ? currentProfile.avatar_url : "");
     if(url){
       avatarImg.src = url;
       avatarImg.style.display = "block";
@@ -21358,6 +21416,472 @@ function renderUserIdentity(){
    to use. Stats are deferred to Push 4 — for now the cards just
    describe the tool.
    ============================================================ */
+/* ============================================================
+   BILLING + BROKERAGE (v7, Oct 2026)
+   ------------------------------------------------------------
+   - openBillingPortal(): Stripe Customer Portal ("Manage billing")
+   - "Continue on your own" lockout screen (individual plan ended,
+     brokerage lapsed, or agent removed from a brokerage)
+   - Accepting a brokerage invitation (#accept_invite=<id> links)
+   - "Complete your profile" step for invited brokerage agents
+   - Brokerage dashboard page (#/brokerage): seats, invite agents,
+     roster, logo, add seats, use-a-seat-myself
+   All server writes go through Edge Functions (stripe-portal,
+   stripe-checkout, brokerage-admin). Reads use restFetch + RLS.
+   ============================================================ */
+
+async function callFn(name, body){
+  try { await refreshStoredAuthToken(false); } catch(e){}
+  return invokeFunctionViaRest(name, body || {});
+}
+
+async function openBillingPortal(){
+  try {
+    flash("Opening secure billing…");
+    const r = await callFn("stripe-portal", {});
+    if(r && r.url) location.href = r.url;
+  } catch(e){
+    brandedAlert((e && e.message) || "Couldn't open billing. Please try again.");
+  }
+}
+
+/* ---------- Continue on your own (lockout variant) ---------- */
+function renderContinueOnYourOwn(){
+  const p = currentProfile || {};
+  let title, body;
+  if(p.subscription_status === "detached"){
+    title = "Continue on your own";
+    body = `Your access through <b>${escapeHtml(p.detached_from_brokerage || "your brokerage")}</b> has ended. Your account and saved work are safe — pick a plan to keep going.`;
+  } else if(p.plan === "brokerage_agent"){
+    title = "Your brokerage's plan has ended";
+    body = `<b>${escapeHtml(p.brokerage || "Your brokerage")}</b>'s Reno to Sold subscription is no longer active. Your account and saved work are safe — continue on your own plan, or ask your brokerage to renew.`;
+  } else {
+    title = "Your subscription has ended";
+    body = "Your account and saved work are safe. Restart your plan to pick up right where you left off.";
+  }
+  const signOut = "try { for(let i=localStorage.length-1;i>=0;i--){const k=localStorage.key(i); if(k && /^sb-/.test(k)) localStorage.removeItem(k);} } catch(e){} location.reload();";
+  const btn = (interval, label, sub) => `
+    <button onclick="startOwnCheckout('${interval}')" style="flex:1;min-width:150px;padding:14px 12px;background:${interval==='year'?'linear-gradient(180deg,#d4af6a,#a8853f)':'linear-gradient(180deg,#2a2010,#1a1408)'};
+      color:${interval==='year'?'#0a0a0a':'#e8c989'};border:1px solid #d4af6a;border-radius:8px;cursor:pointer;font-family:inherit;">
+      <div style="font-size:15px;font-weight:800;">${label}</div>
+      <div style="font-size:11px;margin-top:3px;opacity:.85;">${sub}</div>
+    </button>`;
+  return `
+    <div style="max-width:500px;width:100%;padding:34px 32px 28px;text-align:center;background:linear-gradient(180deg,#1a1408,#0f0c06);
+                border:1px solid #c98e2a;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.6);">
+      <img src="RENO_to_SOLD_logo_only.png" alt="Reno to Sold" style="max-height:50px;margin:0 auto 18px;display:block;">
+      <div style="font-size:20px;font-weight:800;color:#d4af6a;margin-bottom:10px;">${title}</div>
+      <div style="font-size:13.5px;line-height:1.55;color:#cfcfcf;margin-bottom:6px;">${body}</div>
+      <div id="cooCount" style="font-size:12.5px;color:#a8853f;margin-bottom:18px;min-height:18px;"></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        ${btn("month", "$49.99 / month", "plus HST")}
+        ${btn("year", "$499 / year", "2 months free · plus HST")}
+      </div>
+      <div id="cooMsg" style="margin-top:12px;font-size:12px;min-height:18px;color:#ff9090;"></div>
+      <button onclick='${signOut}' style="margin-top:6px;background:none;border:none;color:#888;font-size:11.5px;text-decoration:underline;cursor:pointer;">Sign out</button>
+      <div style="margin-top:14px;font-size:11px;color:#777;">Questions? 647-500-0270 · renotosold@gmail.com</div>
+    </div>`;
+}
+async function fillContinueCount(){
+  try {
+    const rows = await restFetch("estimates?select=id&type=in.(estimate,package)&user_id=eq." + encodeURIComponent(currentUser.id));
+    const n = Array.isArray(rows) ? rows.length : 0;
+    const el = document.getElementById("cooCount");
+    if(el && n) el.textContent = n + " saved estimate" + (n === 1 ? "" : "s") + " waiting for you";
+  } catch(e){}
+}
+async function startOwnCheckout(interval){
+  const msg = document.getElementById("cooMsg");
+  const p = currentProfile || {};
+  const parts = (p.full_name || "").trim().split(/\s+/);
+  try {
+    if(msg){ msg.style.color = "#cfcfcf"; msg.textContent = "Opening secure checkout…"; }
+    const r = await callFn("stripe-checkout", {
+      type: "individual", interval,
+      email: currentUser.email,
+      first_name: p.first_name || parts[0] || "Agent",
+      last_name: p.last_name || parts.slice(1).join(" ") || "-",
+      phone: p.phone || "",
+      brokerage_name: p.brokerage || ""
+    });
+    if(r && r.url) location.href = r.url;
+  } catch(e){
+    if(msg){ msg.style.color = "#ff9090"; msg.textContent = (e && e.message) || "Couldn't start checkout."; }
+  }
+}
+
+/* ---------- Accept a brokerage invitation ---------- */
+let _acceptInviteBusy = false;
+async function maybeAcceptBrokerageInvite(){
+  let id = null;
+  try { id = sessionStorage.getItem("rts_accept_invite"); } catch(e){}
+  if(!id || !currentUser || !currentProfile || _acceptInviteBusy) return;
+  _acceptInviteBusy = true;
+  try {
+    const ok = await brandedConfirm(
+      "You've been invited to use Reno to Sold through a brokerage account.\n\n" +
+      "If you accept, your brokerage covers your access and your own Reno to Sold plan is cancelled with a prorated credit. Your saved estimates stay with you.",
+      { title: "Brokerage invitation", confirmLabel: "Accept invitation", cancelLabel: "Not now", destructive: false });
+    if(!ok){ try { sessionStorage.removeItem("rts_accept_invite"); } catch(e){} return; }
+    const r = await callFn("brokerage-admin", { action: "accept_invite", invite_id: id });
+    try { sessionStorage.removeItem("rts_accept_invite"); } catch(e){}
+    await brandedAlert("You're now on " + ((r && r.brokerage) || "your brokerage") + "'s Reno to Sold team.", { title: "Welcome aboard" });
+    try { localStorage.removeItem(PROFILE_CACHE_KEY); } catch(e){}
+    location.reload();
+  } catch(e){
+    try { sessionStorage.removeItem("rts_accept_invite"); } catch(_){}
+    brandedAlert((e && e.message) || "Couldn't accept the invitation.", { error: true });
+  } finally { _acceptInviteBusy = false; }
+}
+
+/* ---------- Complete your profile (invited brokerage agents) ---------- */
+function showCompleteProfileStep(){
+  const modal = document.getElementById("pwSetupModal");
+  if(!modal) return;
+  const p = currentProfile || {};
+  const parts = (p.full_name || "").trim().split(/\s+/);
+  const f = escapeHtmlAttr(p.first_name || (parts.length > 1 ? parts[0] : ""));
+  const l = escapeHtmlAttr(p.last_name || (parts.length > 1 ? parts.slice(1).join(" ") : ""));
+  const ph = escapeHtmlAttr(p.phone || "");
+  const inp = "padding:11px 13px;background:#0a0a0a;border:1px solid #3a3a42;color:#f5f1e6;border-radius:6px;font-size:13px;width:100%;box-sizing:border-box;";
+  modal.firstElementChild.innerHTML = `
+    <div style="font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#a8853f;margin-bottom:8px;text-align:center;">One last thing</div>
+    <div style="font-size:18px;font-weight:800;color:#d4af6a;text-align:center;margin-bottom:10px;">Complete your profile</div>
+    <div style="font-size:13px;color:#cfcfcf;line-height:1.55;margin-bottom:16px;text-align:center;">Your name and phone appear on your dashboard and on the estimates you share.${p.brokerage ? `<br><span style="color:#a8853f;">Brokerage: ${escapeHtml(p.brokerage)}</span>` : ""}</div>
+    <form onsubmit="event.preventDefault(); saveCompleteProfile();" style="display:flex;flex-direction:column;gap:10px;">
+      <div style="display:flex;gap:10px;">
+        <input id="cpFirst" placeholder="First name" value="${f}" style="${inp}">
+        <input id="cpLast" placeholder="Last name" value="${l}" style="${inp}">
+      </div>
+      <input id="cpPhone" placeholder="Phone" value="${ph}" style="${inp}">
+      <button type="submit" id="cpSave" style="margin-top:6px;padding:12px;background:linear-gradient(180deg,#d4af6a,#a8853f);color:#0a0a0a;border:none;border-radius:6px;font-size:12.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;">Save &amp; continue</button>
+    </form>
+    <div id="cpMsg" style="margin-top:10px;font-size:12px;min-height:18px;text-align:center;color:#ff9090;"></div>
+    <div style="font-size:11px;color:#888;text-align:center;">You can add a photo anytime in User settings.</div>`;
+}
+async function saveCompleteProfile(){
+  const first = (document.getElementById("cpFirst").value || "").trim();
+  const last  = (document.getElementById("cpLast").value || "").trim();
+  const phone = (document.getElementById("cpPhone").value || "").trim();
+  const msg = document.getElementById("cpMsg");
+  if(!first || !last){ msg.textContent = "Please enter your first and last name."; return; }
+  if(!phone){ msg.textContent = "Please enter a phone number."; return; }
+  const btn = document.getElementById("cpSave"); if(btn){ btn.disabled = true; btn.textContent = "Saving…"; }
+  try {
+    const upd = { first_name: first, last_name: last, full_name: first + " " + last, phone, profile_completed_at: new Date().toISOString() };
+    await dbUpdate("profiles", { id: currentUser.id }, upd, { prefer: "return=minimal" });
+    Object.assign(currentProfile, upd);
+    try { saveCachedProfile(currentProfile); } catch(e){}
+    try { renderUserIdentity(); } catch(e){}
+    try { if(getCurrentRoute() === "dashboard") renderDashboard(); } catch(e){}
+    const m = document.getElementById("pwSetupModal"); if(m) m.remove();
+    flash("Profile saved ✓");
+  } catch(e){
+    msg.textContent = (e && e.message) || "Couldn't save. Try again.";
+    if(btn){ btn.disabled = false; btn.textContent = "Save & continue"; }
+  }
+}
+
+/* ---------- Brokerage dashboard (#/brokerage) ---------- */
+const BRK = { brokerage: null, roster: [], invites: [], seatsUsed: 0, preview: null };
+const BRK_TIER_LABEL = { starter: "Starter (5–49 seats)", growth: "Growth (50–99 seats)", enterprise: "Enterprise (100–249 seats)", network: "Network (250+ seats)" };
+const BRK_TIER_RATE  = { starter: 29.99, growth: 24.99, enterprise: 19.99, network: 16.99 };
+const brkTierFor = n => n >= 250 ? "network" : n >= 100 ? "enterprise" : n >= 50 ? "growth" : "starter";
+const brkDate = d => d ? new Date(d).toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric" }) : "—";
+
+function brkCss(){
+  if(document.getElementById("brkStyles")) return;
+  const st = document.createElement("style"); st.id = "brkStyles";
+  st.textContent = `
+    .brk-wrap{max-width:1040px;margin:0 auto;padding:0 4px 40px;display:flex;flex-direction:column;gap:16px;}
+    .brk-card{background:rgba(255,255,255,.025);border:1px solid var(--line-strong,#2e2e34);border-radius:12px;padding:20px 22px;}
+    .brk-h{font-size:15px;font-weight:800;color:var(--gold-bright,#d4af6a);margin:0 0 4px;letter-spacing:.02em;}
+    .brk-sub{font-size:12.5px;color:var(--muted,#9a958a);margin:0 0 14px;line-height:1.5;}
+    .brk-top{display:flex;gap:18px;align-items:center;flex-wrap:wrap;}
+    .brk-logo{width:64px;height:64px;border-radius:10px;border:1px solid var(--line-strong,#2e2e34);background:#0a0a0a;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#a8853f;font-weight:800;font-size:22px;flex:none;}
+    .brk-logo img{width:100%;height:100%;object-fit:contain;}
+    .brk-pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.04em;border:1px solid;}
+    .brk-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-top:16px;}
+    .brk-stat{background:#0d0d10;border:1px solid var(--line-strong,#2e2e34);border-radius:10px;padding:12px 14px;}
+    .brk-stat b{display:block;font-size:20px;color:var(--ink,#f5f1e6);margin-top:2px;}
+    .brk-stat span{font-size:11px;color:var(--muted,#9a958a);text-transform:uppercase;letter-spacing:.08em;}
+    .brk-bar{height:6px;background:#26262b;border-radius:4px;overflow:hidden;margin-top:8px;}
+    .brk-bar i{display:block;height:100%;background:linear-gradient(90deg,#a8853f,#d4af6a);}
+    .brk-btn{background:linear-gradient(180deg,#d4af6a,#a8853f);color:#0a0a0a;border:none;border-radius:7px;padding:10px 16px;font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;}
+    .brk-btn.ghost{background:transparent;color:var(--ink,#f5f1e6);border:1px solid var(--line-strong,#3a3a42);}
+    .brk-btn.small{padding:6px 10px;font-size:10.5px;}
+    .brk-btn:disabled{opacity:.45;cursor:not-allowed;}
+    .brk-ta{width:100%;min-height:110px;box-sizing:border-box;background:#0a0a0a;border:1px solid var(--line-strong,#3a3a42);color:var(--ink,#f5f1e6);border-radius:8px;padding:12px;font-size:13px;font-family:inherit;resize:vertical;}
+    .brk-table{width:100%;border-collapse:collapse;font-size:12.5px;}
+    .brk-table th{text-align:left;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted,#9a958a);padding:8px 8px;border-bottom:1px solid var(--line-strong,#2e2e34);font-weight:700;}
+    .brk-table td{padding:10px 8px;border-bottom:1px solid rgba(255,255,255,.05);color:var(--ink,#f5f1e6);vertical-align:middle;}
+    .brk-table td .em{color:var(--muted,#9a958a);font-size:11.5px;}
+    .brk-prev{margin-top:12px;font-size:12.5px;line-height:1.7;}
+    .brk-prev .ok{color:#5fce86}.brk-prev .bad{color:#ff9090}.brk-prev .skip{color:#9a958a}
+    .brk-note{font-size:12px;color:#e8c989;background:rgba(212,175,106,.08);border:1px solid rgba(212,175,106,.25);border-radius:8px;padding:10px 12px;margin-top:12px;line-height:1.5;}
+    @media (max-width:700px){ .brk-table .hide-sm{display:none;} }
+  `;
+  document.head.appendChild(st);
+}
+
+async function brkLoad(){
+  const bid = currentProfile && currentProfile.brokerage_id;
+  if(!bid) throw new Error("No brokerage on this account.");
+  const [b, roster, invites, used] = await Promise.all([
+    restFetch("brokerages?select=*&id=eq." + encodeURIComponent(bid)),
+    restFetch("rpc/brokerage_agent_activity", { method: "POST", body: { b: bid } }),
+    restFetch("brokerage_invites?select=id,email,placeholder_name,created_at,expires_at&status=eq.pending&brokerage_id=eq." + encodeURIComponent(bid) + "&order=created_at.desc"),
+    restFetch("rpc/brokerage_seats_used", { method: "POST", body: { b: bid } }),
+  ]);
+  BRK.brokerage = (b && b[0]) || null;
+  BRK.roster = Array.isArray(roster) ? roster : [];
+  BRK.invites = (Array.isArray(invites) ? invites : []).filter(i => new Date(i.expires_at) > new Date());
+  BRK.seatsUsed = Number(used) || 0;
+  window._myBrokerage = BRK.brokerage;
+}
+
+async function renderBrokeragePage(){
+  brkCss();
+  const v = document.getElementById("view-brokerage");
+  if(!v) return;
+  if(!BRK.brokerage) v.innerHTML = '<div class="brk-wrap"><div class="brk-card"><p class="brk-sub">Loading your brokerage…</p></div></div>';
+  try { await brkLoad(); } catch(e){
+    v.innerHTML = '<div class="brk-wrap"><div class="brk-card"><p class="brk-sub">Couldn\'t load your brokerage: ' + escapeHtml(e.message || String(e)) + '</p></div></div>';
+    return;
+  }
+  const b = BRK.brokerage;
+  const trial = b.status === "trialing";
+  const free = Math.max(0, b.seat_limit - BRK.seatsUsed);
+  const pct = b.seat_limit ? Math.min(100, Math.round(BRK.seatsUsed / b.seat_limit * 100)) : 0;
+  const statusPill = {
+    trialing: ['Free trial · ends ' + brkDate(b.trial_ends_at), '#d4af6a'],
+    active: [b.cancel_at_period_end ? 'Cancels ' + brkDate(b.current_period_end) : 'Active · renews ' + brkDate(b.current_period_end), b.cancel_at_period_end ? '#ff9090' : '#5fce86'],
+    past_due: ['Payment issue — update your card', '#ff9090'],
+    unpaid: ['Unpaid', '#ff9090'], canceled: ['Cancelled', '#ff9090'], incomplete: ['Setting up', '#9a958a'],
+  }[b.status] || [b.status, '#9a958a'];
+  const purchased = b.seats_purchased || b.seat_limit;
+  const owner = currentProfile;
+
+  const rosterRows = BRK.roster.map((a, idx) => {
+    const pending = a.status === "setup_pending" && !a.last_sign_in_at;
+    const st = pending ? '<span class="brk-pill" style="color:#d4af6a;border-color:#6b5524;">Invited</span>'
+                       : '<span class="brk-pill" style="color:#5fce86;border-color:#2e5a3d;">Active</span>';
+    return `<tr>
+      <td><div>${escapeHtml(a.full_name || "—")}</div><div class="em">${escapeHtml(a.email)}</div></td>
+      <td>${st}</td>
+      <td class="hide-sm">${a.estimates_count || 0}</td>
+      <td class="hide-sm">${brkDate(a.last_estimate_at)}</td>
+      <td class="hide-sm">${a.last_sign_in_at ? brkDate(a.last_sign_in_at) : "Never"}</td>
+      <td style="text-align:right;white-space:nowrap;">
+        ${pending ? `<button class="brk-btn ghost small" onclick="brkResend('${a.user_id}')">Resend</button> ` : ""}
+        <button class="brk-btn ghost small" onclick="brkRemove(${idx})">Remove</button>
+      </td></tr>`;
+  }).join("");
+  const inviteRows = BRK.invites.map(i => `<tr>
+      <td><div>${escapeHtml(i.placeholder_name || "—")}</div><div class="em">${escapeHtml(i.email)}</div></td>
+      <td><span class="brk-pill" style="color:#9ec5ff;border-color:#2c4a6e;">Awaiting acceptance</span></td>
+      <td class="hide-sm" colspan="3" style="color:var(--muted);font-size:11.5px;">Has their own plan · invite expires ${brkDate(i.expires_at)}</td>
+      <td style="text-align:right;"><button class="brk-btn ghost small" onclick="brkCancelInvite('${i.id}')">Cancel</button></td></tr>`).join("");
+
+  v.innerHTML = `
+  <div class="brk-wrap">
+    <div class="brk-card">
+      <div class="brk-top">
+        <div class="brk-logo">${b.logo_url ? `<img src="${escapeHtmlAttr(b.logo_url)}" alt="">` : escapeHtml((b.name || "?").charAt(0))}</div>
+        <div style="flex:1;min-width:200px;">
+          <div class="brk-h" style="font-size:19px;">${escapeHtml(b.name)}</div>
+          <div class="brk-sub" style="margin:4px 0 0;">${escapeHtml(BRK_TIER_LABEL[b.tier] || "")} · billed ${b.billing_interval === "year" ? "yearly" : "monthly"}
+            &nbsp; <span class="brk-pill" style="color:${statusPill[1]};border-color:${statusPill[1]}55;">${escapeHtml(statusPill[0])}</span></div>
+        </div>
+        <button class="brk-btn ghost" onclick="openBillingPortal()">Manage billing</button>
+      </div>
+      <div class="brk-stats">
+        <div class="brk-stat"><span>Seats used</span><b>${BRK.seatsUsed} of ${b.seat_limit}</b><div class="brk-bar"><i style="width:${pct}%"></i></div></div>
+        <div class="brk-stat"><span>Open seats</span><b>${free}</b></div>
+        <div class="brk-stat"><span>Price per seat</span><b>$${(BRK_TIER_RATE[b.tier] || 0).toFixed(2)}<small style="font-size:11px;color:var(--muted);">/${b.billing_interval === "year" ? "mo, billed yearly" : "mo"}</small></b></div>
+        <div class="brk-stat"><span>Your own seat</span><b style="font-size:14px;margin-top:6px;">${owner.uses_seat ? "Using a seat" : "Not using a seat"}</b>
+          <button class="brk-btn ghost small" style="margin-top:8px;" onclick="brkSelfSeat(${owner.uses_seat ? "false" : "true"})">${owner.uses_seat ? "Release my seat" : "Use a seat myself"}</button></div>
+      </div>
+      ${trial ? `<div class="brk-note">You're on a free trial — you can invite up to <b>${b.seat_limit}</b> agents now. All <b>${purchased}</b> of your seats unlock when the trial ends on <b>${brkDate(b.trial_ends_at)}</b>.</div>` : ""}
+      ${b.status === "past_due" ? `<div class="brk-note" style="color:#ff9090;border-color:#6b2a2a;background:rgba(255,80,80,.06);">We couldn't charge your card. Your agents keep access while we retry — please <a href="javascript:openBillingPortal()" style="color:#ffb0b0;">update your payment method</a>.</div>` : ""}
+      <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+        <button class="brk-btn ghost" onclick="brkAddSeats()">+ Add seats</button>
+        <span style="font-size:11.5px;color:var(--muted);">Need fewer seats? Remove agents below, then contact us before your renewal date.</span>
+      </div>
+    </div>
+
+    <div class="brk-card">
+      <div class="brk-h">Invite agents</div>
+      <p class="brk-sub">Paste your agents' emails — one per line, separated by commas, a column from Excel, or a list copied from Outlook/Gmail (e.g. <i>Jane Smith &lt;jane@xyz.ca&gt;</i>). Each agent gets an email to set their password.</p>
+      <textarea id="brkPaste" class="brk-ta" placeholder="jane@xyzrealty.ca&#10;John Smith <john@xyzrealty.ca>&#10;…" oninput="BRK.preview=null;document.getElementById('brkPrev').innerHTML='';document.getElementById('brkSendBtn').style.display='none';"></textarea>
+      <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="brk-btn ghost" onclick="brkReview()">Review list</button>
+        <button class="brk-btn" id="brkSendBtn" style="display:none;" onclick="brkSend()">Send invites</button>
+      </div>
+      <div id="brkPrev" class="brk-prev"></div>
+    </div>
+
+    <div class="brk-card">
+      <div class="brk-h">Your agents</div>
+      <p class="brk-sub">Activity only — estimate contents stay private to each agent.</p>
+      ${(BRK.roster.length || BRK.invites.length) ? `
+      <div style="overflow-x:auto;"><table class="brk-table">
+        <thead><tr><th>Agent</th><th>Status</th><th class="hide-sm">Estimates</th><th class="hide-sm">Last estimate</th><th class="hide-sm">Last sign-in</th><th></th></tr></thead>
+        <tbody>${rosterRows}${inviteRows}</tbody></table></div>` : `<p class="brk-sub" style="margin:0;">No agents yet — invite your first agents above.</p>`}
+    </div>
+
+    <div class="brk-card" id="brkBranding">
+      <div class="brk-h">Brokerage logo</div>
+      <p class="brk-sub">Shown on your dashboard and in your agents' dashboard header.</p>
+      <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
+        <div class="brk-logo" style="width:90px;height:90px;">${b.logo_url ? `<img src="${escapeHtmlAttr(b.logo_url)}" alt="">` : escapeHtml((b.name || "?").charAt(0))}</div>
+        <label class="brk-btn ghost" style="display:inline-block;">${b.logo_url ? "Change logo" : "Upload logo"}
+          <input type="file" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="brkUploadLogo(event)"></label>
+        <span id="brkLogoMsg" style="font-size:12px;color:var(--muted);"></span>
+      </div>
+    </div>
+  </div>`;
+}
+
+function brkParseEmails(text){
+  const out = []; const seen = new Set();
+  const re = /(?:"?([^"<>,;\n\r\t]*?)"?\s*<\s*([^<>\s,;]+@[^<>\s,;]+)\s*>)|([^\s<>,;"']+@[^\s<>,;"']+)/g;
+  let m;
+  while((m = re.exec(text || ""))){
+    const email = (m[2] || m[3] || "").trim().toLowerCase().replace(/[.;:,]+$/, "");
+    const name = (m[1] || "").trim();
+    if(!email) continue;
+    if(seen.has(email)){ out.push({ email, name, dup: true }); continue; }
+    seen.add(email); out.push({ email, name });
+  }
+  return out;
+}
+function brkReview(){
+  const list = brkParseEmails(document.getElementById("brkPaste").value);
+  const team = new Set(BRK.roster.map(a => (a.email || "").toLowerCase()));
+  const pend = new Set(BRK.invites.map(i => (i.email || "").toLowerCase()));
+  const valid = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+  const ready = [], invalid = [], skipped = [];
+  list.forEach(x => {
+    if(x.dup) return;
+    if(!valid.test(x.email)) invalid.push(x);
+    else if(team.has(x.email)) skipped.push({ ...x, why: "already on your team" });
+    else if(pend.has(x.email)) skipped.push({ ...x, why: "already invited" });
+    else if(currentUser && x.email === (currentUser.email || "").toLowerCase()) skipped.push({ ...x, why: "that's you — use “Use a seat myself”" });
+    else ready.push(x);
+  });
+  const dups = list.filter(x => x.dup).length;
+  const free = Math.max(0, (BRK.brokerage ? BRK.brokerage.seat_limit : 0) - BRK.seatsUsed);
+  BRK.preview = ready;
+  const prev = document.getElementById("brkPrev");
+  const btn = document.getElementById("brkSendBtn");
+  if(!list.length){ prev.innerHTML = '<span class="bad">No email addresses found.</span>'; btn.style.display = "none"; return; }
+  let h = `<div class="ok">✓ ${ready.length} ready to invite</div>`;
+  if(invalid.length) h += `<div class="bad">⚠ ${invalid.length} invalid: ${invalid.map(x => escapeHtml(x.email)).join(", ")}</div>`;
+  if(skipped.length) h += `<div class="skip">• ${skipped.length} skipped: ${skipped.map(x => escapeHtml(x.email) + " (" + x.why + ")").join(", ")}</div>`;
+  if(dups) h += `<div class="skip">• ${dups} duplicate${dups === 1 ? "" : "s"} removed</div>`;
+  const after = BRK.seatsUsed + ready.length;
+  h += `<div style="margin-top:6px;color:${after > BRK.brokerage.seat_limit ? "#ff9090" : "var(--ink)"};">${Math.min(after, BRK.brokerage.seat_limit)} of ${BRK.brokerage.seat_limit} seats will be used.</div>`;
+  if(ready.length > free){
+    h += `<div class="brk-note" style="margin-top:8px;">You have <b>${free}</b> open seat${free === 1 ? "" : "s"} but ${ready.length} agents to invite.
+      ${BRK.brokerage.status === "trialing" ? "During the free trial you can invite up to " + BRK.brokerage.seat_limit + " agents." : `<a href="javascript:brkAddSeats(${ready.length - free})" style="color:#d4af6a;">Add ${ready.length - free} seat${ready.length - free === 1 ? "" : "s"}</a>, or only the first ${free} will be invited.`}</div>`;
+  }
+  prev.innerHTML = h;
+  const n = Math.min(ready.length, free);
+  btn.style.display = n ? "" : "none";
+  btn.textContent = "Send " + n + " invite" + (n === 1 ? "" : "s");
+}
+async function brkSend(){
+  const btn = document.getElementById("brkSendBtn");
+  const free = Math.max(0, BRK.brokerage.seat_limit - BRK.seatsUsed);
+  const list = (BRK.preview || []).slice(0, free);
+  if(!list.length) return;
+  btn.disabled = true; btn.textContent = "Sending…";
+  try {
+    const r = await callFn("brokerage-admin", { action: "invite", emails: list.map(x => ({ email: x.email, name: x.name })) });
+    const res = (r && r.results) || [];
+    const sent = res.filter(x => x.status === "invited" || x.status === "invited_existing").length;
+    const label = { invalid: "invalid email", already_on_team: "already on your team", already_invited: "already invited", not_eligible: "this account can't be added", other_brokerage: "belongs to another brokerage", no_seats: "no open seats", is_you: "that's you", error: "error" };
+    const problems = res.filter(x => !(x.status === "invited" || x.status === "invited_existing"));
+    const pendingAcc = res.filter(x => x.status === "invited_existing").length;
+    document.getElementById("brkPaste").value = "";
+    await renderBrokeragePage();
+    const prev = document.getElementById("brkPrev");
+    if(prev) prev.innerHTML = `<div class="ok">✓ ${sent} invite${sent === 1 ? "" : "s"} sent.</div>` +
+      (pendingAcc ? `<div class="skip">• ${pendingAcc} already ha${pendingAcc === 1 ? "s" : "ve"} their own plan — they'll appear once they accept.</div>` : "") +
+      (problems.length ? `<div class="bad">⚠ Not invited: ${problems.map(x => escapeHtml(x.email) + " (" + (label[x.status] || x.status) + ")").join(", ")}</div>` : "");
+    try { updateDashboardStats(); } catch(e){}
+  } catch(e){
+    btn.disabled = false; btn.textContent = "Send invites";
+    brandedAlert((e && e.message) || "Couldn't send invites.", { error: true });
+  }
+}
+async function brkResend(userId){
+  try { await callFn("brokerage-admin", { action: "resend", user_id: userId }); flash("Invite re-sent ✓"); }
+  catch(e){ brandedAlert((e && e.message) || "Couldn't resend.", { error: true }); }
+}
+async function brkRemove(idx){
+  const a = BRK.roster[idx]; if(!a) return;
+  const userId = a.user_id, name = a.full_name || a.email;
+  const ok = await brandedConfirm(`Remove ${name} from your brokerage?\n\nThey lose access through your brokerage right away and their seat opens up. Their saved estimates stay with their own account, and they can continue on their own plan.`,
+    { confirmLabel: "Remove agent", destructive: true });
+  if(!ok) return;
+  try { await callFn("brokerage-admin", { action: "remove", user_id: userId }); flash("Agent removed"); renderBrokeragePage(); }
+  catch(e){ brandedAlert((e && e.message) || "Couldn't remove agent.", { error: true }); }
+}
+async function brkCancelInvite(id){
+  try { await callFn("brokerage-admin", { action: "cancel_invite", invite_id: id }); flash("Invite cancelled"); renderBrokeragePage(); }
+  catch(e){ brandedAlert((e && e.message) || "Couldn't cancel.", { error: true }); }
+}
+async function brkAddSeats(suggest){
+  const b = BRK.brokerage; if(!b) return;
+  const trial = b.status === "trialing";
+  const raw = await brandedPrompt(`How many seats would you like to add?${trial ? "\n\n(You're on a free trial — new seats unlock when the trial ends.)" : ""}`, String(suggest || 5), { title: "Add seats", confirmLabel: "Continue" });
+  if(raw == null) return;
+  const add = Math.floor(Number(raw));
+  if(!(add >= 1)){ brandedAlert("Enter a number of seats to add."); return; }
+  // Current purchased quantity = seat_limit when not trialing; during trial we can't know it here exactly, so use tier math server-side.
+  const current = b.seats_purchased || (trial ? null : b.seat_limit);
+  let priceLine = "";
+  if(current != null){
+    const total = current + add, tier = brkTierFor(total), rate = BRK_TIER_RATE[tier];
+    const per = b.billing_interval === "year" ? rate * 10 : rate;
+    priceLine = `\n\nNew total: ${total} seats × $${per.toFixed(2)}/${b.billing_interval === "year" ? "yr" : "mo"} = $${(total * per).toFixed(2)} + HST per ${b.billing_interval === "year" ? "year" : "month"} (${BRK_TIER_LABEL[tier]}).\n${trial ? "Billing at this amount starts when your trial ends." : "You'll be charged a prorated amount today for the rest of this billing period."}`;
+  }
+  const ok = await brandedConfirm(`Add ${add} seat${add === 1 ? "" : "s"}?${priceLine}`, { confirmLabel: "Add seats", destructive: false });
+  if(!ok) return;
+  try {
+    const r = await callFn("brokerage-admin", { action: "add_seats", add });
+    flash(r && r.trialing ? "Seats added — they unlock when your trial ends" : "Seats added ✓");
+    renderBrokeragePage();
+  } catch(e){ brandedAlert((e && e.message) || "Couldn't add seats.", { error: true }); }
+}
+async function brkSelfSeat(on){
+  const ok = await brandedConfirm(on
+    ? "Use one of your seats yourself? You'll get the agent tools (pre-listing packages, detailed renovation estimator, trim calculator)."
+    : "Release your seat? You'll lose access to the agent tools, and the seat opens up for an agent.", { confirmLabel: on ? "Use a seat" : "Release seat", destructive: !on });
+  if(!ok) return;
+  try {
+    await callFn("brokerage-admin", { action: "self_seat", on });
+    try { localStorage.removeItem(PROFILE_CACHE_KEY); } catch(e){}
+    location.reload();
+  } catch(e){ brandedAlert((e && e.message) || "Couldn't update your seat.", { error: true }); }
+}
+async function brkUploadLogo(ev){
+  const f = ev.target.files && ev.target.files[0];
+  const msg = document.getElementById("brkLogoMsg");
+  if(!f) return;
+  try {
+    if(msg) msg.textContent = "Uploading…";
+    const url = await uploadAvatar(currentUser.id, f);
+    await dbUpdate("brokerages", { id: BRK.brokerage.id }, { logo_url: url }, { prefer: "return=minimal" });
+    window._myBrokerage = null; // force header refresh
+    try { renderUserIdentity(); } catch(e){}
+    flash("Logo saved ✓");
+    renderBrokeragePage();
+  } catch(e){ if(msg) msg.textContent = (e && e.message) || "Upload failed."; }
+}
+
 function dashboardCards(){
   /* Returns the ordered list of card definitions for the current user.
      Each card: { key, title, icon, desc, action, requireFeature?, adminOnly? }
@@ -21366,12 +21890,22 @@ function dashboardCards(){
        - the user has the feature flag, OR
        - the user is admin and the card is adminOnly. */
   const allCards = [
+    { key: "brokerage", requireFeature: "brokerage_admin",
+      title: "Agents & seats", icon: "ti-users-group",
+      desc: "Invite your agents, see who's active, and manage your seats.",
+      action: () => navigateTo("brokerage") },
+
+    { key: "brokerage_branding", requireFeature: "brokerage_admin",
+      title: "Brokerage logo", icon: "ti-photo",
+      desc: "Add or change the logo shown on your dashboard and your agents' dashboards.",
+      action: () => { navigateTo("brokerage"); setTimeout(() => { const el = document.getElementById("brkBranding"); if(el) el.scrollIntoView({behavior:"smooth"}); }, 300); } },
+
     { key: "packages", requireFeature: "prelisting_packages",
       title: "Pre-listing packages", icon: "ti-home-check",
       desc: "Pick a renovation package for a listing and get an instant, guaranteed price range. Send it to your seller or book a walkthrough.",
       action: () => navigateTo("packages") },
 
-    { key: "estimator", title: "Detailed renovation estimator", icon: "ti-calculator",
+    { key: "estimator", requireFeature: "estimator", title: "Detailed renovation estimator", icon: "ti-calculator",
       desc: "Build a detailed, line-by-line renovation estimate. Save, print, email, or submit for review.",
       action: () => navigateTo("estimator") },
 
@@ -21415,6 +21949,11 @@ function dashboardCards(){
       desc: "Invite, edit, suspend, or remove agents and staff.",
       action: () => openUsersModal() },
 
+    { key: "billing", requireFeature: "billing",
+      title: "Manage billing", icon: "ti-credit-card",
+      desc: "Update your card, switch monthly/annual, view invoices, or cancel.",
+      action: () => openBillingPortal() },
+
     { key: "pricing", requireFeature: "pricing_editor",
       title: "Pricing", icon: "ti-tag",
       desc: "Edit unit pricing and contractor rates that drive every estimate.",
@@ -21440,7 +21979,9 @@ function renderDashboard(){
     welcomeEl.style.display = "flex";
     const first = (currentProfile.full_name || "").split(/\s+/)[0] || "there";
     if(greetEl) greetEl.textContent = "Welcome back, " + first + ".";
-    const roleLabel = isAdmin() ? "Administrator" : isStaff() ? "Staff" : "Agent";
+    const roleLabel = isAdmin() ? "Administrator" : isStaff() ? "Staff"
+      : currentProfile.role === "brokerage" ? ("Brokerage owner" + (currentProfile.brokerage ? " · " + currentProfile.brokerage : ""))
+      : "Agent";
     if(subEl)   subEl.textContent = roleLabel + " · " + (currentUser ? currentUser.email : "");
   } else if(welcomeEl){
     welcomeEl.style.display = "none";
@@ -21518,6 +22059,15 @@ function _setDashStat(key, text, urgent){
 }
 
 function updateDashboardStats(){
+  try {
+    if(canUse("brokerage_admin") && window._myBrokerage){
+      restFetch("rpc/brokerage_seats_used", { method: "POST", body: { b: window._myBrokerage.id } })
+        .then(n => _setDashStat("brokerage", (Number(n)||0) + " of " + window._myBrokerage.seat_limit + " seats used"))
+        .catch(() => {});
+      _setDashStat("brokerage_branding", window._myBrokerage.logo_url ? "Logo added" : "No logo yet");
+    }
+    if(canUse("billing")) _setDashStat("billing", "Secure Stripe portal");
+  } catch(e){}
   // Estimator — count of local saved estimates
   try {
     const saves = (typeof loadSavedList === "function" ? loadSavedList() : []) || [];
