@@ -4282,9 +4282,9 @@
 
       <div class="sb-section">Workspace</div>
 
-      <button class="sb-item" data-route="estimator" data-label="Estimator" onclick="navigateTo('estimator')">
+      <button class="sb-item" data-route="estimator" data-label="Detailed renovation estimator" onclick="navigateTo('estimator')">
         <i class="ti ti-calculator" aria-hidden="true"></i>
-        <span class="sb-item-label">Estimator</span>
+        <span class="sb-item-label">Detailed renovation estimator</span>
       </button>
 
       <button class="sb-item" data-route="packages" data-feature="prelisting_packages" data-label="Pre-listing packages" onclick="navigateTo('packages')">
@@ -4396,7 +4396,7 @@
           </div>
           <div style="display:flex;gap:8px;">
             <button onclick="tcStartNew()" style="background:transparent;border:1px solid var(--line-strong);color:var(--ink);border-radius:6px;padding:8px 14px;font-size:12px;font-weight:600;letter-spacing:.06em;cursor:pointer;font-family:inherit;">Start New</button>
-            <button onclick="tcBackToEstimate()" style="background:transparent;border:1px solid var(--line-strong);color:var(--ink);border-radius:6px;padding:8px 14px;font-size:12px;font-weight:600;letter-spacing:.06em;cursor:pointer;font-family:inherit;">← Back to Estimator</button>
+            <button onclick="tcBackToEstimate()" style="background:transparent;border:1px solid var(--line-strong);color:var(--ink);border-radius:6px;padding:8px 14px;font-size:12px;font-weight:600;letter-spacing:.06em;cursor:pointer;font-family:inherit;">← Back to Detailed renovation estimator</button>
           </div>
         </div>
 
@@ -4755,7 +4755,7 @@
       </div>
     </div>
     <div class="spacer"></div>
-    <a href="javascript:void(0)" onclick="ET.backToEstimator()" class="btn" style="text-decoration:none" title="Back to the Reno to Sold estimator">← Estimator</a>
+    <a href="javascript:void(0)" onclick="ET.backToEstimator()" class="btn" style="text-decoration:none" title="Back to the Detailed renovation estimator">← Detailed renovation estimator</a>
     <!-- "Saved" button removed 2026-06-29 — redundant with the Projects tab on the home view. -->
 
     <button class="btn gold" onclick="ET.openNewProject()">＋ New Project</button>
@@ -5004,7 +5004,7 @@
   <div class="contractor-toolbar no-print">
     <div class="ct-title">Contractor Bid Sheet</div>
     <div class="ct-actions">
-      <button onclick="closeContractorBid()">&larr; Back to Estimator</button>
+      <button onclick="closeContractorBid()">&larr; Back to Detailed renovation estimator</button>
       <button onclick="openContractorsBookModal()">Contractors</button>
       <button onclick="openReceivedBidsModal()">Bids</button>
       <button onclick="openEmailContractorBidModal()">Email to Contractor</button>
@@ -5025,7 +5025,7 @@
   <div class="estimate-toolbar no-print">
     <div class="et-title">Client Estimate</div>
     <div class="et-actions">
-      <button onclick="closeClientEstimate()">&larr; Back to Estimator</button>
+      <button onclick="closeClientEstimate()">&larr; Back to Detailed renovation estimator</button>
       <button onclick="openEmailEstimateModal()">Email to Client</button>
       <button class="primary" onclick="printEstimate()">Print / Save as PDF</button>
     </div>
@@ -5042,7 +5042,7 @@
     </div>
     <div class="iv-actions">
       <button onclick="openContractorPricing()">Contractor Rates</button>
-      <button onclick="closeInternal()">&larr; Back to Estimator</button>
+      <button onclick="closeInternal()">&larr; Back to Detailed renovation estimator</button>
       <button class="primary" onclick="window.print()">Print Internal</button>
     </div>
   </div>
@@ -5118,7 +5118,7 @@
 </div>
 
 <!-- Floating lock icon (Internal Mode entry) -->
-<button id="lockBtn" class="lock-btn no-print" onclick="onLockClick()" aria-label="Internal mode" title="Internal Mode">
+<button id="lockBtn" class="lock-btn no-print" style="display:none" onclick="onLockClick()" aria-label="Internal mode" title="Internal Mode">
   <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
     <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
@@ -9836,8 +9836,8 @@ async function openContractorBid(){
     Object.keys(CONTRACTOR_CAT_LABELS).some(c => !!state.enabled[c]);
   if(!hasActiveEstimate || !hasEnabledCats){
     const goToEstimator = await brandedConfirm(
-      "Contractor Bid needs an active estimate with at least one category enabled.\n\nOpen the Estimator to load or create one?",
-      { destructive: false, confirmLabel: "Open Estimator" }
+      "Contractor Bid needs an active estimate with at least one category enabled.\n\nOpen the Detailed renovation estimator to load or create one?",
+      { destructive: false, confirmLabel: "Open estimator" }
     );
     if(goToEstimator){
       navigateTo("estimator");
@@ -10418,7 +10418,7 @@ async function lockSite(){
 const COMPANY_INFO = {
   logoSrc: "logo.png",
   logoAlt: "Reno to Sold Inc.",
-  phone:   "416-832-3779",
+  phone:   "647-500-0270",
   email:   "renotosold@gmail.com",
   addressLine1: "1195 Queensway E #28",
   addressLine2: "Mississauga, ON  L4Y 0G4",
@@ -12883,7 +12883,7 @@ function buildClientEstimateEmailHtml(plainBody){
       ${bits.join(" &middot; ")}`;
   } else {
     footerBlock = `
-      Reno to Sold Inc. &middot; Mississauga, ON L4Y 0G4 &middot; 416-832-3779<br>
+      Reno to Sold Inc. &middot; Mississauga, ON L4Y 0G4 &middot; 647-500-0270<br>
       <a href="mailto:renotosold@gmail.com" style="color:#a8853f;text-decoration:none;">renotosold@gmail.com</a>`;
   }
 
@@ -14306,7 +14306,7 @@ function buildContractorEmailHtml({ contactFirstName, rawAddr, bidLink, personal
         <p style="margin:0 0 3px;">Thanks,</p>
         <p style="margin:0 0 3px;font-weight:700;font-size:15px;color:#0a0a0a;">Mohamed Nada</p>
         <p style="margin:0 0 4px;font-size:11px;letter-spacing:.20em;font-weight:800;color:#a8853f;text-transform:uppercase;">RENO <span style="color:#d4af6a;">TO</span> SOLD INC.</p>
-        <p style="margin:0;font-size:13px;color:#555;">416-832-3779</p>
+        <p style="margin:0;font-size:13px;color:#555;">647-500-0270</p>
       </td></tr>
     </table>
   </td></tr>
@@ -14331,7 +14331,7 @@ function buildContractorEmailPlain({ contactFirstName, rawAddr, bidLink, persona
     `(Drafts auto-save as you type. You can come back to the link any time until I accept your bid.)\n\n` +
     `ALTERNATIVE — the same bid sheet is attached as a PDF. Print it, fill it in, and reply to this email with the completed copy.\n\n` +
     `Let me know if you have any questions.\n\n` +
-    `Thanks,\nMohamed Nada\nRENO TO SOLD INC.\n416-832-3779`
+    `Thanks,\nMohamed Nada\nRENO TO SOLD INC.\n647-500-0270`
   );
 }
 
@@ -15893,12 +15893,12 @@ function onAddressKey(ev){
    until then this is the office number used in the identity card,
    PDF footers, and email templates. Change in ONE place — every
    surface that displays the office phone reads from here. */
-const OFFICE_PHONE = "416-832-3779";
+const OFFICE_PHONE = "647-500-0270";
 const OFFICE_EMAIL = "renotosold@gmail.com";
 const OFFICE_COMPANY = "Reno to Sold Inc.";
 
 /* ---------- Supabase cross-device sync ---------- */
-window.RTS_BUILD = "2026-10-14-sync-fix-v5-packages";
+window.RTS_BUILD = "2026-10-17-v6-signup-polish";
 console.log("[build] " + window.RTS_BUILD);
 const SUPABASE_URL = "https://icrnvnmvcdpmhnjorefs.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imljcm52bm12Y2RwbWhuam9yZWZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2ODQwMDgsImV4cCI6MjA5NDI2MDAwOH0.YoeBndWsky8vAW6mLeMziPeH2j2C6c_3VdAvOG_i0kA";
@@ -16374,7 +16374,7 @@ function buildAgentNotificationHtml({ headerLabel, headerColor, title, intro, pr
         <p style="margin:0 0 3px;">Thanks,</p>
         <p style="margin:0 0 3px;font-weight:700;font-size:15px;color:#0a0a0a;">Mohamed Nada</p>
         <p style="margin:0 0 4px;font-size:11px;letter-spacing:.20em;font-weight:800;color:#a8853f;text-transform:uppercase;">RENO <span style="color:#d4af6a;">TO</span> SOLD INC.</p>
-        <p style="margin:0;font-size:13px;color:#555;">416-832-3779</p>
+        <p style="margin:0;font-size:13px;color:#555;">647-500-0270</p>
       </td></tr>
     </table>
   </td></tr>
@@ -16428,7 +16428,7 @@ async function notifyAgentOfEstimateDecision({ action, row, note, decidedAt }){
       headerColor: "#ff9090",
       title: "Your estimate was not approved",
       intro: `${agentFirstName ? "Hi " + escapeHtml(agentFirstName) + "," : "Hi,"} Reno to Sold has reviewed your estimate but won't be moving forward with it. See the note below for details. If you'd like to discuss, please get in touch with us directly.`,
-      footerNote: "Questions? Reply to this email or call us at 416-832-3779."
+      footerNote: "Questions? Reply to this email or call us at 647-500-0270."
     }
   };
   const cfg = map[action];
@@ -16472,7 +16472,7 @@ async function notifyAgentOfEstimateDecision({ action, row, note, decidedAt }){
     `Total: ${totalStr} (incl. HST)\n\n` +
     (note ? `Note from Reno to Sold:\n"${note}"\n\n` : "") +
     cfg.footerNote + "\n\n" +
-    `Thanks,\nMohamed Nada\nRENO TO SOLD INC.\n416-832-3779`
+    `Thanks,\nMohamed Nada\nRENO TO SOLD INC.\n647-500-0270`
   );
 
   try {
@@ -16576,7 +16576,7 @@ async function notifyAgentOfDiscountDecision({ row, drStatus, requested, decided
     "\n" +
     (note ? `Note from Reno to Sold:\n"${note}"\n\n` : "") +
     cfg.footerNote + "\n\n" +
-    `Thanks,\nMohamed Nada\nRENO TO SOLD INC.\n416-832-3779`
+    `Thanks,\nMohamed Nada\nRENO TO SOLD INC.\n647-500-0270`
   );
 
   try {
@@ -17062,7 +17062,7 @@ async function fetchCurrentProfile(){
      library call times out at 8s. */
   const attemptFetch = async (timeoutMs, attemptLabel) => {
     const t0 = Date.now();
-    const selectCols = "id,email,full_name,brokerage,phone,role,features,subscription_starts_at,subscription_expires_at,suspended,avatar_url";
+    const selectCols = "id,email,full_name,brokerage,phone,role,features,subscription_starts_at,subscription_expires_at,suspended,avatar_url,plan,brokerage_id,first_name,last_name";
     const queryPromise = restFetch("profiles?id=eq." + encodeURIComponent(currentUser.id) + "&select=" + selectCols, { single: true })
       .then(data => ({ data: data, error: null }))
       .catch(err => {
@@ -18011,10 +18011,12 @@ async function submitPasswordSetup(){
     // response returns the updated user object directly.
     if(result && result.id) setCurrentUser(result);
     setMsg("Password set ✓ You can use email + password from now on.", true);
+    const imgKind = profileImageStepKind();
     setTimeout(() => {
+      if(imgKind){ showProfileImageStep(imgKind); return; }
       const m = document.getElementById("pwSetupModal");
       if(m) m.remove();
-    }, 1200);
+    }, 1000);
   } catch(e) {
     console.error("Password setup failed:", e);
     const msg = (e && e.name === "AbortError")
@@ -18023,6 +18025,101 @@ async function submitPasswordSetup(){
     setMsg("Failed: " + msg);
     if(btn){ btn.disabled = false; btn.textContent = "Set Password"; }
   }
+}
+
+/* ===========================================================
+   FIRST-RUN PHOTO / LOGO STEP (shown right after a password is set)
+   - Individual agents (plan = individual): their photo or logo
+     → profiles.avatar_url (also editable later in User settings)
+   - Brokerage account owner (role = brokerage): the brokerage logo
+     → brokerages.logo_url (editable later in the Brokerage dashboard)
+   - Everyone else (brokerage agents, comp users, staff, admin): skipped
+   =========================================================== */
+function profileImageStepKind(){
+  const p = currentProfile || {};
+  if(p.role === "brokerage" && p.brokerage_id) return "brokerage";
+  if(p.role === "agent" && p.plan === "individual") return "agent";
+  return null;
+}
+let _firstRunImageFile = null;
+function showProfileImageStep(kind){
+  const modal = document.getElementById("pwSetupModal");
+  if(!modal) return;
+  _firstRunImageFile = null;
+  const isB = kind === "brokerage";
+  const title = isB ? "Add your brokerage logo" : "Add your photo or logo";
+  const blurb = isB
+    ? "Your logo appears on your brokerage dashboard and your agents' dashboards."
+    : "Your photo or logo appears on your dashboard and your estimates.";
+  const later = isB ? "You can add or change it anytime in your Brokerage dashboard." : "You can add or change it anytime in User settings.";
+  const card = modal.firstElementChild;
+  card.innerHTML = `
+    <div style="font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#a8853f;margin-bottom:8px;text-align:center;">One last thing</div>
+    <div style="font-size:18px;font-weight:800;color:#d4af6a;text-align:center;margin-bottom:10px;letter-spacing:.04em;">${title}</div>
+    <div style="font-size:13px;color:#cfcfcf;line-height:1.55;margin-bottom:18px;text-align:center;">${blurb}</div>
+    <label for="frImageInput" id="frImagePreview" style="display:flex;align-items:center;justify-content:center;
+           width:120px;height:120px;margin:0 auto 14px;border:1px dashed #a8853f;border-radius:${isB ? "12px" : "50%"};
+           background:#0a0a0a;color:#a8853f;font-size:11.5px;text-align:center;cursor:pointer;overflow:hidden;line-height:1.4;padding:6px;">
+      Click to choose<br>JPG, PNG or WebP
+    </label>
+    <input type="file" id="frImageInput" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="onFirstRunImagePicked(event)">
+    <button type="button" id="frImageSave" disabled onclick="saveFirstRunImage('${kind}')"
+      style="width:100%;padding:12px;background:linear-gradient(180deg,#d4af6a,#a8853f);color:#0a0a0a;border:none;border-radius:6px;
+             font-size:12.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;opacity:.5;">
+      Save &amp; continue
+    </button>
+    <button type="button" onclick="skipFirstRunImage()"
+      style="width:100%;margin-top:8px;padding:11px;background:transparent;color:#cfcfcf;border:1px solid #3a3a42;border-radius:6px;
+             font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;">
+      Skip for now
+    </button>
+    <div id="frImageMsg" style="margin-top:10px;font-size:12px;min-height:18px;text-align:center;color:#ff9090;"></div>
+    <div style="margin-top:6px;font-size:11px;color:#888;text-align:center;line-height:1.55;">${later}</div>`;
+}
+function onFirstRunImagePicked(event){
+  const f = event.target.files && event.target.files[0];
+  const msg = document.getElementById("frImageMsg");
+  if(!f) return;
+  if(!/^image\/(jpeg|png|webp)$/i.test(f.type)){ msg.textContent = "Please choose a JPG, PNG or WebP image."; return; }
+  if(f.size > 15 * 1024 * 1024){ msg.textContent = "Image must be smaller than 15 MB."; return; }
+  msg.textContent = "";
+  _firstRunImageFile = f;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const pv = document.getElementById("frImagePreview");
+    if(pv) pv.innerHTML = '<img src="' + escapeHtmlAttr(e.target.result) + '" alt="" style="width:100%;height:100%;object-fit:contain;">';
+  };
+  reader.readAsDataURL(f);
+  const btn = document.getElementById("frImageSave");
+  if(btn){ btn.disabled = false; btn.style.opacity = "1"; }
+}
+async function saveFirstRunImage(kind){
+  const msg = document.getElementById("frImageMsg");
+  const btn = document.getElementById("frImageSave");
+  if(!_firstRunImageFile || !currentUser) return;
+  if(btn){ btn.disabled = true; btn.textContent = "Uploading…"; }
+  try {
+    const url = await uploadAvatar(currentUser.id, _firstRunImageFile);
+    if(kind === "brokerage"){
+      await dbUpdate("brokerages", { id: currentProfile.brokerage_id }, { logo_url: url }, { prefer: "return=minimal" });
+    } else {
+      await dbUpdate("profiles", { id: currentUser.id }, { avatar_url: url }, { prefer: "return=minimal" });
+      currentProfile.avatar_url = url;
+      try { saveCachedProfile(currentProfile); } catch(e){}
+      try { renderUserIdentity(); } catch(e){}
+    }
+    const m = document.getElementById("pwSetupModal");
+    if(m) m.remove();
+    flash(kind === "brokerage" ? "Logo saved ✓" : "Photo saved ✓");
+  } catch(e){
+    console.error("First-run image upload failed:", e);
+    if(msg){ msg.style.color = "#ff9090"; msg.textContent = (e && e.message) || "Upload failed. Try again or skip for now."; }
+    if(btn){ btn.disabled = false; btn.textContent = "Save & continue"; }
+  }
+}
+function skipFirstRunImage(){
+  const m = document.getElementById("pwSetupModal");
+  if(m) m.remove();
 }
 
 function dismissPasswordSetup(){
@@ -18808,7 +18905,7 @@ function renderUserForm(existing){
     <div style="margin-top:18px;padding:14px;background:#0a0a0e;border:1px solid var(--line);border-radius:8px;">
       <div style="font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold-bright);font-weight:700;margin-bottom:6px;">Features Granted</div>
       <div style="font-size:10.5px;color:var(--muted);margin-bottom:12px;line-height:1.5;">
-        Every user gets the <b style="color:var(--ink);">Estimator</b>. Agents also get <b style="color:var(--ink);">Submit-for-Review</b> automatically. Admins get everything. Use the toggles below to grant extra tools.
+        Every user gets the <b style="color:var(--ink);">Detailed renovation estimator</b>. Agents also get <b style="color:var(--ink);">Submit-for-Review</b> automatically. Admins get everything. Use the toggles below to grant extra tools.
       </div>
       <div id="uf_features" class="feat-groups">
         ${renderFeatureCheckboxes(features, u.role)}
@@ -18840,7 +18937,7 @@ function renderUserForm(existing){
    the form and left-to-right in the users-table summary column. */
 const FEATURE_GROUPS = [
   {
-    group: "Estimator tools",
+    group: "Detailed renovation estimator tools",
     icon: "ti-ruler-measure",
     features: [
       { key: "trim_calculator", label: "Trim Calculator", shortLabel: "Trim",
@@ -18906,7 +19003,7 @@ function _featureSummaryHtml(u){
     .filter(f => f.key !== "pricing_editor" && (f.defaultOn ? features[f.key] !== false : features[f.key]));
   /* Every non-admin gets Estimator; agents also get Submit-for-Review.
      Show those as fixed leading pills so the row is self-explanatory. */
-  const leading = [`<span class="feat-pill">Estimator</span>`];
+  const leading = [`<span class="feat-pill">Detailed renovation estimator</span>`];
   if(u.role === "agent") leading.push(`<span class="feat-pill">Submit review</span>`);
   if(enabled.length === 0){
     return leading.join("");
@@ -19950,7 +20047,7 @@ async function notifyAgentOfReopen({ row, note }){
     `Property: ${propAddr}\n\n` +
     (note ? `Note from Reno to Sold:\n"${note}"\n\n` : "") +
     `Sign in to your dashboard, open the estimate, make the changes, and click Submit for Review.\n\n` +
-    `Thanks,\nMohamed Nada\nRENO TO SOLD INC.\n416-832-3779`
+    `Thanks,\nMohamed Nada\nRENO TO SOLD INC.\n647-500-0270`
   );
 
   try {
@@ -21269,14 +21366,14 @@ function dashboardCards(){
        - the user has the feature flag, OR
        - the user is admin and the card is adminOnly. */
   const allCards = [
-    { key: "estimator", title: "Estimator", icon: "ti-calculator",
-      desc: "Build a renovation estimate. Save, print, email, or submit for review.",
-      action: () => navigateTo("estimator") },
-
     { key: "packages", requireFeature: "prelisting_packages",
       title: "Pre-listing packages", icon: "ti-home-check",
       desc: "Pick a renovation package for a listing and get an instant, guaranteed price range. Send it to your seller or book a walkthrough.",
       action: () => navigateTo("packages") },
+
+    { key: "estimator", title: "Detailed renovation estimator", icon: "ti-calculator",
+      desc: "Build a detailed, line-by-line renovation estimate. Save, print, email, or submit for review.",
+      action: () => navigateTo("estimator") },
 
     { key: "trim", requireFeature: "trim_calculator",
       title: "Trim calculator", icon: "ti-ruler-measure",
@@ -25206,8 +25303,10 @@ function applyFeatureGates(){
     adminEls.forEach(el => { el.style.display = userIsAdmin ? "" : "none"; });
     // Also hide the floating "Internal Mode" lock icon for non-admins.
     // Internal Mode is a legacy admin-only gate; only admins ever need it.
-    const internalLockBtn = document.getElementById("openPinModalBtn");
-    if(internalLockBtn) internalLockBtn.style.display = userIsAdmin ? "" : "none";
+    ["openPinModalBtn","lockBtn"].forEach(id => {
+      const b = document.getElementById(id);
+      if(b) b.style.display = userIsAdmin ? "" : "none";
+    });
     /* CRITICAL: also re-run the agent-discount UI injector here.
        applyFeatureGates() is the canonical "role just resolved" hook,
        so this is the right place to inject the agent panel. Without
