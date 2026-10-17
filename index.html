@@ -4293,9 +4293,19 @@
 
       <div class="sb-section">Workspace</div>
 
-      <button class="sb-item" data-route="brokerage" data-feature="brokerage_admin" data-label="Agents & seats" onclick="navigateTo('brokerage')" style="display:none;">
+      <button class="sb-item" data-route="brk-agents" data-feature="brokerage_admin" data-label="Agents" onclick="navigateTo('brk-agents')" style="display:none;">
         <i class="ti ti-users-group" aria-hidden="true"></i>
-        <span class="sb-item-label">Agents &amp; seats</span>
+        <span class="sb-item-label">Agents</span>
+      </button>
+
+      <button class="sb-item" data-route="brk-seats" data-feature="brokerage_admin" data-label="Seats & billing" onclick="navigateTo('brk-seats')" style="display:none;">
+        <i class="ti ti-credit-card" aria-hidden="true"></i>
+        <span class="sb-item-label">Seats &amp; billing</span>
+      </button>
+
+      <button class="sb-item" data-route="brk-branding" data-feature="brokerage_admin" data-label="Branding" onclick="navigateTo('brk-branding')" style="display:none;">
+        <i class="ti ti-photo" aria-hidden="true"></i>
+        <span class="sb-item-label">Branding</span>
       </button>
 
       <button class="sb-item" data-route="packages" data-feature="prelisting_packages" data-label="Pre-listing packages" onclick="navigateTo('packages')">
@@ -4408,7 +4418,9 @@
            estimate to attach the LF values to. -->
       <!-- Pre-Listing Packages — filled by packages/prelisting.js -->
       <div id="view-packages" class="view"></div>
-      <div id="view-brokerage" class="view"></div>
+      <div id="view-brk-agents" class="view"></div>
+      <div id="view-brk-seats" class="view"></div>
+      <div id="view-brk-branding" class="view"></div>
 
       <div id="view-trim" class="view">
         <div id="tcLinkBanner" style="display:none;background:linear-gradient(135deg,rgba(212,175,106,.14),rgba(212,175,106,.05));border:1px solid rgba(212,175,106,.35);border-radius:12px;padding:14px 18px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;">
@@ -15920,7 +15932,7 @@ const OFFICE_EMAIL = "renotosold@gmail.com";
 const OFFICE_COMPANY = "Reno to Sold Inc.";
 
 /* ---------- Supabase cross-device sync ---------- */
-window.RTS_BUILD = "2026-10-18-v7-brokerage-dashboard";
+window.RTS_BUILD = "2026-10-19-v8-brokerage-ux";
 console.log("[build] " + window.RTS_BUILD);
 const SUPABASE_URL = "https://icrnvnmvcdpmhnjorefs.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imljcm52bm12Y2RwbWhuam9yZWZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2ODQwMDgsImV4cCI6MjA5NDI2MDAwOH0.YoeBndWsky8vAW6mLeMziPeH2j2C6c_3VdAvOG_i0kA";
@@ -15999,10 +16011,7 @@ function canUse(feature){
   // Brokerage account owner: brokerage tools always; agent tools only
   // if they've assigned themselves a seat.
   if(feature === "brokerage_admin") return currentProfile.role === "brokerage" && !!currentProfile.brokerage_id;
-  if(feature === "billing"){
-    if(currentProfile.role === "brokerage") return !!currentProfile.brokerage_id;
-    return currentProfile.role === "agent" && currentProfile.plan === "individual";
-  }
+  if(feature === "billing") return currentProfile.role === "agent" && currentProfile.plan === "individual";
   if(currentProfile.role === "brokerage" && !currentProfile.uses_seat) return false;
   if(feature === "submit_for_review") return currentProfile.role === "agent" || currentProfile.role === "brokerage";
   // Admin has everything else
@@ -19265,12 +19274,20 @@ function renderUserSettingsForm(){
   const role = (p.role || "").trim();
   const isAgentRole = role === "agent";
   const brokerage = (p.brokerage || "").trim();
+  // Agents in a brokerage that uses one logo for everyone can't upload their own
+  const brkLogoLocked = isAgentRole && !!p.brokerage_id && !(window._myBrokerage && window._myBrokerage.agent_logo_mode === "own");
   const body = document.getElementById("userSettingsBody");
   body.innerHTML = `
     <!-- Photo section — hidden for admins/staff since their avatar
          doesn't appear on any client-facing surface right now. Agents
          see this because their headshot goes on every PDF estimate. -->
-    ${isAgentRole ? `
+    ${brkLogoLocked ? `
+      <div class="us-section">
+        <div class="us-section-head">Logo</div>
+        <div style="font-size:12.5px;color:var(--muted);line-height:1.5;">Your brokerage${brokerage ? " (" + escapeHtml(brokerage) + ")" : ""} provides the logo for your account.</div>
+      </div>
+    ` : ""}
+    ${isAgentRole && !brkLogoLocked ? `
       <div class="us-section">
         <div class="us-section-head">Your headshot</div>
         <div class="avatar-uploader">
@@ -21122,7 +21139,7 @@ async function confirmSubmissionDecision(){
 /* PRE-LISTING PACKAGES — the whole tool lives in packages/prelisting.js
    (loaded at the bottom of this file). Only small hooks stay here. */
 
-const VALID_ROUTES = ["dashboard", "estimator", "my-submissions", "bids", "invoicing", "tracker", "trim", "materials", "packages", "brokerage"];
+const VALID_ROUTES = ["dashboard", "estimator", "my-submissions", "bids", "invoicing", "tracker", "trim", "materials", "packages", "brokerage", "brk-agents", "brk-seats", "brk-branding"];
 const DEFAULT_ROUTE = "dashboard";
 /* Tool routes — these use existing overlay/modal code rather than
    .view containers. The router opens/closes them via helper hooks
@@ -21195,7 +21212,8 @@ function renderRoute(){
     history.replaceState({route:"dashboard"}, "", "#/dashboard");
     return renderRoute();
   }
-  if(currentProfile && ((route === "brokerage" && !canUse("brokerage_admin")) ||
+  if(route === "brokerage"){ history.replaceState({route:"brk-agents"}, "", "#/brk-agents"); return renderRoute(); }
+  if(currentProfile && ((/^brk-/.test(route) && !canUse("brokerage_admin")) ||
                         (route === "estimator" && !canUse("estimator")))){
     history.replaceState({route:"dashboard"}, "", "#/dashboard");
     return renderRoute();
@@ -21230,8 +21248,8 @@ function renderRoute(){
     renderDashboard();
   } else if(route === "my-submissions"){
     renderMySubmissions();
-  } else if(route === "brokerage"){
-    try { renderBrokeragePage(); } catch(e){ console.error("route brokerage:", e); }
+  } else if(/^brk-/.test(route)){
+    try { renderBrokeragePage(route.slice(4)); } catch(e){ console.error("route " + route + ":", e); }
   } else if(route === "packages"){
     // Tool lives in packages/prelisting.js (see loader at the bottom of this file)
     if(typeof PL !== "undefined"){ try { PL.open(); } catch(e){ console.error("route packages:", e); } }
@@ -21348,7 +21366,7 @@ function renderUserIdentity(){
   // Load the user's brokerage (name/logo) once, then re-render
   if(currentProfile.brokerage_id && (!window._myBrokerage || window._myBrokerage.id !== currentProfile.brokerage_id) && !window._myBrokerageLoading){
     window._myBrokerageLoading = true;
-    restFetch("brokerages?select=id,name,logo_url,status,seat_limit,tier,billing_interval,trial_ends_at,current_period_end,cancel_at_period_end&id=eq." + encodeURIComponent(currentProfile.brokerage_id))
+    restFetch("brokerages?select=id,name,logo_url,agent_logo_mode,status,seat_limit,seats_purchased,tier,billing_interval,trial_ends_at,current_period_end,cancel_at_period_end&id=eq." + encodeURIComponent(currentProfile.brokerage_id))
       .then(rows => { window._myBrokerage = (rows && rows[0]) || null; })
       .catch(e => console.warn("brokerage load failed", e))
       .finally(() => { window._myBrokerageLoading = false; if(window._myBrokerage) { try { renderUserIdentity(); } catch(e){} } });
@@ -21386,7 +21404,9 @@ function renderUserIdentity(){
   // image fallback; just hide the avatar wrapper.
   if(avatarWrap && avatarImg){
     const brkLogo = window._myBrokerage && window._myBrokerage.logo_url ? window._myBrokerage.logo_url : "";
+    const inBrk = role === "agent" && currentProfile.brokerage_id && window._myBrokerage;
     const url = role === "brokerage" ? (brkLogo || currentProfile.avatar_url || "")
+              : inBrk ? ((window._myBrokerage.agent_logo_mode === "own" && currentProfile.avatar_url) ? currentProfile.avatar_url : brkLogo)
               : (isAgentRole && currentProfile.avatar_url ? currentProfile.avatar_url : "");
     if(url){
       avatarImg.src = url;
@@ -21557,7 +21577,12 @@ function showCompleteProfileStep(){
       <button type="submit" id="cpSave" style="margin-top:6px;padding:12px;background:linear-gradient(180deg,#d4af6a,#a8853f);color:#0a0a0a;border:none;border-radius:6px;font-size:12.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;">Save &amp; continue</button>
     </form>
     <div id="cpMsg" style="margin-top:10px;font-size:12px;min-height:18px;text-align:center;color:#ff9090;"></div>
-    <div style="font-size:11px;color:#888;text-align:center;">You can add a photo anytime in User settings.</div>`;
+    <div id="cpPhotoNote" style="font-size:11px;color:#888;text-align:center;"></div>`;
+  // Only mention adding a photo if the brokerage lets agents use their own logo
+  restFetch("brokerages?select=agent_logo_mode,name&id=eq." + encodeURIComponent(p.brokerage_id || ""))
+    .then(r => { const n = document.getElementById("cpPhotoNote");
+                 if(n && r && r[0] && r[0].agent_logo_mode === "own") n.textContent = "You can add your own photo or logo anytime in User settings."; })
+    .catch(() => {});
 }
 async function saveCompleteProfile(){
   const first = (document.getElementById("cpFirst").value || "").trim();
@@ -21582,12 +21607,14 @@ async function saveCompleteProfile(){
   }
 }
 
-/* ---------- Brokerage dashboard (#/brokerage) ---------- */
+
+/* ---------- Brokerage pages: #/brk-agents, #/brk-seats, #/brk-branding ---------- */
 const BRK = { brokerage: null, roster: [], invites: [], seatsUsed: 0, preview: null };
 const BRK_TIER_LABEL = { starter: "Starter (5–49 seats)", growth: "Growth (50–99 seats)", enterprise: "Enterprise (100–249 seats)", network: "Network (250+ seats)" };
 const BRK_TIER_RATE  = { starter: 29.99, growth: 24.99, enterprise: 19.99, network: 16.99 };
 const brkTierFor = n => n >= 250 ? "network" : n >= 100 ? "enterprise" : n >= 50 ? "growth" : "starter";
 const brkDate = d => d ? new Date(d).toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric" }) : "—";
+const brkMoney = n => "$" + (Math.round(Math.abs(n) * 100) / 100).toLocaleString("en-CA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 function brkCss(){
   if(document.getElementById("brkStyles")) return;
@@ -21598,16 +21625,16 @@ function brkCss(){
     .brk-h{font-size:15px;font-weight:800;color:var(--gold-bright,#d4af6a);margin:0 0 4px;letter-spacing:.02em;}
     .brk-sub{font-size:12.5px;color:var(--muted,#9a958a);margin:0 0 14px;line-height:1.5;}
     .brk-top{display:flex;gap:18px;align-items:center;flex-wrap:wrap;}
-    .brk-logo{width:64px;height:64px;border-radius:10px;border:1px solid var(--line-strong,#2e2e34);background:#0a0a0a;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#a8853f;font-weight:800;font-size:22px;flex:none;}
+    .brk-logo{width:56px;height:56px;border-radius:10px;border:1px solid var(--line-strong,#2e2e34);background:#0a0a0a;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#a8853f;font-weight:800;font-size:20px;flex:none;}
     .brk-logo img{width:100%;height:100%;object-fit:contain;}
     .brk-pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.04em;border:1px solid;}
-    .brk-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-top:16px;}
+    .brk-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-top:4px;}
     .brk-stat{background:#0d0d10;border:1px solid var(--line-strong,#2e2e34);border-radius:10px;padding:12px 14px;}
     .brk-stat b{display:block;font-size:20px;color:var(--ink,#f5f1e6);margin-top:2px;}
     .brk-stat span{font-size:11px;color:var(--muted,#9a958a);text-transform:uppercase;letter-spacing:.08em;}
     .brk-bar{height:6px;background:#26262b;border-radius:4px;overflow:hidden;margin-top:8px;}
     .brk-bar i{display:block;height:100%;background:linear-gradient(90deg,#a8853f,#d4af6a);}
-    .brk-btn{background:linear-gradient(180deg,#d4af6a,#a8853f);color:#0a0a0a;border:none;border-radius:7px;padding:10px 16px;font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;}
+    .brk-btn{background:linear-gradient(180deg,#d4af6a,#a8853f);color:#0a0a0a;border:none;border-radius:7px;padding:10px 16px;font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;font-family:inherit;}
     .brk-btn.ghost{background:transparent;color:var(--ink,#f5f1e6);border:1px solid var(--line-strong,#3a3a42);}
     .brk-btn.small{padding:6px 10px;font-size:10.5px;}
     .brk-btn:disabled{opacity:.45;cursor:not-allowed;}
@@ -21618,7 +21645,24 @@ function brkCss(){
     .brk-table td .em{color:var(--muted,#9a958a);font-size:11.5px;}
     .brk-prev{margin-top:12px;font-size:12.5px;line-height:1.7;}
     .brk-prev .ok{color:#5fce86}.brk-prev .bad{color:#ff9090}.brk-prev .skip{color:#9a958a}
-    .brk-note{font-size:12px;color:#e8c989;background:rgba(212,175,106,.08);border:1px solid rgba(212,175,106,.25);border-radius:8px;padding:10px 12px;margin-top:12px;line-height:1.5;}
+    .brk-note{font-size:12px;color:#e8c989;background:rgba(212,175,106,.08);border:1px solid rgba(212,175,106,.25);border-radius:8px;padding:10px 12px;margin-top:12px;line-height:1.55;}
+    .brk-radio{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line-strong,#2e2e34);border-radius:8px;cursor:pointer;margin-top:8px;font-size:13px;color:var(--ink,#f5f1e6);line-height:1.45;}
+    .brk-radio input{margin-top:3px;accent-color:#d4af6a;}
+    .brk-radio, .brk-radio *{text-transform:none !important;letter-spacing:normal !important;}
+    .brk-radio > span{font-weight:600;font-size:13px;}
+    .brk-radio small{font-weight:400;}
+    .brk-radio small{display:block;color:var(--muted,#9a958a);font-size:11.5px;}
+    .brk-tabs{display:flex;gap:6px;flex-wrap:wrap;}
+    .brk-tab{padding:8px 14px;border-radius:999px;border:1px solid var(--line-strong,#2e2e34);color:var(--muted,#9a958a);font-size:12px;font-weight:700;cursor:pointer;background:transparent;font-family:inherit;}
+    .brk-tab.on{color:#0a0a0a;background:linear-gradient(180deg,#d4af6a,#a8853f);border-color:transparent;}
+    .brk-modal{position:fixed;inset:0;z-index:9990;background:rgba(10,10,10,.82);display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px);}
+    .brk-modal > div{max-width:480px;width:100%;background:linear-gradient(180deg,#1a1408,#0f0c06);border:1px solid #c98e2a;border-radius:12px;padding:26px 26px 22px;color:#e8c989;font-family:inherit;}
+    .brk-num{display:flex;align-items:center;gap:8px;justify-content:center;margin:14px 0 6px;}
+    .brk-num input{width:100px;text-align:center;font-size:22px;font-weight:800;padding:8px;background:#0a0a0a;border:1px solid #3a3a42;color:#f5f1e6;border-radius:8px;}
+    .brk-num button{width:40px;height:40px;border-radius:8px;border:1px solid #3a3a42;background:#0a0a0a;color:#e8c989;font-size:20px;cursor:pointer;}
+    .brk-sum{width:100%;font-size:13px;color:#cfcfcf;border-collapse:collapse;margin-top:10px;}
+    .brk-sum td{padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06);}
+    .brk-sum td:last-child{text-align:right;color:#f5f1e6;font-weight:700;}
     @media (max-width:700px){ .brk-table .hide-sm{display:none;} }
   `;
   document.head.appendChild(st);
@@ -21640,30 +21684,49 @@ async function brkLoad(){
   window._myBrokerage = BRK.brokerage;
 }
 
-async function renderBrokeragePage(){
+function brkHeader(active){
+  const b = BRK.brokerage;
+  const st = {
+    trialing: ['Free trial · ends ' + brkDate(b.trial_ends_at), '#d4af6a'],
+    active: [b.cancel_at_period_end ? 'Cancels ' + brkDate(b.current_period_end) : 'Active · renews ' + brkDate(b.current_period_end), b.cancel_at_period_end ? '#ff9090' : '#5fce86'],
+    past_due: ['Payment issue — update your card', '#ff9090'],
+    unpaid: ['Unpaid', '#ff9090'], canceled: ['Cancelled', '#ff9090'], incomplete: ['Setting up', '#9a958a'],
+  }[b.status] || [b.status, '#9a958a'];
+  const tab = (key, label) => `<button class="brk-tab ${active === key ? "on" : ""}" onclick="navigateTo('brk-${key}')">${label}</button>`;
+  return `
+    <div class="brk-card" style="padding:16px 20px;">
+      <div class="brk-top">
+        <div class="brk-logo">${b.logo_url ? `<img src="${escapeHtmlAttr(b.logo_url)}" alt="">` : escapeHtml((b.name || "?").charAt(0))}</div>
+        <div style="flex:1;min-width:200px;">
+          <div class="brk-h" style="font-size:18px;">${escapeHtml(b.name)}</div>
+          <span class="brk-pill" style="color:${st[1]};border-color:${st[1]}55;">${escapeHtml(st[0])}</span>
+        </div>
+        <div class="brk-tabs">${tab("agents", "Agents")}${tab("seats", "Seats &amp; billing")}${tab("branding", "Branding")}</div>
+      </div>
+      ${b.status === "past_due" ? `<div class="brk-note" style="color:#ff9090;border-color:#6b2a2a;background:rgba(255,80,80,.06);">We couldn't charge your card. Your agents keep access while we retry — please <a href="javascript:openBillingPortal()" style="color:#ffb0b0;">update your payment method</a>.</div>` : ""}
+    </div>`;
+}
+
+async function renderBrokeragePage(section){
+  section = section || "agents";
   brkCss();
-  const v = document.getElementById("view-brokerage");
+  const v = document.getElementById("view-brk-" + section);
   if(!v) return;
   if(!BRK.brokerage) v.innerHTML = '<div class="brk-wrap"><div class="brk-card"><p class="brk-sub">Loading your brokerage…</p></div></div>';
   try { await brkLoad(); } catch(e){
     v.innerHTML = '<div class="brk-wrap"><div class="brk-card"><p class="brk-sub">Couldn\'t load your brokerage: ' + escapeHtml(e.message || String(e)) + '</p></div></div>';
     return;
   }
-  const b = BRK.brokerage;
-  const trial = b.status === "trialing";
-  const free = Math.max(0, b.seat_limit - BRK.seatsUsed);
-  const pct = b.seat_limit ? Math.min(100, Math.round(BRK.seatsUsed / b.seat_limit * 100)) : 0;
-  const statusPill = {
-    trialing: ['Free trial · ends ' + brkDate(b.trial_ends_at), '#d4af6a'],
-    active: [b.cancel_at_period_end ? 'Cancels ' + brkDate(b.current_period_end) : 'Active · renews ' + brkDate(b.current_period_end), b.cancel_at_period_end ? '#ff9090' : '#5fce86'],
-    past_due: ['Payment issue — update your card', '#ff9090'],
-    unpaid: ['Unpaid', '#ff9090'], canceled: ['Cancelled', '#ff9090'], incomplete: ['Setting up', '#9a958a'],
-  }[b.status] || [b.status, '#9a958a'];
-  const purchased = b.seats_purchased || b.seat_limit;
-  const owner = currentProfile;
+  const body = section === "seats" ? brkSeatsHtml() : section === "branding" ? brkBrandingHtml() : brkAgentsHtml();
+  v.innerHTML = `<div class="brk-wrap">${brkHeader(section)}${body}</div>`;
+}
 
+/* ----- Agents page ----- */
+function brkAgentsHtml(){
+  const b = BRK.brokerage;
+  const free = Math.max(0, b.seat_limit - BRK.seatsUsed);
   const rosterRows = BRK.roster.map((a, idx) => {
-    const pending = a.status === "setup_pending" && !a.last_sign_in_at;
+    const pending = !a.last_sign_in_at;
     const st = pending ? '<span class="brk-pill" style="color:#d4af6a;border-color:#6b5524;">Invited</span>'
                        : '<span class="brk-pill" style="color:#5fce86;border-color:#2e5a3d;">Active</span>';
     return `<tr>
@@ -21673,54 +21736,35 @@ async function renderBrokeragePage(){
       <td class="hide-sm">${brkDate(a.last_estimate_at)}</td>
       <td class="hide-sm">${a.last_sign_in_at ? brkDate(a.last_sign_in_at) : "Never"}</td>
       <td style="text-align:right;white-space:nowrap;">
-        ${pending ? `<button class="brk-btn ghost small" onclick="brkResend('${a.user_id}')">Resend</button> ` : ""}
+        ${pending ? `<button class="brk-btn ghost small" onclick="brkResend(${idx})">Resend</button> ` : ""}
         <button class="brk-btn ghost small" onclick="brkRemove(${idx})">Remove</button>
       </td></tr>`;
   }).join("");
-  const inviteRows = BRK.invites.map(i => `<tr>
+  const inviteRows = BRK.invites.map((i, idx) => `<tr>
       <td><div>${escapeHtml(i.placeholder_name || "—")}</div><div class="em">${escapeHtml(i.email)}</div></td>
       <td><span class="brk-pill" style="color:#9ec5ff;border-color:#2c4a6e;">Awaiting acceptance</span></td>
       <td class="hide-sm" colspan="3" style="color:var(--muted);font-size:11.5px;">Has their own plan · invite expires ${brkDate(i.expires_at)}</td>
-      <td style="text-align:right;"><button class="brk-btn ghost small" onclick="brkCancelInvite('${i.id}')">Cancel</button></td></tr>`).join("");
-
-  v.innerHTML = `
-  <div class="brk-wrap">
-    <div class="brk-card">
-      <div class="brk-top">
-        <div class="brk-logo">${b.logo_url ? `<img src="${escapeHtmlAttr(b.logo_url)}" alt="">` : escapeHtml((b.name || "?").charAt(0))}</div>
-        <div style="flex:1;min-width:200px;">
-          <div class="brk-h" style="font-size:19px;">${escapeHtml(b.name)}</div>
-          <div class="brk-sub" style="margin:4px 0 0;">${escapeHtml(BRK_TIER_LABEL[b.tier] || "")} · billed ${b.billing_interval === "year" ? "yearly" : "monthly"}
-            &nbsp; <span class="brk-pill" style="color:${statusPill[1]};border-color:${statusPill[1]}55;">${escapeHtml(statusPill[0])}</span></div>
-        </div>
-        <button class="brk-btn ghost" onclick="openBillingPortal()">Manage billing</button>
-      </div>
-      <div class="brk-stats">
-        <div class="brk-stat"><span>Seats used</span><b>${BRK.seatsUsed} of ${b.seat_limit}</b><div class="brk-bar"><i style="width:${pct}%"></i></div></div>
-        <div class="brk-stat"><span>Open seats</span><b>${free}</b></div>
-        <div class="brk-stat"><span>Price per seat</span><b>$${(BRK_TIER_RATE[b.tier] || 0).toFixed(2)}<small style="font-size:11px;color:var(--muted);">/${b.billing_interval === "year" ? "mo, billed yearly" : "mo"}</small></b></div>
-        <div class="brk-stat"><span>Your own seat</span><b style="font-size:14px;margin-top:6px;">${owner.uses_seat ? "Using a seat" : "Not using a seat"}</b>
-          <button class="brk-btn ghost small" style="margin-top:8px;" onclick="brkSelfSeat(${owner.uses_seat ? "false" : "true"})">${owner.uses_seat ? "Release my seat" : "Use a seat myself"}</button></div>
-      </div>
-      ${trial ? `<div class="brk-note">You're on a free trial — you can invite up to <b>${b.seat_limit}</b> agents now. All <b>${purchased}</b> of your seats unlock when the trial ends on <b>${brkDate(b.trial_ends_at)}</b>.</div>` : ""}
-      ${b.status === "past_due" ? `<div class="brk-note" style="color:#ff9090;border-color:#6b2a2a;background:rgba(255,80,80,.06);">We couldn't charge your card. Your agents keep access while we retry — please <a href="javascript:openBillingPortal()" style="color:#ffb0b0;">update your payment method</a>.</div>` : ""}
-      <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-        <button class="brk-btn ghost" onclick="brkAddSeats()">+ Add seats</button>
-        <span style="font-size:11.5px;color:var(--muted);">Need fewer seats? Remove agents below, then contact us before your renewal date.</span>
-      </div>
-    </div>
-
+      <td style="text-align:right;"><button class="brk-btn ghost small" onclick="brkCancelInvite(${idx})">Cancel</button></td></tr>`).join("");
+  const mode = b.agent_logo_mode === "own" ? "own" : "brokerage";
+  return `
     <div class="brk-card">
       <div class="brk-h">Invite agents</div>
-      <p class="brk-sub">Paste your agents' emails — one per line, separated by commas, a column from Excel, or a list copied from Outlook/Gmail (e.g. <i>Jane Smith &lt;jane@xyz.ca&gt;</i>). Each agent gets an email to set their password.</p>
+      <p class="brk-sub"><b style="color:var(--ink);">${free}</b> open seat${free === 1 ? "" : "s"} (${BRK.seatsUsed} of ${b.seat_limit} in use).
+        Paste emails — one per line, separated by commas, a column from Excel, or a list copied from Outlook/Gmail (e.g. <i>Jane Smith &lt;jane@xyz.ca&gt;</i>). Each agent gets an email to set their password.
+        ${b.status === "trialing" ? `<br><span style="color:#d4af6a;">Free trial: up to ${b.seat_limit} agents now — all ${b.seats_purchased || b.seat_limit} seats unlock on ${brkDate(b.trial_ends_at)}.</span>` : ""}</p>
       <textarea id="brkPaste" class="brk-ta" placeholder="jane@xyzrealty.ca&#10;John Smith <john@xyzrealty.ca>&#10;…" oninput="BRK.preview=null;document.getElementById('brkPrev').innerHTML='';document.getElementById('brkSendBtn').style.display='none';"></textarea>
-      <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;">
+      <div style="margin-top:12px;font-size:12px;color:var(--muted);font-weight:700;letter-spacing:.06em;text-transform:uppercase;">Agent logos</div>
+      <label class="brk-radio"><input type="radio" name="brkLogoMode" value="brokerage" ${mode === "brokerage" ? "checked" : ""}>
+        <span>Agents use our brokerage logo <small>Recommended. Agents can't upload their own logo.</small></span></label>
+      <label class="brk-radio"><input type="radio" name="brkLogoMode" value="own" ${mode === "own" ? "checked" : ""}>
+        <span>Agents may upload their own photo or logo <small>Our logo is used until they add one.</small></span></label>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px;">This applies to all your agents. You can change it anytime under Branding.</div>
+      <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">
         <button class="brk-btn ghost" onclick="brkReview()">Review list</button>
         <button class="brk-btn" id="brkSendBtn" style="display:none;" onclick="brkSend()">Send invites</button>
       </div>
       <div id="brkPrev" class="brk-prev"></div>
     </div>
-
     <div class="brk-card">
       <div class="brk-h">Your agents</div>
       <p class="brk-sub">Activity only — estimate contents stay private to each agent.</p>
@@ -21728,9 +21772,58 @@ async function renderBrokeragePage(){
       <div style="overflow-x:auto;"><table class="brk-table">
         <thead><tr><th>Agent</th><th>Status</th><th class="hide-sm">Estimates</th><th class="hide-sm">Last estimate</th><th class="hide-sm">Last sign-in</th><th></th></tr></thead>
         <tbody>${rosterRows}${inviteRows}</tbody></table></div>` : `<p class="brk-sub" style="margin:0;">No agents yet — invite your first agents above.</p>`}
-    </div>
+    </div>`;
+}
 
-    <div class="brk-card" id="brkBranding">
+/* ----- Seats & billing page ----- */
+function brkSeatsHtml(){
+  const b = BRK.brokerage;
+  const trial = b.status === "trialing";
+  const purchased = b.seats_purchased || b.seat_limit;
+  const per = BRK_TIER_RATE[b.tier] || BRK_TIER_RATE[brkTierFor(purchased)];
+  const yearly = b.billing_interval === "year";
+  const recurring = purchased * (yearly ? per * 10 : per);
+  const pct = b.seat_limit ? Math.min(100, Math.round(BRK.seatsUsed / b.seat_limit * 100)) : 0;
+  const owner = currentProfile;
+  return `
+    <div class="brk-card">
+      <div class="brk-h">Seats</div>
+      <p class="brk-sub">Seats are the number of agents your brokerage pays for. Agents, pending invites and your own seat (if you use one) count toward seats in use.</p>
+      <div class="brk-stats">
+        <div class="brk-stat"><span>Seats paid for</span><b>${purchased}</b></div>
+        <div class="brk-stat"><span>In use</span><b>${BRK.seatsUsed} of ${b.seat_limit}</b><div class="brk-bar"><i style="width:${pct}%"></i></div></div>
+        <div class="brk-stat"><span>Your plan</span><b style="font-size:15px;margin-top:5px;">${escapeHtml(BRK_TIER_LABEL[b.tier] || "")}</b></div>
+        <div class="brk-stat"><span>${yearly ? "Yearly" : "Monthly"} total</span><b>${brkMoney(recurring)}<small style="font-size:11px;color:var(--muted);"> + HST</small></b>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px;">${purchased} × ${brkMoney(yearly ? per * 10 : per)}/${yearly ? "yr" : "mo"}</div></div>
+      </div>
+      ${trial ? `<div class="brk-note">Free trial: up to <b>${b.seat_limit}</b> agents can be invited now. All <b>${purchased}</b> seats unlock and billing starts on <b>${brkDate(b.trial_ends_at)}</b>. Seat changes during the trial are free.</div>` : ""}
+      <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="brk-btn" onclick="brkChangeSeats(${purchased + 5})">+ Add seats</button>
+        <button class="brk-btn ghost" onclick="brkChangeSeats(${Math.max(5, BRK.seatsUsed, purchased - 5)})">− Reduce seats</button>
+      </div>
+      <div style="font-size:11.5px;color:var(--muted);margin-top:10px;line-height:1.55;">
+        You'll see the exact price change before anything is charged. Adding seats is billed today for the rest of your billing period.
+        Reducing seats takes effect right away and the unused time is credited to your next bill. You can reduce down to the number of seats in use (minimum 5).
+      </div>
+    </div>
+    <div class="brk-card">
+      <div class="brk-h">Your own seat</div>
+      <p class="brk-sub">${owner.uses_seat ? "You're using one of your seats, so you have the agent tools (pre-listing packages, detailed renovation estimator, trim calculator)." : "You're not using a seat. Use one if you'd like the agent tools yourself."}</p>
+      <button class="brk-btn ghost" onclick="brkSelfSeat(${owner.uses_seat ? "false" : "true"})">${owner.uses_seat ? "Release my seat" : "Use a seat myself"}</button>
+    </div>
+    <div class="brk-card">
+      <div class="brk-h">Billing</div>
+      <p class="brk-sub">Update your card, switch between monthly and yearly (yearly = 2 months free), download invoices, or cancel — in Stripe's secure billing portal.</p>
+      <button class="brk-btn ghost" onclick="openBillingPortal()">Manage billing</button>
+    </div>`;
+}
+
+/* ----- Branding page ----- */
+function brkBrandingHtml(){
+  const b = BRK.brokerage;
+  const mode = b.agent_logo_mode === "own" ? "own" : "brokerage";
+  return `
+    <div class="brk-card">
       <div class="brk-h">Brokerage logo</div>
       <p class="brk-sub">Shown on your dashboard and in your agents' dashboard header.</p>
       <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
@@ -21740,7 +21833,24 @@ async function renderBrokeragePage(){
         <span id="brkLogoMsg" style="font-size:12px;color:var(--muted);"></span>
       </div>
     </div>
-  </div>`;
+    <div class="brk-card">
+      <div class="brk-h">Agent logos</div>
+      <p class="brk-sub">Choose whether your agents show your brokerage logo or their own.</p>
+      <label class="brk-radio"><input type="radio" name="brkLogoMode2" value="brokerage" ${mode === "brokerage" ? "checked" : ""} onchange="brkSetLogoMode('brokerage')">
+        <span>Agents use our brokerage logo <small>Recommended. Agents can't upload their own logo.</small></span></label>
+      <label class="brk-radio"><input type="radio" name="brkLogoMode2" value="own" ${mode === "own" ? "checked" : ""} onchange="brkSetLogoMode('own')">
+        <span>Agents may upload their own photo or logo <small>Our logo is used until they add one.</small></span></label>
+      <span id="brkModeMsg" style="font-size:12px;color:var(--muted);display:block;margin-top:8px;"></span>
+    </div>`;
+}
+
+async function brkSetLogoMode(mode){
+  const msg = document.getElementById("brkModeMsg");
+  try {
+    await dbUpdate("brokerages", { id: BRK.brokerage.id }, { agent_logo_mode: mode }, { prefer: "return=minimal" });
+    BRK.brokerage.agent_logo_mode = mode;
+    if(msg){ msg.style.color = "#5fce86"; msg.textContent = "Saved ✓"; }
+  } catch(e){ if(msg){ msg.style.color = "#ff9090"; msg.textContent = (e && e.message) || "Couldn't save."; } }
 }
 
 function brkParseEmails(text){
@@ -21767,11 +21877,12 @@ function brkReview(){
     if(!valid.test(x.email)) invalid.push(x);
     else if(team.has(x.email)) skipped.push({ ...x, why: "already on your team" });
     else if(pend.has(x.email)) skipped.push({ ...x, why: "already invited" });
-    else if(currentUser && x.email === (currentUser.email || "").toLowerCase()) skipped.push({ ...x, why: "that's you — use “Use a seat myself”" });
+    else if(currentUser && x.email === (currentUser.email || "").toLowerCase()) skipped.push({ ...x, why: "that's you — use “Use a seat myself” under Seats & billing" });
     else ready.push(x);
   });
   const dups = list.filter(x => x.dup).length;
-  const free = Math.max(0, (BRK.brokerage ? BRK.brokerage.seat_limit : 0) - BRK.seatsUsed);
+  const b = BRK.brokerage;
+  const free = Math.max(0, b.seat_limit - BRK.seatsUsed);
   BRK.preview = ready;
   const prev = document.getElementById("brkPrev");
   const btn = document.getElementById("brkSendBtn");
@@ -21780,11 +21891,13 @@ function brkReview(){
   if(invalid.length) h += `<div class="bad">⚠ ${invalid.length} invalid: ${invalid.map(x => escapeHtml(x.email)).join(", ")}</div>`;
   if(skipped.length) h += `<div class="skip">• ${skipped.length} skipped: ${skipped.map(x => escapeHtml(x.email) + " (" + x.why + ")").join(", ")}</div>`;
   if(dups) h += `<div class="skip">• ${dups} duplicate${dups === 1 ? "" : "s"} removed</div>`;
-  const after = BRK.seatsUsed + ready.length;
-  h += `<div style="margin-top:6px;color:${after > BRK.brokerage.seat_limit ? "#ff9090" : "var(--ink)"};">${Math.min(after, BRK.brokerage.seat_limit)} of ${BRK.brokerage.seat_limit} seats will be used.</div>`;
+  const after = BRK.seatsUsed + Math.min(ready.length, free);
+  h += `<div style="margin-top:6px;color:var(--ink);">${after} of ${b.seat_limit} seats will be in use.</div>`;
   if(ready.length > free){
+    const short = ready.length - free;
     h += `<div class="brk-note" style="margin-top:8px;">You have <b>${free}</b> open seat${free === 1 ? "" : "s"} but ${ready.length} agents to invite.
-      ${BRK.brokerage.status === "trialing" ? "During the free trial you can invite up to " + BRK.brokerage.seat_limit + " agents." : `<a href="javascript:brkAddSeats(${ready.length - free})" style="color:#d4af6a;">Add ${ready.length - free} seat${ready.length - free === 1 ? "" : "s"}</a>, or only the first ${free} will be invited.`}</div>`;
+      ${b.status === "trialing" ? `During the free trial you can invite up to ${b.seat_limit} agents — the rest can be invited when the trial ends on ${brkDate(b.trial_ends_at)}.`
+        : `<a href="javascript:brkChangeSeats(${(b.seats_purchased || b.seat_limit) + short})" style="color:#d4af6a;">Add ${short} seat${short === 1 ? "" : "s"}</a> (you'll see the price first), or only the first ${free} will be invited.`}</div>`;
   }
   prev.innerHTML = h;
   const n = Math.min(ready.length, free);
@@ -21796,65 +21909,125 @@ async function brkSend(){
   const free = Math.max(0, BRK.brokerage.seat_limit - BRK.seatsUsed);
   const list = (BRK.preview || []).slice(0, free);
   if(!list.length) return;
+  const modeEl = document.querySelector('input[name="brkLogoMode"]:checked');
+  const mode = modeEl ? modeEl.value : "brokerage";
   btn.disabled = true; btn.textContent = "Sending…";
   try {
+    if(mode !== (BRK.brokerage.agent_logo_mode || "brokerage")){
+      await dbUpdate("brokerages", { id: BRK.brokerage.id }, { agent_logo_mode: mode }, { prefer: "return=minimal" });
+    }
     const r = await callFn("brokerage-admin", { action: "invite", emails: list.map(x => ({ email: x.email, name: x.name })) });
     const res = (r && r.results) || [];
     const sent = res.filter(x => x.status === "invited" || x.status === "invited_existing").length;
     const label = { invalid: "invalid email", already_on_team: "already on your team", already_invited: "already invited", not_eligible: "this account can't be added", other_brokerage: "belongs to another brokerage", no_seats: "no open seats", is_you: "that's you", error: "error" };
     const problems = res.filter(x => !(x.status === "invited" || x.status === "invited_existing"));
     const pendingAcc = res.filter(x => x.status === "invited_existing").length;
-    document.getElementById("brkPaste").value = "";
-    await renderBrokeragePage();
+    await renderBrokeragePage("agents");
     const prev = document.getElementById("brkPrev");
     if(prev) prev.innerHTML = `<div class="ok">✓ ${sent} invite${sent === 1 ? "" : "s"} sent.</div>` +
       (pendingAcc ? `<div class="skip">• ${pendingAcc} already ha${pendingAcc === 1 ? "s" : "ve"} their own plan — they'll appear once they accept.</div>` : "") +
       (problems.length ? `<div class="bad">⚠ Not invited: ${problems.map(x => escapeHtml(x.email) + " (" + (label[x.status] || x.status) + ")").join(", ")}</div>` : "");
-    try { updateDashboardStats(); } catch(e){}
   } catch(e){
     btn.disabled = false; btn.textContent = "Send invites";
     brandedAlert((e && e.message) || "Couldn't send invites.", { error: true });
   }
 }
-async function brkResend(userId){
-  try { await callFn("brokerage-admin", { action: "resend", user_id: userId }); flash("Invite re-sent ✓"); }
+async function brkResend(idx){
+  const a = BRK.roster[idx]; if(!a) return;
+  try { await callFn("brokerage-admin", { action: "resend", user_id: a.user_id }); flash("Invite re-sent ✓"); }
   catch(e){ brandedAlert((e && e.message) || "Couldn't resend.", { error: true }); }
 }
 async function brkRemove(idx){
   const a = BRK.roster[idx]; if(!a) return;
-  const userId = a.user_id, name = a.full_name || a.email;
-  const ok = await brandedConfirm(`Remove ${name} from your brokerage?\n\nThey lose access through your brokerage right away and their seat opens up. Their saved estimates stay with their own account, and they can continue on their own plan.`,
+  const name = a.full_name || a.email;
+  const ok = await brandedConfirm(`Remove ${name} from your brokerage?\n\nThey lose access through your brokerage right away and their seat opens up (your seat count and bill don't change — reduce seats under Seats & billing if you want to pay for fewer). Their saved estimates stay with their own account, and they can continue on their own plan.`,
     { confirmLabel: "Remove agent", destructive: true });
   if(!ok) return;
-  try { await callFn("brokerage-admin", { action: "remove", user_id: userId }); flash("Agent removed"); renderBrokeragePage(); }
+  try { await callFn("brokerage-admin", { action: "remove", user_id: a.user_id }); flash("Agent removed"); renderBrokeragePage("agents"); }
   catch(e){ brandedAlert((e && e.message) || "Couldn't remove agent.", { error: true }); }
 }
-async function brkCancelInvite(id){
-  try { await callFn("brokerage-admin", { action: "cancel_invite", invite_id: id }); flash("Invite cancelled"); renderBrokeragePage(); }
+async function brkCancelInvite(idx){
+  const i = BRK.invites[idx]; if(!i) return;
+  try { await callFn("brokerage-admin", { action: "cancel_invite", invite_id: i.id }); flash("Invite cancelled"); renderBrokeragePage("agents"); }
   catch(e){ brandedAlert((e && e.message) || "Couldn't cancel.", { error: true }); }
 }
-async function brkAddSeats(suggest){
+
+/* Seat change dialog: pick a new total → exact price preview from Stripe → confirm */
+function brkChangeSeats(suggest){
   const b = BRK.brokerage; if(!b) return;
-  const trial = b.status === "trialing";
-  const raw = await brandedPrompt(`How many seats would you like to add?${trial ? "\n\n(You're on a free trial — new seats unlock when the trial ends.)" : ""}`, String(suggest || 5), { title: "Add seats", confirmLabel: "Continue" });
-  if(raw == null) return;
-  const add = Math.floor(Number(raw));
-  if(!(add >= 1)){ brandedAlert("Enter a number of seats to add."); return; }
-  // Current purchased quantity = seat_limit when not trialing; during trial we can't know it here exactly, so use tier math server-side.
-  const current = b.seats_purchased || (trial ? null : b.seat_limit);
-  let priceLine = "";
-  if(current != null){
-    const total = current + add, tier = brkTierFor(total), rate = BRK_TIER_RATE[tier];
-    const per = b.billing_interval === "year" ? rate * 10 : rate;
-    priceLine = `\n\nNew total: ${total} seats × $${per.toFixed(2)}/${b.billing_interval === "year" ? "yr" : "mo"} = $${(total * per).toFixed(2)} + HST per ${b.billing_interval === "year" ? "year" : "month"} (${BRK_TIER_LABEL[tier]}).\n${trial ? "Billing at this amount starts when your trial ends." : "You'll be charged a prorated amount today for the rest of this billing period."}`;
-  }
-  const ok = await brandedConfirm(`Add ${add} seat${add === 1 ? "" : "s"}?${priceLine}`, { confirmLabel: "Add seats", destructive: false });
-  if(!ok) return;
+  const purchased = b.seats_purchased || b.seat_limit;
+  const min = Math.max(5, BRK.seatsUsed);
+  const start = Math.max(min, Number(suggest) || purchased);
+  const m = document.createElement("div");
+  m.className = "brk-modal"; m.id = "brkSeatModal";
+  m.innerHTML = `<div>
+    <div style="font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#a8853f;text-align:center;">Seats &amp; billing</div>
+    <div style="font-size:18px;font-weight:800;color:#d4af6a;text-align:center;margin:6px 0 4px;">Change your number of seats</div>
+    <div style="font-size:12.5px;color:#cfcfcf;text-align:center;">You pay for <b>${purchased}</b> seats today · ${BRK.seatsUsed} in use · minimum ${min}</div>
+    <div class="brk-num">
+      <button type="button" onclick="brkSeatStep(-1)">−</button>
+      <input type="number" id="brkSeatInput" min="${min}" value="${start}" oninput="brkSeatPreviewSoon()">
+      <button type="button" onclick="brkSeatStep(1)">+</button>
+    </div>
+    <div id="brkSeatPrev" style="min-height:120px;"></div>
+    <div style="display:flex;gap:10px;margin-top:16px;">
+      <button class="brk-btn ghost" style="flex:1;" onclick="document.getElementById('brkSeatModal').remove()">Cancel</button>
+      <button class="brk-btn" style="flex:1;" id="brkSeatConfirm" disabled onclick="brkSeatConfirm()">Confirm</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+  brkSeatPreview();
+}
+function brkSeatStep(d){ const i = document.getElementById("brkSeatInput"); i.value = Math.max(Number(i.min) || 5, (Number(i.value) || 0) + d); brkSeatPreviewSoon(); }
+let _brkSeatTimer = null, _brkSeatPreview = null;
+function brkSeatPreviewSoon(){ clearTimeout(_brkSeatTimer); _brkSeatTimer = setTimeout(brkSeatPreview, 450); }
+async function brkSeatPreview(){
+  const out = document.getElementById("brkSeatPrev"); const btn = document.getElementById("brkSeatConfirm");
+  if(!out) return;
+  const seats = Math.floor(Number(document.getElementById("brkSeatInput").value));
+  btn.disabled = true; _brkSeatPreview = null;
+  out.innerHTML = '<div style="text-align:center;color:#9a958a;font-size:12px;margin-top:20px;">Calculating exact price…</div>';
   try {
-    const r = await callFn("brokerage-admin", { action: "add_seats", add });
-    flash(r && r.trialing ? "Seats added — they unlock when your trial ends" : "Seats added ✓");
-    renderBrokeragePage();
-  } catch(e){ brandedAlert((e && e.message) || "Couldn't add seats.", { error: true }); }
+    const p = await callFn("brokerage-admin", { action: "preview_seats", seats });
+    _brkSeatPreview = p;
+    const unit = p.interval === "year" ? "year" : "month";
+    const up = p.new_seats > p.current_seats;
+    const diff = p.difference;
+    const tierNote = p.new_tier !== p.current_tier
+      ? `<div style="font-size:11.5px;color:#d4af6a;margin-top:8px;">Your plan moves from ${BRK_TIER_LABEL[p.current_tier]} to ${BRK_TIER_LABEL[p.new_tier]}, so the per-seat price changes for all seats.</div>` : "";
+    let today;
+    if(p.trialing) today = `<tr><td>Charged today</td><td>$0.00 (free trial)</td></tr>`;
+    else if(up) today = `<tr><td>Charged today (prorated to ${brkDate(p.period_end)})</td><td>${brkMoney(p.prorated_now)} + HST</td></tr>`;
+    else today = `<tr><td>Credit on your next bill (unused time)</td><td>${brkMoney(p.prorated_now)} + HST</td></tr>`;
+    out.innerHTML = `
+      <table class="brk-sum">
+        <tr><td>Now: ${p.current_seats} seats</td><td>${brkMoney(p.current_recurring)} / ${unit}</td></tr>
+        <tr><td>New: ${p.new_seats} seats</td><td>${brkMoney(p.new_recurring)} / ${unit}</td></tr>
+        <tr><td style="color:${up ? "#e8c989" : "#5fce86"};">${up ? "Extra" : "You save"} each ${unit}</td><td style="color:${up ? "#e8c989" : "#5fce86"};">${up ? "+" : ""}${brkMoney(diff)} / ${unit} + HST</td></tr>
+        ${today}
+      </table>${tierNote}
+      <div style="font-size:12px;color:#cfcfcf;margin-top:10px;line-height:1.5;">
+        ${up ? `By confirming, you'll be billed <b>${brkMoney(diff)} more per ${unit}</b> (plus HST)${p.trialing ? " once your trial ends" : ", starting today"}.`
+             : `By confirming, your bill goes down by <b>${brkMoney(diff)} per ${unit}</b> (plus HST).`}
+      </div>`;
+    btn.disabled = false;
+    btn.textContent = up ? `Confirm +${p.new_seats - p.current_seats} seats` : `Confirm −${p.current_seats - p.new_seats} seats`;
+  } catch(e){
+    out.innerHTML = `<div style="text-align:center;color:#ff9090;font-size:12.5px;margin-top:20px;">${escapeHtml((e && e.message) || "Couldn't calculate the price.")}</div>`;
+  }
+}
+async function brkSeatConfirm(){
+  const p = _brkSeatPreview; if(!p) return;
+  const btn = document.getElementById("brkSeatConfirm"); btn.disabled = true; btn.textContent = "Updating…";
+  try {
+    await callFn("brokerage-admin", { action: "change_seats", seats: p.new_seats, proration_date: p.proration_date });
+    const m = document.getElementById("brkSeatModal"); if(m) m.remove();
+    flash("Seats updated ✓");
+    renderBrokeragePage(getCurrentRoute() === "brk-agents" ? "agents" : "seats");
+  } catch(e){
+    btn.disabled = false; btn.textContent = "Confirm";
+    brandedAlert((e && e.message) || "Couldn't update seats.", { error: true });
+  }
 }
 async function brkSelfSeat(on){
   const ok = await brandedConfirm(on
@@ -21875,10 +22048,10 @@ async function brkUploadLogo(ev){
     if(msg) msg.textContent = "Uploading…";
     const url = await uploadAvatar(currentUser.id, f);
     await dbUpdate("brokerages", { id: BRK.brokerage.id }, { logo_url: url }, { prefer: "return=minimal" });
-    window._myBrokerage = null; // force header refresh
+    window._myBrokerage = null;
     try { renderUserIdentity(); } catch(e){}
     flash("Logo saved ✓");
-    renderBrokeragePage();
+    renderBrokeragePage("branding");
   } catch(e){ if(msg) msg.textContent = (e && e.message) || "Upload failed."; }
 }
 
@@ -21890,15 +22063,20 @@ function dashboardCards(){
        - the user has the feature flag, OR
        - the user is admin and the card is adminOnly. */
   const allCards = [
-    { key: "brokerage", requireFeature: "brokerage_admin",
-      title: "Agents & seats", icon: "ti-users-group",
-      desc: "Invite your agents, see who's active, and manage your seats.",
-      action: () => navigateTo("brokerage") },
+    { key: "brk_agents", requireFeature: "brokerage_admin",
+      title: "Agents", icon: "ti-users-group",
+      desc: "Invite agents by email, see who's active, resend invites, or remove agents.",
+      action: () => navigateTo("brk-agents") },
 
-    { key: "brokerage_branding", requireFeature: "brokerage_admin",
-      title: "Brokerage logo", icon: "ti-photo",
-      desc: "Add or change the logo shown on your dashboard and your agents' dashboards.",
-      action: () => { navigateTo("brokerage"); setTimeout(() => { const el = document.getElementById("brkBranding"); if(el) el.scrollIntoView({behavior:"smooth"}); }, 300); } },
+    { key: "brk_seats", requireFeature: "brokerage_admin",
+      title: "Seats & billing", icon: "ti-credit-card",
+      desc: "Add or reduce seats with the exact price shown first. Update your card, switch monthly/yearly, view invoices.",
+      action: () => navigateTo("brk-seats") },
+
+    { key: "brk_branding", requireFeature: "brokerage_admin",
+      title: "Branding", icon: "ti-photo",
+      desc: "Your brokerage logo, and whether agents use it or upload their own.",
+      action: () => navigateTo("brk-branding") },
 
     { key: "packages", requireFeature: "prelisting_packages",
       title: "Pre-listing packages", icon: "ti-home-check",
@@ -22061,10 +22239,15 @@ function _setDashStat(key, text, urgent){
 function updateDashboardStats(){
   try {
     if(canUse("brokerage_admin") && window._myBrokerage){
-      restFetch("rpc/brokerage_seats_used", { method: "POST", body: { b: window._myBrokerage.id } })
-        .then(n => _setDashStat("brokerage", (Number(n)||0) + " of " + window._myBrokerage.seat_limit + " seats used"))
+      const mb = window._myBrokerage;
+      restFetch("rpc/brokerage_seats_used", { method: "POST", body: { b: mb.id } })
+        .then(n => _setDashStat("brk_seats", (Number(n)||0) + " of " + mb.seat_limit + " seats in use"))
         .catch(() => {});
-      _setDashStat("brokerage_branding", window._myBrokerage.logo_url ? "Logo added" : "No logo yet");
+      restFetch("rpc/brokerage_agent_activity", { method: "POST", body: { b: mb.id } })
+        .then(r => { const a = (r||[]).filter(x => x.last_sign_in_at).length, inv = (r||[]).length - a;
+                     _setDashStat("brk_agents", (r||[]).length ? (a + " active" + (inv ? " · " + inv + " invited" : "")) : "Invite your first agents"); })
+        .catch(() => {});
+      _setDashStat("brk_branding", (mb.logo_url ? "Logo added" : "No logo yet") + " · " + (mb.agent_logo_mode === "own" ? "agents may use their own" : "agents use your logo"));
     }
     if(canUse("billing")) _setDashStat("billing", "Secure Stripe portal");
   } catch(e){}
