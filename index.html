@@ -15932,7 +15932,7 @@ const OFFICE_EMAIL = "renotosold@gmail.com";
 const OFFICE_COMPANY = "Reno to Sold Inc.";
 
 /* ---------- Supabase cross-device sync ---------- */
-window.RTS_BUILD = "2026-10-19-v8-brokerage-ux";
+window.RTS_BUILD = "2026-10-20-v9-seat-activation";
 console.log("[build] " + window.RTS_BUILD);
 const SUPABASE_URL = "https://icrnvnmvcdpmhnjorefs.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imljcm52bm12Y2RwbWhuam9yZWZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2ODQwMDgsImV4cCI6MjA5NDI2MDAwOH0.YoeBndWsky8vAW6mLeMziPeH2j2C6c_3VdAvOG_i0kA";
@@ -16824,7 +16824,7 @@ async function clearDiscountRequest(){
   closeDiscountRequestModal();
   renderTotals();
 }
-function isAgent(){ return !!(currentProfile && currentProfile.role === "agent"); }
+function isAgent(){ return !!(currentProfile && (currentProfile.role === "agent" || (currentProfile.role === "brokerage" && currentProfile.uses_seat))); }
 function isStaff(){ return !!(currentProfile && currentProfile.role === "staff"); }
 
 /* Returns a human-readable reason WHY the current user is locked
@@ -17101,7 +17101,7 @@ async function fetchCurrentProfile(){
      library call times out at 8s. */
   const attemptFetch = async (timeoutMs, attemptLabel) => {
     const t0 = Date.now();
-    const selectCols = "id,email,full_name,brokerage,phone,role,features,subscription_starts_at,subscription_expires_at,suspended,avatar_url,plan,brokerage_id,first_name,last_name";
+    const selectCols = "id,email,full_name,brokerage,phone,role,features,subscription_starts_at,subscription_expires_at,suspended,avatar_url,plan,brokerage_id,first_name,last_name,uses_seat,subscription_status,detached_from_brokerage,profile_completed_at";
     const queryPromise = restFetch("profiles?id=eq." + encodeURIComponent(currentUser.id) + "&select=" + selectCols, { single: true })
       .then(data => ({ data: data, error: null }))
       .catch(err => {
@@ -17197,7 +17197,8 @@ function initSupabase(){
   const _capturedHash    = window.location.hash || "";
   const _hasAccessToken  = /access_token=/.test(_capturedHash);
   const _hasTokenHash    = /token_hash=/.test(_capturedHash);
-  const _hasFragmentTokens = _hasAccessToken || _hasTokenHash;
+  const _hasRtsActivate  = /(^#|&)rts_activate=/.test(_capturedHash);
+  const _hasFragmentTokens = _hasAccessToken || _hasTokenHash || _hasRtsActivate;
   if(_hasFragmentTokens){
     console.log("[auth] Captured URL fragment (kind=" + (_hasTokenHash ? "token_hash" : "access_token") + ", len=" + _capturedHash.length + ")");
     try {
@@ -17323,7 +17324,20 @@ function initSupabase(){
         let accessToken  = params.get("access_token");
         let refreshToken = params.get("refresh_token");
         const linkType   = params.get("type") || "";
-        const tokenHash  = params.get("token_hash");
+        let tokenHash    = params.get("token_hash");
+        /* Reusable 24-hour activation link: ask activate-account for a
+           fresh one-time sign-in each time the link is opened, so it keeps
+           working until the password is set. */
+        const rtsActivate = params.get("rts_activate");
+        if(!accessToken && !tokenHash && rtsActivate){
+          window._rtsActivateToken = rtsActivate;
+          const act = await rtsActivationCall({ action: "open", token: rtsActivate });
+          if(act && act.status === "ok" && act.token_hash){
+            tokenHash = act.token_hash;
+          } else {
+            rtsActivationProblem(act, rtsActivate, params.get("email") || "");
+          }
+        }
 
         /* token_hash path (new prefetch-proof format from admin-users
            Edge Function): exchange token_hash for access/refresh tokens
@@ -18005,6 +18019,77 @@ function updatePasswordChecklist(){
   setRow("pwReqMatch",  matchOk, pw2.length === 0, "Both fields match");
 }
 
+/* ===========================================================
+   REUSABLE ACTIVATION LINKS (v9)
+   Link: /#rts_activate=<token>&type=recovery&email=<email>
+   Works for 24h, any number of opens, until the password is set.
+   =========================================================== */
+async function rtsActivationCall(body){
+  try {
+    const r = await fetch(SUPABASE_URL + "/functions/v1/activate-account", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "apikey": SUPABASE_ANON_KEY, "Authorization": "Bearer " + SUPABASE_ANON_KEY },
+      body: JSON.stringify(body),
+    });
+    return await r.json().catch(() => ({ error: "HTTP " + r.status }));
+  } catch(e){ return { error: (e && e.message) || "network error" }; }
+}
+function rtsActivationBanner(title, html, tone){
+  try { const old = document.getElementById("rtsResendBanner"); if(old) old.remove(); } catch(e){}
+  const b = document.createElement("div");
+  b.id = "rtsResendBanner";
+  b.style.cssText =
+    "position:fixed;top:0;left:0;right:0;z-index:99999;" +
+    "background:" + (tone === "bad" ? "#3a0f0f" : "linear-gradient(180deg,#2a2010 0%,#1a1408 100%)") + ";" +
+    "border-bottom:2px solid " + (tone === "bad" ? "#8a3a3a" : "#d4af6a") + ";padding:16px 44px;text-align:center;" +
+    "color:#e8c989;font-size:13px;font-weight:600;font-family:-apple-system,'Segoe UI',Roboto,sans-serif;" +
+    "box-shadow:0 4px 16px rgba(0,0,0,.5);line-height:1.55;";
+  b.innerHTML = '<div style="font-size:14px;color:#d4af6a;margin-bottom:4px;">' + title + '</div>' +
+    '<div id="rtsResendStatus" style="font-size:12.5px;color:#cfcfcf;font-weight:400;">' + html + '</div>' +
+    '<button onclick="this.parentNode.remove()" aria-label="Close" style="position:absolute;top:10px;right:12px;background:none;border:none;color:#a8853f;font-size:20px;cursor:pointer;">×</button>';
+  (document.body || document.documentElement).appendChild(b);
+}
+function rtsPrefillLoginEmail(email){
+  if(!email) return;
+  let tries = 0;
+  const t = setInterval(() => {
+    const el = document.getElementById("loginEmail");
+    if(el){ if(!el.value) el.value = email; const pw = document.getElementById("loginPassword"); if(pw) pw.focus(); clearInterval(t); }
+    if(++tries > 40) clearInterval(t);
+  }, 250);
+}
+async function rtsActivationProblem(act, token, emailFromLink){
+  // Not going into the password flow — undo the activation-mode setup
+  try { sessionStorage.removeItem("rts_force_pw_setup"); } catch(e){}
+  try { const ov = document.getElementById("rtsActivationOverlay"); if(ov) ov.remove(); } catch(e){}
+  window._rtsActivateToken = null;
+  const email = (act && act.email) || emailFromLink;
+  const show = () => {
+    if(act && act.status === "activated"){
+      rtsActivationBanner("Your account is already set up",
+        "Sign in below with " + (email ? "<b style=\"color:#e8c989;\">" + escapeHtml(email) + "</b> and " : "") + "the password you chose. Forgot it? Use “Forgot your password?” on the sign-in screen.");
+      rtsPrefillLoginEmail(email);
+    } else if(act && act.status === "expired"){
+      rtsActivationBanner("This activation link has expired",
+        "Activation links last 24 hours. Sending a fresh one" + (email ? " to <b style=\"color:#e8c989;\">" + escapeHtml(email) + "</b>" : "") + "…");
+      rtsActivationCall({ action: "renew", token }).then(r => {
+        const st = document.getElementById("rtsResendStatus");
+        if(!st) return;
+        if(r && r.status === "sent") st.innerHTML = '<span style="color:#5fce86;">✓</span> A new link is on its way' + (email ? " to <b style=\"color:#e8c989;\">" + escapeHtml(email) + "</b>" : "") + ". Check your inbox (and spam folder).";
+        else if(r && r.status === "activated"){ st.innerHTML = "Your account is already set up — sign in below with your password."; rtsPrefillLoginEmail(email); }
+        else st.innerHTML = "We couldn't send a new link automatically. Please call 647-500-0270 or ask whoever invited you to resend it.";
+      });
+    } else if(act && act.status === "invalid"){
+      rtsActivationBanner("This activation link isn't valid",
+        "Please use the most recent email we sent you, ask whoever invited you to resend it, or call 647-500-0270.", "bad");
+    } else {
+      rtsActivationBanner("We couldn't open your activation link",
+        "Please check your connection and click the link in your email again. It keeps working for 24 hours.", "bad");
+    }
+  };
+  if(document.body) show(); else document.addEventListener("DOMContentLoaded", show, { once: true });
+}
+
 async function submitPasswordSetup(){
   const pw1 = document.getElementById("pwSetupNew").value || "";
   const pw2 = document.getElementById("pwSetupConfirm").value || "";
@@ -18049,6 +18134,10 @@ async function submitPasswordSetup(){
     // Refresh currentUser reference (its metadata changed). The REST
     // response returns the updated user object directly.
     if(result && result.id) setCurrentUser(result);
+    if(window._rtsActivateToken){
+      rtsActivationCall({ action: "done", token: window._rtsActivateToken }).catch(() => {});
+      window._rtsActivateToken = null;
+    }
     setMsg("Password set ✓ You can use email + password from now on.", true);
     const imgKind = profileImageStepKind();
     setTimeout(() => {
@@ -21712,9 +21801,15 @@ async function renderBrokeragePage(section){
   brkCss();
   const v = document.getElementById("view-brk-" + section);
   if(!v) return;
-  if(!BRK.brokerage) v.innerHTML = '<div class="brk-wrap"><div class="brk-card"><p class="brk-sub">Loading your brokerage…</p></div></div>';
+  const loadingHtml = '<div class="brk-wrap"><div class="brk-card"><p class="brk-sub">Loading your brokerage…</p></div></div>';
+  // Profile still loading (e.g. right after a page refresh) — show a
+  // loading card; applyFeatureGates() re-renders this page once it lands.
+  if(!currentProfile){ v.innerHTML = loadingHtml; return; }
+  if(!currentProfile.brokerage_id){ navigateTo("dashboard"); return; }
+  if(!BRK.brokerage) v.innerHTML = loadingHtml;
   try { await brkLoad(); } catch(e){
-    v.innerHTML = '<div class="brk-wrap"><div class="brk-card"><p class="brk-sub">Couldn\'t load your brokerage: ' + escapeHtml(e.message || String(e)) + '</p></div></div>';
+    console.warn("[brokerage] load failed:", e);
+    v.innerHTML = '<div class="brk-wrap"><div class="brk-card"><div class="brk-h">We couldn\'t load your brokerage just now</div><p class="brk-sub">This is usually a brief connection hiccup.</p><button class="brk-btn" onclick="renderBrokeragePage(\'' + section + '\')">Try again</button></div></div>';
     return;
   }
   const body = section === "seats" ? brkSeatsHtml() : section === "branding" ? brkBrandingHtml() : brkAgentsHtml();
@@ -22037,7 +22132,11 @@ async function brkSelfSeat(on){
   try {
     await callFn("brokerage-admin", { action: "self_seat", on });
     try { localStorage.removeItem(PROFILE_CACHE_KEY); } catch(e){}
-    location.reload();
+    try { await fetchCurrentProfile(); } catch(e){}
+    if(currentProfile) currentProfile.uses_seat = on;
+    applyFeatureGates();
+    navigateTo("dashboard");
+    flash(on ? "You now have the agent tools ✓" : "Seat released");
   } catch(e){ brandedAlert((e && e.message) || "Couldn't update your seat.", { error: true }); }
 }
 async function brkUploadLogo(ev){
@@ -26052,7 +26151,12 @@ function applyFeatureGates(){
        whenever the profile changes (role, features, brokerage, etc.). */
     try { renderUserIdentity(); } catch(e){ console.warn("renderUserIdentity error:", e); }
     try {
-      if(getCurrentRoute() === "dashboard") renderDashboard();
+      const _r = getCurrentRoute();
+      if(_r === "dashboard") renderDashboard();
+      else if(/^brk-/.test(_r) && typeof renderBrokeragePage === "function"){
+        if(currentProfile && !canUse("brokerage_admin")) navigateTo("dashboard");
+        else renderBrokeragePage(_r.slice(4));
+      }
     } catch(e){ console.warn("renderDashboard error:", e); }
   } catch(e) {
     console.warn("applyFeatureGates error:", e);
