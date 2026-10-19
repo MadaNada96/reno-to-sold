@@ -15932,7 +15932,7 @@ const OFFICE_EMAIL = "renotosold@gmail.com";
 const OFFICE_COMPANY = "Reno to Sold Inc.";
 
 /* ---------- Supabase cross-device sync ---------- */
-window.RTS_BUILD = "2026-10-20-v9-seat-activation";
+window.RTS_BUILD = "2026-10-21-v10-billing-notices";
 console.log("[build] " + window.RTS_BUILD);
 const SUPABASE_URL = "https://icrnvnmvcdpmhnjorefs.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imljcm52bm12Y2RwbWhuam9yZWZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2ODQwMDgsImV4cCI6MjA5NDI2MDAwOH0.YoeBndWsky8vAW6mLeMziPeH2j2C6c_3VdAvOG_i0kA";
@@ -17101,7 +17101,7 @@ async function fetchCurrentProfile(){
      library call times out at 8s. */
   const attemptFetch = async (timeoutMs, attemptLabel) => {
     const t0 = Date.now();
-    const selectCols = "id,email,full_name,brokerage,phone,role,features,subscription_starts_at,subscription_expires_at,suspended,avatar_url,plan,brokerage_id,first_name,last_name,uses_seat,subscription_status,detached_from_brokerage,profile_completed_at";
+    const selectCols = "id,email,full_name,brokerage,phone,role,features,subscription_starts_at,subscription_expires_at,suspended,avatar_url,plan,brokerage_id,first_name,last_name,uses_seat,subscription_status,detached_from_brokerage,profile_completed_at,cancel_at_period_end,current_period_end";
     const queryPromise = restFetch("profiles?id=eq." + encodeURIComponent(currentUser.id) + "&select=" + selectCols, { single: true })
       .then(data => ({ data: data, error: null }))
       .catch(err => {
@@ -22244,6 +22244,39 @@ function dashboardCards(){
   });
 }
 
+/* Dashboard billing notice (v10): payment problem or plan set to end.
+   Individual agents → their own plan. Brokerage owner → the brokerage's
+   plan. Brokerage agents never see it (their brokerage pays). */
+function renderBillingNotice(grid){
+  const old = document.getElementById("dashBillingNotice"); if(old) old.remove();
+  const p = currentProfile; if(!p || !grid) return;
+  let status = null, cancelAt = false, end = null, who = "your";
+  if(p.role === "agent" && p.plan === "individual"){
+    status = p.subscription_status; cancelAt = !!p.cancel_at_period_end; end = p.current_period_end;
+  } else if(p.role === "brokerage" && window._myBrokerage){
+    const b = window._myBrokerage; status = b.status; cancelAt = !!b.cancel_at_period_end; end = b.current_period_end; who = "your brokerage's";
+  } else return;
+  const d = end ? new Date(end).toLocaleDateString("en-CA", { month: "long", day: "numeric", year: "numeric" }) : "";
+  let html = "", bad = false;
+  if(status === "past_due" || status === "unpaid"){
+    bad = true;
+    html = "<b>We couldn't charge the card on " + who + " plan.</b> " +
+      (p.role === "brokerage" ? "Your agents keep access while we retry." : "You keep access while we retry.") +
+      " Please update your payment method to avoid losing access.";
+  } else if(cancelAt && end){
+    html = "<b>" + (p.role === "brokerage" ? "Your brokerage's plan" : "Your plan") + " is set to end on " + escapeHtml(d) + ".</b> " +
+      "Everything keeps working until then. Changed your mind? You can keep it going in billing.";
+  } else return;
+  const div = document.createElement("div");
+  div.id = "dashBillingNotice";
+  div.style.cssText = "grid-column:1/-1;margin:0 0 14px;padding:12px 16px;border-radius:10px;font-size:13px;line-height:1.55;display:flex;gap:14px;align-items:center;flex-wrap:wrap;" +
+    (bad ? "background:rgba(255,80,80,.07);border:1px solid #6b2a2a;color:#ffb0b0;" : "background:rgba(212,175,106,.08);border:1px solid rgba(212,175,106,.3);color:#e8c989;");
+  div.innerHTML = '<div style="flex:1;min-width:220px;">' + html + '</div>' +
+    '<button type="button" onclick="openBillingPortal()" style="background:linear-gradient(180deg,#d4af6a,#a8853f);color:#0a0a0a;border:none;border-radius:7px;padding:9px 14px;font-weight:800;font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;font-family:inherit;">' +
+    (bad ? "Update card" : "Manage billing") + '</button>';
+  grid.parentNode.insertBefore(div, grid);
+}
+
 function renderDashboard(){
   const grid = document.getElementById("dashGrid");
   if(!grid) return;
@@ -22263,6 +22296,8 @@ function renderDashboard(){
   } else if(welcomeEl){
     welcomeEl.style.display = "none";
   }
+
+  try { renderBillingNotice(grid); } catch(e){ console.warn("renderBillingNotice:", e); }
 
   // First-run tour removed per Mo's request 2026-06-29 (kept the function
   // below as a no-op so any future references don't break).
