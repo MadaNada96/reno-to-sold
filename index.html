@@ -15932,7 +15932,7 @@ const OFFICE_EMAIL = "renotosold@gmail.com";
 const OFFICE_COMPANY = "Reno to Sold Inc.";
 
 /* ---------- Supabase cross-device sync ---------- */
-window.RTS_BUILD = "2026-10-21-v10-billing-notices";
+window.RTS_BUILD = "2026-10-21-v10b-billing-notices";
 console.log("[build] " + window.RTS_BUILD);
 const SUPABASE_URL = "https://icrnvnmvcdpmhnjorefs.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imljcm52bm12Y2RwbWhuam9yZWZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2ODQwMDgsImV4cCI6MjA5NDI2MDAwOH0.YoeBndWsky8vAW6mLeMziPeH2j2C6c_3VdAvOG_i0kA";
@@ -21458,7 +21458,9 @@ function renderUserIdentity(){
     restFetch("brokerages?select=id,name,logo_url,agent_logo_mode,status,seat_limit,seats_purchased,tier,billing_interval,trial_ends_at,current_period_end,cancel_at_period_end&id=eq." + encodeURIComponent(currentProfile.brokerage_id))
       .then(rows => { window._myBrokerage = (rows && rows[0]) || null; })
       .catch(e => console.warn("brokerage load failed", e))
-      .finally(() => { window._myBrokerageLoading = false; if(window._myBrokerage) { try { renderUserIdentity(); } catch(e){} } });
+      .finally(() => { window._myBrokerageLoading = false; if(window._myBrokerage) { try { renderUserIdentity(); } catch(e){}
+        // The brokerage loads after the dashboard first draws — add the billing notice now
+        try { if(getCurrentRoute() === "dashboard") renderBillingNotice(document.getElementById("dashGrid")); } catch(e){} } });
   }
 
   // Name — always the user's full name (fallback to email prefix)
