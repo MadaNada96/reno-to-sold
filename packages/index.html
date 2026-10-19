@@ -309,7 +309,7 @@
 const PP_SUPABASE_URL  = "https://icrnvnmvcdpmhnjorefs.supabase.co";
 const PP_SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imljcm52bm12Y2RwbWhuam9yZWZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2ODQwMDgsImV4cCI6MjA5NDI2MDAwOH0.YoeBndWsky8vAW6mLeMziPeH2j2C6c_3VdAvOG_i0kA";
 const PP_CONTACT = { email:"renotosold@gmail.com", phone:"647-500-0270" };
-const PP_LOGIN_URL = "../";   // main portal login (sign-up with paid subscription coming soon)
+const PP_LOGIN_URL = "../";   // main portal login (sign-up lives at ../signup/)
 
 // Fallback rates — mirror DEFAULT_PRICES in the portal's index.html.
 const PP_DEFAULT_RATES = {
@@ -504,7 +504,7 @@ const PP = {
       o += `<div class="opt"><div class="opt-t">Kitchen &amp; bathrooms</div>
         <div class="hint" style="margin-top:0">Design the kitchen and bathrooms — cabinets, countertops, backsplash, island, tubs, showers and tile — and price them instantly in the Reno to Sold agent portal.</div>
         <a class="cta login-cta" href="${PP_LOGIN_URL}">Log in to design kitchen &amp; bath →</a>
-        <div class="q-small" style="text-align:center">New to Reno to Sold? Agent sign-up is coming soon.</div></div>`;
+        <div class="q-small" style="text-align:center">New to Reno to Sold? <a href="../signup/" style="color:inherit;font-weight:700">Start a 5-day free trial</a>.</div></div>`;
     }
     document.getElementById("opts").innerHTML = o;
     this.renderQuote();
