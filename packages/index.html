@@ -3,8 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Reno to Sold &mdash; Pre-Listing Packages</title>
-<meta name="description" content="Pick a pre-listing renovation package and get an instant, guaranteed price range — 2026 GTA pricing from Reno to Sold.">
+<title>Reno. List. Sold. · Free pre-listing walkthrough · Reno to Sold</title>
+<meta name="description" content="Selling your home in the west GTA? We renovate it, list it and sell it for more. One team, one plan, completely managed. Pick a package and book a free walkthrough.">
+<meta property="og:title" content="Reno. List. Sold. · Reno to Sold">
+<meta property="og:description" content="We renovate your home, list it, and sell it for more. One team, one plan, completely managed for you. Book a free walkthrough.">
+<meta property="og:image" content="https://renotosold.homes/RENO_to_SOLD_logo_only.png">
+<meta property="og:url" content="https://renotosold.homes/packages/">
 <link rel="icon" type="image/svg+xml" href="../favicon.svg">
 <meta name="theme-color" content="#0a0a0a">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -213,6 +217,62 @@
   .incl-list{margin-top:12px;display:flex;flex-direction:column;gap:8px;}
   .incl-list details.incl{margin-top:0;}
   @media (max-width:560px){ .prop-grid{grid-template-columns:1fr 1fr;} .prop-grid > div:first-child{grid-column:1 / -1;} }
+  /* homeowner intro */
+  .intro{padding:22px 24px}
+  .intro h1{font-family:'Cormorant Garamond',serif;font-weight:600;font-size:30px;line-height:1.15;margin:0 0 8px;color:var(--ink-strong)}
+  .intro h1 em{color:var(--gold-bright)}
+  .intro p{margin:0 0 14px;color:var(--ink);font-size:14px;line-height:1.6}
+  .steps3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:6px 0 4px}
+  .steps3 div{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:12px;font-size:12.5px;color:var(--muted);line-height:1.5}
+  .steps3 b{display:block;color:var(--ink);font-size:13px;margin-bottom:2px}
+  .steps3 i{font-style:normal;display:inline-flex;width:22px;height:22px;border-radius:50%;background:var(--gold-grad);color:#1a1405;font-weight:800;font-size:12px;align-items:center;justify-content:center;margin-bottom:6px}
+  .perks{margin-top:14px;border:1px solid rgba(212,175,106,.35);background:linear-gradient(135deg,rgba(212,175,106,.10),rgba(212,175,106,.02));border-radius:12px;padding:14px 16px}
+  .perks .t{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);font-weight:800;margin-bottom:8px}
+  .perks ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;font-size:13px}
+  .perks li:before{content:"✓ ";color:var(--gold-bright);font-weight:800}
+  .agentbar{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;border:1px dashed var(--line-strong);border-radius:12px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:var(--muted)}
+  .agentbar b{color:var(--ink)}
+  .agentbar a{white-space:nowrap}
+  .q-incl{list-style:none;margin:12px 0 14px;padding:0;font-size:13px;line-height:1.9}
+  .q-incl li:before{content:"✓ ";color:var(--gold-bright);font-weight:800}
+  .q-incl li.tbd{color:var(--muted)}
+  .q-incl li.tbd:before{content:"＋ ";color:var(--muted)}
+  /* address suggestions */
+  .addr-wrap{position:relative}
+  .addr-list{position:absolute;left:0;right:0;top:100%;z-index:5;background:#0d0d11;border:1px solid var(--gold-deep);border-top:none;border-radius:0 0 8px 8px;max-height:240px;overflow:auto;display:none}
+  .addr-list.show{display:block}
+  .addr-list button{display:block;width:100%;text-align:left;border:none;border-radius:0;border-bottom:1px solid var(--line);padding:10px 12px;font-size:13px;color:var(--ink);background:transparent}
+  .addr-list button:hover,.addr-list button.on{background:rgba(212,175,106,.10)}
+  .addr-list small{display:block;color:var(--muted);font-size:11.5px}
+  .addr-list .pw{font-size:10.5px;color:var(--muted);padding:6px 12px;text-align:right}
+  .hero2{padding:34px 28px;text-align:center;background:radial-gradient(ellipse at top,rgba(212,175,106,.16),transparent 70%),var(--panel)}
+  .hero2 .kick{font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--gold);font-weight:800}
+  .hero2 h1{font-family:'Cormorant Garamond',serif;font-weight:600;font-size:52px;line-height:1.05;margin:10px 0 12px;color:var(--ink-strong)}
+  .hero2 h1 em{color:var(--gold-bright)}
+  .hero2 p{max-width:620px;margin:0 auto 20px;font-size:15.5px;line-height:1.6;color:var(--ink)}
+  .hero2 .ctas{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+  .hero2 .ctas a{display:inline-block;text-decoration:none;padding:13px 20px;border-radius:9px;font-weight:800;font-size:13px;letter-spacing:.06em;text-transform:uppercase}
+  .hero2 .area{margin-top:16px;font-size:12px;color:var(--muted)}
+  .sec{padding:22px 24px}
+  .sec h2.big{font-family:'Cormorant Garamond',serif;font-weight:600;font-size:28px;text-transform:none;letter-spacing:0;color:var(--ink-strong);border:none;padding:0;margin:0 0 8px;display:block}
+  .sec h2.big em{color:var(--gold-bright)}
+  .sec .lead{color:var(--ink);font-size:14px;line-height:1.65;margin:0 0 14px}
+  .grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+  .card{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:14px}
+  .card b{display:block;color:var(--ink-strong);font-size:14px;margin-bottom:4px}
+  .card span{font-size:12.5px;color:var(--muted);line-height:1.55}
+  .proc{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;counter-reset:p}
+  .proc div{counter-increment:p;border-top:2px solid var(--gold-deep);padding-top:10px;font-size:12.5px;color:var(--muted);line-height:1.5}
+  .proc div:before{content:counter(p);display:inline-flex;width:22px;height:22px;border-radius:50%;background:var(--gold-grad);color:#1a1405;font-weight:800;font-size:12px;align-items:center;justify-content:center;margin-bottom:6px}
+  .proc b{display:block;color:var(--ink-strong);font-size:14px;margin-bottom:3px}
+  .faqh details{border:1px solid var(--line);border-radius:10px;background:var(--panel-2);margin-bottom:8px}
+  .faqh summary{cursor:pointer;padding:13px 16px;font-weight:700;font-size:14px;color:var(--ink)}
+  .faqh details p{margin:0;padding:0 16px 14px;font-size:13.5px;color:var(--muted);line-height:1.6}
+  .socials{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:8px}
+  .socials a{color:var(--gold-bright);font-size:12px;text-decoration:none;font-weight:600}
+  @media (max-width:860px){ .grid3{grid-template-columns:1fr 1fr} .proc{grid-template-columns:1fr 1fr} }
+  @media (max-width:560px){ .hero2 h1{font-size:40px} .grid3,.proc{grid-template-columns:1fr} }
+  @media (max-width:560px){ .steps3{grid-template-columns:1fr} .perks ul{grid-template-columns:1fr} .intro h1{font-size:25px} }
 </style>
 </head>
 <body>
@@ -228,14 +288,47 @@
       </div>
       <div class="brand-sub">
         <div class="tag">Pre-Listing Packages</div>
-        <div class="ttl">Instant guaranteed price range</div>
+        <div class="ttl">Free walkthrough · Greater Toronto Area</div>
       </div>
     </div>
   </div>
 
-  <div class="brand-tagline">
-    <span class="bt-line">Prep <span class="bt-accent">smart.</span> List <span class="bt-accent">fast.</span></span>
-    <span class="bt-line bt-sub">Sell for <span class="bt-accent">more.</span></span>
+
+
+  <div class="panel hero2">
+    <div class="kick">Pre-sale home renovations · West GTA</div>
+    <h1>Reno. List. <em>Sold.</em></h1>
+    <p>We renovate your home, list it, and sell it for more. One team, one plan, completely managed for you.</p>
+    <div class="ctas">
+      <a class="btn-gold" href="#tool">Get my free walkthrough</a>
+      <a class="cta ghost" style="margin:0" href="tel:6475000270">Call 647-500-0270</a>
+    </div>
+    <div class="area">Etobicoke · Mississauga · Oakville · Burlington and across the GTA</div>
+  </div>
+
+  <div class="panel sec">
+    <h2 class="big">Selling as-is leaves money on the table. <em>Renovating alone is a second job.</em></h2>
+    <p class="lead">Dated kitchens, tired floors and years of living make buyers discount a home. Taking on a renovation while planning a move is more than most people want to carry. So we carry it: one team plans the work that pays off, manages every trade, and gets your home ready for market. You make one decision at the start; we're accountable for everything after it.</p>
+    <div class="perks" style="margin-top:4px">
+      <div class="t">Renovate and list with Reno to Sold</div>
+      <ul><li>Discounted renovation</li><li>Discounted listing fees</li><li>Free listing photography</li><li>Free home staging</li></ul>
+    </div>
+  </div>
+
+  <div class="agentbar">
+    <span><b>Are you a real estate agent?</b> Get instant, guaranteed price ranges for your listings, branded to you.</span>
+    <span><a class="cta btn-gold" style="display:inline-block;margin:0;padding:9px 14px;font-size:12.5px" href="../signup/">Start a free trial</a>
+    <a style="color:var(--gold-bright);font-size:12.5px;margin-left:10px;font-weight:600" href="../">Agent log in</a></span>
+  </div>
+
+  <div id="tool" style="scroll-margin-top:12px"></div>
+  <div class="panel sec" style="margin-bottom:12px;padding:16px 24px">
+    <h2 class="big" style="font-size:24px;margin:0">Pick your package. <em>Book a free walkthrough.</em></h2>
+    <div class="steps3" style="margin-top:12px">
+      <div><i>1</i><b>Tell us about your home</b>Type, size, bedrooms and bathrooms.</div>
+      <div><i>2</i><b>Pick a package</b>From a deep clean to a full refresh.</div>
+      <div><i>3</i><b>Book your walkthrough</b>We visit, then give you your exact price.</div>
+    </div>
   </div>
 
   <div class="layout">
@@ -248,7 +341,7 @@
           <div class="ptg" id="ptype"></div>
           <div class="prop-grid">
             <div>
-              <label for="sqft">Total finished sqft</label>
+              <label for="sqft">Total finished sqft (approx.)</label>
               <input type="number" id="sqft" min="0" step="10" inputmode="numeric" placeholder="e.g. 1600" oninput="PP.set('sqft', this.value)">
             </div>
             <div>
@@ -284,13 +377,49 @@
     <!-- ===== Quote ===== -->
     <aside class="side">
       <div class="panel quote">
-        <h2>Your price range</h2>
+        <h2>Your package</h2>
         <div class="panel-body" id="quote"></div>
       </div>
     </aside>
   </div>
 
-  <p class="footnote" id="rateNote">Prices based on Reno to Sold's 2026 GTA rates. All prices plus HST.</p>
+  <div class="panel sec" style="margin-top:16px">
+    <h2 class="big">Why homeowners choose <em>Reno to Sold</em></h2>
+    <div class="grid3">
+      <div class="card"><b>One accountable team</b><span>Renovation, project management and your sale, with one point of contact from start to sold.</span></div>
+      <div class="card"><b>Decisions made with numbers</b><span>We recommend only the work that pays off in your sale price, and we'll tell you if it doesn't.</span></div>
+      <div class="card"><b>Fixed quote, fixed timeline</b><span>Scope, cost and timing are set in writing before work starts, with weekly progress updates.</span></div>
+      <div class="card"><b>Completely hands-off</b><span>Stay in the home, hand us the keys, or manage it all from out of town. Ideal for downsizers, seniors and estate families.</span></div>
+      <div class="card"><b>We never send you trades to manage</b><span>Cleaners, painters, flooring and renovation crews are scheduled and supervised by our team.</span></div>
+      <div class="card"><b>Built for selling</b><span>Neutral, buyer-friendly finishes chosen to photograph well and stand out against comparable listings.</span></div>
+    </div>
+  </div>
+
+  <div class="panel sec">
+    <h2 class="big">From walkthrough to <em>sold</em></h2>
+    <div class="proc">
+      <div><b>Assess</b>We walk through your home and look at what buyers in your area pay for.</div>
+      <div><b>Plan &amp; quote</b>You get a written plan with your exact price and timeline before any work starts.</div>
+      <div><b>Renovate</b>We manage every trade, with weekly updates and photos.</div>
+      <div><b>List</b>Staged, professionally photographed and listed on MLS.</div>
+      <div><b>Sold</b>Showings, offers and negotiation handled through closing.</div>
+    </div>
+    <div class="hint" style="margin-top:10px">Already working with a real estate agent? No problem. Our packages work with any agent: just add their name when you book.</div>
+  </div>
+
+  <div class="panel sec faqh">
+    <h2 class="big">Questions homeowners ask</h2>
+    <details><summary>Is the walkthrough really free?</summary><p>Yes. It's free and there's no obligation. We visit the home, confirm the scope with you and give you your exact price.</p></details>
+    <details><summary>Why don't you show prices online?</summary><p>Every home is different. Ceiling heights, floor condition, rooms to paint and access all change the price, so we confirm it in person. Your quote is in writing before any work starts.</p></details>
+    <details><summary>Do I have to list my home with you?</summary><p>No. You can book any package on its own, and it works with whichever agent you choose. If you renovate and list with Reno to Sold, you also get a discounted renovation, discounted listing fees, and free photography and staging.</p></details>
+    <details><summary>Can I stay in my home during the work?</summary><p>Most clients do. We plan the work around you. You can also hand us the keys, or manage everything from out of town.</p></details>
+    <details><summary>Do you do kitchens and bathrooms?</summary><p>Yes. Package 4 includes the option to renovate the kitchen and bathrooms. We design them with you at the walkthrough.</p></details>
+    <details><summary>Which areas do you serve?</summary><p>Etobicoke, Mississauga, Oakville, Burlington and across the Greater Toronto Area. Not sure if we cover your street? Call 647-500-0270.</p></details>
+    <details><summary>What happens to my information?</summary><p>It goes straight to our team to arrange your walkthrough. We don't sell it or add you to a mailing list.</p></details>
+  </div>
+
+  <p class="footnote">Serving the Greater Toronto Area. All work is done by the Reno to Sold team. Questions? Call <a href="tel:6475000270" style="color:var(--gold-bright)">647-500-0270</a> or email <a href="mailto:renotosold@gmail.com" style="color:var(--gold-bright)">renotosold@gmail.com</a>.</p>
+  <div class="socials"><a href="https://renotosold.ca/" target="_blank" rel="noopener">renotosold.ca</a><a href="https://www.instagram.com/renotosold" target="_blank" rel="noopener">Instagram</a><a href="https://www.facebook.com/people/Reno-To-Sold/61591180143938/" target="_blank" rel="noopener">Facebook</a><a href="https://www.tiktok.com/@renotosold" target="_blank" rel="noopener">TikTok</a><a href="https://youtube.com/@renotosold" target="_blank" rel="noopener">YouTube</a></div>
   <p class="footnote" style="letter-spacing:.18em;text-transform:uppercase;font-size:10px;color:var(--gold-deep);">Reno to Sold &middot; Renovate Smart &middot; Sell For More</p>
 </div>
 
@@ -309,24 +438,11 @@
 const PP_SUPABASE_URL  = "https://icrnvnmvcdpmhnjorefs.supabase.co";
 const PP_SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imljcm52bm12Y2RwbWhuam9yZWZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2ODQwMDgsImV4cCI6MjA5NDI2MDAwOH0.YoeBndWsky8vAW6mLeMziPeH2j2C6c_3VdAvOG_i0kA";
 const PP_CONTACT = { email:"renotosold@gmail.com", phone:"647-500-0270" };
-const PP_LOGIN_URL = "../";   // main portal login (sign-up lives at ../signup/)
+const PP_LOGIN_URL = "../";        // agent portal login
+const PP_SIGNUP_URL = "../signup/"; // agent free trial
+/* Homeowner page: no prices are shown or shipped in this file. The exact
+   price is given at the walkthrough. Agents get pricing in the portal. */
 
-// Fallback rates — mirror DEFAULT_PRICES in the portal's index.html.
-const PP_DEFAULT_RATES = {
-  rangePct: 15,
-  cleaning: { deep:{ rate:1.15 }, carpet:{ rate:5 }, declutter:{ rate:0 } },
-  painting: {
-    walls:   { labour:2.25, material:1.00 },   // standard 2 coats — includes baseboards & trims in packages
-    ceiling: { labour:0.90, material:0.35 },   // flat ceilings
-    door:    { labour:80,   material:30 }      // per interior door
-  },
-  flooring: {
-    vinyl:{ labour:2.50, material:3.00 }, laminate:{ labour:2.75, material:4.00 },
-    engineered:{ labour:4.50, material:6.00 }, hardwood:{ labour:5.50, material:8.50 },
-    removal:{ labour:2.00, material:0.50 }, baseboards:{ labour:4.00, material:2.50 }
-  }
-};
-const PP_WASTE = { vinyl:1.07, laminate:1.08, engineered:1.10, hardwood:1.12 };
 const PP_FLOORS = [
   ["vinyl","Vinyl (Luxury Vinyl Plank)","Waterproof, durable and budget-friendly — the most popular pre-listing choice."],
   ["laminate","Waterproof Laminate","Realistic wood look with a harder-wearing surface."],
@@ -343,7 +459,7 @@ const PP_FLOOR_SCOPE = [
 const PP_KB_SCOPE = [
   ["Kitchen", "Demolition and disposal of the existing kitchen (cabinet removal, countertop tear-out, haul-away and dump fees). New semi-custom or custom cabinets including sink, faucet, plumbing adjustments and all hardware; standard or premium quartz countertops; backsplash in tile or matching quartz; optional island and under-cabinet LED lighting."],
   ["Bathrooms", "Demolition and disposal of the existing bathroom (tile removal, fixture tear-out, haul-away). Full refresh with a new toilet, vanity, mirror, light fixture, faucet and accessories, plus new floor tile. Tub surround or stand-up shower tile with waterproofing and a glass enclosure where applicable. Options include a new or freestanding tub, double vanity or a new stand-up shower."],
-  ["How it's priced", "Kitchens and bathrooms are designed to your layout and priced in the Reno to Sold agent portal."]
+  ["How it's priced", "Kitchens and bathrooms are designed to your layout and priced at the walkthrough."]
 ];
 const PP_PACKAGES = [
   { id:1, name:"Clean & Declutter", tag:"Show-ready in days", svc:["cleaning"] },
@@ -359,79 +475,24 @@ const PP_CLEAN_SCOPE = [
 ];
 
 const PP = {
-  rates: JSON.parse(JSON.stringify(PP_DEFAULT_RATES)),
-  live: false,
   s: { ptype:"", beds:"", baths:"", bsmt:false, sqft:"", pkg:2, level:"walls", doors:"", ceilings:true, floor:"vinyl", carpet:false, carpetSqft:"", declutter:false },
 
-  async loadRates(){
-    try {
-      const r = await fetch(PP_SUPABASE_URL + "/rest/v1/rpc/public_package_rates", {
-        method:"POST",
-        headers:{ "apikey":PP_SUPABASE_ANON, "Authorization":"Bearer " + PP_SUPABASE_ANON, "Content-Type":"application/json" },
-        body:"{}"
-      });
-      if(!r.ok) return;
-      const d = await r.json();
-      if(!d || typeof d !== "object") return;
-      const R = this.rates;
-      const pick = (o, path) => path.split(".").reduce((a,k) => a && a[k], o);
-      const numOk = v => typeof v === "number" && isFinite(v) && v >= 0;
-      if(numOk(d.rangePct)) R.rangePct = d.rangePct;
-      ["deep","carpet","declutter"].forEach(k => { const v = pick(d, "cleaning."+k+".rate"); if(numOk(v)) R.cleaning[k].rate = v; });
-      ["walls","ceiling","door"].forEach(k => ["labour","material"].forEach(f => { const v = pick(d, "painting."+k+"."+f); if(numOk(v)) R.painting[k][f] = v; }));
-      Object.keys(R.flooring).forEach(k => ["labour","material"].forEach(f => { const v = pick(d, "flooring."+k+"."+f); if(numOk(v)) R.flooring[k][f] = v; }));
-      this.live = true;
-      const n = document.getElementById("rateNote");
-      if(n) n.textContent = "Prices use Reno to Sold's current rates. All prices plus HST.";
-      this.render();
-    } catch(e){ /* keep built-in rates */ }
-  },
-
-  set(k, v, full){ this.s[k] = v; full ? this.render() : this.renderPrices(); },
-
+  set(k, v, full){ this.s[k] = v; if(full) this.render(); },
   n(v){ const x = parseFloat(v); return isFinite(x) && x > 0 ? x : 0; },
-  fmt(v){ return "$" + String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, ","); },
-  range(a){
-    const p = this.rates.rangePct;
-    return { low: Math.floor(a/50)*50, high: Math.ceil(a*(1+p/100)/50)*50 };
-  },
-  rg(a){ const r = this.range(a); return this.fmt(r.low) + " – " + this.fmt(r.high); },
-  lf(sq){ return sq > 0 ? Math.round(sq*0.30/5)*5 : 0; },
 
-  // Same math as the portal's computeCategory() for the package services
+  // What the chosen package includes (no pricing on the public page)
   compute(pkgId){
-    const s = this.s, R = this.rates, sq = this.n(s.sqft);
+    const s = this.s;
     const pk = PP_PACKAGES.find(p => p.id === pkgId);
     const lines = [], tbd = [];
-    if(!pk || !sq) return { lines, tbd, sub:0 };
-    // cleaning
-    let c = sq * R.cleaning.deep.rate;
-    if(s.carpet){
-      if(R.cleaning.carpet.rate > 0) c += this.n(s.carpetSqft) * R.cleaning.carpet.rate;
-      else tbd.push("Carpet cleaning — priced at walkthrough");
-    }
-    if(s.declutter && !(R.cleaning.declutter.rate > 0)) tbd.push("Decluttering — priced after photo review");
-    if(s.declutter && R.cleaning.declutter.rate > 0) c += sq * R.cleaning.declutter.rate;
-    lines.push(["Deep cleaning" + (s.declutter ? " & decluttering" : ""), c]);
-    // painting
-    if(pk.svc.includes("painting")){
-      const P = R.painting;
-      let p = sq * (P.walls.labour + P.walls.material);
-      if(s.level === "full"){
-        if(s.ceilings) p += sq * (P.ceiling.labour + P.ceiling.material);
-        p += this.n(s.doors) * (P.door.labour + P.door.material);
-      }
-      lines.push(["Painting", p]);
-    }
-    // flooring
-    if(pk.svc.includes("flooring")){
-      const F = R.flooring, t = F[s.floor] || F.vinyl, w = PP_WASTE[s.floor] || 1.10;
-      const f = sq*t.labour + sq*w*t.material + sq*(F.removal.labour+F.removal.material) + this.lf(sq)*(F.baseboards.labour+F.baseboards.material);
-      lines.push(["Flooring — " + (PP_FLOORS.find(x => x[0] === s.floor) || PP_FLOORS[0])[1], f]);
-    }
-    if(pk.svc.includes("kitchen")) tbd.push("Kitchen & bathroom renovation — log in to design and price");
-    const sub = lines.reduce((a, l) => a + l[1], 0);
-    return { lines, tbd, sub };
+    if(!pk) return { lines, tbd };
+    lines.push("Deep cleaning" + (s.declutter ? " & decluttering" : ""));
+    if(s.carpet) lines.push("Carpet cleaning");
+    if(pk.svc.includes("painting")) lines.push(s.level === "full" ? "Painting: full interior" + (s.ceilings ? " incl. ceilings" : "") + " & doors" : "Painting: walls, baseboards & trims");
+    if(pk.svc.includes("flooring")) lines.push("New flooring: " + (PP_FLOORS.find(x => x[0] === s.floor) || PP_FLOORS[0])[1] + ", with removal & baseboards");
+    if(pk.svc.includes("kitchen")) tbd.push("Kitchen & bathroom renovation (designed with you at the walkthrough)");
+    if(s.declutter) tbd.push("Decluttering is priced after a photo review");
+    return { lines, tbd };
   },
 
   render(){
@@ -450,7 +511,6 @@ const PP = {
     ].map(([t, rows]) => `<details class="incl"><summary>${t}</summary>${rows.map(([h, d]) => `<p><b>${h}:</b> ${d}</p>`).join("")}</details>`).join("");
     // package cards
     document.getElementById("pkgs").innerHTML = PP_PACKAGES.map(p => {
-      const q = this.compute(p.id);
       const svc = ["cleaning","painting","flooring","kitchen"].map(k => {
         const on = p.svc.includes(k);
         const l = { cleaning:"Deep cleaning", painting:"Painting", flooring:"Flooring", kitchen:"Kitchen & bath (optional)" }[k];
@@ -461,7 +521,6 @@ const PP = {
         <span class="pkg-name">${p.name}</span>
         <span class="pkg-tag">${p.tag}</span>
         <ul>${svc}</ul>
-        <span class="pkg-price" data-pkg="${p.id}">${q.sub > 0 ? `<small>From</small> ${this.fmt(this.range(q.sub).low)}${p.id === 4 ? '<em> + kitchen &amp; bath</em>' : ""}` : '<small>Enter sqft for pricing</small>'}</span>
       </button>`;
     }).join("");
     // options
@@ -469,7 +528,7 @@ const PP = {
     let o = `
       <div class="opt">
         <label class="chk"><input type="checkbox" ${s.carpet ? "checked" : ""} onchange="PP.set('carpet', this.checked, true)"> Add carpet cleaning <em>(extra)</em></label>
-        ${s.carpet ? `<div class="sub-in"><label for="cs">Carpeted area (sqft)</label><input type="number" id="cs" min="0" value="${s.carpetSqft}" placeholder="e.g. 400" oninput="PP.set('carpetSqft', this.value)"></div>` : ""}
+        ${s.carpet ? `<div class="sub-in"><label for="cs">Carpeted area (sqft, approx.)</label><input type="number" id="cs" min="0" value="${s.carpetSqft}" placeholder="e.g. 400" oninput="PP.set('carpetSqft', this.value)"></div>` : ""}
         <label class="chk"><input type="checkbox" ${s.declutter ? "checked" : ""} onchange="PP.set('declutter', this.checked, true)"> Add decluttering <em>(priced after a photo review)</em></label>
         ${s.declutter ? `<div class="decl-box">
           <div class="decl-t">Upload photos of the areas to declutter</div>
@@ -502,42 +561,25 @@ const PP = {
     }
     if(pk.svc.includes("kitchen")){
       o += `<div class="opt"><div class="opt-t">Kitchen &amp; bathrooms</div>
-        <div class="hint" style="margin-top:0">Design the kitchen and bathrooms — cabinets, countertops, backsplash, island, tubs, showers and tile — and price them instantly in the Reno to Sold agent portal.</div>
-        <a class="cta login-cta" href="${PP_LOGIN_URL}">Log in to design kitchen &amp; bath →</a>
-        <div class="q-small" style="text-align:center">New to Reno to Sold? <a href="../signup/" style="color:inherit;font-weight:700">Start a 5-day free trial</a>.</div></div>`;
+        <div class="hint" style="margin-top:0">We design the kitchen and bathrooms with you (cabinets, countertops, backsplash, island, tubs, showers and tile) and price them at your walkthrough.</div></div>`;
     }
     document.getElementById("opts").innerHTML = o;
     this.renderQuote();
   },
 
-  renderPrices(){
-    PP_PACKAGES.forEach(p => {
-      const el = document.querySelector(`.pkg-price[data-pkg="${p.id}"]`);
-      if(!el) return;
-      const q = this.compute(p.id);
-      el.innerHTML = q.sub > 0 ? `<small>From</small> ${this.fmt(this.range(q.sub).low)}${p.id === 4 ? '<em> + kitchen &amp; bath</em>' : ""}` : '<small>Enter sqft for pricing</small>';
-    });
-    this.renderQuote();
-  },
+  renderPrices(){ this.renderQuote(); },
 
   renderQuote(){
     const s = this.s, q = this.compute(s.pkg);
     const pk = PP_PACKAGES.find(p => p.id === s.pkg);
-    const el = document.getElementById("quote");
-    if(!q.sub){
-      el.innerHTML = `<div class="q-pkg">Package ${pk.id} · ${pk.name}</div><div class="q-empty">Enter the property's square footage to see your guaranteed price range.</div>`;
-      return;
-    }
-    el.innerHTML = `
-      <div class="q-pkg">Package ${pk.id} · ${pk.name}</div>
-      <div class="q-range">${this.rg(q.sub)}</div>
-      <div class="q-note">Plus HST. The exact amount is provided at the walkthrough and is <b>guaranteed to be within this range</b>.</div>
-      <div class="q-lines">${q.lines.map(l => `<div class="totrow"><span>${l[0]}</span><span class="v">${this.rg(l[1])}</span></div>`).join("")}
-        ${q.tbd.map(t => `<div class="totrow tbd"><span>${t}</span><span class="v">TBD</span></div>`).join("")}</div>
-      <button type="button" class="btn-gold cta" onclick="PPB.open()">Book a walkthrough</button>
-      <a class="cta ghost" href="tel:${PP_CONTACT.phone.replace(/\D/g, "")}">Call ${PP_CONTACT.phone}</a>
-      <a class="agent-link" href="${PP_LOGIN_URL}">Agent? Log in to the full tool →</a>
-      <div class="q-small">Save quotes, send them to your seller and book walkthroughs.</div>`;
+    document.getElementById("quote").innerHTML = `
+      <div class="q-pkg">Package ${pk.id}</div>
+      <div class="q-range" style="font-size:22px">${pk.name}</div>
+      <div class="q-note">${pk.tag}.</div>
+      <ul class="q-incl">${q.lines.map(l => `<li>${l}</li>`).join("")}${q.tbd.map(t => `<li class="tbd">${t}</li>`).join("")}</ul>
+      <div class="q-note" style="margin-bottom:12px">Your exact price is given at a <b>free, no-obligation walkthrough</b>. Plus HST.</div>
+      <button type="button" class="btn-gold cta" onclick="PPB.open()">Book a free walkthrough</button>
+      <a class="cta ghost" href="tel:${PP_CONTACT.phone.replace(/\D/g, "")}">Call ${PP_CONTACT.phone}</a>`;
   }
 };
 
@@ -602,8 +644,6 @@ const PPB = {
   },
 
   open(){
-    const q = PP.compute(PP.s.pkg);
-    if(!q.sub){ alert("Enter the property's square footage first so we can include your price range."); return; }
     this.prefs = [];
     const ov = document.createElement("div");
     ov.className = "bk-bg"; ov.id = "bkModal";
@@ -617,20 +657,22 @@ const PPB = {
   formHtml(){
     const days = rtsBookableDays();
     const pk = PP_PACKAGES.find(p => p.id === PP.s.pkg);
-    const q = PP.compute(PP.s.pkg);
     return `
-      <div class="bk-h"><b>Book a walkthrough</b><button type="button" class="bk-x" aria-label="Close" onclick="PPB.close()">×</button></div>
+      <div class="bk-h"><b>Book a free walkthrough</b><button type="button" class="bk-x" aria-label="Close" onclick="PPB.close()">×</button></div>
       <div class="bk-b">
-        <div class="bk-sum">Package ${pk.id} · ${pk.name} · <b>${PP.rg(q.sub)}</b> + HST<br>${PPB.propLine(PP.s)}</div>
+        <div class="bk-sum">Package ${pk.id} · <b>${pk.name}</b><br>${PPB.propLine(PP.s)}</div>
 
         <div class="bk-sec">1 · Your details</div>
         <div class="bk-2">
-          <div><label for="bkName">Name</label><input type="text" id="bkName" autocomplete="name"></div>
-          <div><label for="bkRole">I am</label><select id="bkRole"><option>A real estate agent</option><option>A homeowner</option><option>Other</option></select></div>
+          <div><label for="bkName">Your name</label><input type="text" id="bkName" autocomplete="name"></div>
+          <div><label for="bkAgent">Your real estate agent <span style="text-transform:none;letter-spacing:0;font-weight:400">(optional)</span></label><input type="text" id="bkAgent" placeholder="Name, if you have one"></div>
           <div><label for="bkEmail">Email</label><input type="email" id="bkEmail" autocomplete="email"></div>
           <div><label for="bkPhone">Phone</label><input type="tel" id="bkPhone" autocomplete="tel"></div>
         </div>
-        <label for="bkAddr">Property address</label><input type="text" id="bkAddr" placeholder="Street, city">
+        <label for="bkWhen">When are you planning to sell?</label>
+        <select id="bkWhen"><option value="">Choose one…</option><option>Within 3 months</option><option>In 3–6 months</option><option>In 6–12 months</option><option>Just exploring</option></select>
+        <label for="bkAddr">Property address</label>
+        <div class="addr-wrap"><input type="text" id="bkAddr" placeholder="Start typing the address…" autocomplete="off" oninput="PPA.input(this)" onkeydown="PPA.key(event)" onblur="setTimeout(()=>PPA.hide(),150)"><div class="addr-list" id="bkAddrList" role="listbox"></div></div>
 
         <div class="bk-sec">2 · Pick 3 times that work for you</div>
         <div class="hint" style="margin-top:0">Choose three different days. We'll confirm one of them by email. Earliest available: <b>${rtsNiceDay(days[0], true)}</b>.</div>
@@ -642,6 +684,7 @@ const PPB = {
 
         <label for="bkNotes" style="margin-top:12px">Notes <span style="text-transform:none;letter-spacing:0;font-weight:400">(optional)</span></label>
         <textarea id="bkNotes" rows="3" placeholder="Access, parking, anything we should know…"></textarea>
+        <div class="hint">Your details go straight to our team to arrange your walkthrough. We don't sell them or add you to a mailing list.</div>
         <div class="bk-err" id="bkErr"></div>
       </div>
       <div class="bk-f">
@@ -690,7 +733,8 @@ const PPB = {
     if(!/.+@.+\..+/.test(email)) return this.err("Please add a valid email.");
     if(phone.replace(/\D/g, "").length < 10) return this.err("Please add a phone number.");
     if(!addr) return this.err("Please add the property address.");
-    if(!PP.s.ptype || !PP.n(PP.s.beds) || !PP.n(PP.s.baths)) return this.err("Please add the property type, bedrooms and bathrooms (step 1 on the page).");
+    if(!v("bkWhen")) return this.err("Please tell us when you're planning to sell.");
+    if(!PP.s.ptype || !PP.n(PP.s.beds) || !PP.n(PP.s.baths) || !PP.n(PP.s.sqft)) return this.err("Please add the property type, size, bedrooms and bathrooms (step 1 on the page).");
     if(this.prefs.length !== 3) return this.err("Please pick 3 different days.");
     const allowed = rtsBookableDays();
     if(this.prefs.some(p => !allowed.includes(p.date))) return this.err("One of the days is no longer available — please pick again.");
@@ -701,20 +745,20 @@ const PPB = {
     const id = (crypto.randomUUID ? crypto.randomUUID() : ("10000000-1000-4000-8000-100000000000").replace(/[018]/g, c => (c ^ Math.random()*16 >> c/4).toString(16)));
     const pk = PP_PACKAGES.find(p => p.id === PP.s.pkg);
     const q = PP.compute(PP.s.pkg);
-    const r = PP.range(q.sub);
     const quote = {
       packageId: pk.id, packageName: pk.name, sqft: PP.n(PP.s.sqft), options: JSON.parse(JSON.stringify(PP.s)),
-      low: r.low, high: r.high, rangePct: PP.rates.rangePct,
-      lines: q.lines.map(l => ({ label:l[0], amount: Math.round(l[1]), low: PP.range(l[1]).low, high: PP.range(l[1]).high })), tbd: q.tbd
+      low: null, high: null, lines: q.lines.map(l => ({ label:l })), tbd: q.tbd
     };
+    const agent = v("bkAgent").trim();
     try {
       // photos first (best effort — a failed photo never blocks the request)
       const photos = [];
       for(const p of this.photos){
         try { photos.push(await this.upload(id, p.file)); } catch(e){ console.warn("photo upload failed", e); }
       }
-      const row = { id, source:"website", status:"new", name, email, phone, role: v("bkRole"), address: addr,
-        preferences: this.prefs, quote, photos, notes: v("bkNotes").trim() };
+      const notes = ["Selling: " + v("bkWhen"), agent ? "Agent: " + agent : "", v("bkNotes").trim()].filter(Boolean).join("\n");
+      const row = { id, source:"website", status:"new", name, email, phone, role: "Homeowner", address: addr,
+        preferences: this.prefs, quote, photos, notes };
       const res = await fetch(PP_SUPABASE_URL + "/rest/v1/walkthrough_requests", {
         method:"POST",
         headers:{ "apikey":PP_SUPABASE_ANON, "Authorization":"Bearer " + PP_SUPABASE_ANON, "Content-Type":"application/json", "Prefer":"return=minimal" },
@@ -750,22 +794,23 @@ const PPB = {
   },
   async notify(row){
     const body = [
-      `New walkthrough request from the website (renotosold.homes/packages).`, ``,
+      `New HOMEOWNER walkthrough request from renotosold.homes/packages.`, ``,
       `Name: ${row.name} (${row.role})`, `Email: ${row.email}`, `Phone: ${row.phone}`, `Property: ${row.address}`,
+      ...row.notes.split("\n").filter(l => /^(Selling|Agent):/.test(l)),
       `Details: ${PPB.propLine(row.quote.options)}`, ``,
       `Preferred times:`, ...row.preferences.map((p, i) => `  ${i+1}. ${rtsNiceDay(p.date, true)}, ${p.window}`), ``,
       `Package ${row.quote.packageId} — ${row.quote.packageName} · ${row.quote.sqft} sqft`,
-      `Range shown: ${PP.fmt(row.quote.low)} – ${PP.fmt(row.quote.high)} + HST`,
-      ...row.quote.lines.map(l => `  • ${l.label}: ${PP.fmt(l.low)} – ${PP.fmt(l.high)}`),
+      `(No price was shown — homeowner page. Price it in the portal: open the request → Open as quote.)`,
+      ...row.quote.lines.map(l => `  • ${l.label}`),
       ...row.quote.tbd.map(t => `  • ${t}`),
       row.photos.length ? `\nPhotos: ${row.photos.length} uploaded` : "",
-      row.notes ? `\nNotes: ${row.notes}` : "", ``,
+      (row.notes.split("\n").filter(l => !/^(Selling|Agent):/.test(l)).join(" ")) ? `\nNotes: ${row.notes.split("\n").filter(l => !/^(Selling|Agent):/.test(l)).join(" ")}` : "", ``,
       `Confirm a time in the portal: Pre-listing packages → All package quotes → Website requests.`
     ].join("\n");
     await fetch(PP_SUPABASE_URL + "/functions/v1/email-estimate", {
       method:"POST",
       headers:{ "apikey":PP_SUPABASE_ANON, "Authorization":"Bearer " + PP_SUPABASE_ANON, "Content-Type":"application/json" },
-      body: JSON.stringify({ to:[PP_CONTACT.email], cc:[], subject:`Walkthrough request — ${row.address}`, body })
+      body: JSON.stringify({ to:[PP_CONTACT.email], cc:[], subject:`Homeowner walkthrough request — ${row.address}`, body })
     });
   },
   done(row){
@@ -774,7 +819,7 @@ const PPB = {
       <div class="bk-h"><b>Request sent</b><button type="button" class="bk-x" aria-label="Close" onclick="PPB.close()">×</button></div>
       <div class="bk-b bk-done">
         <div class="bk-check">✓</div>
-        <p>Thanks, ${row.name.split(/\s+/)[0]}! We received your walkthrough request for <b>${row.address.replace(/</g,"&lt;")}</b>.</p>
+        <p>Thanks, ${row.name.split(/\s+/)[0].replace(/</g,"&lt;")}! We received your walkthrough request for <b>${row.address.replace(/</g,"&lt;")}</b>.</p>
         <p>Your preferred times:</p>
         <ul>${row.preferences.map(p => `<li>${rtsNiceDay(p.date, true)}, ${p.window}</li>`).join("")}</ul>
         <p>We'll email <b>${row.email.replace(/</g,"&lt;")}</b> to confirm one of these, usually within one business day. Questions? Call <a href="tel:${PP_CONTACT.phone.replace(/\D/g,"")}">${PP_CONTACT.phone}</a>.</p>
@@ -786,8 +831,51 @@ const PPB = {
   }
 };
 
+/* Address suggestions — OpenStreetMap (Photon), biased to the GTA.
+   Free, no API key. If it's unavailable, the field still works as plain text. */
+const PPA = {
+  t:null, items:[], idx:-1, ctl:null,
+  input(el){
+    clearTimeout(this.t);
+    const q = el.value.trim();
+    if(q.length < 4){ this.hide(); return; }
+    this.t = setTimeout(() => this.search(q), 250);
+  },
+  async search(q){
+    try {
+      if(this.ctl) this.ctl.abort();
+      this.ctl = new AbortController();
+      const u = "https://photon.komoot.io/api/?limit=6&lang=en&lat=43.65&lon=-79.38&bbox=-80.6,43.1,-78.4,44.6&q=" + encodeURIComponent(q);
+      const r = await fetch(u, { signal: this.ctl.signal });
+      if(!r.ok) return this.hide();
+      const d = await r.json();
+      this.items = (d.features || []).map(f => f.properties || {}).filter(p => p.countrycode === "CA" || p.country === "Canada").map(p => {
+        const street = [p.housenumber, p.street || (p.type === "street" ? p.name : "")].filter(Boolean).join(" ") || p.name || "";
+        const city = p.city || p.town || p.village || p.district || p.county || "";
+        const line = [street, city, (p.state === "Ontario" ? "ON" : p.state), p.postcode].filter(Boolean).join(", ");
+        return { line, main: street || p.name || line, sub: [city, p.postcode].filter(Boolean).join(" · ") };
+      }).filter((x, i, a) => x.line && a.findIndex(y => y.line === x.line) === i);
+      this.idx = -1; this.draw();
+    } catch(e){ if(e && e.name !== "AbortError") this.hide(); }
+  },
+  draw(){
+    const el = document.getElementById("bkAddrList"); if(!el) return;
+    if(!this.items.length){ this.hide(); return; }
+    el.innerHTML = this.items.map((x, i) => `<button type="button" role="option" class="${i === this.idx ? "on" : ""}" onmousedown="event.preventDefault();PPA.pick(${i})">${x.main.replace(/</g,"&lt;")}<small>${x.sub.replace(/</g,"&lt;")}</small></button>`).join("") + `<div class="pw">Suggestions © OpenStreetMap</div>`;
+    el.classList.add("show");
+  },
+  pick(i){ const x = this.items[i]; const inp = document.getElementById("bkAddr"); if(x && inp){ inp.value = x.line; } this.hide(); },
+  hide(){ const el = document.getElementById("bkAddrList"); if(el){ el.classList.remove("show"); el.innerHTML = ""; } },
+  key(e){
+    const el = document.getElementById("bkAddrList"); if(!el || !el.classList.contains("show")) return;
+    if(e.key === "ArrowDown"){ e.preventDefault(); this.idx = Math.min(this.items.length - 1, this.idx + 1); this.draw(); }
+    else if(e.key === "ArrowUp"){ e.preventDefault(); this.idx = Math.max(0, this.idx - 1); this.draw(); }
+    else if(e.key === "Enter" && this.idx >= 0){ e.preventDefault(); this.pick(this.idx); }
+    else if(e.key === "Escape"){ this.hide(); }
+  }
+};
+
 PP.render();
-PP.loadRates();
 </script>
 </body>
 </html>

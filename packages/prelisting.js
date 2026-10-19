@@ -866,7 +866,7 @@ const PL = {
       return `<button class="pl-row" type="button" onclick="PL.openRequest('${r.id}')">
         <div class="pl-row-main"><div class="pl-row-addr">${plEsc(r.address || "—")}</div>
           <div class="pl-row-sub">${plEsc(r.name || "")} · ${plEsc(r.role || "")}${q.packageId ? " · Package " + q.packageId : ""}${c ? " · " + plEsc(plNiceDay(c.date)) + " " + plEsc(c.window) : ""}</div></div>
-        <div class="pl-row-range">${q.low ? fmt(q.low) + " – " + fmt(q.high) : "—"}</div>
+        <div class="pl-row-range">${q.low ? fmt(q.low) + " – " + fmt(q.high) : "Homeowner request"}</div>
         <div class="pl-row-meta"><span class="pl-status ${st[0]}">${st[1]}</span></div>
       </button>`; }).join("")}</div>`;
   },
@@ -884,8 +884,8 @@ const PL = {
           <div><span>Phone</span><b><a href="tel:${plEsc((r.phone || "").replace(/[^0-9+]/g, ""))}" style="color:var(--gold-bright)">${plEsc(r.phone || "")}</a></b></div>
         </div>
         ${q.packageId ? `<div class="pl-q-lines" style="margin-top:14px;">
-          <div><span><b>Package ${q.packageId} · ${plEsc(q.packageName || "")}</b> · ${plEsc(plPropLine({ propType:(q.options||{}).ptype, beds:(q.options||{}).beds, baths:(q.options||{}).baths, basementIncluded:(q.options||{}).bsmt, propSqft:q.sqft }))}</span><b>${fmt(q.low)} – ${fmt(q.high)}</b></div>
-          ${(q.lines || []).map(l => `<div><span>${plEsc(l.label)}</span><b>${fmt(l.low)} – ${fmt(l.high)}</b></div>`).join("")}
+          <div><span><b>Package ${q.packageId} · ${plEsc(q.packageName || "")}</b> · ${plEsc(plPropLine({ propType:(q.options||{}).ptype, beds:(q.options||{}).beds, baths:(q.options||{}).baths, basementIncluded:(q.options||{}).bsmt, propSqft:q.sqft }))}</span><b>${q.low ? fmt(q.low) + " – " + fmt(q.high) : "Price at walkthrough"}</b></div>
+          ${(q.lines || []).map(l => `<div><span>${plEsc(l.label)}</span><b>${l.low ? fmt(l.low) + " – " + fmt(l.high) : "Included"}</b></div>`).join("")}
           ${(q.tbd || []).map(t => `<div class="tbd"><span>${plEsc(t)}</span><b>TBD</b></div>`).join("")}
         </div>` : ""}
         <div class="pl-admin-notes"><span>${c ? "Confirmed time" : "Preferred times — pick one to confirm"}</span>
@@ -918,7 +918,7 @@ const PL = {
     flash("Walkthrough confirmed");
     try {
       const nice = plNiceDay(p.date, true);
-      const body = `Hi ${(r.name || "").split(/\s+/)[0] || "there"},\n\nThanks for your request. Your pre-listing walkthrough for ${r.address} is confirmed for ${nice}, ${p.window}.${note ? "\n\n" + note : ""}\n\nWe'll confirm the exact amount at the walkthrough — guaranteed to be within the range you were quoted.\n\nQuestions? Reply to this email or call 647-500-0270.\n\nReno to Sold`;
+      const body = `Hi ${(r.name || "").split(/\s+/)[0] || "there"},\n\nThanks for your request. Your pre-listing walkthrough for ${r.address} is confirmed for ${nice}, ${p.window}.${note ? "\n\n" + note : ""}\n\n${(r.quote || {}).low ? "We'll confirm the exact amount at the walkthrough — guaranteed to be within the range you were quoted." : "We'll walk through the home with you and give you your exact price."}\n\nQuestions? Reply to this email or call 647-500-0270.\n\nReno to Sold`;
       const rts = plSettings().ccEmail || COMPANY_INFO.email || "renotosold@gmail.com";
       await plSendEmail({ to:[r.email], cc:[rts], subject:`Walkthrough confirmed — ${nice}, ${p.window}`, body });
     } catch(e){ console.warn("[PL] confirmation email failed:", e && e.message); brandedAlert("The time is saved, but the confirmation email didn't send. Please email " + r.email + " directly."); }
