@@ -731,6 +731,29 @@
     display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;
   }
   @media (max-width:880px){ .inv-stats-grid{ grid-template-columns:repeat(2,1fr); } }
+
+  /* ===== Invoicing — All Projects: per-project cards ===== */
+  .inv-proj-grid{
+    display:grid;grid-template-columns:repeat(auto-fill, minmax(240px, 1fr));gap:12px;
+  }
+  .inv-proj-card{
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:14px 15px;cursor:pointer;display:flex;flex-direction:column;gap:6px;
+    transition:border-color .14s ease, transform .14s ease, box-shadow .14s ease;
+  }
+  .inv-proj-card:hover{ border-color:var(--gold-deep);transform:translateY(-2px);box-shadow:var(--gold-glow); }
+  .inv-proj-card.has-overdue{ border-color:rgba(226,109,109,.5); }
+  .ipc-name{ font-size:14.5px;font-weight:700;color:var(--ink-strong);line-height:1.25;word-break:break-word; }
+  .ipc-sub{ font-size:11.5px;color:var(--muted);line-height:1.3; }
+  .ipc-stats{ display:flex;gap:12px;margin-top:6px;flex-wrap:wrap; }
+  .ipc-stat .l{ font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700; }
+  .ipc-stat .v{ font-size:15px;font-weight:800;color:var(--gold-bright);font-variant-numeric:tabular-nums; }
+  .ipc-stat.warn .v{ color:#ff9090; }
+  .ipc-overdue{
+    margin-top:2px;font-size:11px;font-weight:700;color:#ff9090;
+    background:rgba(226,109,109,.12);border-radius:6px;padding:4px 8px;align-self:flex-start;
+  }
+  .inv-proj-empty{ color:var(--muted);font-style:italic;padding:22px 4px; }
   .inv-stat-card{
     background:#0a0a0e;border:1px solid var(--line-strong);border-radius:8px;
     padding:11px 14px;
@@ -812,6 +835,29 @@
   .inv-detail-meta input, .inv-detail-meta select{
     width:100%;padding:7px 10px;font-size:13px;
   }
+  /* Custom-invoice line-item editor */
+  .inv-lineitems{ margin:14px 0 4px; }
+  .inv-li-title{ font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:8px; }
+  .inv-li-head{ display:grid;grid-template-columns:1fr 150px 30px;gap:8px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:700;padding:0 2px 4px; }
+  .inv-li-head span:nth-child(2){ text-align:right; }
+  .inv-li-row{ display:grid;grid-template-columns:1fr 150px 30px;gap:8px;margin-bottom:8px;align-items:center; }
+  .inv-li-row input{ width:100%;padding:8px 10px;font-size:13px; }
+  .inv-li-row input[type="number"]{ text-align:right;font-variant-numeric:tabular-nums; }
+  .inv-li-del{
+    width:28px;height:28px;border-radius:7px;background:transparent;
+    border:1px solid var(--line-strong);color:var(--muted);cursor:pointer;
+    font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center;
+  }
+  .inv-li-del:hover{ color:var(--danger);border-color:var(--danger); }
+  .inv-li-del:disabled{ opacity:.4;cursor:not-allowed; }
+  .inv-li-add{
+    background:transparent;border:1px dashed var(--line-strong);color:var(--gold-bright);
+    font-family:inherit;font-weight:600;font-size:12.5px;letter-spacing:.03em;
+    padding:8px 14px;border-radius:8px;cursor:pointer;margin-top:2px;
+  }
+  .inv-li-add:hover{ border-color:var(--gold);color:var(--gold); }
+  .inv-li-add:disabled{ opacity:.4;cursor:not-allowed; }
+
   .inv-totals{
     background:#0a0a0e;border:1px solid var(--line-strong);
     border-radius:8px;padding:12px 14px;margin:12px 0;
@@ -1652,21 +1698,19 @@
     display:flex; align-items:center; gap:12px;
   }
   .es-agent-avatar{
-    width:64px; height:64px;
-    min-width:64px; max-width:64px;
-    min-height:64px; max-height:64px;
-    aspect-ratio: 1 / 1;
-    border-radius:50%;
+    height:64px; min-height:64px; max-height:64px;
+    min-width:64px; max-width:180px; width:auto;
+    border-radius:10px;
     background:#f4efe1; border:2px solid #d4af6a; overflow:hidden;
-    flex:0 0 64px;
-    box-sizing:border-box;
-    display:inline-block;
+    flex:0 0 auto;
+    box-sizing:border-box; padding:5px;
+    display:inline-flex; align-items:center; justify-content:center;
     vertical-align:middle;
   }
   .es-agent-avatar img{
-    width:100%; height:100%;
-    aspect-ratio: 1 / 1;
-    object-fit:cover; object-position:center;
+    max-width:100%; max-height:100%;
+    width:auto; height:auto;
+    object-fit:contain; object-position:center;
     display:block;
   }
   .es-agent-avatar.no-photo{ display:none; }
@@ -1728,28 +1772,25 @@
   }
   @media (max-width:720px){
     .es-agent-avatar{
-      width:52px; height:52px;
-      min-width:52px; max-width:52px;
-      min-height:52px; max-height:52px;
-      flex:0 0 52px;
+      height:52px; min-height:52px; max-height:52px;
+      min-width:52px; max-width:150px; width:auto;
+      flex:0 0 auto;
     }
     .es-agent-name{ font-size:12px; }
   }
   @media print{
     .es-agent-avatar{
-      width:64px !important; height:64px !important;
-      min-width:64px !important; max-width:64px !important;
-      min-height:64px !important; max-height:64px !important;
-      aspect-ratio: 1 / 1 !important;
-      flex:0 0 64px !important;
-      border-radius:50% !important;
+      height:64px !important; min-height:64px !important; max-height:64px !important;
+      min-width:64px !important; max-width:180px !important; width:auto !important;
+      flex:0 0 auto !important;
+      border-radius:10px !important;
       -webkit-print-color-adjust:exact;
       print-color-adjust:exact;
     }
     .es-agent-avatar img{
-      width:64px !important; height:64px !important;
-      aspect-ratio: 1 / 1 !important;
-      object-fit:cover !important;
+      max-width:100% !important; max-height:100% !important;
+      width:auto !important; height:auto !important;
+      object-fit:contain !important;
       object-position:center !important;
     }
   }
@@ -2055,7 +2096,7 @@
     margin:0 0 3px;
   }
   .es-savings-card .es-sav-amount{
-    font-family:'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+    font-family:'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     font-size:34px; line-height:1; font-weight:700;
     color:#e8c989; letter-spacing:.02em;
     margin:4px 0 6px;
@@ -3267,6 +3308,71 @@
   .view{display:none;}
   .view.active{display:block;}
 
+  /* ===== ESTIMATOR PICKER =====
+     #estimatorPicker is the first child of #view-estimator. When
+     #view-estimator carries .show-picker we hide every OTHER direct child
+     (the whole editor) and show only the picker. When .show-picker is
+     absent the picker hides and the editor shows normally. */
+  #estimatorPicker{ display:none; }
+  #view-estimator.show-picker #estimatorPicker{ display:block; }
+  #view-estimator.show-picker > *:not(#estimatorPicker){ display:none !important; }
+
+  .ep-head{
+    display:flex; align-items:flex-end; justify-content:space-between;
+    gap:16px; flex-wrap:wrap; margin:8px 0 22px;
+  }
+  .ep-title{ font-size:24px; font-weight:800; color:var(--ink-strong); letter-spacing:.01em; }
+  .ep-sub{ font-size:13px; color:var(--muted); margin-top:4px; }
+  .ep-new-btn{
+    display:inline-flex; align-items:center; gap:8px;
+    background:var(--gold-grad); color:#1a1508; border:none;
+    font-family:inherit; font-weight:700; font-size:13.5px; letter-spacing:.03em;
+    padding:11px 18px; border-radius:10px; cursor:pointer;
+    box-shadow:var(--gold-glow); transition:transform .12s ease, box-shadow .12s ease;
+  }
+  .ep-new-btn:hover{ transform:translateY(-1px); box-shadow:0 6px 22px rgba(212,175,106,.28); }
+  .ep-new-btn i{ font-size:16px; }
+
+  .ep-grid{
+    display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr));
+    gap:14px;
+  }
+  /* Saved-estimate card */
+  .ep-card{
+    position:relative; text-align:left;
+    background:var(--panel); border:1px solid var(--line);
+    border-radius:14px; padding:16px 16px 14px; cursor:pointer;
+    display:flex; flex-direction:column; gap:8px; min-height:132px;
+    transition:border-color .14s ease, transform .14s ease, box-shadow .14s ease;
+  }
+  .ep-card:hover{ border-color:var(--gold-deep); transform:translateY(-2px); box-shadow:var(--gold-glow); }
+  .ep-card-name{ font-size:15.5px; font-weight:700; color:var(--ink-strong); line-height:1.25;
+    padding-right:26px; word-break:break-word; }
+  .ep-card-addr{ font-size:12px; color:var(--gold-bright); line-height:1.35; }
+  .ep-card-seller{ font-size:11.5px; color:var(--muted); line-height:1.35; }
+  .ep-card-foot{ margin-top:auto; display:flex; align-items:center; justify-content:space-between; gap:8px; padding-top:8px; }
+  .ep-card-total{ font-size:17px; font-weight:800; color:var(--gold-bright); font-variant-numeric:tabular-nums; }
+  .ep-card-date{ font-size:10.5px; color:var(--muted); }
+  .ep-card-del{
+    position:absolute; top:10px; right:10px;
+    width:26px; height:26px; border-radius:7px;
+    background:transparent; border:1px solid var(--line-strong); color:var(--muted);
+    cursor:pointer; font-size:13px; line-height:1; display:flex; align-items:center; justify-content:center;
+    opacity:0; transition:opacity .14s ease, color .14s ease, border-color .14s ease;
+  }
+  .ep-card:hover .ep-card-del{ opacity:1; }
+  .ep-card-del:hover{ color:var(--danger); border-color:var(--danger); }
+  /* "New estimate" tile — dashed, sits first in the grid */
+  .ep-card.ep-card-new{
+    align-items:center; justify-content:center; text-align:center;
+    border-style:dashed; border-color:var(--line-strong); background:transparent; color:var(--muted);
+    gap:6px;
+  }
+  .ep-card.ep-card-new:hover{ border-color:var(--gold); color:var(--gold-bright); }
+  .ep-card-new .ep-new-plus{ font-size:26px; line-height:1; }
+  .ep-card-new .ep-new-label{ font-size:13px; font-weight:700; letter-spacing:.03em; }
+  .ep-empty{ grid-column:1/-1; color:var(--muted); font-style:italic; padding:20px 4px; }
+
   /* ----- Sidebar — expanded state ----- */
   .app-sidebar{
     width:200px;flex-shrink:0;background:var(--panel);border:1px solid var(--line);
@@ -3391,17 +3497,19 @@
   }
   .uic-contact span{display:inline-flex;align-items:center;gap:4px;}
   .uic-contact i{font-size:12px;color:var(--gold);}
+  /* Logo-friendly identity slot: fixed height, flexible width so a WIDE
+     brokerage logo (RE/MAX etc.) shows in full via object-fit:contain instead
+     of being cropped to a circle. Square agent photos still display fine
+     (they render as a rounded square). */
   .uic-avatar{
-    width:54px;height:54px;
-    min-width:54px;max-width:54px;
-    min-height:54px;max-height:54px;
-    aspect-ratio:1/1;
-    border-radius:50%;background:var(--panel-2);
+    height:52px;min-height:52px;max-height:52px;
+    min-width:52px;max-width:170px;width:auto;
+    border-radius:9px;background:var(--panel-2);
     border:2px solid var(--gold);overflow:hidden;
-    flex:0 0 54px;box-sizing:border-box;
-    display:flex;align-items:center;justify-content:center;
+    flex:0 0 auto;box-sizing:border-box;padding:4px;
+    display:inline-flex;align-items:center;justify-content:center;
   }
-  .uic-avatar img{width:100%;height:100%;object-fit:cover;object-position:center;display:block;}
+  .uic-avatar img{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;object-position:center;display:block;}
   .uic-avatar.no-photo{display:none;}  /* hide cleanly when no photo — header still balanced */
 
   /* RTS partner block — wraps the "Powered by" divider + compact RTS
@@ -3478,10 +3586,9 @@
     .brandbar.has-identity .logo-img{max-width:110px;max-height:38px;}
     .user-identity{gap:10px;}
     .uic-avatar{
-      width:44px;height:44px;
-      min-width:44px;max-width:44px;
-      min-height:44px;max-height:44px;
-      flex:0 0 44px;
+      height:44px;min-height:44px;max-height:44px;
+      min-width:44px;max-width:140px;width:auto;
+      flex:0 0 auto;
       border-width:1.5px;
     }
     .uic-name{font-size:11px;}
@@ -3590,12 +3697,13 @@
     background:var(--panel-2);border:1px dashed var(--line-strong);border-radius:10px;
   }
   .avatar-uploader .au-preview{
-    width:62px;height:62px;border-radius:50%;background:#0d0d11;
+    height:62px;min-width:62px;max-width:150px;width:auto;
+    border-radius:10px;background:#0d0d11;padding:4px;box-sizing:border-box;
     border:2px solid var(--line-strong);overflow:hidden;flex-shrink:0;
-    display:flex;align-items:center;justify-content:center;color:var(--muted);
+    display:inline-flex;align-items:center;justify-content:center;color:var(--muted);
     font-size:11px;letter-spacing:.06em;text-transform:uppercase;
   }
-  .avatar-uploader .au-preview img{width:100%;height:100%;object-fit:cover;display:block;}
+  .avatar-uploader .au-preview img{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;display:block;}
   .avatar-uploader .au-actions{display:flex;flex-direction:column;gap:6px;flex:1;}
   .avatar-uploader .au-row{display:flex;gap:8px;}
   .avatar-uploader .au-hint{font-size:10.5px;color:var(--muted);}
@@ -4313,7 +4421,7 @@
         <span class="sb-item-label">Pre-listing packages</span>
       </button>
 
-      <button class="sb-item" data-route="estimator" data-feature="estimator" data-label="Detailed renovation estimator" onclick="navigateTo('estimator')">
+      <button class="sb-item" data-route="estimator" data-feature="estimator" data-label="Detailed renovation estimator" onclick="openEstimatorHome()">
         <i class="ti ti-calculator" aria-hidden="true"></i>
         <span class="sb-item-label">Detailed renovation estimator</span>
       </button>
@@ -4594,8 +4702,30 @@
            on the estimator. -->
       <div id="view-estimator" class="view">
 
+        <!-- ============================================================
+             ESTIMATOR PICKER — the "home" screen for the estimator.
+             Shown when the user opens Estimator from the dashboard/sidebar
+             so they choose an existing estimate or explicitly start a new
+             one, instead of dropping straight into a blank estimate.
+             Toggled via the .show-picker class on #view-estimator, which
+             hides every OTHER direct child (the editor) — same pattern as
+             the contractor bid-response mode. ============================ -->
+        <div id="estimatorPicker" class="no-print">
+          <div class="ep-head">
+            <div>
+              <div class="ep-title">Your estimates</div>
+              <div class="ep-sub">Open a saved estimate to keep working on it, or start a new one.</div>
+            </div>
+            <button class="ep-new-btn" onclick="startNewEstimateFromPicker()">
+              <i class="ti ti-plus" aria-hidden="true"></i> New estimate
+            </button>
+          </div>
+          <div class="ep-grid" id="epGrid"></div>
+        </div>
+
         <!-- Workflow toolbar (was Row 2 of the old brand bar). -->
         <div class="toolbar-row-2 no-print">
+          <button onclick="openEstimatorHome()" title="Back to your saved estimates">&larr; All estimates</button>
           <button onclick="newEstimate()">+ New</button>
           <button onclick="saveEstimate()">Save</button>
           <button onclick="openSavedModal()">Saved</button>
@@ -5361,10 +5491,29 @@
     <h3>
       <span id="invDetailHeading">Invoice</span>
       <span class="small-stack">
+        <button class="primary" onclick="saveAndCloseInvoiceDetail()" title="Save your changes and return to the invoice list">Save &amp; Close</button>
         <button class="ghost" onclick="closeInvoiceDetail()">Close</button>
       </span>
     </h3>
     <div class="modal-body" id="invoiceDetailBody"></div>
+  </div>
+</div>
+
+<!-- Invoice Preview modal — shows the rendered invoice PDF element on-screen
+     (same builder the Download / Email flows use) so the user can eyeball it
+     before sending. Read-only. -->
+<div class="modal-bg" id="invoicePreviewModal" onclick="if(event.target===this)closeInvoicePreview()">
+  <div class="modal" style="max-width:820px;">
+    <h3>
+      <span>Invoice Preview</span>
+      <span class="small-stack">
+        <button class="primary" id="invPreviewDownloadBtn" onclick="downloadInvoiceFromPreview()">Download PDF</button>
+        <button class="ghost" onclick="closeInvoicePreview()">Close</button>
+      </span>
+    </h3>
+    <div class="modal-body">
+      <div id="invoicePreviewBody" style="background:#e9e9ee;padding:16px;border-radius:8px;max-height:70vh;overflow:auto;"></div>
+    </div>
   </div>
 </div>
 
@@ -5735,7 +5884,14 @@ const DEFAULT_PRICES = {
       //             glass enclosure.
       refresh: { labour: 1800, material: 2700 },
       convert: { labour: 3425, material: 4570 },
-      new:     { labour: 4500, material: 7670 }
+      new:     { labour: 4500, material: 7670 },
+      // Curbless (zero-threshold / barrier-free) upgrade — NEW BUILD only.
+      // Fixed per-bathroom add-on ON TOP of the "new" shower price. Covers the
+      // GTA 2026 premium over a standard curbed shower: linear drain (~$650
+      // more than a centre drain), recessing + sloping the subfloor between
+      // joists, and continuous waterproofing across the zero-threshold entry.
+      // ~$2,200 total (mid-range of the GTA $800–$2,500 upcharge band).
+      curbless: { labour: 1400, material: 800 }
     }
   },
   potlights: {
@@ -5977,7 +6133,7 @@ function freshState(){
     // fills it in via the bid link, just like other categories. The Internal
     // Mode override is for cases where there's no bid yet but Mo wants to
     // pre-set a contractor cost for margin tracking.
-    miscellaneous: { items: [] },
+    miscellaneous: { items: [], bypassDiscount: false },
     // INVOICES — array of invoice records tied to this estimate. Pre-populated
     // by the active milestone schedule (10/40/40/10 by default, or
     // 10/40/20/20/10 when kitchen is in scope — see getMilestoneSchedule()),
@@ -6071,6 +6227,15 @@ function defaultBath(){
     doubleVanity:false,
     standUpShower:false,
     showerType:"convert",
+    // Curbless (zero-threshold) shower upgrade — only chargeable on a NEW BUILD
+    // shower (showerType==="new"). Fixed add-on priced from bathroom.standUpShower.curbless.
+    curbless:false,
+    // "Tile all bathroom walls" — full floor-to-ceiling wall tile for the whole
+    // room, not just the tub/shower surround. When on, the room dimensions below
+    // drive the "Wall tiling required (sqft)" figure (2×(L+W)×height) and that
+    // SUPERSEDES the tub/shower surround auto-estimate (no double counting).
+    tileAllWalls:false,
+    roomLength:"", roomWidth:"", roomHeight:8,
     // Custom stand-up shower footprint (used to compute floor + wall tile sqft)
     showerWidth:4, showerDepth:3, showerHeight:8,
     // Custom tub dimensions (used to compute tub-surround wall tile sqft)
@@ -6110,6 +6275,13 @@ function migrateFlatShowerPrice(p){
   // Backfill the "refresh" tier on older saves that only have convert + new
   if(p && p.bathroom && p.bathroom.standUpShower && !p.bathroom.standUpShower.refresh){
     p.bathroom.standUpShower.refresh = { labour: 1800, material: 2700 };
+  }
+  // Backfill the "curbless" upgrade tier on saves/snapshots from before it
+  // existed (deepMerge over DEFAULT_PRICES normally covers this, but pricing
+  // snapshots on old submissions are loaded WITHOUT a merge — see the snapshot
+  // restore paths — so backfill here keeps the pricing editor + compute safe).
+  if(p && p.bathroom && p.bathroom.standUpShower && !p.bathroom.standUpShower.curbless){
+    p.bathroom.standUpShower.curbless = { labour: 1400, material: 800 };
   }
   // Freestanding tub — new price entry per size tier. Backfill defaults if missing.
   if(p && p.bathroom){
@@ -6392,6 +6564,9 @@ function loadEstimate(id){
   deepMerge(merged, e.state || {});
   migrateOldEstimate(merged);
   state = merged; state._id = id;
+  // Loading an estimate always means we're now editing it — leave the picker.
+  estimatorView = "editor";
+  try { applyEstimatorView(); } catch(e){}
   renderAll();
   closeSavedModal();
 }
@@ -6440,6 +6615,12 @@ function migrateOldEstimate(m){
       if(typeof b.tubLength      !== "number" || !isFinite(b.tubLength))      b.tubLength      = 5;
       if(typeof b.tubEndWall     !== "number" || !isFinite(b.tubEndWall))     b.tubEndWall     = 3;
       if(typeof b.tubWallHeight  !== "number" || !isFinite(b.tubWallHeight))  b.tubWallHeight  = 8;
+      // Curbless upgrade + tile-all-walls — backfill on older saves.
+      if(typeof b.curbless     !== "boolean") b.curbless     = false;
+      if(typeof b.tileAllWalls !== "boolean") b.tileAllWalls = false;
+      if(b.roomLength == null) b.roomLength = "";
+      if(b.roomWidth  == null) b.roomWidth  = "";
+      if(typeof b.roomHeight !== "number" || !isFinite(b.roomHeight)) b.roomHeight = 8;
     });
   }
   // Flooring: removal & disposal is now ALWAYS included — force flag on older saves
@@ -6669,6 +6850,7 @@ function migrateOldEstimate(m){
   if(typeof m.enabled.miscellaneous !== "boolean") m.enabled.miscellaneous = false;
   if(!m.miscellaneous || typeof m.miscellaneous !== "object") m.miscellaneous = { items: [] };
   if(!Array.isArray(m.miscellaneous.items)) m.miscellaneous.items = [];
+  if(typeof m.miscellaneous.bypassDiscount !== "boolean") m.miscellaneous.bypassDiscount = false;
   m.miscellaneous.items.forEach((it, idx) => {
     if(!it.id || typeof it.id !== "string") it.id = "misc_" + Date.now() + "_" + idx + "_" + Math.floor(Math.random()*1e6).toString(36);
     if(typeof it.name        !== "string") it.name        = "";
@@ -6766,11 +6948,142 @@ async function deleteEstimate(id){
 async function newEstimate(){
   if(!(await brandedConfirm("Start a new estimate? Unsaved changes will be lost.", { confirmLabel: "Start New" }))) return;
   state = freshState();
+  estimatorView = "editor";
+  applyEstimatorView();
   renderAll();
+}
+
+/* ============================================================
+   ESTIMATOR PICKER — "home" screen for the Estimator route.
+   ============================================================
+   estimatorView is either "picker" (the card grid of saved estimates)
+   or "editor" (the live estimate form). Opening Estimator from the
+   sidebar lands on the picker; opening a card or starting a new estimate
+   flips to the editor. The editor's "← All estimates" button flips back. */
+let estimatorView = "picker";
+
+/* Toggle the .show-picker class on #view-estimator per estimatorView, and
+   (re)render the card grid when showing the picker. Safe to call anytime —
+   no-ops if the estimator view isn't in the DOM yet. */
+function applyEstimatorView(){
+  const view = document.getElementById("view-estimator");
+  if(!view) return;
+  const showPicker = (estimatorView !== "editor");
+  view.classList.toggle("show-picker", showPicker);
+  if(showPicker) renderEstimatorPicker();
+}
+
+/* Open the Estimator "home" (picker). Wired to the sidebar Estimator item. */
+function openEstimatorHome(){
+  estimatorView = "picker";
+  navigateTo("estimator");   // renderRoute() calls applyEstimatorView()
+}
+
+/* Reveal the editor (used after a card is opened or a new estimate starts). */
+function showEstimatorEditor(){
+  estimatorView = "editor";
+  applyEstimatorView();
+}
+
+/* Compute an estimate's grand total WITHOUT permanently loading it, by
+   briefly swapping the global `state` computeTotals() reads from. computeTotals
+   is pure (reads state + prices, mutates nothing), so this is side-effect free.
+   Returns null on any error so a bad save never breaks the card grid. */
+function estimateTotalFor(savedState){
+  const prev = state;
+  try {
+    const merged = freshState();
+    deepMerge(merged, savedState || {});
+    try { migrateOldEstimate(merged); } catch(_){}
+    state = merged;
+    return computeTotals().total;
+  } catch(e){
+    return null;
+  } finally {
+    state = prev;
+  }
+}
+
+/* Build the card grid from the saved-estimates list (localStorage, kept in
+   sync with the cloud `estimates` table by the existing sync code). */
+function renderEstimatorPicker(){
+  const grid = document.getElementById("epGrid");
+  if(!grid) return;
+  let list = [];
+  try { list = loadSavedList() || []; } catch(e){ list = []; }
+  // Newest first by savedAt.
+  list = list.slice().sort((a,b) => new Date(b.savedAt||0) - new Date(a.savedAt||0));
+
+  // New estimates are started from the "+ New estimate" button in the header,
+  // so the grid shows only the saved-estimate cards.
+  let html = "";
+
+  list.forEach(e => {
+    const st = e.state || {};
+    const name = (e.name || st.propName || "Untitled property").trim() || "Untitled property";
+    const addr = (st.propAddress || "").trim();
+    const s0 = (Array.isArray(st.sellers) && st.sellers[0]) ? st.sellers[0] : {};
+    const seller = ((s0.name || st.sellerName) || "").trim();
+    const allCount = Array.isArray(st.sellers) ? st.sellers.length : (seller ? 1 : 0);
+    const sellerLine = seller ? (seller + (allCount > 1 ? ` +${allCount-1} more` : "")) : "";
+    const status = st.status || "draft";
+    const statusPill = (status !== "draft" && typeof renderStatusPill === "function") ? renderStatusPill(status) : "";
+    const total = estimateTotalFor(st);
+    const totalTxt = (total != null && isFinite(total)) ? fmt(total) : "—";
+    const dateTxt = e.savedAt ? new Date(e.savedAt).toLocaleDateString(undefined, {month:"short", day:"numeric", year:"numeric"}) : "";
+    const id = e.id;
+    html += `
+      <div class="ep-card" onclick="openEstimateFromPicker('${id}')" title="Open this estimate">
+        <button class="ep-card-del no-print" title="Delete this estimate"
+          onclick="event.stopPropagation();deleteEstimateFromPicker('${id}')">&times;</button>
+        <div class="ep-card-name">${escapeHtml(name)}</div>
+        ${addr ? `<div class="ep-card-addr">${escapeHtml(addr)}</div>` : ""}
+        ${sellerLine ? `<div class="ep-card-seller">${escapeHtml(sellerLine)}</div>` : ""}
+        ${statusPill ? `<div style="margin-top:2px;">${statusPill}</div>` : ""}
+        <div class="ep-card-foot">
+          <span class="ep-card-total">${totalTxt}</span>
+          ${dateTxt ? `<span class="ep-card-date">${escapeHtml(dateTxt)}</span>` : ""}
+        </div>
+      </div>`;
+  });
+
+  if(!list.length){
+    html += `<div class="ep-empty">No saved estimates yet — start your first one above.</div>`;
+  }
+  grid.innerHTML = html;
+}
+
+/* Open a saved estimate from a picker card → load it into state and show the editor. */
+function openEstimateFromPicker(id){
+  loadEstimate(id);          // loads state + renderAll()
+  showEstimatorEditor();
+}
+
+/* Start a fresh estimate from the picker (no confirm — the picker is a clean
+   entry point) and drop into the editor. */
+function startNewEstimateFromPicker(){
+  state = freshState();
+  showEstimatorEditor();
+  renderAll();
+}
+
+/* Delete from a picker card. deleteEstimate() handles its own confirmation
+   prompt + cloud cascade; we just refresh the grid afterwards. */
+async function deleteEstimateFromPicker(id){
+  try { await deleteEstimate(id); } catch(e){}
+  renderEstimatorPicker();
 }
 
 /* ---------- Calculations ---------- */
 function num(v){ const n = parseFloat(v); return isFinite(n) && n>0 ? n : 0; }
+
+/* Miscellaneous line items are typically single lump-sum lines
+   ("Stairs — $5,000"), so the Qty field shows a "1" placeholder and a
+   blank / zero qty is treated as 1 (honouring that hint) instead of silently
+   zeroing the whole line. Used by EVERY misc line-total computation —
+   estimator card, client PDF, contractor bid, and margin snapshot — so the
+   four surfaces never disagree. */
+function miscQty(it){ const q = num(it && it.qty); return q > 0 ? q : 1; }
 
 function paintingSqft(){
   const s = state.painting;
@@ -6963,8 +7276,10 @@ function computeCategory(cat, priceSet){
       }
       const ft = num(b.floorTileSqft);
       if(p.floorTile){ labour += ft * p.floorTile.labour; material += ft * p.floorTile.material; }
-      // Wall tile zeroes out when freestanding tub is selected (no tub surround).
-      if(!b.freestandingTub){
+      // Wall tile zeroes out when freestanding tub is selected (no tub surround)
+      // — UNLESS "Tile all bathroom walls" is on, in which case the whole-room
+      // wall tile applies regardless of the tub type.
+      if(!b.freestandingTub || b.tileAllWalls){
         const wt = num(b.wallTileSqft);
         if(p.wallTile){ labour += wt * p.wallTile.labour; material += wt * p.wallTile.material; }
       }
@@ -6988,6 +7303,11 @@ function computeCategory(cat, priceSet){
         if(sR){
           labour += sR.labour;
           material += sR.material;
+        }
+        // Curbless (zero-threshold) upgrade — NEW BUILD only, fixed add-on.
+        if(showerType === "new" && b.curbless && p.standUpShower.curbless){
+          labour   += p.standUpShower.curbless.labour   || 0;
+          material += p.standUpShower.curbless.material || 0;
         }
       }
     });
@@ -7041,7 +7361,7 @@ function computeCategory(cat, priceSet){
     // material to keep the rate-based convention consistent.
     if(s && Array.isArray(s.items)){
       s.items.forEach(it => {
-        const t = num(it.qty) * num(it.clientRate);
+        const t = miscQty(it) * num(it.clientRate);
         if(isFinite(t)) material += t;
       });
     }
@@ -7265,6 +7585,14 @@ function updateWallRemovalLive(){
   } catch(_){}
 }
 
+/* True when the Miscellaneous category is enabled AND its "bypass discounts"
+   toggle is on — meaning misc items are excluded from any listing/custom
+   discount applied to the estimate. */
+function miscBypassActive(){
+  return !!(state && state.enabled && state.enabled.miscellaneous
+    && state.miscellaneous && state.miscellaneous.bypassDiscount);
+}
+
 function computeTotals(){
   let L = 0, M = 0;
   const perCat = {};
@@ -7274,33 +7602,41 @@ function computeTotals(){
     L += r.labour; M += r.material;
   });
   const sub = L + M;
+  // When "bypass discounts" is on for Miscellaneous, exclude the misc total
+  // from the base the discount is calculated + allocated against, so those
+  // items are never reduced by a listing/custom discount.
+  const miscR = perCat.miscellaneous || { labour:0, material:0 };
+  const miscTotal = miscR.labour + miscR.material;
+  const discountableBase = miscBypassActive() ? Math.max(0, sub - miscTotal) : sub;
   const d = state.discount || {};
   let listingDisc = 0, customDisc = 0;
   if(d.enabled){
     if(d.listing){
       const pct = num(prices.listingDiscount && prices.listingDiscount.percent);
-      listingDisc = sub * (Math.min(pct,100)/100);
+      listingDisc = discountableBase * (Math.min(pct,100)/100);
     }
     if(d.customEnabled){
       if(d.customType === "percent"){
         const pct = num(d.customValue);
-        customDisc = sub * (Math.min(pct,100)/100);
+        customDisc = discountableBase * (Math.min(pct,100)/100);
       } else {
-        customDisc = num(d.customValue);
+        // Flat custom discount — capped to the discountable base so it can
+        // never eat into bypassed misc items.
+        customDisc = Math.min(num(d.customValue), discountableBase);
       }
     }
   }
   let discount = listingDisc + customDisc;
-  discount = Math.min(discount, sub);
-  // proportionally scale if combined > sub
-  if(listingDisc + customDisc > sub && listingDisc + customDisc > 0){
-    const scale = sub / (listingDisc + customDisc);
+  discount = Math.min(discount, discountableBase);
+  // proportionally scale if combined > discountable base
+  if(listingDisc + customDisc > discountableBase && listingDisc + customDisc > 0){
+    const scale = discountableBase / (listingDisc + customDisc);
     listingDisc *= scale; customDisc *= scale;
   }
   const afterDisc = sub - discount;
   const hst = afterDisc * 0.13;
   const total = afterDisc + hst;
-  return { perCat, labour:L, material:M, subtotal:sub, listingDisc, customDisc, discount, afterDisc, hst, total };
+  return { perCat, labour:L, material:M, subtotal:sub, discountableBase, listingDisc, customDisc, discount, afterDisc, hst, total };
 }
 
 function fmt(n){
@@ -7614,16 +7950,22 @@ function renderTotals(){
   }
 
   // Overall discount rate (used to allocate a proportional share per category).
-  // discRate is 0..1; e.g. a 10% discount across the whole subtotal gives 0.10.
-  const _discRate = (t.subtotal > 0) ? (t.discount / t.subtotal) : 0;
+  // discRate is 0..1; e.g. a 10% discount across the discountable base gives 0.10.
+  // The base excludes misc items when "bypass discounts" is on, so the remaining
+  // categories absorb the whole discount and misc is left untouched.
+  const _discBase = (t.discountableBase != null ? t.discountableBase : t.subtotal);
+  const _discRate = (_discBase > 0) ? (t.discount / _discBase) : 0;
   const _discPct  = _discRate * 100;
+  const _bypassMisc = miscBypassActive();
   // Per-category totals
   Object.keys(CATEGORY_META).forEach(cat => {
     const r = t.perCat[cat];
     const catSub = r.labour + r.material;
+    // Misc is excluded from discount allocation when bypass is on.
+    const catExcluded = (cat === "miscellaneous" && _bypassMisc);
     // Allocated share of the overall discount that "belongs" to this category.
-    const catDisc = catSub * _discRate;
-    const hasDisc = state.enabled[cat] && catSub > 0 && t.discount > 0;
+    const catDisc = catExcluded ? 0 : catSub * _discRate;
+    const hasDisc = state.enabled[cat] && catSub > 0 && t.discount > 0 && !catExcluded;
     // The headline figure on the closed category card AND the Subtotal row
     // inside the breakdown should be the POST-discount price — so the
     // discount line above it actually changes the bottom number. Labour and
@@ -8498,6 +8840,17 @@ function renderCatBody(cat){
 }
 
 /* ---------- Miscellaneous helpers ---------- */
+/* Toggle "bypass discounts" for the misc section. Excluding misc from the
+   discount changes the allocation for EVERY other category (they now absorb
+   the whole discount), so a full renderTotals() is required — then re-sync the
+   misc card's own subtotal/discount rows. */
+function setMiscBypassDiscount(on){
+  if(!state.miscellaneous || typeof state.miscellaneous !== "object") state.miscellaneous = { items: [] };
+  state.miscellaneous.bypassDiscount = !!on;
+  renderTotals();
+  try { syncMiscSubtotal(); } catch(e){}
+}
+
 function renderMiscellaneous(){
   const m = state.miscellaneous || (state.miscellaneous = { items: [] });
   const items = Array.isArray(m.items) ? m.items : (m.items = []);
@@ -8505,11 +8858,11 @@ function renderMiscellaneous(){
   return `
     <div class="footnote" style="margin-bottom:14px;background:rgba(212,175,106,.08);border:1px solid rgba(212,175,106,.30);border-radius:8px;padding:10px 12px;line-height:1.55;">
       <b style="color:var(--gold-bright)">Use this for anything that doesn't fit a category:</b> permits, surveys, change orders, demo allowances, dumpster fees, custom one-off items. Each line is its own price &mdash; <b>qty × $/unit</b>.
-      ${internal ? `
-        <br><br>
-        <span style="color:var(--gold-bright);font-weight:600;">Internal Mode visible:</span> the optional &ldquo;Contractor cost actual&rdquo; field lets you record what a contractor will charge for each item. Snapshot uses this for margin tracking when no bid has been submitted yet.
-      ` : ""}
     </div>
+    <label class="check-row" style="margin-bottom:12px;">
+      <input type="checkbox" ${m.bypassDiscount?'checked':''} onchange="setMiscBypassDiscount(this.checked)">
+      <span>Bypass discounts <span style="color:var(--muted);font-weight:400;font-size:12px;">(exclude these items from any listing or custom discount applied to the estimate &mdash; e.g. permits &amp; pass-through fees)</span></span>
+    </label>
     <div id="misc-items">${items.map((it,i) => renderMiscItem(it,i,internal)).join("")}</div>
     <button class="add-btn no-print" onclick="addMiscItem()">+ Add item</button>
     <!--
@@ -8534,12 +8887,12 @@ function renderMiscellaneous(){
    placeholder if the user hasn't named it yet) on the left and its qty ×
    rate total on the right. Stays in sync via updateMiscItemTotal. */
 function renderMiscSummaryRow(it, i){
-  const lineTotal = num(it.qty) * num(it.clientRate);
+  const lineTotal = miscQty(it) * num(it.clientRate);
   const name = (it.name || "").trim() || ("Item #" + (i+1));
   return `<div class="breakdown misc-summary-row" data-misc-idx="${i}"><span style="color:var(--ink);">${escapeHtml(name)}</span><span style="font-variant-numeric:tabular-nums;color:var(--ink);">${fmt(lineTotal)}</span></div>`;
 }
 function renderMiscItem(it, i, internal){
-  const lineTotal = num(it.qty) * num(it.clientRate);
+  const lineTotal = miscQty(it) * num(it.clientRate);
   // Unit pill toggle — closed set of common GTA renovation units. Defaults
   // to "ea". The class `misc-item-card` hides browser spinner arrows on the
   // qty + rate number inputs (see CSS rule alongside .price-edit-row).
@@ -8578,20 +8931,50 @@ function renderMiscItem(it, i, internal){
           <label>Line total <span style="color:var(--muted);font-weight:400;">(auto)</span></label>
           <div id="misc-line-total-${i}" style="padding:9px 12px;background:#19170f;border:1px solid var(--gold-deep);border-radius:8px;color:var(--gold-bright);font-weight:700;font-variant-numeric:tabular-nums;">${fmt(lineTotal)}</div>
         </div>
-        ${internal ? `
-          <div style="grid-column:1/-1;border-top:1px dashed var(--line);padding-top:10px;margin-top:4px;">
-            <label style="color:var(--gold-bright);">Contractor cost actual ($/unit) <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;">&mdash; Internal Mode only, optional override for margin tracking</span></label>
-            <input type="number" min="0" step="any" value="${it.contractorCostOverride !== null ? escapeHtmlAttr(it.contractorCostOverride) : ''}" placeholder="${(it.contractorCostOverride===null) ? 'pull from contractor bid when submitted' : '0.00'}" oninput="state.miscellaneous.items[${i}].contractorCostOverride=(this.value===''?null:this.value);renderTotals()">
-          </div>
-        ` : ""}
       </div>
     </div>
   `;
 }
+/* Repaint the Miscellaneous card's Subtotal + discount + header total directly
+   from current state. Runs IN ADDITION to renderTotals() (and always after it)
+   so the misc subtotal is guaranteed to reflect the running sum of the item
+   line totals the moment an item is added, edited, or removed — independent of
+   the shared cross-category totals loop. Mirrors renderTotals()'s misc branch:
+   the Subtotal shown is the POST-discount figure so the discount line above it
+   actually moves the bottom number. */
+function syncMiscSubtotal(){
+  const bd = document.getElementById("cat-breakdown-miscellaneous");
+  if(!bd) return;
+  const items = (state.miscellaneous && Array.isArray(state.miscellaneous.items)) ? state.miscellaneous.items : [];
+  const catSub = items.reduce((a, it) => a + miscQty(it) * num(it.clientRate), 0);
+  let discRate = 0, projDiscount = 0;
+  try {
+    const t = computeTotals();
+    const base = (t.discountableBase != null ? t.discountableBase : t.subtotal);
+    if(base > 0){ discRate = t.discount / base; projDiscount = t.discount; }
+  } catch(_){}
+  // Misc gets no discount when "bypass discounts" is on.
+  const bypass = miscBypassActive();
+  const hasDisc = !bypass && !!(state.enabled && state.enabled.miscellaneous) && catSub > 0 && projDiscount > 0;
+  const catDisc = catSub * discRate;
+  const catNet  = catSub - (hasDisc ? catDisc : 0);
+  const bdT = bd.querySelector(".bd-t");
+  if(bdT) bdT.textContent = fmt(catNet);
+  const discRow = bd.querySelector(".bd-discount-row");
+  if(discRow){
+    discRow.style.display = hasDisc ? "" : "none";
+    if(hasDisc){
+      const bdD = discRow.querySelector(".bd-d");
+      if(bdD) bdD.textContent = "-" + fmt(catDisc);
+    }
+  }
+  const hdr = document.getElementById("cat-total-miscellaneous");
+  if(hdr && state.enabled && state.enabled.miscellaneous){ hdr.textContent = fmt(catNet); hdr.style.color = ""; }
+}
 function updateMiscItemTotal(i){
   const it = state.miscellaneous.items[i];
   if(!it) return;
-  const t = num(it.qty) * num(it.clientRate);
+  const t = miscQty(it) * num(it.clientRate);
   // 1. Refresh the per-item "Line total" pill on the item card
   const el = document.getElementById("misc-line-total-"+i);
   if(el) el.textContent = fmt(t);
@@ -8609,6 +8992,9 @@ function updateMiscItemTotal(i){
   //    custom breakdown plus the category card header total and any other
   //    cross-category totals (savings card, quote summary, etc.)
   renderTotals();
+  // 4. Guarantee the misc Subtotal repaints even if the shared loop above
+  //    didn't reach this card. Runs last so it wins.
+  syncMiscSubtotal();
 }
 function addMiscItem(){
   if(!state.miscellaneous || typeof state.miscellaneous !== "object") state.miscellaneous = { items: [] };
@@ -8617,19 +9003,21 @@ function addMiscItem(){
     id: "misc_" + Date.now() + "_" + Math.floor(Math.random()*1e6).toString(36),
     name: "",
     description: "",
-    qty: "",
+    qty: "1",
     unit: "ea",
     clientRate: "",
     contractorCostOverride: null
   });
   renderCatBodyOnly("miscellaneous");
   renderTotals();
+  syncMiscSubtotal();
 }
 function removeMiscItem(i){
   if(!state.miscellaneous || !Array.isArray(state.miscellaneous.items)) return;
   state.miscellaneous.items.splice(i, 1);
   renderCatBodyOnly("miscellaneous");
   renderTotals();
+  syncMiscSubtotal();
 }
 function escapeHtmlAttr(s){
   return String(s == null ? "" : s)
@@ -9028,7 +9416,11 @@ function bathroomIncludesPanel(b, i){
   // New stand-up shower plumbing rough-in — only for "new build" scope.
   if(b.standUpShower && (b.showerType || "convert") === "new"){
     newItems.push("New stand-up shower plumbing rough-in");
+    // Curbless (zero-threshold) upgrade — new build only.
+    if(b.curbless) newItems.push("Curbless (zero-threshold) shower base &mdash; linear drain, sloped subfloor");
   }
+  // Whole-room wall tile when "Tile all bathroom walls" is on.
+  if(b.tileAllWalls) newItems.push("All bathroom walls tiled (floor to ceiling)");
   // Tub wall tiles only when there's a DROP-IN tub against the wall.
   // Freestanding tubs don't have a surround so no wall tile is included.
   if(layoutHasTub && !b.newTub && !b.freestandingTub && !convertingTubToShower) newItems.push("Tub wall tiles");
@@ -9097,8 +9489,9 @@ function renderBathrooms(){
     const hasTub = (layoutHasTub || b.newTub) && !b.freestandingTub;
     // Wall tile only applies when there's a tub surround or stand-up shower.
     // If a freestanding tub is selected for this bathroom, hide wall tile
-    // input entirely (compute already treats it as zero).
-    const showsWallTile = pieces !== "2" && !b.freestandingTub;
+    // input entirely (compute already treats it as zero) — UNLESS "Tile all
+    // bathroom walls" is on, which always needs the wall-tile field visible.
+    const showsWallTile = (pieces !== "2" && !b.freestandingTub) || b.tileAllWalls;
     return `
     <div class="bath-row">
       <div style="margin-bottom:10px;">
@@ -9118,10 +9511,34 @@ function renderBathrooms(){
         </div>
         ${showsWallTile ? `
         <div>
-          <label>Wall tiling required (sqft)</label>
+          <label>Wall tiling required (sqft)${b.tileAllWalls ? ` <span style="color:var(--gold-bright);font-weight:400;font-size:11px;text-transform:none;letter-spacing:0;">&mdash; auto from room size</span>` : ""}</label>
           <input type="number" min="0" value="${b.wallTileSqft||""}" oninput="state.bathroom.rooms[${i}].wallTileSqft=this.value;renderTotals()">
         </div>` : ""}
       </div>
+      <label class="check-row">
+        <input type="checkbox" ${b.tileAllWalls?'checked':''} onchange="state.bathroom.rooms[${i}].tileAllWalls=this.checked;applyTubTileAuto(${i});renderBathBody()">
+        <span>Tile all bathroom walls <span style="color:var(--muted);font-weight:400;font-size:12px;">(full floor-to-ceiling wall tile for the whole room, not just the tub/shower surround)</span></span>
+      </label>
+      ${b.tileAllWalls ? `
+        <div class="shower-size-row" style="margin-left:25px;">
+          <div class="ssr-title">Bathroom dimensions <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;font-size:11px;">(auto-computes total wall tile: 2 &times; (length + width) &times; wall height)</span></div>
+          <div class="ssr-grid">
+            <div>
+              <label>Length (ft)</label>
+              <input type="number" step="0.5" min="1" max="40" value="${b.roomLength||''}" placeholder="e.g. 8" onchange="state.bathroom.rooms[${i}].roomLength=this.value;applyTubTileAuto(${i});renderBathBody()">
+            </div>
+            <div>
+              <label>Width (ft)</label>
+              <input type="number" step="0.5" min="1" max="40" value="${b.roomWidth||''}" placeholder="e.g. 5" onchange="state.bathroom.rooms[${i}].roomWidth=this.value;applyTubTileAuto(${i});renderBathBody()">
+            </div>
+            <div>
+              <label>Wall height (ft)</label>
+              <input type="number" step="0.5" min="6" max="14" value="${b.roomHeight||8}" onchange="state.bathroom.rooms[${i}].roomHeight=this.value;applyTubTileAuto(${i});renderBathBody()">
+            </div>
+          </div>
+          <div class="footnote" style="margin-top:6px;">Enter the room's floor length &times; width and the wall height. Total wall area = <b>perimeter &times; height</b> (door/window openings are not deducted, keeping the estimate conservative). This value fills the <b>Wall tiling required (sqft)</b> field above and replaces the tub/shower surround estimate.</div>
+        </div>
+      ` : ""}
       ${hasTub ? `
         <div class="shower-size-row">
           <div class="ssr-title">Tub size <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;font-size:11px;">(used to auto-compute wall tile sqft for the tub surround)</span></div>
@@ -9150,7 +9567,7 @@ function renderBathrooms(){
         <!-- Freestanding tub — mutually exclusive with "Add new tub". Hides
              wall tile + tub-dimension inputs in this bathroom. -->
         <label class="check-row">
-          <input type="checkbox" ${b.freestandingTub?'checked':''} onchange="state.bathroom.rooms[${i}].freestandingTub=this.checked;if(this.checked){state.bathroom.rooms[${i}].newTub=false;state.bathroom.rooms[${i}].wallTileSqft='';}renderBathBody()">
+          <input type="checkbox" ${b.freestandingTub?'checked':''} onchange="state.bathroom.rooms[${i}].freestandingTub=this.checked;if(this.checked)state.bathroom.rooms[${i}].newTub=false;applyTubTileAuto(${i});renderBathBody()">
           <span>Add <b>freestanding</b> tub <span style="color:var(--muted);font-weight:400;font-size:12px;">(floor-mount &mdash; no wall tile required)</span></span>
         </label>
         ${b.freestandingTub ? `
@@ -9181,7 +9598,7 @@ function renderBathrooms(){
               {value:"refresh", label:"Refresh existing"},
               {value:"convert", label:"Convert from tub"},
               {value:"new",     label:"New build"}
-            ], "state.bathroom.rooms["+i+"].showerType=this.value;renderBathBody()")}
+            ], "state.bathroom.rooms["+i+"].showerType=this.value;if(this.value!=='new')state.bathroom.rooms["+i+"].curbless=false;renderBathBody()")}
             <div class="footnote" style="margin-top:6px;margin-bottom:8px;">
               <b style="color:var(--gold-bright)">Refresh</b>: re-tile + new fixtures &amp; glass, reuse plumbing &amp; structure.
               <b style="color:var(--gold-bright)">Convert</b>: reuse existing tub plumbing, build curb + waterproof + tile.
@@ -9205,6 +9622,12 @@ function renderBathrooms(){
               </div>
               <div class="footnote" style="margin-top:6px;">Defaults to a 4&prime;&times;3&prime;&times;8&prime; stand-up shower. Adjust based on what exists or what we're building.</div>
             </div>
+            ${(b.showerType || "convert") === "new" ? `
+              <label class="check-row" style="margin-top:10px;">
+                <input type="checkbox" ${b.curbless?'checked':''} onchange="state.bathroom.rooms[${i}].curbless=this.checked;renderTotals()">
+                <span>Make it curbless <span style="color:var(--muted);font-weight:400;font-size:12px;">(zero-threshold / barrier-free &mdash; linear drain, recessed &amp; sloped subfloor, continuous waterproofing)</span></span>
+              </label>
+            ` : ""}
           </div>
         ` : ""}
         ${state.bathroom.rooms.length>1 ? `<button class="ghost danger no-print" onclick="removeBath(${i})" style="align-self:flex-end;margin-top:4px;">Remove this bathroom</button>`:""}
@@ -9247,10 +9670,27 @@ function showerFloorSqft(b){
   const d = num(b.showerDepth) || 3;
   return w * d;
 }
+/* Whole-room wall area for the "Tile all bathroom walls" option:
+   perimeter × height = 2 × (length + width) × wall height.
+   Gross area — door/window openings are NOT deducted, keeping the estimate
+   conservative (slightly high) and consistent with how the tub/shower
+   surround is modelled. Returns 0 until length + width are entered. */
+function roomAllWallSqft(b){
+  const L = num(b && b.roomLength);
+  const W = num(b && b.roomWidth);
+  const H = num(b && b.roomHeight) || 8;
+  if(L <= 0 || W <= 0) return 0;
+  return 2 * (L + W) * H;
+}
 /* Recompute wall-tile sqft for a single bathroom based on what's in it.
-   Adds tub surround if there's a tub (pieces 3 or 4 or newTub),
-   plus shower 3-wall surround if standUpShower is on. */
+   • "Tile all bathroom walls" ON  → whole-room wall area (perimeter × height).
+     This SUPERSEDES the surround estimate: tiling every wall already covers
+     the tub/shower surfaces, so we don't add the surround on top.
+   • Otherwise → tub surround (pieces 3/4 or newTub) + shower 3-wall surround.
+     Freestanding tubs have no surround, so wall tile is 0 in that case. */
 function autoBathWallTileSqft(b){
+  if(b && b.tileAllWalls) return Math.round(roomAllWallSqft(b));
+  if(b && b.freestandingTub) return 0;
   let sqft = 0;
   const hasTub = (b.pieces === "3" || b.pieces === "4" || b.newTub);
   if(hasTub) sqft += tubSurroundSqft(b);
@@ -9737,6 +10177,11 @@ function renderPricingEditor(){
       <div class="lbl">New shower (framing + plumbing)</div>
       <div>${priceInput("bathroom.standUpShower.new.labour", prices.bathroom.standUpShower.new.labour, 50)}</div>
       <div>${priceInput("bathroom.standUpShower.new.material", prices.bathroom.standUpShower.new.material, 50)}</div>
+    </div>
+    <div class="price-edit-row">
+      <div class="lbl">Curbless upgrade <span style="color:var(--muted);font-weight:400;font-size:11px;">(new build only &mdash; fixed add-on: linear drain, sloped subfloor, waterproofing)</span></div>
+      <div>${priceInput("bathroom.standUpShower.curbless.labour", (prices.bathroom.standUpShower.curbless||{labour:1400}).labour, 50)}</div>
+      <div>${priceInput("bathroom.standUpShower.curbless.material", (prices.bathroom.standUpShower.curbless||{material:800}).material, 50)}</div>
     </div>`;
 
   // Pot lights
@@ -9874,6 +10319,7 @@ async function openContractorBid(){
       { destructive: false, confirmLabel: "Open estimator" }
     );
     if(goToEstimator){
+      try { estimatorView = "picker"; } catch(_){}
       navigateTo("estimator");
     }
     return;
@@ -9901,6 +10347,7 @@ function closeContractorBid(){
   // Sync URL — if user's currently on /#/bids, take them back to estimator
   try {
     if(typeof getCurrentRoute === "function" && getCurrentRoute() === "bids"){
+      try { estimatorView = "editor"; } catch(_){}
       navigateTo("estimator");
     }
   } catch(e){}
@@ -10182,7 +10629,7 @@ function renderContractorSheet(){
       items.push({ hdr:true, html:`Bathroom #${i+1}` });
       items.push({ sub:true, html:`Pieces: <b>${bathroomLabel(b.pieces)}</b>` });
       if(num(b.floorTileSqft)) items.push({ sub:true, html:`Floor tile: <b>${b.floorTileSqft} sqft</b>` });
-      if(num(b.wallTileSqft))  items.push({ sub:true, html:`Wall tile: <b>${b.wallTileSqft} sqft</b>` });
+      if(num(b.wallTileSqft))  items.push({ sub:true, html:`Wall tile: <b>${b.wallTileSqft} sqft</b>${b.tileAllWalls ? ' &mdash; <b>all bathroom walls, floor to ceiling</b>' : ''}` });
       // Tub surround tile suppressed when freestanding tub is selected.
       const hasTub_ = (b.pieces === "3" || b.pieces === "4" || b.newTub) && !b.freestandingTub;
       if(hasTub_){
@@ -10206,6 +10653,7 @@ function renderContractorSheet(){
                              "convert existing tub, reuse tub plumbing";
         const sw = (num(b.showerWidth)||4), sd = (num(b.showerDepth)||3), sh = (num(b.showerHeight)||8);
         items.push({ sub:true, html:`Stand-up shower: <b>included</b> &mdash; ${showerNote} (waterproofing, new tile, new fixtures, new glass enclosure). Size: <b>${sw}&prime; &times; ${sd}&prime; &times; ${sh}&prime; high</b>.` });
+        if(st === "new" && b.curbless) items.push({ sub:true, html:`Curbless (zero-threshold) upgrade: <b>included</b> &mdash; linear drain, recessed &amp; sloped subfloor, continuous waterproofing.` });
       }
       // Per-bathroom "Existing (re-used)" disclosure — mirrors on-screen panel.
       const layoutHasTub_ = (b.pieces === "3" || b.pieces === "4");
@@ -10323,7 +10771,7 @@ function renderContractorSheet(){
     miscItems.forEach((it, i) => {
       const name = (it.name || "").trim();
       if(!name) return;
-      const qty = num(it.qty) || 0;
+      const qty = miscQty(it);
       const unit = (it.unit || "ea").trim();
       const desc = (it.description || "").trim();
       anyEnabled = true;
@@ -10456,7 +10904,9 @@ const COMPANY_INFO = {
   email:   "renotosold@gmail.com",
   addressLine1: "1195 Queensway E #28",
   addressLine2: "Mississauga, ON  L4Y 0G4",
-  signatureName: "RENO TO SOLD INC."
+  signatureName: "RENO TO SOLD INC.",
+  // Business HST / GST registration number — appears on invoices.
+  hstNumber: "76868 2965 RT0001"
 };
 
 function openClientEstimate(){
@@ -11128,13 +11578,14 @@ function buildEstimateLineItems(){
           material: ft * p.floorTile.material
         });
       }
-      // Wall tile is suppressed when freestanding tub is selected (no surround).
-      if(!b.freestandingTub){
+      // Wall tile is suppressed when freestanding tub is selected (no surround),
+      // UNLESS "Tile all bathroom walls" is on (whole-room tile applies).
+      if(!b.freestandingTub || b.tileAllWalls){
         const wt = num(b.wallTileSqft);
         if(p.wallTile && wt > 0){
           addRow(rows, {
             desc: `${lbl} — Wall tile`,
-            subdesc: "Tub surround / shower walls — supply & install",
+            subdesc: b.tileAllWalls ? "All bathroom walls, floor to ceiling — supply & install" : "Tub surround / shower walls — supply & install",
             qty: wt, unit: "sqft",
             labour: wt * p.wallTile.labour,
             material: wt * p.wallTile.material
@@ -11186,6 +11637,16 @@ function buildEstimateLineItems(){
             subdesc: `${sw}′ × ${sd}′ × ${sh}′ high — waterproofing, tile, fixtures, glass enclosure`,
             qty: 1, unit: "ea",
             labour: sR.labour, material: sR.material
+          });
+        }
+        // Curbless (zero-threshold) upgrade — NEW BUILD only, fixed add-on.
+        if(st === "new" && b.curbless && p.standUpShower.curbless){
+          addRow(rows, {
+            desc: `${lbl} — Curbless (zero-threshold) shower upgrade`,
+            subdesc: "Barrier-free entry — linear drain, recessed & sloped subfloor, continuous waterproofing",
+            qty: 1, unit: "ea",
+            labour: p.standUpShower.curbless.labour || 0,
+            material: p.standUpShower.curbless.material || 0
           });
         }
       }
@@ -11340,10 +11801,10 @@ function buildEstimateLineItems(){
     items.forEach(it => {
       const name = (it.name || "").trim();
       if(!name) return;  // skip blank rows
-      const qty = num(it.qty) || 0;
+      const qty = miscQty(it);
       const rate = num(it.clientRate) || 0;
       const total = qty * rate;
-      if(qty <= 0 && total <= 0) return;
+      if(total <= 0) return;   // skip lines with no price (qty defaults to 1 via miscQty)
       rows.push({
         desc: name,
         subdesc: (it.description || "").trim(),
@@ -11370,8 +11831,9 @@ function computeBathroomRoom(b, priceSet){
   if(baseRow){ L += baseRow.labour; M += baseRow.material; }
   const ft = num(b.floorTileSqft);
   if(p.floorTile && ft > 0){ L += ft * p.floorTile.labour; M += ft * p.floorTile.material; }
-  // Wall tile is ZERO when freestanding tub is selected (no tub surround).
-  if(!b.freestandingTub){
+  // Wall tile is ZERO when freestanding tub is selected (no tub surround),
+  // UNLESS "Tile all bathroom walls" is on (whole-room tile applies regardless).
+  if(!b.freestandingTub || b.tileAllWalls){
     const wt = num(b.wallTileSqft);
     if(p.wallTile && wt > 0){ L += wt * p.wallTile.labour; M += wt * p.wallTile.material; }
   }
@@ -11385,8 +11847,14 @@ function computeBathroomRoom(b, priceSet){
   }
   if(b.doubleVanity && p.doubleVanity){ L += p.doubleVanity.labour; M += p.doubleVanity.material; }
   if(b.standUpShower && p.standUpShower){
-    const sR = p.standUpShower[b.showerType || "convert"] || p.standUpShower.convert;
+    const showerType = b.showerType || "convert";
+    const sR = p.standUpShower[showerType] || p.standUpShower.convert;
     if(sR){ L += sR.labour; M += sR.material; }
+    // Curbless (zero-threshold) upgrade — NEW BUILD only, fixed add-on.
+    if(showerType === "new" && b.curbless && p.standUpShower.curbless){
+      L += p.standUpShower.curbless.labour   || 0;
+      M += p.standUpShower.curbless.material || 0;
+    }
   }
   return { labour:L, material:M };
 }
@@ -11775,8 +12243,12 @@ function buildEstimateSummary(){
       const pieces = b.pieces || "4";
       bullets.push(`Layout: <b>${bathroomLabel(pieces)}</b> — full refresh (fixtures, toilet, vanity, faucet, mirror, light, accessories)`);
       if(num(b.floorTileSqft)) bullets.push(`Floor tile — ${b.floorTileSqft} sqft`);
-      // Wall tile suppressed when freestanding tub is selected (no surround).
-      if(!b.freestandingTub && num(b.wallTileSqft)) bullets.push(`Wall tile (shower/tub surround) — ${b.wallTileSqft} sqft`);
+      // Wall tile suppressed when freestanding tub is selected (no surround),
+      // unless "Tile all bathroom walls" is on (whole-room tile).
+      if((!b.freestandingTub || b.tileAllWalls) && num(b.wallTileSqft)){
+        const wtLbl = b.tileAllWalls ? "Wall tile (all walls, floor to ceiling)" : "Wall tile (shower/tub surround)";
+        bullets.push(`${wtLbl} — ${b.wallTileSqft} sqft`);
+      }
       if(b.newTub && !b.freestandingTub) bullets.push("New drop-in tub installed (replaces existing)");
       if(b.freestandingTub){
         const size = b.freestandingTubSize || "standard";
@@ -11799,6 +12271,7 @@ function buildEstimateSummary(){
         const sw = (num(b.showerWidth)||4), sd = (num(b.showerDepth)||3), sh = (num(b.showerHeight)||8);
         bullets.push(`Stand-up shower (${stLbl}) — ${sw}′ × ${sd}′ × ${sh}′ high, new tile, fixtures, glass walls &amp; door`);
         if(st === "new") bullets.push("New stand-up shower plumbing rough-in");
+        if(st === "new" && b.curbless) bullets.push("Curbless (zero-threshold) upgrade — linear drain, recessed &amp; sloped subfloor, continuous waterproofing");
       }
 
       // Closing "Existing (re-used)" disclosure — mirrors the on-screen
@@ -11926,10 +12399,10 @@ function buildEstimateSummary(){
     items.forEach(it => {
       const name = (it.name || "").trim();
       if(!name) return;
-      const qty = num(it.qty) || 0;
+      const qty = miscQty(it);
       const rate = num(it.clientRate) || 0;
       const total = qty * rate;
-      if(qty <= 0 && total <= 0) return;
+      if(total <= 0) return;   // skip lines with no price (qty defaults to 1 via miscQty)
       const unit = (it.unit || "ea").trim();
       const desc = (it.description || "").trim();
       // Each item gets a single bullet: "Name — Qty Unit @ $rate (= $total)".
@@ -12087,12 +12560,16 @@ function renderClientEstimate(){
     // discount line appears between the pre-discount "Labour & Material"
     // row and a new post-discount "Subtotal" row. So the client sees
     // every step: original total, savings, final price for that scope.
-    const _esDiscRate = (totals.subtotal > 0) ? (totals.discount / totals.subtotal) : 0;
+    const _esDiscBase = (totals.discountableBase != null ? totals.discountableBase : totals.subtotal);
+    const _esDiscRate = (_esDiscBase > 0) ? (totals.discount / _esDiscBase) : 0;
     const _esDiscPct  = _esDiscRate * 100;
     const _esDiscPctLabel = _esDiscPct.toFixed(_esDiscPct < 1 ? 2 : 1).replace(/\.0+$/,"");
     const hasDiscount = totals.discount && totals.discount > 0;
-    const renderDiscRow = (catSub) => {
-      if(!hasDiscount || catSub <= 0) return "";
+    const _esBypassMisc = miscBypassActive();
+    // Misc items are excluded from the per-category discount rows when bypass is on.
+    const _esCatExcluded = (cat) => (cat === "miscellaneous" && _esBypassMisc);
+    const renderDiscRow = (catSub, cat) => {
+      if(!hasDiscount || catSub <= 0 || _esCatExcluded(cat)) return "";
       const catDisc = catSub * _esDiscRate;
       return `
         <div class="es-cat-total es-cat-disc">
@@ -12101,8 +12578,8 @@ function renderClientEstimate(){
         </div>
       `;
     };
-    const renderNetRow = (catSub, label) => {
-      if(!hasDiscount || catSub <= 0) return "";
+    const renderNetRow = (catSub, label, cat) => {
+      if(!hasDiscount || catSub <= 0 || _esCatExcluded(cat)) return "";
       const catDisc = catSub * _esDiscRate;
       const net = catSub - catDisc;
       return `
@@ -12122,19 +12599,19 @@ function renderClientEstimate(){
             <div class="es-subblock-title">${escapeHtml(sb.title)}</div>
             ${renderBullets(sb.bullets)}
             ${renderTotalRow(`${sb.title} — Labour & Material`, sb.total)}
-            ${renderDiscRow(sb.total)}
-            ${renderNetRow(sb.total, `${sb.title} — Subtotal`)}
+            ${renderDiscRow(sb.total, sec.cat)}
+            ${renderNetRow(sb.total, `${sb.title} — Subtotal`, sec.cat)}
           </div>
         `).join("");
         // Category-level rollup under all sub-blocks: combined L&M, discount, net.
         body += renderTotalRow(`${sec.title} — Combined Labour & Material`, sec.total);
-        body += renderDiscRow(sec.total);
-        body += renderNetRow(sec.total, `${sec.title} — Combined Subtotal`);
+        body += renderDiscRow(sec.total, sec.cat);
+        body += renderNetRow(sec.total, `${sec.title} — Combined Subtotal`, sec.cat);
       } else {
         body += renderBullets(sec.bullets || []);
         body += renderTotalRow("Total Labour & Material", sec.total);
-        body += renderDiscRow(sec.total);
-        body += renderNetRow(sec.total, "Subtotal (after discount)");
+        body += renderDiscRow(sec.total, sec.cat);
+        body += renderNetRow(sec.total, "Subtotal (after discount)", sec.cat);
       }
       html += `
         <div class="es-category-block">
@@ -12878,11 +13355,12 @@ function buildClientEstimateEmailHtml(plainBody){
     const agentName      = (currentProfile.full_name || "").trim();
     const agentBrokerage = (currentProfile.brokerage || "").trim();
     const agentAvatarUrl = (currentProfile.avatar_url || "").trim();
-    // Inline the avatar as a circular image. Fallback to a gold circle
-    // when there's no avatar — better than a broken image icon.
+    // Inline the avatar/logo. Height-based with auto width so a WIDE brokerage
+    // logo shows in full (email-safe — no reliance on object-fit, which some
+    // clients ignore). Fallback to a gold box when there's no avatar.
     const avatarHtml = agentAvatarUrl
-      ? `<img src="${escapeHtmlAttr(agentAvatarUrl)}" width="60" height="60" alt="" style="display:block;width:60px;height:60px;border-radius:50%;object-fit:cover;border:2px solid #d4af6a;background:#f4efe1;">`
-      : `<div style="width:60px;height:60px;border-radius:50%;background:#f4efe1;border:2px solid #d4af6a;display:inline-block;"></div>`;
+      ? `<img src="${escapeHtmlAttr(agentAvatarUrl)}" alt="" style="display:block;height:54px;width:auto;max-width:170px;border-radius:9px;border:2px solid #d4af6a;background:#0a0a0a;">`
+      : `<div style="width:54px;height:54px;border-radius:9px;background:#f4efe1;border:2px solid #d4af6a;display:inline-block;"></div>`;
     headerBlock = `
       <tr><td style="background:#0a0a0a;padding:22px 26px;border-bottom:3px solid #d4af6a;">
         <table cellpadding="0" cellspacing="0" border="0" width="100%">
@@ -15097,7 +15575,7 @@ function exportPricingSnapshot(){
   if(state && state.enabled && state.enabled.miscellaneous){
     const items = (state.miscellaneous && state.miscellaneous.items) || [];
     const detailedItems = items.map(it => {
-      const qty       = num(it.qty) || 0;
+      const qty       = miscQty(it);
       const cRate     = num(it.clientRate) || 0;
       const clientTot = qty * cRate;
       const hasOverride = (it.contractorCostOverride !== null) && (it.contractorCostOverride !== "");
@@ -15777,7 +16255,7 @@ function scopeItemsFor(cat){
       items.push({ hdr:true, html:`Bathroom #${i+1}` });
       items.push({ sub:true, html:`<b>${bathroomLabel(b.pieces)}</b>` });
       if(num(b.floorTileSqft)) items.push({ sub:true, html:`Floor tile: <b>${b.floorTileSqft} sqft</b>` });
-      if(num(b.wallTileSqft))  items.push({ sub:true, html:`Wall tile: <b>${b.wallTileSqft} sqft</b>` });
+      if(num(b.wallTileSqft))  items.push({ sub:true, html:`Wall tile: <b>${b.wallTileSqft} sqft</b>${b.tileAllWalls ? ' &mdash; <b>all bathroom walls, floor to ceiling</b>' : ''}` });
       if(b.newTub)             items.push({ sub:true, html:`+ New tub` });
       if(b.doubleVanity)       items.push({ sub:true, html:`+ Double vanity` });
       if(b.standUpShower){
@@ -15787,7 +16265,9 @@ function scopeItemsFor(cat){
                                      "convert from tub";
         const sw = (num(b.showerWidth)||4), sd = (num(b.showerDepth)||3);
         items.push({ sub:true, html:`+ Stand-up shower (${t}) — ${sw}&prime;&times;${sd}&prime;` });
+        if(st === "new" && b.curbless) items.push({ sub:true, html:`+ Curbless (zero-threshold) upgrade` });
       }
+      if(b.tileAllWalls) items.push({ sub:true, html:`+ All bathroom walls tiled` });
     });
   }
   else if(cat === "cleaning"){
@@ -15932,7 +16412,7 @@ const OFFICE_EMAIL = "renotosold@gmail.com";
 const OFFICE_COMPANY = "Reno to Sold Inc.";
 
 /* ---------- Supabase cross-device sync ---------- */
-window.RTS_BUILD = "2026-10-22-v11b-signup-banner";
+window.RTS_BUILD = "2026-10-23-v13-restore-lost-features";
 console.log("[build] " + window.RTS_BUILD);
 const SUPABASE_URL = "https://icrnvnmvcdpmhnjorefs.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imljcm52bm12Y2RwbWhuam9yZWZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2ODQwMDgsImV4cCI6MjA5NDI2MDAwOH0.YoeBndWsky8vAW6mLeMziPeH2j2C6c_3VdAvOG_i0kA";
@@ -19920,6 +20400,8 @@ async function handleMyEstimateChange(payload){
       await refreshSavedFromCloud();
       const savedModal = document.getElementById("savedModal");
       if(savedModal && savedModal.classList.contains("show")) renderSavedList();
+      const evx = document.getElementById("view-estimator");
+      if(evx && evx.classList.contains("show-picker")) renderEstimatorPicker();
     } catch(e){}
     // If this change is to the estimate currently open in the estimator AND
     // its status changed while the agent had it LOCKED (i.e. an admin action,
@@ -21284,9 +21766,14 @@ function closeAllToolOverlays(){
     document.body.classList.remove("show-contractor");
   } catch(e){}
   try {
-    // Invoicing modal — remove .show
+    // Invoicing modal — remove .show. If the user drilled into another
+    // project's invoicing and is now navigating away (rather than clicking
+    // Done), restore their original active estimate.
     const invModal = document.getElementById("invoicingModal");
-    if(invModal) invModal.classList.remove("show");
+    if(invModal && invModal.classList.contains("show")){
+      invModal.classList.remove("show");
+      try { if(typeof restoreBorrowedInvoicingEstimate === "function") restoreBorrowedInvoicingEstimate(); } catch(e){}
+    }
   } catch(e){}
   try {
     // Bids dashboard — remove .show
@@ -21339,6 +21826,9 @@ function renderRoute(){
   // Per-route side-effects
   if(route === "dashboard"){
     renderDashboard();
+  } else if(route === "estimator"){
+    // Show the picker "home" or the editor depending on estimatorView.
+    try { applyEstimatorView(); } catch(e){ console.error("route estimator:", e); }
   } else if(route === "my-submissions"){
     renderMySubmissions();
   } else if(/^brk-/.test(route)){
@@ -22190,7 +22680,7 @@ function dashboardCards(){
 
     { key: "estimator", requireFeature: "estimator", title: "Detailed renovation estimator", icon: "ti-calculator",
       desc: "Build a detailed, line-by-line renovation estimate. Save, print, email, or submit for review.",
-      action: () => navigateTo("estimator") },
+      action: () => openEstimatorHome() },
 
     { key: "trim", requireFeature: "trim_calculator",
       title: "Trim calculator", icon: "ti-ruler-measure",
@@ -22708,6 +23198,7 @@ function loadMySubmissionById(id){
       } catch(e){ console.warn("persist cloud-only submission failed:", e); }
       try { migrateOldEstimate(state); } catch(e){}
       try { renderAll(); } catch(e){ console.error("renderAll after cloud-only load:", e); }
+      try { estimatorView = "editor"; } catch(_){}
       navigateTo("estimator");
       return;
     }
@@ -23102,7 +23593,8 @@ function openTrimCalcFromEstimate(){
 /* Called from the trim view's "← Back to Estimator" button. */
 function tcBackToEstimate(){
   if(_linkedTrimEstimateId){
-    // Estimate is already loaded — just navigate
+    // Estimate is already loaded — just navigate back to the editor
+    try { estimatorView = "editor"; } catch(_){}
     navigateTo('estimator');
   } else {
     navigateTo('dashboard');
@@ -23190,6 +23682,7 @@ async function tcPushToEstimate(){
   try { if(typeof renderAll === "function") renderAll(); } catch(e){ console.error("renderAll on tcPush:", e); }
 
   // Navigate to estimator and flash a summary
+  try { estimatorView = "editor"; } catch(_){}
   navigateTo('estimator');
   const propLbl = state.propName || state.propAddress || "estimate";
   const bits = [];
@@ -26597,6 +27090,11 @@ async function bootstrapCloudSync(showMigratePrompt){
   if(document.getElementById("savedModal").classList.contains("show")){
     renderSavedList();
   }
+  // Refresh the estimator picker grid too, if it's the current view.
+  try {
+    const ev = document.getElementById("view-estimator");
+    if(ev && ev.classList.contains("show-picker")) renderEstimatorPicker();
+  } catch(e){}
 
   // Sync the Expense Tracker — it lives in the SAME estimates table,
   // distinguished by type='tracker' (projects) and type='tracker_meta'
@@ -27646,11 +28144,16 @@ function nextInvoiceNumber(){
   return "RTS-INV-" + String(next).padStart(4, "0");
 }
 
-/* Compute current contract value (post-discount, pre-HST). */
+/* Compute current contract value (post-discount, PRE-HST).
+   Milestone invoices bill a percentage of THIS value and then add HST once on
+   top (createMilestoneInvoice). Using the tax-inclusive total here would apply
+   HST twice — a % of an already-taxed number, then taxed again. It also keeps
+   the "Contract" figure comparable with "Invoiced"/"Collected", which sum the
+   pre-HST inv.amount values. */
 function invoiceContractValue(){
   try{
     const t = computeTotals();
-    return Math.round((t.total || 0) * 100) / 100;
+    return Math.round((t.afterDisc || 0) * 100) / 100;
   }catch(e){ return 0; }
 }
 
@@ -28164,18 +28667,38 @@ async function openInvoicing(){
     return;
   }
   if(!Array.isArray(state.invoices)) state.invoices = [];
+  // Opened from a saved estimate → land on that project's own invoicing.
+  // The "All Projects" scope toggle takes them back to the project cards.
+  _invoicingScope = "current";
   const nameEl = document.getElementById("invModalEstimateName");
   if(nameEl){
     const propName = (state.propName || "").trim();
     const addr = (state.propAddress || "").trim();
-    nameEl.textContent = propName || addr || "Project";
+    nameEl.textContent = addr || propName || "Project";
   }
   renderInvoicing();
   document.getElementById("invoicingModal").classList.add("show");
 }
 
+/* Put the user's workspace back to the estimate they were on before they
+   drilled into another project's invoicing (borrow-and-restore). Their invoice
+   edits on the borrowed project were saved to THAT project along the way; this
+   just restores their active estimate. No-op when nothing was borrowed.
+   Called both from closeInvoicing() (Done / backdrop) and from the router's
+   closeAllToolOverlays() (navigating away without closing the modal). */
+function restoreBorrowedInvoicingEstimate(){
+  if(!_invoicingBorrowedSnapshot) return;
+  const snap = _invoicingBorrowedSnapshot;
+  _invoicingBorrowedSnapshot = null;
+  try {
+    state = snap;
+    if(typeof renderAll === "function") renderAll();
+  } catch(e){}
+}
+
 function closeInvoicing(){
   document.getElementById("invoicingModal").classList.remove("show");
+  restoreBorrowedInvoicingEstimate();
   // Sync URL — if user's currently on /#/invoicing, take them back to
   // the dashboard. Otherwise leave the URL alone (Invoicing modal was
   // opened inline from a project).
@@ -28197,6 +28720,14 @@ let _invAllFilter = {
   status: "all",                    // "all" | "draft" | "sent" | "paid" | "overdue"
   year:   "all"                     // "all" or 4-digit year string
 };
+/* Borrow-and-restore: when the user drills into ANOTHER project's invoicing
+   from the All Projects cards, we temporarily load that estimate so the
+   invoicing tools (which all read the global `state`) operate on it — but we
+   snapshot the estimate they were actually working on first, and restore it
+   when the invoicing modal closes. This way browsing another project's
+   invoices never permanently switches their active workspace. Null when not
+   borrowed. */
+let _invoicingBorrowedSnapshot = null;
 
 function setInvoicingScope(scope){
   _invoicingScope = (scope === "all") ? "all" : "current";
@@ -28397,88 +28928,96 @@ function renderInvoicingAllProjects(){
     </div>
   `;
 
-  // ---- Filter chip row ----
-  const statusChips = ["all","draft","sent","overdue","paid"].map(s => `
-    <span class="inv-filter-chip ${s === "overdue" ? "overdue " : ""}${_invAllFilter.status === s ? "active" : ""}"
-          onclick="setInvAllFilter('status','${s}')">${s === "all" ? "All" : s.charAt(0).toUpperCase()+s.slice(1)}</span>
-  `).join("");
-  const yearChips = ["all", ...yearList].map(y => `
-    <span class="inv-filter-chip ${_invAllFilter.year === y ? "active" : ""}"
-          onclick="setInvAllFilter('year','${y}')">${y === "all" ? "All years" : y}</span>
-  `).join("");
-  const filterHtml = `
-    <div class="inv-filter-row">
-      <span class="label">Status:</span>
-      ${statusChips}
-    </div>
-    <div class="inv-filter-row">
-      <span class="label">Year:</span>
-      ${yearChips}
-    </div>
-  `;
-
-  // ---- Apply filters to the flat list ----
-  let filtered = flat.filter(({inv}) => {
-    if(!inv) return false;
-    const yr  = String((inv.issuedDate || "").slice(0,4));
-    if(_invAllFilter.year !== "all" && yr !== _invAllFilter.year) return false;
-    const eff = invoiceEffectiveStatus(inv);
-    if(_invAllFilter.status === "all") return true;
-    if(_invAllFilter.status === "overdue") return eff === "overdue";
-    return eff === _invAllFilter.status;
-  });
-  // Sort newest first by issuedDate, fall back to createdAt.
-  filtered.sort((a,b) => {
-    const ad = (a.inv.issuedDate || a.inv.createdAt || "");
-    const bd = (b.inv.issuedDate || b.inv.createdAt || "");
-    return bd.localeCompare(ad);
+  // ---- Group invoices by project (estimate) → one card per project ----
+  const projMap = new Map();   // estId -> aggregate
+  flat.forEach(({est, inv, fromLive}) => {
+    if(!est) return;
+    const id = est.id;
+    if(!projMap.has(id)){
+      const st = est.state || {};
+      projMap.set(id, {
+        id,
+        fromLive: !!fromLive,
+        name:    (st.propName || est.name || "").trim(),
+        address: (st.propAddress || "").trim(),
+        invoiced: 0,      // issued (sent + paid) incl. HST
+        outstanding: 0,   // sent & not paid (incl. overdue), incl. HST
+        overdue: 0,
+        count: 0,
+        lastIssued: ""
+      });
+    }
+    const p = projMap.get(id);
+    p.fromLive = p.fromLive || !!fromLive;
+    p.count++;
+    if(inv){
+      const eff = invoiceEffectiveStatus(inv);
+      const tot = +(inv.total || 0);
+      if(inv.status === "sent" || inv.status === "paid") p.invoiced += tot;
+      if(inv.status === "sent") p.outstanding += tot;
+      if(eff === "overdue") p.overdue += tot;
+      const iss = inv.issuedDate || "";
+      if(iss > p.lastIssued) p.lastIssued = iss;
+    }
   });
 
-  const tableRowsHtml = filtered.length === 0
-    ? `<tr><td colspan="7" class="inv-list-empty">No invoices match the current filters.</td></tr>`
-    : filtered.map(({est, inv, fromLive}) => {
-        const eff   = invoiceEffectiveStatus(inv);
-        const proj  = (est && (est.name || (est.state && (est.state.propName || est.state.propAddress)))) || "—";
-        const click = fromLive
-          // Live project — just open the invoice detail in this estimate.
-          ? `openInvoiceDetail('${escapeHtmlAttr(inv.id)}')`
-          // Other project — switch to it, then open the invoice detail.
-          : `openInvoiceFromAllProjects('${escapeHtmlAttr(est.id)}','${escapeHtmlAttr(inv.id)}')`;
+  const projects = Array.from(projMap.values()).sort((a,b) => {
+    // Overdue projects first, then by most recent activity.
+    if((b.overdue>0) !== (a.overdue>0)) return (b.overdue>0) ? 1 : -1;
+    return (b.lastIssued || "").localeCompare(a.lastIssued || "");
+  });
+
+  const cardsHtml = projects.length === 0
+    ? `<div class="inv-proj-empty">No invoices yet on any project. Open a project's invoicing to create the first one.</div>`
+    : projects.map(p => {
+        const title = p.address || p.name || "Untitled project";
+        const sub   = (p.address && p.name) ? p.name : "";
         return `
-          <tr onclick="${click}">
-            <td>${escapeHtml(inv.number || "—")}</td>
-            <td title="${escapeHtmlAttr(proj)}">${escapeHtml(proj.length > 38 ? proj.slice(0,36)+"…" : proj)}</td>
-            <td>${escapeHtml(inv.milestoneLabel || "Custom")}</td>
-            <td>${escapeHtml(inv.issuedDate || "—")}</td>
-            <td>${escapeHtml(inv.dueDate || "—")}</td>
-            <td><span class="inv-status-pill ${eff}">${escapeHtml(eff.toUpperCase())}</span></td>
-            <td class="money">${fmt(inv.total || 0)}</td>
-          </tr>
+          <div class="inv-proj-card ${p.overdue>0 ? "has-overdue" : ""}" onclick="openProjectInvoicing('${escapeHtmlAttr(p.id)}')" title="Open this project's invoicing">
+            <div class="ipc-name">${escapeHtml(title)}</div>
+            ${sub ? `<div class="ipc-sub">${escapeHtml(sub)}</div>` : ""}
+            <div class="ipc-stats">
+              <div class="ipc-stat"><div class="l">Invoiced</div><div class="v">${fmt(p.invoiced)}</div></div>
+              <div class="ipc-stat${p.outstanding>0 ? " warn" : ""}"><div class="l">Outstanding</div><div class="v">${fmt(p.outstanding)}</div></div>
+              <div class="ipc-stat"><div class="l">Invoices</div><div class="v">${p.count}</div></div>
+            </div>
+            ${p.overdue>0 ? `<div class="ipc-overdue">${fmt(p.overdue)} overdue</div>` : ""}
+          </div>
         `;
       }).join("");
 
   return `
     ${statsHtml}
-    ${filterHtml}
     <div class="inv-list-title">
-      <span>All Invoices Across Projects</span>
-      <span style="font-size:11px;color:var(--muted);font-weight:500;letter-spacing:.04em;text-transform:none;">${filtered.length} invoice${filtered.length===1?"":"s"} shown</span>
+      <span>Projects</span>
+      <span style="font-size:11px;color:var(--muted);font-weight:500;letter-spacing:.04em;text-transform:none;">${projects.length} project${projects.length===1?"":"s"} with invoices</span>
     </div>
-    <table class="inv-list-table">
-      <thead>
-        <tr>
-          <th>Invoice #</th>
-          <th>Project</th>
-          <th>Milestone</th>
-          <th>Issued</th>
-          <th>Due</th>
-          <th>Status</th>
-          <th style="text-align:right;">Total (incl. HST)</th>
-        </tr>
-      </thead>
-      <tbody>${tableRowsHtml}</tbody>
-    </table>
+    <div class="inv-proj-grid">${cardsHtml}</div>
   `;
+}
+
+/* Open a specific project's invoicing (current-project view) from a project
+   card in the All Projects grid. Loads the estimate into the workspace if it
+   isn't already the live one, then flips to the per-project view. */
+function openProjectInvoicing(estId){
+  const liveId = state && state._id;
+  if(estId && estId !== liveId && estId !== "_live" && typeof loadEstimate === "function"){
+    // Snapshot the estimate the user was actually working on (once, on the
+    // first borrow) so closeInvoicing() can restore it — drilling into another
+    // project's invoices shouldn't permanently swap their workspace.
+    if(!_invoicingBorrowedSnapshot){
+      try { _invoicingBorrowedSnapshot = JSON.parse(JSON.stringify(state)); } catch(e){ _invoicingBorrowedSnapshot = null; }
+    }
+    loadEstimate(estId);   // no-ops safely if the id isn't in the saved list
+  }
+  _invoicingScope = "current";
+  const nameEl = document.getElementById("invModalEstimateName");
+  if(nameEl){
+    const addr = (state.propAddress || "").trim();
+    const nm   = (state.propName || "").trim();
+    nameEl.textContent = addr || nm || "Project";
+  }
+  renderInvoicing();
 }
 
 /* When the user clicks an invoice row in All Projects that belongs to a
@@ -28544,15 +29083,27 @@ async function createMilestoneInvoice(milestoneId){
   openInvoiceDetail(inv.id);
 }
 
-/* Create a new custom invoice (free-form, not tied to a milestone). */
+/* Generate a stable id for an invoice line item. */
+function newLineItemId(){
+  return "li_" + Date.now().toString(36) + "_" + Math.floor(Math.random()*1e6).toString(36);
+}
+
+/* Recompute a custom invoice's pre-HST amount from its line items, then
+   refresh HST + total. Only touches line-item invoices; milestone invoices
+   keep their single amount untouched. */
+function recomputeInvoiceFromLineItems(inv){
+  if(!inv || !Array.isArray(inv.lineItems)) return;
+  const subtotal = inv.lineItems.reduce((a, li) => a + (parseFloat(li && li.amount) || 0), 0);
+  inv.amount = +subtotal.toFixed(2);
+  inv.hstAmount = +(inv.amount * (inv.hstRate || 0)).toFixed(2);
+  inv.total = +(inv.amount + inv.hstAmount).toFixed(2);
+}
+
+/* Create a new custom invoice (free-form line items, not tied to a milestone).
+   Opens straight into the editor with one blank line item to fill in. */
 async function createCustomInvoice(){
   const name = await brandedPrompt("Custom invoice name (e.g. \"Change Order #1 — Add island countertop\"):", "Change Order", { title: "New custom invoice" });
   if(!name) return;
-  const amtStr = await brandedPrompt("Invoice amount $ (pre-HST):", "1000", { title: "Invoice amount" });
-  const amount = parseFloat(amtStr);
-  if(!isFinite(amount) || amount <= 0){ await brandedAlert("Invalid amount."); return; }
-  const hstAmount = +(amount * INVOICE_HST_RATE_DEFAULT).toFixed(2);
-  const total = +(amount + hstAmount).toFixed(2);
   const now = new Date().toISOString();
   const issued = todayISO();
   const inv = {
@@ -28562,8 +29113,9 @@ async function createCustomInvoice(){
     milestoneLabel: name.trim(),
     milestoneDesc: "",
     percent: 0,
-    amount: +amount.toFixed(2),
-    hstRate: INVOICE_HST_RATE_DEFAULT, hstAmount, total,
+    lineItems: [ { id: newLineItemId(), desc: "", amount: "" } ],
+    amount: 0,
+    hstRate: INVOICE_HST_RATE_DEFAULT, hstAmount: 0, total: 0,
     status: "draft",
     issuedDate: issued,
     dueDate: addDaysISO(issued, INVOICE_DUE_DAYS_DEFAULT),
@@ -28575,6 +29127,49 @@ async function createCustomInvoice(){
   saveEstimate({ silent:true });
   renderInvoicing();
   openInvoiceDetail(inv.id);
+}
+
+/* ---- Line-item editing (custom invoices) ---- */
+function addInvoiceLineItem(invId){
+  const inv = (state.invoices || []).find(x => x.id === invId);
+  if(!inv) return;
+  if(!Array.isArray(inv.lineItems)) inv.lineItems = [];
+  inv.lineItems.push({ id: newLineItemId(), desc: "", amount: "" });
+  inv.updatedAt = new Date().toISOString();
+  recomputeInvoiceFromLineItems(inv);
+  saveEstimate({ silent:true });
+  renderInvoiceDetail(inv);
+}
+function removeInvoiceLineItem(invId, lineId){
+  const inv = (state.invoices || []).find(x => x.id === invId);
+  if(!inv || !Array.isArray(inv.lineItems)) return;
+  inv.lineItems = inv.lineItems.filter(li => li.id !== lineId);
+  if(inv.lineItems.length === 0) inv.lineItems.push({ id: newLineItemId(), desc: "", amount: "" });
+  inv.updatedAt = new Date().toISOString();
+  recomputeInvoiceFromLineItems(inv);
+  saveEstimate({ silent:true });
+  renderInvoiceDetail(inv);
+}
+/* Live edit of a line item. For the amount we update totals in place (no full
+   re-render, to preserve input focus); desc just persists. */
+function updateInvoiceLineItem(invId, lineId, field, value){
+  const inv = (state.invoices || []).find(x => x.id === invId);
+  if(!inv || !Array.isArray(inv.lineItems)) return;
+  const li = inv.lineItems.find(x => x.id === lineId);
+  if(!li) return;
+  li[field] = value;
+  inv.updatedAt = new Date().toISOString();
+  if(field === "amount"){
+    recomputeInvoiceFromLineItems(inv);
+    const fmtMoneyDec = (n) => "$" + (Math.round(n*100)/100).toLocaleString("en-US", { minimumFractionDigits:2, maximumFractionDigits:2 });
+    const setTxt = (id, v) => { const el = document.getElementById(id); if(el) el.textContent = v; };
+    setTxt("inv-detail-subtotal", fmtMoneyDec(inv.amount));
+    setTxt("inv-detail-hst", fmtMoneyDec(inv.hstAmount));
+    setTxt("inv-detail-total", fmtMoneyDec(inv.total));
+    const amtField = document.getElementById("inv-detail-amount-field");
+    if(amtField) amtField.value = (Math.round(inv.amount*100)/100).toFixed(2);
+  }
+  saveEstimate({ silent:true });
 }
 
 /* Open the detail modal for an invoice (by id). */
@@ -28592,11 +29187,61 @@ function closeInvoiceDetail(){
   renderInvoicing();
 }
 
+/* Explicit "Save & Close" — invoice fields already autosave on every edit
+   (updateInvoiceField / line-item edits call saveEstimate silently), but this
+   gives a clear, reassuring commit + return-to-list action. */
+function saveAndCloseInvoiceDetail(){
+  try { saveEstimate({ silent:true }); } catch(e){}
+  closeInvoiceDetail();
+}
+
+/* ---- Invoice preview (on-screen, read-only) ---- */
+let _previewInvoiceId = null;
+function previewInvoice(invId){
+  const inv = (state.invoices || []).find(x => x.id === invId);
+  if(!inv){ try{ brandedAlert("Invoice not found."); }catch(e){} return; }
+  _previewInvoiceId = invId;
+  const host = document.getElementById("invoicePreviewBody");
+  if(host){
+    host.innerHTML = "";
+    try {
+      const el = buildInvoicePdfEl(inv);
+      // Constrain to a page-like sheet centred in the scroll area.
+      el.style.maxWidth = "720px";
+      el.style.margin = "0 auto";
+      el.style.boxShadow = "0 4px 24px rgba(0,0,0,.25)";
+      host.appendChild(el);
+    } catch(e){
+      host.innerHTML = '<div style="color:#a00;padding:20px;">Could not render preview.</div>';
+    }
+  }
+  document.getElementById("invoicePreviewModal").classList.add("show");
+}
+function closeInvoicePreview(){
+  document.getElementById("invoicePreviewModal").classList.remove("show");
+  const host = document.getElementById("invoicePreviewBody");
+  if(host) host.innerHTML = "";
+}
+function downloadInvoiceFromPreview(){
+  if(_previewInvoiceId) downloadInvoicePdf(_previewInvoiceId);
+}
+
 function renderInvoiceDetail(inv){
   const body = document.getElementById("invoiceDetailBody");
   if(!body) return;
   const fmt = (n) => "$" + Math.round(n).toLocaleString("en-US");
   const fmtMoneyDec = (n) => "$" + (Math.round(n*100)/100).toLocaleString("en-US", { minimumFractionDigits:2, maximumFractionDigits:2 });
+
+  // Custom invoices are line-item driven. Migrate any legacy custom invoice
+  // (created before line items existed) into a single seeded line item so the
+  // editor + auto-total work uniformly.
+  const isCustom = inv.milestone === "custom";
+  if(isCustom && !Array.isArray(inv.lineItems)){
+    inv.lineItems = (+inv.amount > 0)
+      ? [ { id: newLineItemId(), desc: inv.milestoneLabel || "Item", amount: +inv.amount } ]
+      : [ { id: newLineItemId(), desc: "", amount: "" } ];
+    recomputeInvoiceFromLineItems(inv);
+  }
 
   // Linked expenses — pull from tracker
   let linkedExpenses = [];
@@ -28664,8 +29309,8 @@ function renderInvoiceDetail(inv){
         <input type="date" value="${escapeHtmlAttr(inv.dueDate || '')}" ${disabled} onchange="updateInvoiceField('${inv.id}','dueDate',this.value)">
       </div>
       <div>
-        <label>Amount $ (pre-HST)</label>
-        <input type="number" min="0" step="0.01" value="${escapeHtmlAttr(inv.amount || 0)}" ${disabled} oninput="updateInvoiceAmount('${inv.id}', this.value)">
+        <label>Amount $ (pre-HST)${isCustom ? ` <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">— auto from line items</span>` : ""}</label>
+        <input type="number" min="0" step="0.01" id="inv-detail-amount-field" value="${escapeHtmlAttr(inv.amount || 0)}" ${isCustom ? "readonly style=\"background:#1a1a1a;color:var(--muted);cursor:not-allowed;\"" : `${disabled} oninput="updateInvoiceAmount('${inv.id}', this.value)"`}>
       </div>
       <div>
         <label>HST Rate (decimal)</label>
@@ -28680,6 +29325,23 @@ function renderInvoiceDetail(inv){
         <input type="text" placeholder="e-transfer / cheque / wire" value="${escapeHtmlAttr(inv.paymentMethod || '')}" ${disabled} oninput="updateInvoiceField('${inv.id}','paymentMethod',this.value)">
       </div>
     </div>
+
+    ${isCustom ? `
+    <div class="inv-lineitems">
+      <div class="inv-li-title">Line Items <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;font-size:11px;">— the pre-HST subtotal auto-totals from these</span></div>
+      <div class="inv-li-head"><span>Description</span><span>Amount $</span><span></span></div>
+      <div id="inv-li-rows">
+        ${(Array.isArray(inv.lineItems) ? inv.lineItems : []).map(li => `
+          <div class="inv-li-row" data-li="${escapeHtmlAttr(li.id)}">
+            <input type="text" placeholder="e.g. Add island countertop" value="${escapeHtmlAttr(li.desc || '')}" ${disabled} oninput="updateInvoiceLineItem('${inv.id}','${li.id}','desc',this.value)">
+            <input type="number" min="0" step="0.01" placeholder="0.00" value="${escapeHtmlAttr(li.amount === 0 || li.amount ? li.amount : '')}" ${disabled} oninput="updateInvoiceLineItem('${inv.id}','${li.id}','amount',this.value)">
+            <button class="inv-li-del" title="Remove line" ${disabled} onclick="removeInvoiceLineItem('${inv.id}','${li.id}')">&times;</button>
+          </div>
+        `).join("")}
+      </div>
+      <button class="inv-li-add" ${disabled} onclick="addInvoiceLineItem('${inv.id}')">+ Add line item</button>
+    </div>
+    ` : ""}
 
     <div>
       <label style="display:block;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:4px;">Notes / Payment Instructions</label>
@@ -28705,6 +29367,7 @@ function renderInvoiceDetail(inv){
 
     <div class="inv-actions">
       <button class="primary" onclick="openEmailInvoiceModal('${inv.id}')" ${isVoid ? "disabled" : ""} title="Email the invoice PDF to the client (auto-marks Sent on success)">Send to Client</button>
+      <button onclick="previewInvoice('${inv.id}')" title="Preview the invoice exactly as the client will see it">Preview</button>
       <button onclick="downloadInvoicePdf('${inv.id}')">Download PDF</button>
       <button onclick="markInvoiceSent('${inv.id}')" ${inv.status === "sent" || inv.status === "paid" ? "disabled" : ""}>Mark Sent</button>
       <button onclick="markInvoicePaid('${inv.id}')" ${inv.status === "paid" || isVoid ? "disabled" : ""}>Mark Paid</button>
@@ -28833,17 +29496,50 @@ function buildInvoicePdfEl(inv){
     .filter(s => s.name || s.email || s.phone);
   const fmtMoneyDec = (n) => "$" + (Math.round(n*100)/100).toLocaleString("en-US", { minimumFractionDigits:2, maximumFractionDigits:2 });
 
+  // Line-item invoices (custom) render one table row per item; everything else
+  // (milestone invoices) renders the single scope-of-work row.
+  const lineItems = Array.isArray(inv.lineItems)
+    ? inv.lineItems.filter(li => li && ((li.desc || "").trim() || (+li.amount || 0) !== 0))
+    : [];
+  const hasLineItems = lineItems.length > 0;
+  let bodyRows;
+  if(hasLineItems){
+    const caption = (inv.milestoneLabel || "").trim();
+    bodyRows =
+      (caption ? `<tr><td colspan="2" style="padding:10px 12px;border-bottom:2px solid #0a0a0a;font-weight:700;font-size:12.5px;color:#0a0a0a;">${escapeHtml(caption)}</td></tr>` : "") +
+      lineItems.map(li => `
+        <tr>
+          <td style="padding:12px;border-bottom:1px solid #eee;vertical-align:top;font-size:12.5px;color:#0a0a0a;">${escapeHtml((li.desc || "").trim() || "Item")}</td>
+          <td style="padding:12px;border-bottom:1px solid #eee;text-align:right;font-weight:700;font-variant-numeric:tabular-nums;font-size:13.5px;color:#0a0a0a;vertical-align:top;">${fmtMoneyDec(+li.amount || 0)}</td>
+        </tr>
+      `).join("");
+  } else {
+    bodyRows = `
+        <tr>
+          <td style="padding:14px 12px;border-bottom:1px solid #eee;vertical-align:top;">
+            <div style="font-weight:700;font-size:13.5px;color:#0a0a0a;margin-bottom:4px;">${escapeHtml(inv.milestoneLabel || "Invoice")}</div>
+            ${inv.milestoneDesc ? `<div style="font-size:11.5px;color:#555;line-height:1.5;margin-bottom:6px;">${escapeHtml(inv.milestoneDesc)}</div>` : ""}
+            <div style="font-size:11.5px;color:#3b2e10;line-height:1.5;background:#fbf5e6;border-left:3px solid #d4af6a;padding:7px 10px;margin-top:6px;">
+              This invoice is associated with the scope of work approved and signed by all parties in the estimate for this project.
+            </div>
+            ${inv.percent ? `<div style="font-size:10.5px;color:#a8853f;margin-top:6px;letter-spacing:.10em;text-transform:uppercase;">${inv.percent}% of contract</div>` : ""}
+          </td>
+          <td style="padding:14px 12px;border-bottom:1px solid #eee;text-align:right;font-weight:700;font-variant-numeric:tabular-nums;font-size:14px;color:#0a0a0a;vertical-align:top;">${fmtMoneyDec(inv.amount || 0)}</td>
+        </tr>`;
+  }
+
   const wrapper = document.createElement("div");
   wrapper.style.cssText = "background:#ffffff;color:#0a0a0a;padding:36px 40px;font-family:'Montserrat',sans-serif;line-height:1.5;font-size:12px;";
   wrapper.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #0a0a0a;padding-bottom:14px;margin-bottom:18px;">
       <div>
-        <img src="${escapeHtmlAttr(ci.logoSrc)}" alt="Reno to Sold" style="max-height:48px;display:block;margin-bottom:6px;">
+        <img src="RENO_to_SOLD_logo_only.png" alt="Reno to Sold" style="max-height:48px;display:block;margin-bottom:6px;">
         <div style="font-size:10.5px;color:#444;line-height:1.5;">
           ${escapeHtml(ci.phone)}<br>
           ${escapeHtml(ci.email)}<br>
           ${escapeHtml(ci.addressLine1)}<br>
           ${escapeHtml(ci.addressLine2)}
+          ${ci.hstNumber ? `<br><span style="color:#0a0a0a;font-weight:700;">HST&nbsp;#:</span> ${escapeHtml(ci.hstNumber)}` : ""}
         </div>
       </div>
       <div style="text-align:right;">
@@ -28867,8 +29563,7 @@ function buildInvoicePdfEl(inv){
       </div>
       <div>
         <div style="font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:#a8853f;font-weight:700;margin-bottom:6px;">Project</div>
-        <div style="font-size:13px;font-weight:700;color:#0a0a0a;">${escapeHtml(propName || "—")}</div>
-        <div style="font-size:11px;color:#555;">${escapeHtml(propAddr || "")}</div>
+        <div style="font-size:13px;font-weight:700;color:#0a0a0a;">${escapeHtml(propAddr || "—")}</div>
       </div>
     </div>
     <table style="width:100%;border-collapse:collapse;margin-bottom:18px;">
@@ -28878,19 +29573,7 @@ function buildInvoicePdfEl(inv){
           <th style="text-align:right;padding:10px 12px;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;font-weight:700;width:140px;">Amount</th>
         </tr>
       </thead>
-      <tbody>
-        <tr>
-          <td style="padding:14px 12px;border-bottom:1px solid #eee;vertical-align:top;">
-            <div style="font-weight:700;font-size:13.5px;color:#0a0a0a;margin-bottom:4px;">${escapeHtml(inv.milestoneLabel || "Invoice")}</div>
-            ${inv.milestoneDesc ? `<div style="font-size:11.5px;color:#555;line-height:1.5;margin-bottom:6px;">${escapeHtml(inv.milestoneDesc)}</div>` : ""}
-            <div style="font-size:11.5px;color:#3b2e10;line-height:1.5;background:#fbf5e6;border-left:3px solid #d4af6a;padding:7px 10px;margin-top:6px;">
-              This invoice is associated with the scope of work approved and signed by all parties in the estimate for this project.
-            </div>
-            ${inv.percent ? `<div style="font-size:10.5px;color:#a8853f;margin-top:6px;letter-spacing:.10em;text-transform:uppercase;">${inv.percent}% of contract</div>` : ""}
-          </td>
-          <td style="padding:14px 12px;border-bottom:1px solid #eee;text-align:right;font-weight:700;font-variant-numeric:tabular-nums;font-size:14px;color:#0a0a0a;vertical-align:top;">${fmtMoneyDec(inv.amount || 0)}</td>
-        </tr>
-      </tbody>
+      <tbody>${bodyRows}</tbody>
     </table>
     <div style="display:flex;justify-content:flex-end;margin-bottom:18px;">
       <div style="min-width:280px;">
@@ -28901,7 +29584,7 @@ function buildInvoicePdfEl(inv){
     </div>
     <!-- Payable To — the client uses this block to know how to send payment. -->
     <div style="background:#0a0a0a;color:#ffffff;border-radius:6px;padding:14px 16px;margin-bottom:16px;">
-      <div style="font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:#d4af6a;font-weight:700;margin-bottom:8px;">Make Payment Payable To</div>
+      <div style="font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:#d4af6a;font-weight:700;margin-bottom:8px;">Payable To</div>
       <div style="display:grid;grid-template-columns:140px 1fr;gap:6px 14px;font-size:12.5px;line-height:1.5;">
         <div style="color:#d4af6a;font-weight:700;">Cheque:</div>
         <div style="font-weight:700;letter-spacing:.04em;">RENO TO SOLD INC.</div>
@@ -28916,7 +29599,7 @@ function buildInvoicePdfEl(inv){
       </div>
     ` : ""}
     <div style="border-top:2px solid #0a0a0a;padding-top:12px;font-size:10.5px;color:#666;text-align:center;line-height:1.6;">
-      Thank you for your business. Reno to Sold Inc. &middot; Payment due by ${escapeHtml(String(inv.dueDate || "agreed terms"))}.
+      Thank you for your business. Reno to Sold Inc.
     </div>
   `;
   return wrapper;
@@ -29972,6 +30655,7 @@ function backToEstimator(){
   /* Also update the URL so back-button + tab bookmarking stays in
      sync with what's on screen. If the router doesn't exist (older
      embeds), the DOM changes above still work. */
+  try { estimatorView = "editor"; } catch(_){}
   try { if(typeof navigateTo === "function") navigateTo("estimator"); } catch(e){}
 }
 function openFromEstimator(ctx){
