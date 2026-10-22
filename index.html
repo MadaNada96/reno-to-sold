@@ -16412,7 +16412,7 @@ const OFFICE_EMAIL = "renotosold@gmail.com";
 const OFFICE_COMPANY = "Reno to Sold Inc.";
 
 /* ---------- Supabase cross-device sync ---------- */
-window.RTS_BUILD = "2026-10-23-v13-restore-lost-features";
+window.RTS_BUILD = "2026-10-24-v14-route-gates";
 console.log("[build] " + window.RTS_BUILD);
 const SUPABASE_URL = "https://icrnvnmvcdpmhnjorefs.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imljcm52bm12Y2RwbWhuam9yZWZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2ODQwMDgsImV4cCI6MjA5NDI2MDAwOH0.YoeBndWsky8vAW6mLeMziPeH2j2C6c_3VdAvOG_i0kA";
@@ -21793,6 +21793,12 @@ function renderRoute(){
     return renderRoute();
   }
   if(route === "brokerage"){ history.replaceState({route:"brk-agents"}, "", "#/brk-agents"); return renderRoute(); }
+  // Internal tools: the sidebar hides them, and a typed URL must not open them either.
+  const _toolFeature = { materials:"materials_catalog", bids:"contractor_bids", invoicing:"invoicing", tracker:"expense_tracker", trim:"trim_calculator" }[route];
+  if(_toolFeature && currentProfile && !canUse(_toolFeature)){
+    history.replaceState({route:"dashboard"}, "", "#/dashboard");
+    return renderRoute();
+  }
   if(currentProfile && ((/^brk-/.test(route) && !canUse("brokerage_admin")) ||
                         (route === "estimator" && !canUse("estimator")))){
     history.replaceState({route:"dashboard"}, "", "#/dashboard");
@@ -26686,7 +26692,9 @@ function applyFeatureGates(){
     try { renderUserIdentity(); } catch(e){ console.warn("renderUserIdentity error:", e); }
     try {
       const _r = getCurrentRoute();
-      if(_r === "dashboard") renderDashboard();
+      const _tf = { materials:"materials_catalog", bids:"contractor_bids", invoicing:"invoicing", tracker:"expense_tracker", trim:"trim_calculator", packages:"prelisting_packages" }[_r];
+      if(_tf && currentProfile && !canUse(_tf)) navigateTo("dashboard");
+      else if(_r === "dashboard") renderDashboard();
       else if(/^brk-/.test(_r) && typeof renderBrokeragePage === "function"){
         if(currentProfile && !canUse("brokerage_admin")) navigateTo("dashboard");
         else renderBrokeragePage(_r.slice(4));
