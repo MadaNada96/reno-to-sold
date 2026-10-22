@@ -539,6 +539,7 @@ footer .wrap{display:flex;gap:16px;justify-content:space-between;flex-wrap:wrap}
   <div class="wrap">
     <div>© <span id="yr"></span> Reno to Sold Inc. · Mississauga, Ontario · GST/HST 768682965 RT0001</div>
     <div><a href="tel:+16475000270" style="color:var(--muted)">647-500-0270</a> · <a href="mailto:renotosold@gmail.com" style="color:var(--muted)">renotosold@gmail.com</a> · <a href="/" style="color:var(--muted)">Sign in</a></div>
+    <div><a href="/terms/" style="color:var(--muted)">Terms</a> · <a href="/privacy/" style="color:var(--muted)">Privacy</a> · <a href="/cancellation/" style="color:var(--muted)">Cancellation &amp; refunds</a></div>
   </div>
 </footer>
 
@@ -548,7 +549,7 @@ footer .wrap{display:flex;gap:16px;justify-content:space-between;flex-wrap:wrap}
 var SUPABASE_URL = "https://icrnvnmvcdpmhnjorefs.supabase.co";
 var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imljcm52bm12Y2RwbWhuam9yZWZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2ODQwMDgsImV4cCI6MjA5NDI2MDAwOH0.YoeBndWsky8vAW6mLeMziPeH2j2C6c_3VdAvOG_i0kA";
 /* Flip to true once the Terms / Privacy pages are published (step 4). */
-var LEGAL_READY = false;
+var LEGAL_READY = true;
 var HST = 0.13, TRIAL_DAYS = 5, MIN_SEATS = 5, MAX_SEATS = 5000;
 var AGENT = { month: 49.99, year: 499 };
 var TIERS = [
@@ -676,7 +677,7 @@ function renderForm(){
   var q = quote();
   $("agreeText").innerHTML = "I understand my 5-day free trial starts today and, unless I cancel before " + esc(trialEnd()) +
     ", I'll be charged " + esc(money(q.total)) + " (incl. HST) per " + q.per + " until I cancel." +
-    (LEGAL_READY ? ' I agree to the <a href="/terms/" target="_blank" rel="noopener">Terms</a> and <a href="/privacy/" target="_blank" rel="noopener">Privacy Policy</a>.' : "");
+    (LEGAL_READY ? ' I agree to the <a href="/terms/" target="_blank" rel="noopener">Terms of Service</a>, <a href="/privacy/" target="_blank" rel="noopener">Privacy Policy</a> and <a href="/cancellation/" target="_blank" rel="noopener">Cancellation &amp; Refund Policy</a>.' : "");
 }
 function setErr(id, msg){ var f = $(id).closest(".fld"); f.classList.toggle("err", !!msg); f.querySelector(".em").textContent = msg || ""; return !msg; }
 function val(id){ return ($(id).value || "").trim(); }
