@@ -7025,7 +7025,7 @@ function migrateOldEstimate(m){
   delete m.sellerName; delete m.sellerPhone; delete m.sellerEmail;
 }
 async function deleteEstimate(id){
-  if(!(await brandedConfirm("Delete this estimate? Any contractor bids linked to this property will be removed too.", { confirmLabel: "Delete" }))) return;
+  if(!(await brandedConfirm("Delete this estimate? Contractor bids for this property are kept — you'll still find them under Bids → All bids.", { confirmLabel: "Delete" }))) return;
   const list = loadSavedList();
   const target = list.find(x => x.id === id);
   const est = (target && target.state) || {};
@@ -7038,12 +7038,9 @@ async function deleteEstimate(id){
   renderSavedList();
   if(currentUser && supa){
     deleteCloudEstimate(id);
-    // Cascade-delete linked contractor bids. ID-linked bids are removed
-    // exactly by this estimate's client_id; legacy address-linked bids are
-    // removed only if no OTHER estimate still shares this address.
-    const stillLinked = !!projKey && remaining.some(x => x.state &&
-      projectKeyForAddr(x.state.propAddress, x.state.propName) === projKey);
-    deleteBidsForEstimate(id, projKey, stillLinked).catch(e => console.warn("cascade bid delete failed:", e));
+    // v16: contractor bids are NEVER deleted automatically. A bid is the
+    // contractor's submitted work; it stays under Bids → All bids and can be
+    // removed one at a time with its own Delete button.
   }
 }
 async function newEstimate(){
@@ -14221,8 +14218,8 @@ async function deleteBidsForEstimate(clientId, projKey, projKeyStillUsed){
    authoritative fetch of every estimate the admin can read (all users):
      1. Backfill — stamp estimate_client_id onto legacy bids whose address
         matches exactly one estimate (unambiguous only).
-     2. Prune — delete bids whose estimate no longer exists (by id, or by
-        address for still-legacy bids).
+     (v16: the old "prune orphaned bids" step was removed — it could delete
+      real bids automatically. Bids are only ever deleted by hand.)
    Cross-user safe: checks against ALL estimates, not just the admin's own
    saved list, so bids for agents' estimates are never wrongly deleted.
    Guarded: if the estimates fetch fails, it does nothing. */
@@ -14240,7 +14237,6 @@ async function reconcileBidLinks(){
     const k = e.state ? projectKeyForAddr(e.state.propAddress, e.state.propName) : "";
     if(k && e.client_id){ (byKey[k] = byKey[k] || []).push(e.client_id); }
   }
-  const liveKeys = new Set(Object.keys(byKey));
   // 1) Backfill legacy bids with an UNAMBIGUOUS address match.
   for(const b of _receivedBidsCache){
     if(b.estimate_client_id) continue;
@@ -14253,21 +14249,7 @@ async function reconcileBidLinks(){
       } catch(e){ console.warn("backfill bid link failed:", e); }
     }
   }
-  // 2) Prune bids whose estimate is gone.
-  const orphans = _receivedBidsCache.filter(b => {
-    if(b.estimate_client_id) return !liveIds.has(b.estimate_client_id);
-    const k = bidProjectKey(b);
-    return k && !liveKeys.has(k);
-  });
-  if(orphans.length){
-    for(const b of orphans){
-      try { await dbDelete("contractor_bids", { user_id: currentUser.id, bid_token: b.bid_token }); }
-      catch(e){ console.warn("delete orphan bid failed:", e); }
-    }
-    const gone = new Set(orphans.map(b => b.bid_token));
-    _receivedBidsCache = _receivedBidsCache.filter(b => !gone.has(b.bid_token));
-    console.log("[bids] pruned " + orphans.length + " orphaned bid(s) with no matching estimate");
-  }
+  // v16: no automatic pruning. Bids are only deleted by the user, one at a time.
 }
 function renderReceivedBidsList(){
   const filter = _receivedBidsTab;
@@ -14282,7 +14264,9 @@ function renderReceivedBidsList(){
   const list = projectScoped.filter(b => filter === "all" || b.status === filter);
   const root = document.getElementById("rbList");
   const empty = document.getElementById("rbEmpty");
-  renderReceivedBidsScopeToggle(projKey, projectScoped.length, (_receivedBidsCache || []).length);
+  const projectOnlyCount = (projKey || projClientId)
+    ? (_receivedBidsCache || []).filter(b => bidBelongsToEstimate(b, projClientId, projKey)).length : 0;
+  renderReceivedBidsScopeToggle(projKey, projectOnlyCount, (_receivedBidsCache || []).length);
   renderReceivedBidsSnapshot(projectScoped);
   if(!list.length){
     root.innerHTML = "";
@@ -14335,12 +14319,14 @@ function renderReceivedBidsScopeToggle(projKey, projectCount, totalCount){
   host.style.display = "";
   const propLabel = (state.propName || "").trim() || (state.propAddress || "").trim() || "this project";
   const scope = _receivedBidsScope || "project";
+  const info = scope === "all"
+    ? `Showing <b>all bids</b> &middot; ${totalCount} total
+       ${projectCount ? `&middot; <span style="color:var(--muted);">${projectCount} on ${escapeHtml(propLabel)}</span>` : ""}`
+    : `Showing bids for <b>${escapeHtml(propLabel)}</b>
+       &middot; ${projectCount} bid${projectCount===1?"":"s"} on this project
+       ${totalCount > projectCount ? `&middot; <span style="color:var(--muted);">${totalCount - projectCount} more on other projects</span>` : ""}`;
   host.innerHTML = `
-    <div class="rb-scope-info">
-      Showing bids for <b>${escapeHtml(propLabel)}</b>
-      &middot; ${projectCount} bid${projectCount===1?"":"s"} on this project
-      ${totalCount > projectCount ? `&middot; <span style="color:var(--muted);">${totalCount - projectCount} more on other projects</span>` : ""}
-    </div>
+    <div class="rb-scope-info">${info}</div>
     <div class="rb-scope-toggle">
       <button class="${scope==='project'?'on':''}" onclick="setReceivedBidsScope('project')">This project</button>
       <button class="${scope==='all'?'on':''}"     onclick="setReceivedBidsScope('all')">All bids</button>
@@ -16517,7 +16503,7 @@ const OFFICE_EMAIL = "renotosold@gmail.com";
 const OFFICE_COMPANY = "Reno to Sold Inc.";
 
 /* ---------- Supabase cross-device sync ---------- */
-window.RTS_BUILD = "2026-10-25-v15-autosave-autosync";
+window.RTS_BUILD = "2026-10-26-v16-bids-safe";
 console.log("[build] " + window.RTS_BUILD);
 const SUPABASE_URL = "https://icrnvnmvcdpmhnjorefs.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imljcm52bm12Y2RwbWhuam9yZWZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2ODQwMDgsImV4cCI6MjA5NDI2MDAwOH0.YoeBndWsky8vAW6mLeMziPeH2j2C6c_3VdAvOG_i0kA";
