@@ -185,6 +185,8 @@
 
   .toolbar{display:flex;gap:8px;flex-wrap:wrap;}
   .toolbar-row-2{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin:0 0 18px;padding:0;position:relative;}
+  .autosave-status{font-size:11.5px;color:var(--muted);min-width:150px;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;}
+  .autosave-status.saved{color:#5fce86;} .autosave-status.pending{color:var(--gold-bright);} .autosave-status.blocked{color:var(--muted);} .autosave-status.offline{color:#ff9966;}
   .import-pdf-link{
     display:inline-flex;align-items:center;gap:6px;
     font:inherit;font-size:12px;font-weight:600;letter-spacing:.08em;
@@ -4728,6 +4730,7 @@
           <button onclick="openEstimatorHome()" title="Back to your saved estimates">&larr; All estimates</button>
           <button onclick="newEstimate()">+ New</button>
           <button onclick="saveEstimate()">Save</button>
+          <span id="autosaveStatus" class="autosave-status" aria-live="polite"></span>
           <button onclick="openSavedModal()">Saved</button>
           <button class="import-pdf-link" onclick="triggerPdfImport()" title="Auto-fill a new estimate from an iGUIDE floor plan PDF">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 12 15 15"/></svg>
@@ -6507,6 +6510,100 @@ async function resetPricing(){
 function loadSavedList(){ try{ return JSON.parse(localStorage.getItem("reno_estimates_v1")||"[]"); }catch(e){ return []; } }
 function persistSavedList(arr){ localStorage.setItem("reno_estimates_v1", JSON.stringify(arr)); }
 
+/* ============================================================
+   AUTOSAVE + AUTOMATIC CLOUD SYNC (v15)
+   ------------------------------------------------------------
+   • Pending queue: every cloud write marks the item "pending" first
+     and clears it on success. Anything that couldn't reach the cloud
+     (offline, expired session) is retried automatically: on sign-in,
+     every 60 seconds, and when the connection comes back. The queue
+     is per user, so nothing from another account is ever uploaded.
+   • Autosave: the estimate open in the editor saves itself ~2.5 s
+     after the last change — only when it's the user's own estimate,
+     has a property name, address and sqft, isn't locked (submitted),
+     and actually changed. Untouched new estimates, submissions an
+     admin is reviewing, and borrowed invoicing views are never saved.
+   ============================================================ */
+function _rtsPendingKey(){ return (typeof currentUser !== "undefined" && currentUser && currentUser.id) ? "rts_pending_sync_" + currentUser.id : null; }
+function _rtsPendingRead(){ try { const k = _rtsPendingKey(); return k ? (JSON.parse(localStorage.getItem(k) || "{}") || {}) : {}; } catch(e){ return {}; } }
+function rtsPendingMark(type, id, on){
+  const k = _rtsPendingKey(); if(!k || !type || !id) return;
+  try {
+    const q = _rtsPendingRead(); q[type] = q[type] || {};
+    if(on) q[type][id] = Date.now(); else delete q[type][id];
+    localStorage.setItem(k, JSON.stringify(q));
+  } catch(e){}
+}
+function rtsPendingIds(type){ const q = _rtsPendingRead(); return Object.keys(q[type] || {}); }
+function rtsPendingCount(){ const q = _rtsPendingRead(); return Object.values(q).reduce((n, o) => n + Object.keys(o || {}).length, 0); }
+window.rtsPendingMark = rtsPendingMark; window.rtsPendingIds = rtsPendingIds;
+
+let _rtsFlushing = false;
+async function flushPendingSync(){
+  if(_rtsFlushing || typeof currentUser === "undefined" || !currentUser || !navigator.onLine) return;
+  if(!rtsPendingCount()) return;
+  _rtsFlushing = true;
+  try {
+    const est = loadSavedList();
+    for(const id of rtsPendingIds("estimate")){ const e = est.find(x => x && x.id === id); if(e) await upsertCloudEstimate(e); else rtsPendingMark("estimate", id, false); }
+    const con = loadContractors();
+    for(const id of rtsPendingIds("contractor")){ const c = con.find(x => x && x.id === id); if(c) await upsertCloudContractor(c); else rtsPendingMark("contractor", id, false); }
+    if(window.ET && typeof ET.flushPending === "function"){ try { await ET.flushPending(); } catch(e){} }
+  } finally { _rtsFlushing = false; try { updateAutosaveStatus(); } catch(e){} }
+}
+setInterval(() => { flushPendingSync().catch(() => {}); }, 60000);
+window.addEventListener("online", () => { flushPendingSync().catch(() => {}); });
+
+let _autosaveTimer = null, _autosaveSnap = null, _autosaveRef = null;
+function _estimateSnap(){ try { return JSON.stringify(state); } catch(e){ return null; } }
+function markEstimateClean(){ _autosaveRef = state; _autosaveSnap = _estimateSnap(); clearTimeout(_autosaveTimer); updateAutosaveStatus(); }
+function _estimateHasRequiredFields(){
+  return !!((state.propName || "").trim() && (state.propAddress || "").trim() && String(state.propSqft || "").trim());
+}
+function _autosaveContextOk(){
+  if(typeof currentUser === "undefined" || !currentUser || !state) return false;
+  if(typeof PL !== "undefined" && PL && PL._hosting) return false;                 // packages tool borrows the estimator
+  try { if(stashedAdminState) return false; } catch(e){}                 // admin reviewing a submission
+  try { if(_invoicingBorrowedSnapshot) return false; } catch(e){}         // invoicing another project
+  if(getCurrentRoute() !== "estimator" || estimatorView !== "editor") return false;
+  if(isEstimateLocked()) return false;                                              // submitted / priced / approved
+  if(state._id && !loadSavedList().some(x => x && x.id === state._id)) return false; // not one of this user's saved estimates
+  return true;
+}
+function _estimateDirty(){ return _autosaveRef === state && _estimateSnap() !== _autosaveSnap; }
+function estimateHasUnsavableChanges(){ return _estimateDirty() && !_estimateHasRequiredFields() && !state._id; }
+function scheduleAutosave(){
+  // A different estimate object was loaded/swapped in: start tracking it, don't save it.
+  if(_autosaveRef !== state){ markEstimateClean(); return; }
+  clearTimeout(_autosaveTimer);
+  if(!_estimateDirty()){ updateAutosaveStatus(); return; }
+  updateAutosaveStatus();
+  if(!_autosaveContextOk() || !_estimateHasRequiredFields()) return;
+  _autosaveTimer = setTimeout(() => { try { autosaveNow(); } catch(e){ console.warn("autosave failed:", e); } }, 2500);
+}
+function autosaveNow(){
+  clearTimeout(_autosaveTimer);
+  if(_autosaveRef !== state || !_estimateDirty()) return false;
+  if(!_autosaveContextOk() || !_estimateHasRequiredFields()) return false;
+  saveEstimate({ silent: true, auto: true });
+  return true;
+}
+function updateAutosaveStatus(){
+  const el = document.getElementById("autosaveStatus"); if(!el) return;
+  let cls = "", txt = "";
+  const pend = rtsPendingIds("estimate").includes(state && state._id);
+  if(typeof currentUser === "undefined" || !currentUser){ txt = ""; }
+  else if(state && isEstimateLocked()){ cls = "blocked"; txt = "Locked while under review"; }
+  else if(_autosaveRef === state && _estimateDirty()){
+    if(!_estimateHasRequiredFields() && !state._id){ cls = "blocked"; txt = "Add name, address & sqft to autosave"; }
+    else { cls = "pending"; txt = "Saving…"; }
+  }
+  else if(state && state._id && pend){ cls = "offline"; txt = navigator.onLine ? "Saved on this device · syncing…" : "Offline · will sync automatically"; }
+  else if(state && state._id){ cls = "saved"; txt = "✓ All changes saved"; }
+  el.className = "autosave-status " + cls; el.textContent = txt;
+}
+window.addEventListener("beforeunload", () => { try { autosaveNow(); } catch(e){} });
+
 function saveEstimate(opts){
   opts = opts || {};
   /* Validation — require property name AND address AND sqft before
@@ -6534,9 +6631,10 @@ function saveEstimate(opts){
   const entry = { id, name, savedAt: new Date().toISOString(), state: JSON.parse(JSON.stringify(state)) };
   if(idx>=0) list[idx] = entry; else list.unshift(entry);
   persistSavedList(list);
+  try { markEstimateClean(); } catch(e){}
   // Silent path — used by invoicing edits where we don't want a toast on
   // every keystroke. Otherwise show the normal "Saved estimate: X" flash.
-  if(!opts.silent) flash("Saved estimate: " + name);
+  if(!opts.silent && !opts.auto) flash("Saved estimate: " + name);
   // Mirror to cloud if signed in (fire-and-forget — local save is the source of truth offline)
   if(currentUser && supa){ upsertCloudEstimate(entry); }
   // Keep any linked Expense Tracker project in sync with the estimate's
@@ -6934,6 +7032,9 @@ async function deleteEstimate(id){
   const projKey = projectKeyForAddr(est.propAddress, est.propName);
   const remaining = list.filter(x => x.id !== id);
   persistSavedList(remaining);
+  rtsPendingMark("estimate", id, false);
+  // Deleting the estimate that's open: clear it so autosave can't bring it back.
+  if(state && state._id === id){ clearTimeout(_autosaveTimer); state = freshState(); try { renderAll(); } catch(e){} }
   renderSavedList();
   if(currentUser && supa){
     deleteCloudEstimate(id);
@@ -6946,7 +7047,10 @@ async function deleteEstimate(id){
   }
 }
 async function newEstimate(){
-  if(!(await brandedConfirm("Start a new estimate? Unsaved changes will be lost.", { confirmLabel: "Start New" }))) return;
+  try { autosaveNow(); } catch(e){}
+  if(estimateHasUnsavableChanges()){
+    if(!(await brandedConfirm("This estimate isn't saved yet: add a property name, address and total sqft to save it. Start a new estimate anyway?", { confirmLabel: "Start New" }))) return;
+  }
   state = freshState();
   estimatorView = "editor";
   applyEstimatorView();
@@ -6975,6 +7079,7 @@ function applyEstimatorView(){
 
 /* Open the Estimator "home" (picker). Wired to the sidebar Estimator item. */
 function openEstimatorHome(){
+  try { autosaveNow(); } catch(e){}
   estimatorView = "picker";
   navigateTo("estimator");   // renderRoute() calls applyEstimatorView()
 }
@@ -8044,6 +8149,7 @@ function renderTotals(){
   // Pre-Listing Packages: keep the package quote in sync while it hosts
   // the estimator's Kitchen / Bathrooms cards.
   try{ if(typeof PL !== "undefined" && PL._hosting) PL.onHostedChange(); }catch(_){}
+  try { scheduleAutosave(); } catch(e){}
 }
 
 function renderCategories(){
@@ -13618,6 +13724,7 @@ function cloudRowToContractor(row){
 }
 async function upsertCloudContractor(c){
   if(!currentUser || !supa || !c || !c.id) return;
+  rtsPendingMark("contractor", c.id, true);
   try{
     /* CRITICAL BUG FIX: use a regular select that returns ALL matching
        rows (sorted newest-first), then update the newest and DELETE
@@ -13642,6 +13749,7 @@ async function upsertCloudContractor(c){
         for(const d of dupeIds){ try { await dbDelete("estimates", { id: d }); } catch(e){} }
       }
     }
+    rtsPendingMark("contractor", c.id, false);
   }catch(e){
     console.error("Contractor cloud upsert failed:", e);
     try { flash("⚠ Contractor not synced to cloud"); } catch(_){}
@@ -13663,21 +13771,12 @@ async function pullCloudContractors(showMigratePrompt){
   const migrateKey = "reno_contractors_cloud_migrated_" + currentUser.id;
   const localList = loadContractors();
 
-  // First-time-on-this-device prompt
-  if(showMigratePrompt && !localStorage.getItem(migrateKey) && localList.length > 0){
-    const n = localList.length;
-    const ok = await brandedConfirm("You have " + n + " local contractor" + (n===1?"":"s")
-      + " on this device. Upload to your account so they sync across all your devices?",
-      { destructive: false, confirmLabel: "Upload" });
-    if(ok){
-      for(const c of localList){
-        if(!c.updatedAt) c.updatedAt = Date.now();
-        await upsertCloudContractor(c);
-      }
-      saveContractors(localList);
-      flash("Uploaded " + n + " contractor" + (n===1?"":"s"));
-    }
-    localStorage.setItem(migrateKey, "1");
+  /* Automatic sync (no prompt): anything this user saved on this device
+     that hasn't reached the cloud yet is pushed first, silently. */
+  void migrateKey; void showMigratePrompt;
+  for(const id of rtsPendingIds("contractor")){
+    const c = localList.find(x => x && x.id === id);
+    if(c) await upsertCloudContractor(c); else rtsPendingMark("contractor", id, false);
   }
 
   // Pull + merge (newer wins per client_id)
@@ -13694,6 +13793,12 @@ async function pullCloudContractors(showMigratePrompt){
   const merged = (cloud || [])
     .filter(r => r.client_id)
     .map(r => cloudRowToContractor(r));
+  // Keep any of this user's edits that still couldn't reach the cloud (offline)
+  const stillPending = rtsPendingIds("contractor");
+  localList.filter(c => c && stillPending.includes(c.id)).forEach(c => {
+    const i = merged.findIndex(x => x.id === c.id);
+    if(i >= 0) merged[i] = c; else merged.push(c);
+  });
   saveContractors(merged);
 
   // Refresh any visible contractor UI so cloud data shows immediately
@@ -16412,7 +16517,7 @@ const OFFICE_EMAIL = "renotosold@gmail.com";
 const OFFICE_COMPANY = "Reno to Sold Inc.";
 
 /* ---------- Supabase cross-device sync ---------- */
-window.RTS_BUILD = "2026-10-24-v14-route-gates";
+window.RTS_BUILD = "2026-10-25-v15-autosave-autosync";
 console.log("[build] " + window.RTS_BUILD);
 const SUPABASE_URL = "https://icrnvnmvcdpmhnjorefs.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imljcm52bm12Y2RwbWhuam9yZWZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2ODQwMDgsImV4cCI6MjA5NDI2MDAwOH0.YoeBndWsky8vAW6mLeMziPeH2j2C6c_3VdAvOG_i0kA";
@@ -26838,6 +26943,7 @@ function localToCloud(e){
 
 async function upsertCloudEstimate(entry){
   if(!currentUser || !supa) return;
+  rtsPendingMark("estimate", entry && entry.id, true);
   try{
     /* Bypasses supa.from() which hangs on the supabase-js code path.
        Uses restFetch for the select and dbInsert/dbUpdate/dbDelete for
@@ -26865,9 +26971,12 @@ async function upsertCloudEstimate(entry){
         }
       }
     }
+    rtsPendingMark("estimate", entry.id, false);
+    try { updateAutosaveStatus(); } catch(_){}
     return true;
   }catch(e){
     console.error("Cloud upsert failed:", e);
+    try { updateAutosaveStatus(); } catch(_){}
     /* Never fail silently — an estimate that isn't in the cloud is
        wiped from this browser on sign-out. */
     try { flash("⚠ Not synced to cloud — check connection before signing out"); } catch(_){}
@@ -27024,16 +27133,14 @@ async function bootstrapCloudSync(showMigratePrompt){
   // Background — saved estimates must NEVER wait on pricing.
   _pricingSync().catch(e => console.error("[sync] Pricing sync failed:", e));
 
-  // First-time-on-this-device prompt to upload any local-only estimates
-  const migrateKey = "reno_cloud_migrated_" + currentUser.id;
+  /* Automatic sync (no prompt). Estimates this user saved on this device
+     that never reached the cloud (e.g. saved while offline) are pushed
+     first, silently. Only items in this user's own pending queue are
+     pushed — never leftovers from another account. */
   const localList = loadSavedList();
-  if(showMigratePrompt && !localStorage.getItem(migrateKey) && localList.length > 0){
-    const ok = await brandedConfirm("Welcome! You have " + localList.length + " local estimate(s) on this device. Upload them to your account so they sync across all your devices?", { destructive: false, confirmLabel: "Upload" });
-    if(ok){
-      for(const e of localList){ await upsertCloudEstimate(e); }
-      flash("Uploaded " + localList.length + " estimate" + (localList.length===1?"":"s"));
-    }
-    localStorage.setItem(migrateKey, "1");
+  for(const id of rtsPendingIds("estimate")){
+    const e = localList.find(x => x && x.id === id);
+    if(e) await upsertCloudEstimate(e); else rtsPendingMark("estimate", id, false);
   }
 
   // Pull cloud copy, merge with local (newer wins per client_id).
@@ -27090,6 +27197,13 @@ async function bootstrapCloudSync(showMigratePrompt){
   const cloudList = (cloud || [])
     .filter(r => r.client_id)
     .map(r => cloudToLocal(r));
+  // Keep this user's saves that still couldn't reach the cloud (offline) —
+  // they stay queued and are retried automatically.
+  const _pendEst = rtsPendingIds("estimate");
+  localList.filter(e => e && _pendEst.includes(e.id)).forEach(e => {
+    const i = cloudList.findIndex(x => x.id === e.id);
+    if(i >= 0) cloudList[i] = e; else cloudList.push(e);
+  });
   cloudList.sort((a,b) => new Date(b.savedAt) - new Date(a.savedAt));
   persistSavedList(cloudList);
   console.log("[sync] Loaded " + cloudList.length + " saved estimate(s) from cloud");
@@ -29730,6 +29844,7 @@ function localProjToCloud(p){
 
 async function upsertCloudProject(p){
   if(!cloudReady() || !p || !p.id) return;
+  try { window.rtsPendingMark && window.rtsPendingMark("tracker", p.id, true); } catch(_){}
   try{
     /* Same critical fix as upsertCloudEstimate: .maybeSingle() silently
        errored on duplicates, causing exponential row growth. Use an
@@ -29751,6 +29866,7 @@ async function upsertCloudProject(p){
         for(const d of dupeIds){ try { await dbDelete("estimates", { id: d }); } catch(e){} }
       }
     }
+    try { window.rtsPendingMark && window.rtsPendingMark("tracker", p.id, false); } catch(_){}
   }catch(e){
     console.error("Tracker cloud upsert failed:", e);
     try { toast("⚠ Project not synced to cloud"); } catch(_){}
@@ -29800,18 +29916,12 @@ async function bootstrapCloudSync(ctx, showMigratePrompt){
   if(!cloudReady()) return;
   const migrateKey = "rts_cloud_migrated_" + cloudCtx.user.id;
 
-  // First-time-on-this-device prompt — offer to push local projects up
-  if(showMigratePrompt && !localStorage.getItem(migrateKey) && (DB.projects||[]).length > 0){
-    const n = DB.projects.length;
-    const ok = await brandedConfirm("You have " + n + " local Expense Tracker project" + (n===1?"":"s")
-      + " on this device. Upload to your account so they sync across all your devices?",
-      { destructive: false, confirmLabel: "Upload" });
-    if(ok){
-      for(const p of DB.projects){ await upsertCloudProject(p); }
-      if((DB.customCategories||[]).length) await upsertCloudCustomCategories();
-      toast("Uploaded " + n + " tracker project" + (n===1?"":"s"));
-    }
-    localStorage.setItem(migrateKey, "1");
+  // Automatic sync (no prompt): push this user's unsynced project edits first.
+  void migrateKey; void showMigratePrompt;
+  const _pendTr = (window.rtsPendingIds ? window.rtsPendingIds("tracker") : []);
+  for(const id of _pendTr){
+    const p = (DB.projects || []).find(x => x && x.id === id);
+    if(p) await upsertCloudProject(p); else if(window.rtsPendingMark) window.rtsPendingMark("tracker", id, false);
   }
 
   // Pull tracker projects + tracker_meta from the cloud
@@ -30739,7 +30849,14 @@ function setExpenseInvoice(expenseId, invoiceId){
   if(typeof renderExpenses === "function") renderExpenses();
 }
 
-window.ET={ goHome:goHome, openNewProject:openNewProject, switchHome:switchHome, switchTab:switchTab,
+async function flushPendingTracker(){
+  if(!cloudReady() || !window.rtsPendingIds) return;
+  for(const id of window.rtsPendingIds("tracker")){
+    const p = (DB.projects || []).find(x => x && x.id === id);
+    if(p) await upsertCloudProject(p); else window.rtsPendingMark("tracker", id, false);
+  }
+}
+window.ET={ flushPending:flushPendingTracker, goHome:goHome, openNewProject:openNewProject, switchHome:switchHome, switchTab:switchTab,
   renderExpenses:renderExpenses, exportCSV:exportCSV, importCSV:importCSV, openExpense:openExpense,
   clearSelection:clearSelection, deleteSelected:deleteSelected, toggleSelectAll:toggleSelectAll,
   toggleSelect:toggleSelect, onMetaEdit:onMetaEdit, onInvoiceEdit:onInvoiceEdit, acInput:acInput,
