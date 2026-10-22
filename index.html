@@ -334,6 +334,25 @@
   .pill-m{background:rgba(245,241,230,.08);color:var(--ink);border:1px solid rgba(245,241,230,.2);}
   .pill-d{background:rgba(255,155,106,.16);color:#ffb88a;border:1px solid rgba(255,155,106,.4);}
   .breakdown.disc .bd-d{color:#ffb88a;font-weight:600;}
+  /* Proposed subtotal (per-category price override) */
+  .ps-row{margin-top:10px;padding:12px 14px;border:1px solid rgba(212,175,106,.35);border-radius:8px;background:rgba(212,175,106,.05);}
+  .ps-row.active{border-color:var(--gold);background:rgba(212,175,106,.09);}
+  .ps-row.invalid{border-color:#8a2828;background:rgba(255,144,144,.06);}
+  .ps-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;}
+  .ps-lbl{font-size:11px;letter-spacing:.14em;text-transform:uppercase;font-weight:700;color:var(--gold-bright);}
+  .ps-lbl small{display:block;font-size:11px;letter-spacing:0;text-transform:none;font-weight:400;color:var(--muted);margin-top:2px;}
+  .ps-ctrl{display:flex;align-items:center;gap:8px;}
+  .ps-input-wrap{position:relative;}
+  .ps-input-wrap span{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:13px;pointer-events:none;}
+  .ps-input-wrap input{width:150px;padding:7px 10px 7px 22px;text-align:right;font-variant-numeric:tabular-nums;font-weight:600;margin:0;}
+  .ps-clear{font-size:11px;padding:5px 10px;}
+  .ps-info{margin-top:8px;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;line-height:1.5;}
+  .ps-info b{color:var(--ink);font-weight:600;}
+  .ps-info .ps-pct{color:#ffb88a;font-weight:700;}
+  .ps-info .ps-err{color:#ff9090;}
+  /* Admin only — hidden for agents, brokerages, staff and signed-out views */
+  .ps-row{display:none !important;}
+  body.role-admin .ps-row{display:block !important;}
 
   .total-card{position:sticky;top:0;z-index:10;background:#000;border:1px solid var(--gold-deep);border-radius:14px;padding:22px 26px;margin-bottom:18px;box-shadow:var(--gold-glow), var(--shadow);overflow:hidden;}
   .total-card::before{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:var(--gold-grad);}
@@ -4768,6 +4787,7 @@
       <div class="lbl">Subtotal</div><div class="val" id="td-sub">$0</div>
       <div class="lbl" id="td-disc-listing-row" style="display:none">Listing Discount <span id="td-disc-listing-pct" style="text-transform:none;letter-spacing:normal;font-weight:400;color:var(--muted);"></span></div><div class="val discount" id="td-disc-listing" style="display:none">−$0</div>
       <div class="lbl" id="td-disc-custom-row" style="display:none">Custom Discount <span id="td-disc-custom-note" style="text-transform:none;letter-spacing:normal;font-weight:400;color:var(--muted);"></span></div><div class="val discount" id="td-disc-custom" style="display:none">−$0</div>
+      <div class="lbl" id="td-disc-prop-row" style="display:none">Proposed Pricing <span id="td-disc-prop-note" style="text-transform:none;letter-spacing:normal;font-weight:400;color:var(--muted);"></span></div><div class="val discount" id="td-disc-prop" style="display:none">−$0</div>
       <div class="lbl" id="td-after-row" style="display:none">After Discount</div><div class="val" id="td-after" style="display:none">$0</div>
       <div class="lbl">HST (13%)</div><div class="val" id="td-hst">$0</div>
       <div class="lbl final">Total</div><div class="val final" id="td-total">$0</div>
@@ -7695,6 +7715,103 @@ function miscBypassActive(){
     && state.miscellaneous && state.miscellaneous.bypassDiscount);
 }
 
+/* ============================================================
+   PROPOSED SUBTOTAL — price a category by hand.
+   The admin types the price they want to charge for a category (before
+   HST). Its discount becomes (estimate subtotal − proposed) and the % is
+   recalculated from that. The category is taken out of the listing/custom
+   discount base so it isn't discounted twice. HST is still added on top.
+   Stored per category in state.proposedSubtotal = { kitchen: "75000", ... }.
+   To roll out to more categories, add them to PROPOSED_SUBTOTAL_CATS — the
+   input (breakdownRows), totals, PDF and profit analysis all read from here.
+   ============================================================ */
+const PROPOSED_SUBTOTAL_CATS = ["kitchen"];
+function proposedSubtotalEnabled(cat){ return PROPOSED_SUBTOTAL_CATS.indexOf(cat) !== -1; }
+function proposedSubtotalRaw(cat){
+  const m = (state && state.proposedSubtotal) || {};
+  const v = m[cat];
+  if(v === undefined || v === null || String(v).trim() === "") return null;
+  const n = parseFloat(String(v).replace(/[^0-9.]/g, ""));
+  return isFinite(n) ? n : null;
+}
+/* Only valid, applied overrides: enabled category, estimate > 0,
+   0 < proposed < estimate subtotal. Returns { cat: proposedAmount }. */
+function activeProposedSubtotals(perCat){
+  const out = {};
+  PROPOSED_SUBTOTAL_CATS.forEach(cat => {
+    if(!state.enabled || !state.enabled[cat] || !perCat[cat]) return;
+    const raw = perCat[cat].labour + perCat[cat].material;
+    const p = proposedSubtotalRaw(cat);
+    if(p == null || raw <= 0 || p <= 0 || p >= raw) return;
+    out[cat] = p;
+  });
+  return out;
+}
+/* Discount shown for one category: { disc, pct, proposed } */
+function categoryDiscountInfo(t, cat){
+  const r = t.perCat[cat] || { labour:0, material:0 };
+  const raw = r.labour + r.material;
+  const disc = (t.catDisc && t.catDisc[cat]) || 0;
+  return { raw, disc, pct: raw > 0 ? disc / raw * 100 : 0, proposed: !!(t.proposed && t.proposed[cat] != null) };
+}
+function fmtPct(p){ return p.toFixed(p < 1 ? 2 : 1).replace(/\.0+$/,""); }
+function setProposedSubtotal(cat, val){
+  if(!isAdmin()) return;
+  if(!state.proposedSubtotal || typeof state.proposedSubtotal !== "object") state.proposedSubtotal = {};
+  const clean = String(val || "").replace(/[^0-9.]/g, "");
+  if(clean === "") delete state.proposedSubtotal[cat]; else state.proposedSubtotal[cat] = clean;
+  renderTotals();
+}
+function clearProposedSubtotal(cat){
+  if(!isAdmin()) return;
+  if(state.proposedSubtotal) delete state.proposedSubtotal[cat];
+  const inp = document.getElementById("ps-input-" + cat);
+  if(inp) inp.value = "";
+  renderTotals();
+}
+function proposedSubtotalRowHtml(cat){
+  if(!proposedSubtotalEnabled(cat) || !isAdmin()) return "";
+  const v = proposedSubtotalRaw(cat);
+  const shown = v == null ? "" : String(Math.round(v * 100) / 100);
+  return `
+    <div class="ps-row no-print" id="ps-row-${cat}" onclick="event.stopPropagation()">
+      <div class="ps-head">
+        <div class="ps-lbl">Proposed subtotal<small>Set your own price for this section (before HST)</small></div>
+        <div class="ps-ctrl">
+          <div class="ps-input-wrap"><span>$</span>
+            <input type="text" inputmode="decimal" id="ps-input-${cat}" placeholder="e.g. 75000" value="${escapeHtml(shown)}"
+              oninput="setProposedSubtotal('${cat}', this.value)" aria-label="Proposed subtotal">
+          </div>
+          <button type="button" class="ghost ps-clear" onclick="clearProposedSubtotal('${cat}')">Clear</button>
+        </div>
+      </div>
+      <div class="ps-info" id="ps-info-${cat}"></div>
+    </div>`;
+}
+/* Live status text under the input — called from renderTotals. */
+function updateProposedSubtotalRow(t, cat){
+  const row = document.getElementById("ps-row-" + cat);
+  const info = document.getElementById("ps-info-" + cat);
+  if(!row || !info) return;
+  const raw = (t.perCat[cat].labour + t.perCat[cat].material);
+  const p = proposedSubtotalRaw(cat);
+  row.classList.remove("active", "invalid");
+  if(p == null){
+    info.innerHTML = `Estimate subtotal <b>${fmt(raw)}</b>. Leave blank to use the standard discount.`;
+    return;
+  }
+  if(t.proposed && t.proposed[cat] != null){
+    const ci = categoryDiscountInfo(t, cat);
+    row.classList.add("active");
+    info.innerHTML = `Estimate <b>${fmt(raw)}</b> → proposed <b>${fmt(p)}</b> · discount <b>${fmt(ci.disc)}</b> = <span class="ps-pct">${fmtPct(ci.pct)}%</span> · plus HST <b>${fmt(p * 0.13)}</b>`;
+    return;
+  }
+  row.classList.add("invalid");
+  info.innerHTML = raw <= 0
+    ? `<span class="ps-err">Add kitchen items first — the estimate subtotal is $0.</span>`
+    : `<span class="ps-err">Must be more than $0 and less than the estimate subtotal (${fmt(raw)}). Not applied.</span>`;
+}
+
 function computeTotals(){
   let L = 0, M = 0;
   const perCat = {};
@@ -7709,7 +7826,20 @@ function computeTotals(){
   // items are never reduced by a listing/custom discount.
   const miscR = perCat.miscellaneous || { labour:0, material:0 };
   const miscTotal = miscR.labour + miscR.material;
-  const discountableBase = miscBypassActive() ? Math.max(0, sub - miscTotal) : sub;
+  // Proposed subtotals: categories priced by hand. They're taken OUT of the
+  // listing/custom discount base — their discount is simply (estimate − proposed).
+  const proposed = activeProposedSubtotals(perCat);
+  let proposedDisc = 0;
+  Object.keys(proposed).forEach(cat => {
+    proposedDisc += perCat[cat].labour + perCat[cat].material - proposed[cat];
+  });
+  const _bypassMisc = miscBypassActive();
+  let discountableBase = 0;
+  Object.keys(perCat).forEach(cat => {
+    if(proposed[cat] != null) return;                       // priced by hand
+    if(cat === "miscellaneous" && _bypassMisc) return;       // bypass discounts
+    discountableBase += perCat[cat].labour + perCat[cat].material;
+  });
   const d = state.discount || {};
   let listingDisc = 0, customDisc = 0;
   if(d.enabled){
@@ -7728,17 +7858,28 @@ function computeTotals(){
       }
     }
   }
-  let discount = listingDisc + customDisc;
-  discount = Math.min(discount, discountableBase);
+  let globalDisc = Math.min(listingDisc + customDisc, discountableBase);
   // proportionally scale if combined > discountable base
   if(listingDisc + customDisc > discountableBase && listingDisc + customDisc > 0){
     const scale = discountableBase / (listingDisc + customDisc);
     listingDisc *= scale; customDisc *= scale;
   }
+  // Per-category discount (what each category's Discount row shows).
+  const globalRate = discountableBase > 0 ? globalDisc / discountableBase : 0;
+  const bypass = miscBypassActive();
+  const catDisc = {};
+  Object.keys(perCat).forEach(cat => {
+    const raw = perCat[cat].labour + perCat[cat].material;
+    if(proposed[cat] != null) catDisc[cat] = raw - proposed[cat];
+    else if(cat === "miscellaneous" && bypass) catDisc[cat] = 0;
+    else catDisc[cat] = raw * globalRate;
+  });
+  const discount = globalDisc + proposedDisc;
   const afterDisc = sub - discount;
   const hst = afterDisc * 0.13;
   const total = afterDisc + hst;
-  return { perCat, labour:L, material:M, subtotal:sub, discountableBase, listingDisc, customDisc, discount, afterDisc, hst, total };
+  return { perCat, labour:L, material:M, subtotal:sub, discountableBase, listingDisc, customDisc,
+           proposed, proposedDisc, catDisc, discount, afterDisc, hst, total };
 }
 
 function fmt(n){
@@ -7983,6 +8124,17 @@ function renderTotals(){
     cRow.style.display = "none"; cVal.style.display = "none";
   }
 
+  // Proposed-subtotal line
+  const pRow = document.getElementById("td-disc-prop-row"), pVal = document.getElementById("td-disc-prop");
+  if(pRow && pVal){
+    const showP = t.proposedDisc > 0.005;
+    pRow.style.display = showP ? "" : "none"; pVal.style.display = showP ? "" : "none";
+    if(showP){
+      document.getElementById("td-disc-prop-note").textContent = "(" + Object.keys(t.proposed).map(c => (CATEGORY_META[c] && CATEGORY_META[c].title) || c).join(", ") + ")";
+      pVal.textContent = "−" + fmt(t.proposedDisc);
+    }
+  }
+
   // After-discount line
   const showAfter = t.discount > 0;
   document.getElementById("td-after-row").style.display = showAfter ? "" : "none";
@@ -7991,12 +8143,14 @@ function renderTotals(){
 
   // Savings banners — top of page (between Live Total and Property Info) + inside Client Savings card.
   // Both display the same total savings; sub-message adapts to which discount(s) are active.
-  const showBanner = !!(state.discount && state.discount.enabled && t.discount > 0);
+  const showBanner = !!(((state.discount && state.discount.enabled) || t.proposedDisc > 0) && t.discount > 0);
   const amountText = fmt(t.discount);
   const onListing  = t.listingDisc > 0;
   const onCustom   = t.customDisc > 0;
   let subText = "On this renovation with Reno to Sold";
-  if(onListing && onCustom){
+  if(t.proposedDisc > 0 && !onListing && !onCustom){
+    subText = "Special pricing on this renovation";
+  } else if(onListing && onCustom){
     subText = "Listing discount + custom savings combined";
   } else if(onListing){
     subText = "On this renovation with Reno to Sold";
@@ -8065,9 +8219,11 @@ function renderTotals(){
     const catSub = r.labour + r.material;
     // Misc is excluded from discount allocation when bypass is on.
     const catExcluded = (cat === "miscellaneous" && _bypassMisc);
-    // Allocated share of the overall discount that "belongs" to this category.
-    const catDisc = catExcluded ? 0 : catSub * _discRate;
-    const hasDisc = state.enabled[cat] && catSub > 0 && t.discount > 0 && !catExcluded;
+    // This category's discount: allocated share of listing/custom, or
+    // (estimate − proposed) when a proposed subtotal is set.
+    const _ci = categoryDiscountInfo(t, cat);
+    const catDisc = _ci.disc;
+    const hasDisc = state.enabled[cat] && catSub > 0 && catDisc > 0.005 && (!catExcluded || _ci.proposed);
     // The headline figure on the closed category card AND the Subtotal row
     // inside the breakdown should be the POST-discount price — so the
     // discount line above it actually changes the bottom number. Labour and
@@ -8121,10 +8277,13 @@ function renderTotals(){
         if(hasDisc){
           discRow.querySelector(".bd-d").textContent = "-" + fmt(catDisc);
           const note = discRow.querySelector(".bd-d-note");
-          if(note) note.textContent = "(" + _discPct.toFixed(_discPct < 1 ? 2 : 1).replace(/\.0+$/,"") + "% allocated share)";
+          if(note) note.textContent = _ci.proposed
+            ? "(" + fmtPct(_ci.pct) + "% · proposed price)"
+            : "(" + fmtPct(_ci.pct) + "% allocated share)";
         }
       }
     }
+    if(proposedSubtotalEnabled(cat)) updateProposedSubtotalRow(t, cat);
   });
 
   // Live flooring material readout
@@ -8235,6 +8394,7 @@ function breakdownRows(cat){
         ${kRow("undercab",   "Under-cabinet lighting")}
         <div class="breakdown disc bd-discount-row" style="display:none"><span><span class="pill pill-d">Discount</span> <span class="bd-d-note" style="margin-left:6px;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;"></span></span><span class="bd-d">-$0</span></div>
         <div class="breakdown" style="font-weight:600"><span>Subtotal</span><span class="bd-t">$0</span></div>
+        ${proposedSubtotalRowHtml(cat)}
       </div>
     `;
   }
@@ -8247,6 +8407,7 @@ function breakdownRows(cat){
         <div class="breakdown"><span><span class="pill pill-l">Supplied &amp; Installed</span></span><span class="bd-si">$0</span></div>
         <div class="breakdown disc bd-discount-row" style="display:none"><span><span class="pill pill-d">Discount</span> <span class="bd-d-note" style="margin-left:6px;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;"></span></span><span class="bd-d">-$0</span></div>
         <div class="breakdown" style="font-weight:600"><span>Subtotal</span><span class="bd-t">$0</span></div>
+        ${proposedSubtotalRowHtml(cat)}
       </div>
     `;
   }
@@ -8256,6 +8417,7 @@ function breakdownRows(cat){
       <div class="breakdown"><span><span class="pill pill-m">Material</span></span><span class="bd-m">$0</span></div>
       <div class="breakdown disc bd-discount-row" style="display:none"><span><span class="pill pill-d">Discount</span> <span class="bd-d-note" style="margin-left:6px;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;"></span></span><span class="bd-d">-$0</span></div>
       <div class="breakdown" style="font-weight:600"><span>Subtotal</span><span class="bd-t">$0</span></div>
+        ${proposedSubtotalRowHtml(cat)}
     </div>
   `;
 }
@@ -9050,16 +9212,13 @@ function syncMiscSubtotal(){
   if(!bd) return;
   const items = (state.miscellaneous && Array.isArray(state.miscellaneous.items)) ? state.miscellaneous.items : [];
   const catSub = items.reduce((a, it) => a + miscQty(it) * num(it.clientRate), 0);
-  let discRate = 0, projDiscount = 0;
+  let catDisc = 0;
   try {
     const t = computeTotals();
-    const base = (t.discountableBase != null ? t.discountableBase : t.subtotal);
-    if(base > 0){ discRate = t.discount / base; projDiscount = t.discount; }
+    const ci = categoryDiscountInfo(t, "miscellaneous");
+    catDisc = ci.raw > 0 ? catSub * (ci.disc / ci.raw) : 0;
   } catch(_){}
-  // Misc gets no discount when "bypass discounts" is on.
-  const bypass = miscBypassActive();
-  const hasDisc = !bypass && !!(state.enabled && state.enabled.miscellaneous) && catSub > 0 && projDiscount > 0;
-  const catDisc = catSub * discRate;
+  const hasDisc = !!(state.enabled && state.enabled.miscellaneous) && catSub > 0 && catDisc > 0.005;
   const catNet  = catSub - (hasDisc ? catDisc : 0);
   const bdT = bd.querySelector(".bd-t");
   if(bdT) bdT.textContent = fmt(catNet);
@@ -12668,22 +12827,26 @@ function renderClientEstimate(){
     const _esDiscPct  = _esDiscRate * 100;
     const _esDiscPctLabel = _esDiscPct.toFixed(_esDiscPct < 1 ? 2 : 1).replace(/\.0+$/,"");
     const hasDiscount = totals.discount && totals.discount > 0;
-    const _esBypassMisc = miscBypassActive();
-    // Misc items are excluded from the per-category discount rows when bypass is on.
-    const _esCatExcluded = (cat) => (cat === "miscellaneous" && _esBypassMisc);
+    // Per-category rate: allocated share, or the proposed-subtotal rate.
+    const _esRate = (cat) => {
+      const ci = categoryDiscountInfo(totals, cat);
+      return ci.raw > 0 ? ci.disc / ci.raw : 0;
+    };
+    const _esCatExcluded = (cat) => _esRate(cat) <= 0;
     const renderDiscRow = (catSub, cat) => {
       if(!hasDiscount || catSub <= 0 || _esCatExcluded(cat)) return "";
-      const catDisc = catSub * _esDiscRate;
+      const catDisc = catSub * _esRate(cat);
+      const _lbl = categoryDiscountInfo(totals, cat).proposed ? fmtPct(_esRate(cat) * 100) + "%" : fmtPct(_esRate(cat) * 100) + "% allocated share";
       return `
         <div class="es-cat-total es-cat-disc">
-          <span class="lbl">Discount applied <span style="font-weight:500;text-transform:none;letter-spacing:0;font-size:11px;color:#a32a2a;">(${_esDiscPctLabel}% allocated share)</span></span>
+          <span class="lbl">Discount applied <span style="font-weight:500;text-transform:none;letter-spacing:0;font-size:11px;color:#a32a2a;">(${_lbl})</span></span>
           <span class="v" style="color:#a32a2a;">−${fmtCurrency(catDisc)}</span>
         </div>
       `;
     };
     const renderNetRow = (catSub, label, cat) => {
       if(!hasDiscount || catSub <= 0 || _esCatExcluded(cat)) return "";
-      const catDisc = catSub * _esDiscRate;
+      const catDisc = catSub * _esRate(cat);
       const net = catSub - catDisc;
       return `
         <div class="es-cat-total es-cat-net">
@@ -12743,6 +12906,7 @@ function renderClientEstimate(){
               return `<div class="row discount"><span>Listing discount${pctLbl}</span><span class="v">−${fmtCurrency(t.listingDisc)}</span></div>`;
             })() : ""}
             ${t.customDisc ? `<div class="row discount"><span>Discount${state.discount && state.discount.customNote ? ` (${escapeHtml(state.discount.customNote)})` : ""}</span><span class="v">−${fmtCurrency(t.customDisc)}</span></div>` : ""}
+            ${t.proposedDisc > 0.005 ? `<div class="row discount"><span>Special pricing (${escapeHtml(Object.keys(t.proposed).map(c => (CATEGORY_META[c] && CATEGORY_META[c].title) || c).join(", "))})</span><span class="v">−${fmtCurrency(t.proposedDisc)}</span></div>` : ""}
             <div class="row"><span>HST (13%)</span><span class="v">${fmtCurrency(t.hst)}</span></div>
             <div class="row grand"><span>Total</span><span class="v">${fmtCurrency(t.total)}</span></div>
           </div>
@@ -12752,7 +12916,7 @@ function renderClientEstimate(){
 
     // Eye-catching savings card — only when there's an active discount worth showing.
     // Rounded to the nearest dollar, formatted with thousands separators.
-    if(state.discount && state.discount.enabled && t.discount > 0){
+    if(((state.discount && state.discount.enabled) || t.proposedDisc > 0) && t.discount > 0){
       const savingsAmt = fmtMoney(t.discount, 0);
       html += `
         <div class="es-savings-card">
@@ -16233,6 +16397,9 @@ function renderInternalSheet(){
       customDisc = num(d.customValue);
     }
     let totalDisc = Math.min(listingDisc + customDisc, clientSub);
+    // Use the estimator's own discount (respects the on/off switches, misc
+    // bypass and proposed subtotals) so this matches the quote exactly.
+    try { const _t = computeTotals(); totalDisc = Math.min(_t.discount, clientSub); } catch(_){}
     const clientAfter = clientSub - totalDisc;
     const netProfit   = clientAfter - costSub;
     const netPct      = clientAfter > 0 ? (netProfit / clientAfter) * 100 : 0;
@@ -16503,7 +16670,7 @@ const OFFICE_EMAIL = "renotosold@gmail.com";
 const OFFICE_COMPANY = "Reno to Sold Inc.";
 
 /* ---------- Supabase cross-device sync ---------- */
-window.RTS_BUILD = "2026-10-26-v16-bids-safe";
+window.RTS_BUILD = "2026-10-27-v17b-proposed-subtotal-admin";
 console.log("[build] " + window.RTS_BUILD);
 const SUPABASE_URL = "https://icrnvnmvcdpmhnjorefs.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imljcm52bm12Y2RwbWhuam9yZWZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2ODQwMDgsImV4cCI6MjA5NDI2MDAwOH0.YoeBndWsky8vAW6mLeMziPeH2j2C6c_3VdAvOG_i0kA";
