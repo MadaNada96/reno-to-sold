@@ -350,6 +350,14 @@
   .ps-info b{color:var(--ink);font-weight:600;}
   .ps-info .ps-pct{color:#ffb88a;font-weight:700;}
   .ps-info .ps-err{color:#ff9090;}
+  .ps-scope-lbl{margin-top:10px;font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--ink);}
+  .ps-scope-lbl span{font-weight:400;letter-spacing:0;color:var(--muted);}
+  .ps-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
+  .ps-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--muted);font-size:12px;cursor:pointer;font-family:inherit;}
+  .ps-chip em{font-style:normal;font-variant-numeric:tabular-nums;opacity:.85;}
+  .ps-chip .ps-chk{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:3px;border:1px solid var(--muted);font-size:10px;line-height:1;}
+  .ps-chip.on{border-color:var(--gold);color:var(--ink);background:rgba(212,175,106,.12);}
+  .ps-chip.on .ps-chk{background:var(--gold);border-color:var(--gold);color:#0a0a0a;font-weight:800;}
   /* Extra charges (per category, no discount, HST applies) */
   .xc-box{margin-top:10px;padding:12px 14px;border:1px solid rgba(212,175,106,.35);border-radius:8px;background:rgba(212,175,106,.05);}
   .xc-list{margin-top:10px;display:flex;flex-direction:column;gap:8px;}
@@ -7752,15 +7760,79 @@ function proposedSubtotalRaw(cat){
 }
 /* Only valid, applied overrides: enabled category, estimate > 0,
    0 < proposed < estimate subtotal. Returns { cat: proposedAmount }. */
+/* The parts of a category the proposed price can cover. Kitchen splits into
+   its components (main + basement kitchen summed); any leftover cost becomes
+   "Other kitchen costs". Categories without a component list are one part. */
+function proposedComponents(cat, raw){
+  const parts = [];
+  if(cat === "kitchen"){
+    const k = state.kitchen || {};
+    const main = deriveKitchenCosts(k);
+    const bk = k.basement;
+    const bas = (bk && bk.enabled) ? deriveKitchenCosts(bk) : null;
+    const defs = [
+      ["base","Cabinet runs","baseCabinetCost"], ["counter","Countertops","countertopCost"],
+      ["backsplash","Backsplash","backsplashCost"], ["island","Island","islandCost"],
+      ["waterfall","Waterfall ends","waterfallCost"], ["undercab","Under-cabinet lighting","undercabCost"]
+    ];
+    let sum = 0;
+    defs.forEach(([key, label, prop]) => {
+      const c = (main[prop] || 0) + (bas ? (bas[prop] || 0) : 0);
+      sum += c; parts.push({ key, label, cost: c });
+    });
+    const other = raw - sum;
+    if(Math.abs(other) >= 1) parts.push({ key:"other", label:"Other kitchen costs", cost: other });
+    return parts;
+  }
+  return [{ key:"all", label:(CATEGORY_META[cat] && CATEGORY_META[cat].title) || cat, cost: raw }];
+}
+/* Which parts the proposed price covers. Not set yet = everything. */
+function proposedScope(cat){
+  const m = (state && state.proposedScope) || {};
+  return Array.isArray(m[cat]) ? m[cat] : null;
+}
+function proposedCovers(cat, key){
+  const sc = proposedScope(cat);
+  return sc ? sc.indexOf(key) !== -1 : true;
+}
+function toggleProposedScope(cat, key){
+  if(!isAdmin()) return;
+  if(!state.proposedScope || typeof state.proposedScope !== "object") state.proposedScope = {};
+  let sc = proposedScope(cat);
+  if(!sc){
+    // First change: start from "everything currently priced is covered".
+    const t = computeTotals();
+    const raw = t.perCat[cat] ? t.perCat[cat].labour + t.perCat[cat].material : 0;
+    sc = proposedComponents(cat, raw).map(p => p.key);
+  }
+  sc = sc.slice();
+  const i = sc.indexOf(key);
+  if(i === -1) sc.push(key); else sc.splice(i, 1);
+  state.proposedScope[cat] = sc;
+  renderTotals();
+}
+/* Split a category's estimate into covered / not-covered by the proposed price. */
+function proposedCoverSplit(cat, raw){
+  const parts = proposedComponents(cat, raw);
+  let covered = 0;
+  parts.forEach(p => { if(proposedCovers(cat, p.key)) covered += p.cost; });
+  covered = Math.max(0, Math.min(raw, covered));
+  return { parts, covered, uncovered: raw - covered };
+}
+/* Valid, applied overrides only: { proposed:{cat:amount}, cover:{cat:{covered,uncovered,parts}} }.
+   Valid = enabled category, 0 < proposed < estimate of the COVERED parts. */
 function activeProposedSubtotals(perCat){
-  const out = {};
+  const out = {}, cover = {};
   PROPOSED_SUBTOTAL_CATS.forEach(cat => {
     if(!state.enabled || !state.enabled[cat] || !perCat[cat]) return;
     const raw = perCat[cat].labour + perCat[cat].material;
     const p = proposedSubtotalRaw(cat);
-    if(p == null || raw <= 0 || p <= 0 || p >= raw) return;
-    out[cat] = p;
+    if(p == null || raw <= 0 || p <= 0) return;
+    const split = proposedCoverSplit(cat, raw);
+    if(split.covered <= 0 || p >= split.covered) return;
+    out[cat] = p; cover[cat] = split;
   });
+  Object.defineProperty(out, "_cover", { value: cover, enumerable: false });
   return out;
 }
 /* Discount shown for one category: { disc, pct, proposed } */
@@ -7801,6 +7873,7 @@ function proposedSubtotalRowHtml(cat){
           <button type="button" class="ghost ps-clear" onclick="clearProposedSubtotal('${cat}')">Clear</button>
         </div>
       </div>
+      <div class="ps-scope" id="ps-scope-${cat}"></div>
       <div class="ps-info" id="ps-info-${cat}"></div>
     </div>`;
 }
@@ -7808,24 +7881,48 @@ function proposedSubtotalRowHtml(cat){
 function updateProposedSubtotalRow(t, cat){
   const row = document.getElementById("ps-row-" + cat);
   const info = document.getElementById("ps-info-" + cat);
+  const scopeEl = document.getElementById("ps-scope-" + cat);
   if(!row || !info) return;
   const raw = (t.perCat[cat].labour + t.perCat[cat].material);
   const p = proposedSubtotalRaw(cat);
+  const split = proposedCoverSplit(cat, raw);
+  // Part chips — only when the category has more than one part.
+  if(scopeEl){
+    const shown = split.parts.filter(x => x.cost >= 1);
+    scopeEl.innerHTML = (shown.length > 1) ? `
+      <div class="ps-scope-lbl">Proposed price covers <span>— unticked parts are added on top at the standard discount</span></div>
+      <div class="ps-chips">${shown.map(x => {
+        const on = proposedCovers(cat, x.key);
+        return `<button type="button" class="ps-chip${on ? " on" : ""}" onclick="toggleProposedScope('${cat}','${x.key}')" aria-pressed="${on}">
+          <span class="ps-chk">${on ? "✓" : ""}</span>${escapeHtml(x.label)} <em>${fmt(x.cost)}</em></button>`;
+      }).join("")}</div>` : "";
+  }
   row.classList.remove("active", "invalid");
   if(p == null){
     info.innerHTML = `Estimate subtotal <b>${fmt(raw)}</b>. Leave blank to use the standard discount.`;
     return;
   }
   if(t.proposed && t.proposed[cat] != null){
-    const ci = categoryDiscountInfo(t, cat);
+    const cv = t.proposedCover[cat];
+    const offCovered = cv.covered - p;
+    const rate = t.discountableBase > 0 ? (t.listingDisc + t.customDisc) / t.discountableBase : 0;
+    const addOn = cv.uncovered * (1 - rate);
+    const extras = catExtrasTotal(cat);
+    const catTotal = p + addOn + extras;
     row.classList.add("active");
-    info.innerHTML = `Estimate <b>${fmt(raw)}</b> → proposed <b>${fmt(p)}</b> · discount <b>${fmt(ci.disc)}</b> = <span class="ps-pct">${fmtPct(ci.pct)}%</span> · plus HST <b>${fmt(p * 0.13)}</b>${catExtrasTotal(cat) > 0 ? ` · extra charges added separately` : ""}`;
+    const notCovered = split.parts.filter(x => x.cost >= 1 && !proposedCovers(cat, x.key));
+    info.innerHTML = `Covered parts <b>${fmt(cv.covered)}</b> → proposed <b>${fmt(p)}</b> · <span class="ps-pct">${fmtPct(cv.covered > 0 ? offCovered / cv.covered * 100 : 0)}% off</span> (−${fmt(offCovered)})`
+      + (notCovered.length ? `<br>Added on top: ${notCovered.map(x => escapeHtml(x.label) + " " + fmt(x.cost)).join(", ")}${rate > 0 ? ` → <b>${fmt(addOn)}</b> after ${fmtPct(rate * 100)}% discount` : ""}` : "")
+      + (extras > 0 ? `<br>Extra charges <b>${fmt(extras)}</b> (no discount)` : "")
+      + `<br>Kitchen subtotal <b>${fmt(catTotal)}</b> + HST <b>${fmt(catTotal * 0.13)}</b>`;
     return;
   }
   row.classList.add("invalid");
   info.innerHTML = raw <= 0
     ? `<span class="ps-err">Add kitchen items first — the estimate subtotal is $0.</span>`
-    : `<span class="ps-err">Must be more than $0 and less than the estimate subtotal (${fmt(raw)}). Not applied.</span>`;
+    : split.covered <= 0
+      ? `<span class="ps-err">Tick at least one part for the proposed price to cover. Not applied.</span>`
+      : `<span class="ps-err">Must be more than $0 and less than the covered parts' estimate (${fmt(split.covered)}). Not applied.</span>`;
 }
 
 /* ============================================================
@@ -7943,15 +8040,18 @@ function computeTotals(){
   // Proposed subtotals: categories priced by hand. They're taken OUT of the
   // listing/custom discount base — their discount is simply (estimate − proposed).
   const proposed = activeProposedSubtotals(perCat);
+  const proposedCover = proposed._cover || {};
   let proposedDisc = 0;
   Object.keys(proposed).forEach(cat => {
-    proposedDisc += perCat[cat].labour + perCat[cat].material - proposed[cat];
+    proposedDisc += proposedCover[cat].covered - proposed[cat];
   });
   const _bypassMisc = miscBypassActive();
   let discountableBase = 0;
   Object.keys(perCat).forEach(cat => {
-    if(proposed[cat] != null) return;                       // priced by hand
     if(cat === "miscellaneous" && _bypassMisc) return;       // bypass discounts
+    // Priced by hand: only the parts NOT covered by the proposed price get
+    // the standard listing/custom discount.
+    if(proposed[cat] != null){ discountableBase += proposedCover[cat].uncovered; return; }
     discountableBase += perCat[cat].labour + perCat[cat].material;
   });
   const d = state.discount || {};
@@ -7984,7 +8084,7 @@ function computeTotals(){
   const catDisc = {};
   Object.keys(perCat).forEach(cat => {
     const raw = perCat[cat].labour + perCat[cat].material;
-    if(proposed[cat] != null) catDisc[cat] = raw - proposed[cat];
+    if(proposed[cat] != null) catDisc[cat] = (proposedCover[cat].covered - proposed[cat]) + proposedCover[cat].uncovered * globalRate;
     else if(cat === "miscellaneous" && bypass) catDisc[cat] = 0;
     else catDisc[cat] = raw * globalRate;
   });
@@ -7993,7 +8093,7 @@ function computeTotals(){
   const hst = afterDisc * 0.13;
   const total = afterDisc + hst;
   return { perCat, labour:L, material:M, subtotal:sub, discountableBase, listingDisc, customDisc,
-           proposed, proposedDisc, catDisc, extras, extrasTotal, discount, afterDisc, hst, total };
+           proposed, proposedCover, proposedDisc, catDisc, extras, extrasTotal, discount, afterDisc, hst, total };
 }
 
 function fmt(n){
@@ -16826,7 +16926,7 @@ const OFFICE_EMAIL = "renotosold@gmail.com";
 const OFFICE_COMPANY = "Reno to Sold Inc.";
 
 /* ---------- Supabase cross-device sync ---------- */
-window.RTS_BUILD = "2026-10-28-v18-extra-charges";
+window.RTS_BUILD = "2026-10-29-v19-proposed-scope";
 console.log("[build] " + window.RTS_BUILD);
 const SUPABASE_URL = "https://icrnvnmvcdpmhnjorefs.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imljcm52bm12Y2RwbWhuam9yZWZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2ODQwMDgsImV4cCI6MjA5NDI2MDAwOH0.YoeBndWsky8vAW6mLeMziPeH2j2C6c_3VdAvOG_i0kA";
