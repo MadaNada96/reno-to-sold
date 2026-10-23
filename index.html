@@ -350,6 +350,19 @@
   .ps-info b{color:var(--ink);font-weight:600;}
   .ps-info .ps-pct{color:#ffb88a;font-weight:700;}
   .ps-info .ps-err{color:#ff9090;}
+  /* Extra charges (per category, no discount, HST applies) */
+  .xc-box{margin-top:10px;padding:12px 14px;border:1px solid rgba(212,175,106,.35);border-radius:8px;background:rgba(212,175,106,.05);}
+  .xc-list{margin-top:10px;display:flex;flex-direction:column;gap:8px;}
+  .xc-line{display:flex;gap:8px;align-items:center;}
+  .xc-line input.xc-desc{flex:1;min-width:0;margin:0;padding:7px 10px;}
+  .xc-line .ps-input-wrap input{width:130px;}
+  .xc-del{font-size:15px;line-height:1;padding:5px 9px;}
+  .xc-foot{display:flex;justify-content:space-between;align-items:center;margin-top:10px;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;}
+  .xc-foot b{color:var(--ink);}
+  .breakdown.bd-xc-line,.bd-xc-rows .breakdown.bd-xc-line:first-of-type{color:var(--ink);border-top:1px solid var(--line);padding-top:9px;}
+  .pill-x{background:rgba(212,175,106,.14);color:var(--gold-bright);border:1px solid rgba(212,175,106,.45);}
+  .xc-box{display:none !important;}
+  body.role-admin .xc-box{display:block !important;}
   /* Admin only — hidden for agents, brokerages, staff and signed-out views */
   .ps-row{display:none !important;}
   body.role-admin .ps-row{display:block !important;}
@@ -4787,6 +4800,7 @@
       <div class="lbl">Subtotal</div><div class="val" id="td-sub">$0</div>
       <div class="lbl" id="td-disc-listing-row" style="display:none">Listing Discount <span id="td-disc-listing-pct" style="text-transform:none;letter-spacing:normal;font-weight:400;color:var(--muted);"></span></div><div class="val discount" id="td-disc-listing" style="display:none">−$0</div>
       <div class="lbl" id="td-disc-custom-row" style="display:none">Custom Discount <span id="td-disc-custom-note" style="text-transform:none;letter-spacing:normal;font-weight:400;color:var(--muted);"></span></div><div class="val discount" id="td-disc-custom" style="display:none">−$0</div>
+      <div class="lbl" id="td-xc-row" style="display:none">Includes Extra Charges <span id="td-xc-note" style="text-transform:none;letter-spacing:normal;font-weight:400;color:var(--muted);"></span></div><div class="val" id="td-xc" style="display:none;color:var(--muted);">$0</div>
       <div class="lbl" id="td-disc-prop-row" style="display:none">Proposed Pricing <span id="td-disc-prop-note" style="text-transform:none;letter-spacing:normal;font-weight:400;color:var(--muted);"></span></div><div class="val discount" id="td-disc-prop" style="display:none">−$0</div>
       <div class="lbl" id="td-after-row" style="display:none">After Discount</div><div class="val" id="td-after" style="display:none">$0</div>
       <div class="lbl">HST (13%)</div><div class="val" id="td-hst">$0</div>
@@ -7726,6 +7740,8 @@ function miscBypassActive(){
    input (breakdownRows), totals, PDF and profit analysis all read from here.
    ============================================================ */
 const PROPOSED_SUBTOTAL_CATS = ["kitchen"];
+/* Pre-Listing Packages borrows the Kitchen card — no price overrides there. */
+function _plHosting(){ try { return typeof PL !== "undefined" && PL && !!PL._hosting; } catch(_){ return false; } }
 function proposedSubtotalEnabled(cat){ return PROPOSED_SUBTOTAL_CATS.indexOf(cat) !== -1; }
 function proposedSubtotalRaw(cat){
   const m = (state && state.proposedSubtotal) || {};
@@ -7770,7 +7786,7 @@ function clearProposedSubtotal(cat){
   renderTotals();
 }
 function proposedSubtotalRowHtml(cat){
-  if(!proposedSubtotalEnabled(cat) || !isAdmin()) return "";
+  if(!proposedSubtotalEnabled(cat) || !isAdmin() || _plHosting()) return "";
   const v = proposedSubtotalRaw(cat);
   const shown = v == null ? "" : String(Math.round(v * 100) / 100);
   return `
@@ -7803,13 +7819,107 @@ function updateProposedSubtotalRow(t, cat){
   if(t.proposed && t.proposed[cat] != null){
     const ci = categoryDiscountInfo(t, cat);
     row.classList.add("active");
-    info.innerHTML = `Estimate <b>${fmt(raw)}</b> → proposed <b>${fmt(p)}</b> · discount <b>${fmt(ci.disc)}</b> = <span class="ps-pct">${fmtPct(ci.pct)}%</span> · plus HST <b>${fmt(p * 0.13)}</b>`;
+    info.innerHTML = `Estimate <b>${fmt(raw)}</b> → proposed <b>${fmt(p)}</b> · discount <b>${fmt(ci.disc)}</b> = <span class="ps-pct">${fmtPct(ci.pct)}%</span> · plus HST <b>${fmt(p * 0.13)}</b>${catExtrasTotal(cat) > 0 ? ` · extra charges added separately` : ""}`;
     return;
   }
   row.classList.add("invalid");
   info.innerHTML = raw <= 0
     ? `<span class="ps-err">Add kitchen items first — the estimate subtotal is $0.</span>`
     : `<span class="ps-err">Must be more than $0 and less than the estimate subtotal (${fmt(raw)}). Not applied.</span>`;
+}
+
+/* ============================================================
+   EXTRA CHARGES — custom add-on charges per category.
+   NOT discounted (listing, custom or proposed subtotal) but HST applies.
+   Stored as state.extraCharges = { kitchen: [{ desc, amount }, ...] }.
+   Admin only to edit; everyone sees them on the estimate.
+   To roll out to more categories, add them to EXTRA_CHARGE_CATS.
+   ============================================================ */
+const EXTRA_CHARGE_CATS = ["kitchen"];
+function extraChargesEnabled(cat){ return EXTRA_CHARGE_CATS.indexOf(cat) !== -1; }
+function extraChargeList(cat){
+  const m = (state && state.extraCharges) || {};
+  return Array.isArray(m[cat]) ? m[cat] : [];
+}
+function extraChargeAmount(it){
+  const n = parseFloat(String((it && it.amount) || "").replace(/[^0-9.]/g, ""));
+  return isFinite(n) && n > 0 ? n : 0;
+}
+/* Total of a category's extra charges (0 when the category is off). */
+function catExtrasTotal(cat){
+  if(!extraChargesEnabled(cat) || !state.enabled || !state.enabled[cat]) return 0;
+  return extraChargeList(cat).reduce((a, it) => a + extraChargeAmount(it), 0);
+}
+function _xcEnsure(cat){
+  if(!state.extraCharges || typeof state.extraCharges !== "object") state.extraCharges = {};
+  if(!Array.isArray(state.extraCharges[cat])) state.extraCharges[cat] = [];
+  return state.extraCharges[cat];
+}
+function addExtraCharge(cat){
+  if(!isAdmin()) return;
+  _xcEnsure(cat).push({ desc:"", amount:"" });
+  renderExtraChargesEditor(cat);
+  const list = document.querySelectorAll("#xc-list-" + cat + " .xc-desc");
+  if(list.length) list[list.length - 1].focus();
+  renderTotals();
+}
+function removeExtraCharge(cat, i){
+  if(!isAdmin()) return;
+  _xcEnsure(cat).splice(i, 1);
+  renderExtraChargesEditor(cat);
+  renderTotals();
+}
+function setExtraCharge(cat, i, field, val){
+  if(!isAdmin()) return;
+  const arr = _xcEnsure(cat);
+  if(!arr[i]) return;
+  arr[i][field] = field === "amount" ? String(val || "").replace(/[^0-9.]/g, "") : String(val || "");
+  renderTotals();
+}
+function extraChargesBoxHtml(cat){
+  if(!extraChargesEnabled(cat) || !isAdmin() || _plHosting()) return "";
+  return `
+    <div class="xc-box no-print" id="xc-box-${cat}" onclick="event.stopPropagation()">
+      <div class="ps-head">
+        <div class="ps-lbl">Extra charges<small>Added on top · no discount · HST applies</small></div>
+        <button type="button" class="ghost ps-clear" onclick="addExtraCharge('${cat}')">+ Add charge</button>
+      </div>
+      <div class="xc-list" id="xc-list-${cat}"></div>
+      <div class="xc-foot" id="xc-foot-${cat}"></div>
+    </div>`;
+}
+/* Rebuild the editable lines (only on add/remove/render — not while typing). */
+function renderExtraChargesEditor(cat){
+  const host = document.getElementById("xc-list-" + cat);
+  if(!host) return;
+  const arr = extraChargeList(cat);
+  host.innerHTML = arr.map((it, i) => `
+    <div class="xc-line">
+      <input type="text" class="xc-desc" placeholder="Description (e.g. Custom pantry wall)" value="${escapeHtml(it.desc || "")}"
+        oninput="setExtraCharge('${cat}', ${i}, 'desc', this.value)" aria-label="Charge description">
+      <div class="ps-input-wrap"><span>$</span>
+        <input type="text" inputmode="decimal" placeholder="0" value="${escapeHtml(it.amount || "")}"
+          oninput="setExtraCharge('${cat}', ${i}, 'amount', this.value)" aria-label="Charge amount">
+      </div>
+      <button type="button" class="ghost danger xc-del" title="Remove" onclick="removeExtraCharge('${cat}', ${i})">×</button>
+    </div>`).join("");
+}
+/* Live footer + read-only rows in the breakdown — called from renderTotals. */
+function updateExtraChargesDisplay(cat){
+  const foot = document.getElementById("xc-foot-" + cat);
+  const items = extraChargeList(cat).filter(it => extraChargeAmount(it) > 0);
+  const tot = catExtrasTotal(cat);
+  if(foot){
+    foot.innerHTML = items.length
+      ? `<span>${items.length} charge${items.length === 1 ? "" : "s"} · <b>${fmt(tot)}</b> + HST <b>${fmt(tot * 0.13)}</b></span>`
+      : `<span>No extra charges. Use “+ Add charge” for anything not in the estimate.</span>`;
+  }
+  const bd = document.getElementById("cat-breakdown-" + cat);
+  const rows = bd && bd.querySelector(".bd-xc-rows");
+  if(rows){
+    rows.innerHTML = (state.enabled && state.enabled[cat]) ? items.map(it => `
+      <div class="breakdown bd-xc-line"><span><span class="pill pill-x">Extra</span> <span style="margin-left:6px;">${escapeHtml((it.desc || "").trim() || "Additional charge")}</span></span><span>${fmt(extraChargeAmount(it))}</span></div>`).join("") : "";
+  }
 }
 
 function computeTotals(){
@@ -7820,7 +7930,11 @@ function computeTotals(){
     perCat[cat] = r;
     L += r.labour; M += r.material;
   });
-  const sub = L + M;
+  // Extra charges: added to the subtotal, never to the discount base.
+  const extras = {};
+  let extrasTotal = 0;
+  EXTRA_CHARGE_CATS.forEach(cat => { const v = catExtrasTotal(cat); if(v > 0){ extras[cat] = v; extrasTotal += v; } });
+  const sub = L + M + extrasTotal;
   // When "bypass discounts" is on for Miscellaneous, exclude the misc total
   // from the base the discount is calculated + allocated against, so those
   // items are never reduced by a listing/custom discount.
@@ -7879,7 +7993,7 @@ function computeTotals(){
   const hst = afterDisc * 0.13;
   const total = afterDisc + hst;
   return { perCat, labour:L, material:M, subtotal:sub, discountableBase, listingDisc, customDisc,
-           proposed, proposedDisc, catDisc, discount, afterDisc, hst, total };
+           proposed, proposedDisc, catDisc, extras, extrasTotal, discount, afterDisc, hst, total };
 }
 
 function fmt(n){
@@ -8089,7 +8203,7 @@ function renderTotals(){
   document.getElementById("grandTotal").textContent = fmt(t.total);
   document.getElementById("labourTotal").textContent = fmt(t.labour);
   document.getElementById("materialTotal").textContent = fmt(t.material);
-  const sub = t.subtotal || 1;
+  const sub = (t.labour + t.material) || 1;
   document.getElementById("splitL").style.width = (t.labour/sub*100) + "%";
   document.getElementById("splitM").style.width = (t.material/sub*100) + "%";
 
@@ -8122,6 +8236,17 @@ function renderTotals(){
     cVal.textContent = "−" + fmt(t.customDisc);
   } else {
     cRow.style.display = "none"; cVal.style.display = "none";
+  }
+
+  // Extra-charges info line (already inside Subtotal; never discounted)
+  const xRow = document.getElementById("td-xc-row"), xVal = document.getElementById("td-xc");
+  if(xRow && xVal){
+    const showX = t.extrasTotal > 0;
+    xRow.style.display = showX ? "" : "none"; xVal.style.display = showX ? "" : "none";
+    if(showX){
+      document.getElementById("td-xc-note").textContent = "(" + Object.keys(t.extras).map(c => (CATEGORY_META[c] && CATEGORY_META[c].title) || c).join(", ") + " · no discount)";
+      xVal.textContent = fmt(t.extrasTotal);
+    }
   }
 
   // Proposed-subtotal line
@@ -8228,7 +8353,7 @@ function renderTotals(){
     // inside the breakdown should be the POST-discount price — so the
     // discount line above it actually changes the bottom number. Labour and
     // material stay as the original pre-discount figures.
-    const catNet = catSub - (hasDisc ? catDisc : 0);
+    const catNet = catSub - (hasDisc ? catDisc : 0) + ((t.extras && t.extras[cat]) || 0);
     const el = document.getElementById("cat-total-"+cat);
     if(el){
       el.textContent = state.enabled[cat] ? fmt(catNet) : "—";
@@ -8284,6 +8409,7 @@ function renderTotals(){
       }
     }
     if(proposedSubtotalEnabled(cat)) updateProposedSubtotalRow(t, cat);
+    if(extraChargesEnabled(cat)) updateExtraChargesDisplay(cat);
   });
 
   // Live flooring material readout
@@ -8315,6 +8441,7 @@ function renderCategories(){
   if(typeof PL !== "undefined" && PL._hosting){ root.innerHTML = ""; return; }
   root.innerHTML = "";
   Object.keys(CATEGORY_META).forEach(cat => root.appendChild(buildCategoryCard(cat)));
+  EXTRA_CHARGE_CATS.forEach(cat => { try { renderExtraChargesEditor(cat); } catch(_){} });
 }
 /* One estimator category card (head + body). Shared by the estimator and
    by Pre-Listing Packages, which hosts the Kitchen + Bathrooms cards. */
@@ -8393,8 +8520,10 @@ function breakdownRows(cat){
         ${kRow("waterfall",  "Waterfall ends")}
         ${kRow("undercab",   "Under-cabinet lighting")}
         <div class="breakdown disc bd-discount-row" style="display:none"><span><span class="pill pill-d">Discount</span> <span class="bd-d-note" style="margin-left:6px;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;"></span></span><span class="bd-d">-$0</span></div>
+        <div class="bd-xc-rows"></div>
         <div class="breakdown" style="font-weight:600"><span>Subtotal</span><span class="bd-t">$0</span></div>
         ${proposedSubtotalRowHtml(cat)}
+        ${extraChargesBoxHtml(cat)}
       </div>
     `;
   }
@@ -8406,8 +8535,10 @@ function breakdownRows(cat){
       <div id="cat-breakdown-${cat}">
         <div class="breakdown"><span><span class="pill pill-l">Supplied &amp; Installed</span></span><span class="bd-si">$0</span></div>
         <div class="breakdown disc bd-discount-row" style="display:none"><span><span class="pill pill-d">Discount</span> <span class="bd-d-note" style="margin-left:6px;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;"></span></span><span class="bd-d">-$0</span></div>
+        <div class="bd-xc-rows"></div>
         <div class="breakdown" style="font-weight:600"><span>Subtotal</span><span class="bd-t">$0</span></div>
         ${proposedSubtotalRowHtml(cat)}
+        ${extraChargesBoxHtml(cat)}
       </div>
     `;
   }
@@ -8416,8 +8547,10 @@ function breakdownRows(cat){
       <div class="breakdown"><span><span class="pill pill-l">Labour</span></span><span class="bd-l">$0</span></div>
       <div class="breakdown"><span><span class="pill pill-m">Material</span></span><span class="bd-m">$0</span></div>
       <div class="breakdown disc bd-discount-row" style="display:none"><span><span class="pill pill-d">Discount</span> <span class="bd-d-note" style="margin-left:6px;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;"></span></span><span class="bd-d">-$0</span></div>
-      <div class="breakdown" style="font-weight:600"><span>Subtotal</span><span class="bd-t">$0</span></div>
+      <div class="bd-xc-rows"></div>
+        <div class="breakdown" style="font-weight:600"><span>Subtotal</span><span class="bd-t">$0</span></div>
         ${proposedSubtotalRowHtml(cat)}
+        ${extraChargesBoxHtml(cat)}
     </div>
   `;
 }
@@ -12855,6 +12988,23 @@ function renderClientEstimate(){
         </div>
       `;
     };
+    // Extra charges (no discount): listed under the category, then a total.
+    const renderExtrasRows = (sec) => {
+      const items = (typeof catExtrasTotal === "function" && catExtrasTotal(sec.cat) > 0)
+        ? extraChargeList(sec.cat).filter(it => extraChargeAmount(it) > 0) : [];
+      if(!items.length) return "";
+      const extras = items.reduce((a, it) => a + extraChargeAmount(it), 0);
+      const net = sec.total - (hasDiscount ? sec.total * _esRate(sec.cat) : 0);
+      return items.map(it => `
+        <div class="es-cat-total">
+          <span class="lbl">${escapeHtml((it.desc || "").trim() || "Additional charge")}</span>
+          <span class="v">${fmtCurrency(extraChargeAmount(it))}</span>
+        </div>`).join("") + `
+        <div class="es-cat-total es-cat-net">
+          <span class="lbl">${escapeHtml(sec.title)} — Total</span>
+          <span class="v">${fmtCurrency(net + extras)}</span>
+        </div>`;
+    };
     sections.forEach(sec => {
       let body = "";
       if(sec.subblocks && sec.subblocks.length){
@@ -12873,11 +13023,13 @@ function renderClientEstimate(){
         body += renderTotalRow(`${sec.title} — Combined Labour & Material`, sec.total);
         body += renderDiscRow(sec.total, sec.cat);
         body += renderNetRow(sec.total, `${sec.title} — Combined Subtotal`, sec.cat);
+        body += renderExtrasRows(sec);
       } else {
         body += renderBullets(sec.bullets || []);
         body += renderTotalRow("Total Labour & Material", sec.total);
         body += renderDiscRow(sec.total, sec.cat);
         body += renderNetRow(sec.total, "Subtotal (after discount)", sec.cat);
+        body += renderExtrasRows(sec);
       }
       html += `
         <div class="es-category-block">
@@ -16379,7 +16531,10 @@ function renderInternalSheet(){
     html += `<div style="text-align:center;padding:60px 20px;color:var(--muted);font-style:italic;">No categories are enabled. Turn on the categories you want to analyze from the estimator, then come back here.</div>`;
   } else {
     // Summary
-    const clientSub = totalClient.labour + totalClient.material;
+    // Extra charges count as client revenue (no contractor cost recorded).
+    let _xcTotal = 0;
+    try { _xcTotal = computeTotals().extrasTotal || 0; } catch(_){}
+    const clientSub = totalClient.labour + totalClient.material + _xcTotal;
     const costSub   = totalCost.labour + totalCost.material;
     const grossProfit = clientSub - costSub;
     const grossPct    = clientSub > 0 ? (grossProfit / clientSub) * 100 : 0;
@@ -16410,6 +16565,7 @@ function renderInternalSheet(){
       <div class="iv-summary">
         <div class="iv-summary-head">Bottom Line &mdash; Confidential</div>
         <div class="iv-summary-row"><span class="lbl">Client price (subtotal)</span><span class="val">${fmt(clientSub)}</span></div>
+        ${_xcTotal > 0 ? `<div class="iv-summary-row"><span class="lbl" style="font-size:11px;color:var(--muted);">incl. extra charges (no cost entered)</span><span class="val" style="font-size:11px;color:var(--muted);">${fmt(_xcTotal)}</span></div>` : ""}
         <div class="iv-summary-row cost-row"><span class="lbl">Your contractor cost</span><span class="val">${fmt(costSub)}</span></div>
         <div class="iv-summary-row profit-row"><span class="lbl">Gross profit (pre-discount)</span><span class="val">${fmt(grossProfit)}</span></div>
         <div class="iv-summary-row margin-row"><span class="lbl">Gross margin</span><span class="val">${grossPct.toFixed(1)}%</span></div>
@@ -16670,7 +16826,7 @@ const OFFICE_EMAIL = "renotosold@gmail.com";
 const OFFICE_COMPANY = "Reno to Sold Inc.";
 
 /* ---------- Supabase cross-device sync ---------- */
-window.RTS_BUILD = "2026-10-27-v17b-proposed-subtotal-admin";
+window.RTS_BUILD = "2026-10-28-v18-extra-charges";
 console.log("[build] " + window.RTS_BUILD);
 const SUPABASE_URL = "https://icrnvnmvcdpmhnjorefs.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imljcm52bm12Y2RwbWhuam9yZWZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2ODQwMDgsImV4cCI6MjA5NDI2MDAwOH0.YoeBndWsky8vAW6mLeMziPeH2j2C6c_3VdAvOG_i0kA";
