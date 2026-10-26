@@ -968,6 +968,7 @@
   .totals-detail .lbl{color:var(--muted);text-transform:uppercase;font-size:11px;letter-spacing:.12em;font-weight:600;align-self:center;}
   .totals-detail .val{color:var(--ink);text-align:right;align-self:center;}
   .totals-detail .val.discount{color:#ff9b6a;font-weight:600;}
+  .totals-detail .td-strong{font-weight:700;}
   .totals-detail .lbl.final,.totals-detail .val.final{color:var(--gold-bright);font-weight:700;font-size:13px;border-top:1px solid rgba(212,175,106,.3);padding-top:8px;margin-top:4px;}
 
   /* "What's included" panel (bathroom refresh) */
@@ -2029,6 +2030,8 @@
   }
   .es-totals-box .row .v{ font-variant-numeric:tabular-nums; }
   .es-totals-box .row.discount .v{ color:#a32a2a; }
+  .es-totals-box .row.es-disc-total span{ font-weight:700; }
+  .es-totals-box .row.es-after span{ font-weight:600; }
   .es-totals-box .row.grand{
     border-top:2px solid #0a0a0a;
     margin:6px -12px 0;
@@ -4806,11 +4809,7 @@
     </div>
     <div class="totals-detail">
       <div class="lbl">Subtotal</div><div class="val" id="td-sub">$0</div>
-      <div class="lbl" id="td-disc-listing-row" style="display:none">Listing Discount <span id="td-disc-listing-pct" style="text-transform:none;letter-spacing:normal;font-weight:400;color:var(--muted);"></span></div><div class="val discount" id="td-disc-listing" style="display:none">−$0</div>
-      <div class="lbl" id="td-disc-custom-row" style="display:none">Custom Discount <span id="td-disc-custom-note" style="text-transform:none;letter-spacing:normal;font-weight:400;color:var(--muted);"></span></div><div class="val discount" id="td-disc-custom" style="display:none">−$0</div>
-      <div class="lbl" id="td-xc-row" style="display:none">Includes Extra Charges <span id="td-xc-note" style="text-transform:none;letter-spacing:normal;font-weight:400;color:var(--muted);"></span></div><div class="val" id="td-xc" style="display:none;color:var(--muted);">$0</div>
-      <div class="lbl" id="td-disc-prop-row" style="display:none">Proposed Pricing <span id="td-disc-prop-note" style="text-transform:none;letter-spacing:normal;font-weight:400;color:var(--muted);"></span></div><div class="val discount" id="td-disc-prop" style="display:none">−$0</div>
-      <div class="lbl" id="td-after-row" style="display:none">After Discount</div><div class="val" id="td-after" style="display:none">$0</div>
+      <div id="td-disc-lines" style="display:contents"></div>
       <div class="lbl">HST (13%)</div><div class="val" id="td-hst">$0</div>
       <div class="lbl final">Total</div><div class="val final" id="td-total">$0</div>
     </div>
@@ -8019,6 +8018,28 @@ function updateExtraChargesDisplay(cat){
   }
 }
 
+/* The discount lines of the quote summary — ONE source for the estimator
+   totals panel and the client PDF so both always match:
+     Listing discount (set %) · Additional discount (% of subtotal) ·
+     After discount. (Total savings lives in the savings banner.)
+   "Additional" = custom discount + proposed-price savings combined. */
+function quoteSummaryLines(t){
+  const lines = [];
+  const sub = t.subtotal || 0;
+  const pctOfSub = (v) => sub > 0 ? fmtPct(v / sub * 100) + "%" : "";
+  const additional = (t.customDisc || 0) + (t.proposedDisc || 0);
+  if(t.listingDisc > 0.005){
+    const lp = num(prices.listingDiscount && prices.listingDiscount.percent) || 0;
+    lines.push({ label:"Listing discount", pct: lp + "%", amount: -t.listingDisc, kind:"disc" });
+  }
+  if(additional > 0.005) lines.push({ label:"Additional discount", pct: pctOfSub(additional), amount: -additional, kind:"disc" });
+  if(t.discount > 0.005){
+    // Total savings is shown in the "By listing with us you save" banner, not here.
+    lines.push({ label:"After discount", pct:"", amount: t.afterDisc, kind:"after" });
+  }
+  return lines;
+}
+
 function computeTotals(){
   let L = 0, M = 0;
   const perCat = {};
@@ -8312,59 +8333,13 @@ function renderTotals(){
   document.getElementById("td-hst").textContent = fmt(t.hst);
   document.getElementById("td-total").textContent = fmt(t.total);
 
-  // Listing discount line
-  const showListing = t.listingDisc > 0;
-  const lRow = document.getElementById("td-disc-listing-row");
-  const lVal = document.getElementById("td-disc-listing");
-  if(showListing){
-    lRow.style.display = ""; lVal.style.display = "";
-    document.getElementById("td-disc-listing-pct").textContent = "(" + (num(prices.listingDiscount && prices.listingDiscount.percent)||0) + "%)";
-    lVal.textContent = "−" + fmt(t.listingDisc);
-  } else {
-    lRow.style.display = "none"; lVal.style.display = "none";
+  // Discount lines (same as the client PDF Quote Summary)
+  const dl = document.getElementById("td-disc-lines");
+  if(dl){
+    dl.innerHTML = quoteSummaryLines(t).map(l => `
+      <div class="lbl${l.kind === "disc-total" ? " td-strong" : ""}">${l.label}${l.pct ? ` <span style="text-transform:none;letter-spacing:normal;font-weight:400;color:var(--muted);">(${l.pct})</span>` : ""}</div>
+      <div class="val${l.kind === "disc" || l.kind === "disc-total" ? " discount" : ""}${l.kind === "disc-total" ? " td-strong" : ""}">${l.amount < 0 ? "−" + fmt(-l.amount) : fmt(l.amount)}</div>`).join("");
   }
-
-  // Custom discount line
-  const showCustom = t.customDisc > 0;
-  const cRow = document.getElementById("td-disc-custom-row");
-  const cVal = document.getElementById("td-disc-custom");
-  if(showCustom){
-    cRow.style.display = ""; cVal.style.display = "";
-    const d = state.discount;
-    const tag = d.customType === "percent" && num(d.customValue) > 0 ? `(${num(d.customValue)}%)` : "";
-    document.getElementById("td-disc-custom-note").textContent = tag + ((d.customNote||"").trim() ? ` · ${d.customNote.trim()}` : "");
-    cVal.textContent = "−" + fmt(t.customDisc);
-  } else {
-    cRow.style.display = "none"; cVal.style.display = "none";
-  }
-
-  // Extra-charges info line (already inside Subtotal; never discounted)
-  const xRow = document.getElementById("td-xc-row"), xVal = document.getElementById("td-xc");
-  if(xRow && xVal){
-    const showX = t.extrasTotal > 0;
-    xRow.style.display = showX ? "" : "none"; xVal.style.display = showX ? "" : "none";
-    if(showX){
-      document.getElementById("td-xc-note").textContent = "(" + Object.keys(t.extras).map(c => (CATEGORY_META[c] && CATEGORY_META[c].title) || c).join(", ") + " · no discount)";
-      xVal.textContent = fmt(t.extrasTotal);
-    }
-  }
-
-  // Proposed-subtotal line
-  const pRow = document.getElementById("td-disc-prop-row"), pVal = document.getElementById("td-disc-prop");
-  if(pRow && pVal){
-    const showP = t.proposedDisc > 0.005;
-    pRow.style.display = showP ? "" : "none"; pVal.style.display = showP ? "" : "none";
-    if(showP){
-      document.getElementById("td-disc-prop-note").textContent = "(" + Object.keys(t.proposed).map(c => (CATEGORY_META[c] && CATEGORY_META[c].title) || c).join(", ") + ")";
-      pVal.textContent = "−" + fmt(t.proposedDisc);
-    }
-  }
-
-  // After-discount line
-  const showAfter = t.discount > 0;
-  document.getElementById("td-after-row").style.display = showAfter ? "" : "none";
-  document.getElementById("td-after").style.display = showAfter ? "" : "none";
-  document.getElementById("td-after").textContent = fmt(t.afterDisc);
 
   // Savings banners — top of page (between Live Total and Property Info) + inside Client Savings card.
   // Both display the same total savings; sub-message adapts to which discount(s) are active.
@@ -13152,13 +13127,7 @@ function renderClientEstimate(){
         <div class="es-totals">
           <div class="es-totals-box">
             <div class="row"><span>Subtotal</span><span class="v">${fmtCurrency(t.subtotal)}</span></div>
-            ${t.listingDisc ? (() => {
-              const listingPct = num(prices.listingDiscount && prices.listingDiscount.percent);
-              const pctLbl = listingPct > 0 ? ` (${listingPct}%)` : "";
-              return `<div class="row discount"><span>Listing discount${pctLbl}</span><span class="v">−${fmtCurrency(t.listingDisc)}</span></div>`;
-            })() : ""}
-            ${t.customDisc ? `<div class="row discount"><span>Discount${state.discount && state.discount.customNote ? ` (${escapeHtml(state.discount.customNote)})` : ""}</span><span class="v">−${fmtCurrency(t.customDisc)}</span></div>` : ""}
-            ${t.proposedDisc > 0.005 ? `<div class="row discount"><span>Special pricing (${escapeHtml(Object.keys(t.proposed).map(c => (CATEGORY_META[c] && CATEGORY_META[c].title) || c).join(", "))})</span><span class="v">−${fmtCurrency(t.proposedDisc)}</span></div>` : ""}
+            ${quoteSummaryLines(t).map(l => `<div class="row${l.kind === "disc" ? " discount" : l.kind === "disc-total" ? " discount es-disc-total" : " es-after"}"><span>${l.label}${l.pct ? ` (${l.pct})` : ""}</span><span class="v">${l.amount < 0 ? "−" + fmtCurrency(-l.amount) : fmtCurrency(l.amount)}</span></div>`).join("")}
             <div class="row"><span>HST (13%)</span><span class="v">${fmtCurrency(t.hst)}</span></div>
             <div class="row grand"><span>Total</span><span class="v">${fmtCurrency(t.total)}</span></div>
           </div>
@@ -16926,7 +16895,7 @@ const OFFICE_EMAIL = "renotosold@gmail.com";
 const OFFICE_COMPANY = "Reno to Sold Inc.";
 
 /* ---------- Supabase cross-device sync ---------- */
-window.RTS_BUILD = "2026-10-29-v19-proposed-scope";
+window.RTS_BUILD = "2026-10-30-v20b-quote-summary";
 console.log("[build] " + window.RTS_BUILD);
 const SUPABASE_URL = "https://icrnvnmvcdpmhnjorefs.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imljcm52bm12Y2RwbWhuam9yZWZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2ODQwMDgsImV4cCI6MjA5NDI2MDAwOH0.YoeBndWsky8vAW6mLeMziPeH2j2C6c_3VdAvOG_i0kA";
