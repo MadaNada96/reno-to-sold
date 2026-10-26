@@ -720,6 +720,8 @@
   .rp-hst b{color:var(--ink);}
   .rp-actions{display:flex;justify-content:flex-end;margin-top:14px;}
   @media (max-width:540px){ .rp-grid{grid-template-columns:1fr;} }
+  .inv-paid-status{padding:7px 10px;border:1px solid #2e7e4e;border-radius:8px;background:#0f2918;color:#5fce86;font-weight:700;font-size:13px;}
+  .inv-paid-status span{font-weight:400;color:var(--muted);font-size:11px;}
   .inv-paybox{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:7px 10px;border:1px solid var(--line-strong);border-radius:8px;background:#0a0a0e;font-size:12.5px;}
   .inv-paybox b{color:var(--ink);font-variant-numeric:tabular-nums;}
   .inv-paybox button{font-size:11.5px;padding:5px 10px;}
@@ -16996,7 +16998,7 @@ const OFFICE_EMAIL = "renotosold@gmail.com";
 const OFFICE_COMPANY = "Reno to Sold Inc.";
 
 /* ---------- Supabase cross-device sync ---------- */
-window.RTS_BUILD = "2026-10-31-v21b-pdf-fixes";
+window.RTS_BUILD = "2026-11-01-v21c-payments-fix";
 console.log("[build] " + window.RTS_BUILD);
 const SUPABASE_URL = "https://icrnvnmvcdpmhnjorefs.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imljcm52bm12Y2RwbWhuam9yZWZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2ODQwMDgsImV4cCI6MjA5NDI2MDAwOH0.YoeBndWsky8vAW6mLeMziPeH2j2C6c_3VdAvOG_i0kA";
@@ -28784,7 +28786,11 @@ function paymentUnapplied(p){ return Math.max(0, _r2((+p.amount || 0) - paymentA
 function paidOnInvoice(inv, st){
   let s = 0, hasAlloc = false;
   _payList(st).forEach(p => (p.allocations || []).forEach(a => { if(a.invoiceId === inv.id){ s += +a.amount || 0; hasAlloc = true; } }));
-  if(!hasAlloc && inv.status === "paid") return +inv.total || 0;   // legacy "Mark Paid"
+  // Pre-payment-tracking estimates only (never reconciled, no payments yet):
+  // an invoice set to "Paid" counts as paid in full. Once reconciled
+  // (paymentsV 2) ONLY recorded payments count — this stops a manual
+  // "Paid" status and a recorded payment from being counted twice.
+  if(!hasAlloc && inv.status === "paid" && _invSt(st).paymentsV !== 2 && _payList(st).length === 0) return +inv.total || 0;
   return _r2(s);
 }
 function invoiceBalance(inv, st){ return Math.max(0, _r2((+inv.total || 0) - paidOnInvoice(inv, st))); }
@@ -28848,6 +28854,44 @@ function applyCreditToInvoice(inv){
   if(used > 0) syncInvoiceStatusFromPayments(inv);
   return used;
 }
+/* One-time clean-up per estimate (v21c):
+   • No payments recorded yet → invoices set to "Paid" become a recorded
+     payment for their full total (so history is kept).
+   • Payments already recorded → a "Paid" status with no payment behind it
+     is cleared (it was double-counting), then any credit on account is
+     applied to the open invoices, oldest first.
+   Returns true when something changed. */
+function reconcileInvoicePayments(){
+  if(!state) return false;
+  if(!Array.isArray(state.invoices)) state.invoices = [];
+  if(!Array.isArray(state.payments)) state.payments = [];
+  if(state.paymentsV === 2) return false;
+  const hasAlloc = (inv) => state.payments.some(p => (p.allocations || []).some(a => a.invoiceId === inv.id));
+  if(state.payments.length === 0){
+    state.invoices.forEach(inv => {
+      if(inv.status !== "paid" || !(+inv.total > 0)) return;
+      state.payments.push({
+        id: "pay_" + Date.now().toString(36) + Math.floor(Math.random()*1e6).toString(36),
+        date: inv.paidDate || inv.issuedDate || todayISO(), amount: +inv.total,
+        method: inv.paymentMethod || "Other", note: "Marked paid before payment tracking",
+        allocations: [{ invoiceId: inv.id, amount: +inv.total }], createdAt: new Date().toISOString()
+      });
+    });
+  } else {
+    state.invoices.forEach(inv => {
+      if(inv.status === "paid" && !hasAlloc(inv)){ inv.status = "sent"; inv.paidDate = ""; }
+    });
+  }
+  state.paymentsV = 2;
+  invoicesInPayOrder().forEach(inv => applyCreditToInvoice(inv));
+  state.invoices.forEach(syncInvoiceStatusFromPayments);
+  return true;
+}
+
+function _releaseAllocations(invId){
+  _payList().forEach(p => { if(Array.isArray(p.allocations)) p.allocations = p.allocations.filter(a => a.invoiceId !== invId); });
+}
+
 /* Open invoices in the order they should be paid (milestones first, by schedule, then change orders by date). */
 function invoicesInPayOrder(){
   const order = getMilestoneSchedule().map(m => m.id);
@@ -28935,7 +28979,7 @@ function isInvoiceOverdue(inv){
 function invoiceEffectiveStatus(inv, st){
   if(!inv) return "draft";
   if(inv.status === "void") return "void";
-  if(inv.status === "paid") return "paid";
+  if(inv.status === "paid" && _invSt(st).paymentsV !== 2 && _payList(st).length === 0) return "paid";   // legacy
   const paid = paidOnInvoice(inv, st);
   if((+inv.total || 0) > 0 && paid >= (+inv.total || 0) - 0.01) return "paid";
   if(isInvoiceOverdue(inv)) return "overdue";
@@ -29359,8 +29403,7 @@ async function openInvoicing(opts){
       try { autosaveNow(); } catch(e){}
       if(!state || !state._id){ await brandedAlert("Save this estimate first (property name, address and total sqft), then open its invoicing."); return; }
     }
-    if(!Array.isArray(state.invoices)) state.invoices = [];
-    if(!Array.isArray(state.payments)) state.payments = [];
+    if(reconcileInvoicePayments()) saveEstimate({ silent:true });
     _invoicingEntry = "estimate";
     _invoicingScope = "current";
     _invTab = "schedule";
@@ -29513,7 +29556,7 @@ function renderInvoicingAllProjects(){
       rows.push({ p, inv });
       if(inv.status !== "draft" && String(inv.issuedDate || "").slice(0,4) === thisYear) invoicedYtd += +inv.total || 0;
       if(isInvoiceOverdue(inv)) overdueCount++;
-      if(inv.status === "paid" && !(p.st.payments || []).some(x => (x.allocations || []).some(a => a.invoiceId === inv.id)) && String(inv.paidDate || inv.issuedDate || "").slice(0,4) === thisYear) collectedYtd += +inv.total || 0;
+      if(inv.status === "paid" && p.st.paymentsV !== 2 && !(p.st.payments || []).length && String(inv.paidDate || inv.issuedDate || "").slice(0,4) === thisYear) collectedYtd += +inv.total || 0;   // legacy, not yet reconciled
     });
     (p.st.payments || []).forEach(x => { if(String(x.date || "").slice(0,4) === thisYear) collectedYtd += +x.amount || 0; });
   });
@@ -29627,6 +29670,7 @@ async function saveRecordedPayment(){
     const take = _r2(Math.min(left, invoiceBalance(inv)));
     if(take > 0){ p.allocations.push({ invoiceId: inv.id, amount: take }); left = _r2(left - take); }
   });
+  state.paymentsV = 2;
   state.payments.push(p);
   targets.forEach(syncInvoiceStatusFromPayments);
   saveEstimate({ silent:true });
@@ -29734,8 +29778,7 @@ function openProjectInvoicing(estId){
     }
     loadEstimate(estId);   // no-ops safely if the id isn't in the saved list
   }
-  if(!Array.isArray(state.invoices)) state.invoices = [];
-  if(!Array.isArray(state.payments)) state.payments = [];
+  if(reconcileInvoicePayments()) saveEstimate({ silent:true });
   _invoicingScope = "current";
   _invTab = "schedule";
   _setInvoicingHeading();
@@ -30014,12 +30057,12 @@ function renderInvoiceDetail(inv){
       </div>
       <div>
         <label>Status</label>
-        <select ${disabled} onchange="updateInvoiceField('${inv.id}','status',this.value)">
+        ${inv.status === "paid" ? `<div class="inv-paid-status" title="Set automatically from recorded payments">Paid <span>· from payments</span></div>` : `
+        <select ${disabled} onchange="updateInvoiceField('${inv.id}','status',this.value)" title="Paid / Part-paid are set automatically when you record payments">
           <option value="draft" ${inv.status === "draft" ? "selected" : ""}>Draft</option>
           <option value="sent" ${inv.status === "sent" ? "selected" : ""}>Sent</option>
-          <option value="paid" ${inv.status === "paid" ? "selected" : ""}>Paid</option>
           <option value="void" ${inv.status === "void" ? "selected" : ""}>Void</option>
-        </select>
+        </select>`}
       </div>
       <div>
         <label>Issued Date</label>
@@ -30158,6 +30201,7 @@ async function voidInvoice(invId){
   if(!inv) return;
   inv.status = "void";
   inv.updatedAt = new Date().toISOString();
+  _releaseAllocations(invId);   // money paid on it becomes credit on account
   saveEstimate({ silent:true });
   renderInvoiceDetail(inv);
 }
@@ -30167,6 +30211,7 @@ async function deleteInvoice(invId){
   const idx = (state.invoices || []).findIndex(x => x.id === invId);
   if(idx < 0) return;
   state.invoices.splice(idx, 1);
+  _releaseAllocations(invId);
   saveEstimate({ silent:true });
   closeInvoiceDetail();
 }
