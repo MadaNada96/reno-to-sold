@@ -1026,6 +1026,7 @@
   .totals-detail .lbl{color:var(--muted);text-transform:uppercase;font-size:11px;letter-spacing:.12em;font-weight:600;align-self:center;}
   .totals-detail .val{color:var(--ink);text-align:right;align-self:center;}
   .totals-detail .val.discount{color:#ff9b6a;font-weight:600;}
+  @media print{ *{ font-variant-numeric: normal !important; font-feature-settings: normal !important; } }
   .totals-detail .td-strong{font-weight:700;}
   .totals-detail .lbl.final,.totals-detail .val.final{color:var(--gold-bright);font-weight:700;font-size:13px;border-top:1px solid rgba(212,175,106,.3);padding-top:8px;margin-top:4px;}
 
@@ -13559,7 +13560,8 @@ async function pdfFromElement({
   bodyClasses,
   extraCss,
   avoidBreakSelectors,
-  beforePageSelectors
+  beforePageSelectors,
+  fitOnePage            // true → shrink to a single page when it only slightly overflows (invoices)
 }){
   if(!sourceEl) throw new Error("pdfFromElement: sourceEl is required");
 
@@ -13649,6 +13651,10 @@ async function pdfFromElement({
       box-sizing: border-box;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
+      /* Montserrat's tabular figures centre a narrow "1" in a wide slot, which
+         prints as "$1 92,433". Use normal (proportional) figures in every PDF. */
+      font-variant-numeric: normal !important;
+      font-feature-settings: normal !important;
     }
     .__pdf_wrapper .estimate-view,
     .__pdf_wrapper .contractor-view {
@@ -13752,7 +13758,21 @@ async function pdfFromElement({
     const pdf = new jsPDFCtor({ unit: "in", format: FORMAT, orientation: ORIENT });
 
     const cW = fullCanvas.width;
-    const cH = fullCanvas.height;
+    let cH = fullCanvas.height;
+    // Trim trailing blank space so padding at the bottom can never spill
+    // onto an extra, empty page.
+    try {
+      const ctx0 = fullCanvas.getContext("2d");
+      const step = 24;
+      let last = cH;
+      for(let yy = cH - step; yy > 0; yy -= step){
+        const d = ctx0.getImageData(0, yy, cW, step).data;
+        let blank = true;
+        for(let i = 0; i < d.length; i += 16){ if(d[i] < 245 || d[i+1] < 245 || d[i+2] < 245){ blank = false; break; } }
+        if(!blank){ last = Math.min(cH, yy + step + Math.round(12 * (cW / RENDER_W))); break; }
+      }
+      cH = Math.max(1, last);
+    } catch(_){}
     // Canvas-px ↔ PDF-in conversion: the canvas's full width maps to INNER_W_IN.
     const pxPerIn = cW / INNER_W_IN;
     const pageHeightCanvasPx = Math.floor(INNER_H_IN * pxPerIn);
@@ -13810,11 +13830,19 @@ async function pdfFromElement({
       return cut;
     };
 
+    // Squeeze a short overflow onto the current page (shrinks that page a
+    // little) instead of starting a nearly-empty extra page. Never crosses a
+    // forced page break.
+    const TAIL_MAX = fitOnePage ? 0.6 : 0.18;      // fraction of a page
     let y = 0;
     let pageIndex = 0;
     while(y < cH){
       const rawCut = Math.min(y + pageHeightCanvasPx, cH);
-      const cut = (rawCut >= cH) ? cH : adjustCut(rawCut);
+      let cut = (rawCut >= cH) ? cH : adjustCut(rawCut);
+      const tail = cH - rawCut;
+      if(rawCut < cH && tail <= pageHeightCanvasPx * TAIL_MAX && !beforeYs.some(b => b > y + 4 && b < cH)){
+        cut = cH;
+      }
       const sliceH = cut - y;
 
       // Build a slice canvas for this page.
@@ -13827,11 +13855,16 @@ async function pdfFromElement({
       ctx.drawImage(fullCanvas, 0, -y);
 
       if(pageIndex > 0) pdf.addPage();
-      const sliceHIn = (sliceH / pxPerIn);
+      let sliceHIn = (sliceH / pxPerIn);
+      let sliceWIn = INNER_W_IN, xIn = M;
+      if(sliceHIn > INNER_H_IN){           // squeezed page → scale to fit, centred
+        const k = INNER_H_IN / sliceHIn;
+        sliceHIn = INNER_H_IN; sliceWIn = INNER_W_IN * k; xIn = M + (INNER_W_IN - sliceWIn) / 2;
+      }
       pdf.addImage(
         slice.toDataURL("image/jpeg", 0.95), "JPEG",
-        M, M,
-        INNER_W_IN, sliceHIn
+        xIn, M,
+        sliceWIn, sliceHIn
       );
 
       y = cut;
@@ -16963,7 +16996,7 @@ const OFFICE_EMAIL = "renotosold@gmail.com";
 const OFFICE_COMPANY = "Reno to Sold Inc.";
 
 /* ---------- Supabase cross-device sync ---------- */
-window.RTS_BUILD = "2026-10-31-v21-invoicing";
+window.RTS_BUILD = "2026-10-31-v21b-pdf-fixes";
 console.log("[build] " + window.RTS_BUILD);
 const SUPABASE_URL = "https://icrnvnmvcdpmhnjorefs.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imljcm52bm12Y2RwbWhuam9yZWZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2ODQwMDgsImV4cCI6MjA5NDI2MDAwOH0.YoeBndWsky8vAW6mLeMziPeH2j2C6c_3VdAvOG_i0kA";
@@ -29185,7 +29218,8 @@ async function sendInvoiceEmail(){
         filename: (inv.number || "invoice") + ".pdf",
         marginInches: 0.4,
         orientation: "portrait",
-        pageFormat: "letter"
+        pageFormat: "letter",
+        fitOnePage: true
       });
     } finally {
       if(el.parentNode) el.parentNode.removeChild(el);
@@ -30150,7 +30184,8 @@ async function downloadInvoicePdf(invId){
         filename: (inv.number || "invoice") + ".pdf",
         marginInches: 0.4,
         orientation: "portrait",
-        pageFormat: "letter"
+        pageFormat: "letter",
+        fitOnePage: true
       });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -30197,7 +30232,7 @@ function buildInvoicePdfEl(inv){
       lineItems.map(li => `
         <tr>
           <td style="padding:12px;border-bottom:1px solid #eee;vertical-align:top;font-size:12.5px;color:#0a0a0a;">${escapeHtml((li.desc || "").trim() || "Item")}</td>
-          <td style="padding:12px;border-bottom:1px solid #eee;text-align:right;font-weight:700;font-variant-numeric:tabular-nums;font-size:13.5px;color:#0a0a0a;vertical-align:top;">${fmtMoneyDec(+li.amount || 0)}</td>
+          <td style="padding:12px;border-bottom:1px solid #eee;text-align:right;font-weight:700;font-variant-numeric:normal;font-size:13.5px;color:#0a0a0a;vertical-align:top;">${fmtMoneyDec(+li.amount || 0)}</td>
         </tr>
       `).join("");
   } else {
@@ -30211,14 +30246,14 @@ function buildInvoicePdfEl(inv){
             </div>
             ${inv.percent ? `<div style="font-size:10.5px;color:#a8853f;margin-top:6px;letter-spacing:.10em;text-transform:uppercase;">${inv.percent}% of contract</div>` : ""}
           </td>
-          <td style="padding:14px 12px;border-bottom:1px solid #eee;text-align:right;font-weight:700;font-variant-numeric:tabular-nums;font-size:14px;color:#0a0a0a;vertical-align:top;">${fmtMoneyDec(inv.amount || 0)}</td>
+          <td style="padding:14px 12px;border-bottom:1px solid #eee;text-align:right;font-weight:700;font-variant-numeric:normal;font-size:14px;color:#0a0a0a;vertical-align:top;">${fmtMoneyDec(inv.amount || 0)}</td>
         </tr>`;
   }
 
   const wrapper = document.createElement("div");
-  wrapper.style.cssText = "background:#ffffff;color:#0a0a0a;padding:36px 40px;font-family:'Montserrat',sans-serif;line-height:1.5;font-size:12px;";
+  wrapper.style.cssText = "background:#ffffff;color:#0a0a0a;padding:24px 30px;font-family:'Montserrat',sans-serif;line-height:1.5;font-size:12px;";
   wrapper.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #0a0a0a;padding-bottom:14px;margin-bottom:18px;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #0a0a0a;padding-bottom:12px;margin-bottom:14px;">
       <div>
         <img src="RENO_to_SOLD_logo_only.png" alt="Reno to Sold" style="max-height:48px;display:block;margin-bottom:6px;">
         <div style="font-size:10.5px;color:#444;line-height:1.5;">
@@ -30239,7 +30274,7 @@ function buildInvoicePdfEl(inv){
         <div style="font-size:12px;font-weight:600;color:#0a0a0a;">${escapeHtml(inv.dueDate || "—")}</div>
       </div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:22px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:16px;">
       <div>
         <div style="font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:#a8853f;font-weight:700;margin-bottom:6px;">Bill To</div>
         ${sellers.length === 0 ? '<div style="color:#888;">(no sellers on file)</div>' : sellers.map(s => `
@@ -30264,12 +30299,12 @@ function buildInvoicePdfEl(inv){
     </table>
     <div style="display:flex;justify-content:flex-end;margin-bottom:18px;">
       <div style="min-width:280px;">
-        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;"><span style="color:#555;">Subtotal</span><span style="font-weight:700;font-variant-numeric:tabular-nums;">${fmtMoneyDec(inv.amount || 0)}</span></div>
-        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;"><span style="color:#555;">HST (${((inv.hstRate||0)*100).toFixed(1)}%)</span><span style="font-weight:700;font-variant-numeric:tabular-nums;">${fmtMoneyDec(inv.hstAmount || 0)}</span></div>
+        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;"><span style="color:#555;">Subtotal</span><span style="font-weight:700;font-variant-numeric:normal;">${fmtMoneyDec(inv.amount || 0)}</span></div>
+        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;"><span style="color:#555;">HST (${((inv.hstRate||0)*100).toFixed(1)}%)</span><span style="font-weight:700;font-variant-numeric:normal;">${fmtMoneyDec(inv.hstAmount || 0)}</span></div>
         ${_pdfPaid > 0.005 ? `
-        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;"><span style="color:#555;">Invoice total</span><span style="font-weight:700;font-variant-numeric:tabular-nums;">${fmtMoneyDec(inv.total || 0)}</span></div>
-        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;"><span style="color:#555;">Payments received</span><span style="font-weight:700;font-variant-numeric:tabular-nums;">−${fmtMoneyDec(_pdfPaid)}</span></div>` : ""}
-        <div style="display:flex;justify-content:space-between;padding:10px 0 4px;background:#fbf5e6;margin-top:4px;border-radius:4px;padding-left:10px;padding-right:10px;"><span style="font-weight:800;font-size:14px;">${_pdfPaid > 0.005 ? "Balance Due" : "Total Due"}</span><span style="font-weight:800;font-size:15px;color:#0a0a0a;font-variant-numeric:tabular-nums;">${fmtMoneyDec(_pdfPaid > 0.005 ? invoiceBalance(inv) : (inv.total || 0))}</span></div>
+        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;"><span style="color:#555;">Invoice total</span><span style="font-weight:700;font-variant-numeric:normal;">${fmtMoneyDec(inv.total || 0)}</span></div>
+        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;"><span style="color:#555;">Payments received</span><span style="font-weight:700;font-variant-numeric:normal;">−${fmtMoneyDec(_pdfPaid)}</span></div>` : ""}
+        <div style="display:flex;justify-content:space-between;padding:10px 0 4px;background:#fbf5e6;margin-top:4px;border-radius:4px;padding-left:10px;padding-right:10px;"><span style="font-weight:800;font-size:14px;">${_pdfPaid > 0.005 ? "Balance Due" : "Total Due"}</span><span style="font-weight:800;font-size:15px;color:#0a0a0a;font-variant-numeric:normal;">${fmtMoneyDec(_pdfPaid > 0.005 ? invoiceBalance(inv) : (inv.total || 0))}</span></div>
       </div>
     </div>
     ${_pdfPs ? `
@@ -30282,7 +30317,7 @@ function buildInvoicePdfEl(inv){
           ["This invoice", _pdfPs.thisTotal, true],
           ["Paid to date", _pdfPs.paidToDate, false],
           ["Remaining after this invoice is paid", _pdfPs.remainingAfter, false]
-        ].map(r => `<tr style="${r[2] ? "background:#fbf5e6;" : ""}"><td style="padding:7px 12px;border-top:1px solid #eee;color:${r[2] ? "#0a0a0a" : "#555"};font-weight:${r[2] ? 700 : 400};">${r[0]}</td><td style="padding:7px 12px;border-top:1px solid #eee;text-align:right;font-weight:700;font-variant-numeric:tabular-nums;">${fmtMoneyDec(r[1])}</td></tr>`).join("")}
+        ].map(r => `<tr style="${r[2] ? "background:#fbf5e6;" : ""}"><td style="padding:7px 12px;border-top:1px solid #eee;color:${r[2] ? "#0a0a0a" : "#555"};font-weight:${r[2] ? 700 : 400};">${r[0]}</td><td style="padding:7px 12px;border-top:1px solid #eee;text-align:right;font-weight:700;font-variant-numeric:normal;">${fmtMoneyDec(r[1])}</td></tr>`).join("")}
       </table>
     </div>` : ""}
     <!-- Payable To — the client uses this block to know how to send payment. -->
