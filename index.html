@@ -185,7 +185,7 @@
 
   .toolbar{display:flex;gap:8px;flex-wrap:wrap;}
   .toolbar-row-2{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin:0 0 18px;padding:0;position:relative;}
-  .autosave-status{font-size:11.5px;color:var(--muted);min-width:150px;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;}
+  .autosave-status{font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:6px;white-space:nowrap;margin-top:4px;min-height:16px;font-weight:500;letter-spacing:.02em;}
   .autosave-status.saved{color:#5fce86;} .autosave-status.pending{color:var(--gold-bright);} .autosave-status.blocked{color:var(--muted);} .autosave-status.offline{color:#ff9966;}
   .import-pdf-link{
     display:inline-flex;align-items:center;gap:6px;
@@ -672,8 +672,66 @@
     color:var(--gold-bright);font-weight:700;margin-bottom:12px;
   }
   .pf-grid{
-    display:grid;grid-template-columns:repeat(6,1fr);gap:14px;
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:10px;
   }
+  .pf-card-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px;}
+  .pf-card-head .pf-card-title{margin-bottom:0;}
+  .pf-card-title span{color:var(--muted);letter-spacing:.04em;text-transform:none;font-weight:500;font-size:11px;}
+  .pf-progress{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted);}
+  .pf-progress-bar{width:160px;height:6px;border-radius:99px;background:#26262c;overflow:hidden;}
+  .pf-progress-bar.sm{width:100%;height:4px;margin-top:8px;}
+  .pf-progress-bar i{display:block;height:100%;background:linear-gradient(90deg,#2e7e4e,#5fce86);border-radius:99px;}
+  .pf-stat .pf-sub{font-size:10.5px;color:var(--muted);line-height:1.35;}
+  /* v21 invoicing layout */
+  .inv-back{background:transparent;border:none;color:var(--gold-bright);font-weight:700;font-size:12px;letter-spacing:.06em;padding:0 0 12px;cursor:pointer;}
+  .inv-tabbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;border-bottom:1px solid var(--line-strong);margin:4px 0 14px;}
+  .inv-tabs{display:flex;gap:2px;}
+  .inv-tabs button{background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);padding:10px 14px;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;margin-bottom:-1px;}
+  .inv-tabs button b{display:inline-block;min-width:18px;padding:1px 6px;margin-left:4px;border-radius:99px;background:#26262c;color:var(--ink);font-size:10.5px;letter-spacing:0;}
+  .inv-tabs button.active{color:var(--gold-bright);border-bottom-color:var(--gold);}
+  .inv-tabs button.active b{background:rgba(212,175,106,.2);color:var(--gold-bright);}
+  .inv-tab-actions{display:flex;gap:8px;padding-bottom:8px;}
+  .inv-act{font-size:12px;padding:7px 12px;border-radius:8px;}
+  .inv-act.gold{border-color:var(--gold-deep);color:var(--gold-bright);}
+  .inv-panel{min-height:120px;}
+  .inv-empty{color:var(--muted);font-style:italic;padding:26px 6px;text-align:center;}
+  .inv-table-wrap{overflow-x:auto;}
+  .inv-list-table td.mono{font-family:ui-monospace,Menlo,monospace;font-size:12px;letter-spacing:.03em;white-space:nowrap;}
+  .inv-list-table tr.no-click{cursor:default;}
+  .inv-sub{font-size:11px;color:var(--muted);}
+  .inv-row-del{background:transparent;border:none;color:var(--muted);font-size:16px;cursor:pointer;padding:2px 6px;}
+  .inv-row-del:hover{color:#ff9090;}
+  .inv-co-tag{display:inline-block;font-size:9px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;padding:1px 6px;border-radius:4px;background:rgba(212,175,106,.14);color:var(--gold-bright);border:1px solid rgba(212,175,106,.4);vertical-align:1px;}
+  .inv-co-strip{margin-top:12px;font-size:12px;color:var(--muted);display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+  .inv-co-strip a{color:var(--gold-bright);cursor:pointer;border:1px solid rgba(212,175,106,.35);border-radius:99px;padding:3px 10px;}
+  .inv-milestone-card .ms-amount span{font-size:10px;font-weight:600;color:var(--muted);letter-spacing:.04em;}
+  .inv-milestone-card .ms-paid{font-size:11px;color:#5fce86;}
+  .inv-milestone-card .ms-num{font-size:10.5px;color:var(--muted);font-family:ui-monospace,Menlo,monospace;}
+  .inv-milestone-card.not-issued{border-style:dashed;}
+  .inv-milestone-card.not-issued .ms-amount{color:var(--ink);opacity:.8;}
+  .inv-status-pill.partial{ background:#16281f;color:#9fe3b7;border:1px dashed #2e7e4e; }
+  .inv-chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
+  .inv-chips button{font-size:11px;padding:4px 11px;border-radius:99px;border:1px solid var(--line-strong);background:transparent;color:var(--muted);cursor:pointer;}
+  .inv-chips button.active{border-color:var(--gold);color:var(--gold-bright);background:rgba(212,175,106,.1);}
+  .rp-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .rp-grid label{display:block;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:4px;}
+  .rp-grid input,.rp-grid select{width:100%;margin:0;}
+  .rp-hst{margin-top:12px;font-size:12px;color:var(--muted);min-height:16px;}
+  .rp-hst b{color:var(--ink);}
+  .rp-actions{display:flex;justify-content:flex-end;margin-top:14px;}
+  @media (max-width:540px){ .rp-grid{grid-template-columns:1fr;} }
+  .inv-paybox{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:7px 10px;border:1px solid var(--line-strong);border-radius:8px;background:#0a0a0e;font-size:12.5px;}
+  .inv-paybox b{color:var(--ink);font-variant-numeric:tabular-nums;}
+  .inv-paybox button{font-size:11.5px;padding:5px 10px;}
+  .inv-proj-summary{margin:14px 0;border:1px solid rgba(212,175,106,.35);border-radius:10px;padding:12px 14px;background:rgba(212,175,106,.05);}
+  .ips-title{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold-bright);font-weight:700;margin-bottom:8px;}
+  .ips-title span{color:var(--muted);letter-spacing:.04em;text-transform:none;font-weight:500;}
+  .ips-row{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-top:1px solid var(--line);font-size:13px;color:var(--muted);}
+  .ips-row:first-of-type{border-top:none;}
+  .ips-row b{color:var(--ink);font-variant-numeric:tabular-nums;}
+  .ips-row em{font-style:normal;font-size:11px;margin-left:6px;}
+  .ips-row.hl{color:var(--gold-bright);font-weight:700;}
+  .ips-row.hl b{color:#ffe89e;}
   @media (max-width:880px){ .pf-grid{ grid-template-columns:repeat(3,1fr); } }
   @media (max-width:560px){ .pf-grid{ grid-template-columns:repeat(2,1fr); } }
   .pf-stat{
@@ -4471,6 +4529,11 @@
         <span class="sb-item-label">Detailed renovation estimator</span>
       </button>
 
+      <button class="sb-item" data-feature="estimator" data-label="Import estimate from PDF" onclick="startPdfImportTool()">
+        <i class="ti ti-file-import" aria-hidden="true"></i>
+        <span class="sb-item-label">Import from PDF</span>
+      </button>
+
       <button class="sb-item" data-route="trim" data-feature="trim_calculator" data-label="Trim calculator" onclick="navigateTo('trim')">
         <i class="ti ti-ruler-measure" aria-hidden="true"></i>
         <span class="sb-item-label">Trim calculator</span>
@@ -4761,9 +4824,14 @@
               <div class="ep-title">Your estimates</div>
               <div class="ep-sub">Open a saved estimate to keep working on it, or start a new one.</div>
             </div>
-            <button class="ep-new-btn" onclick="startNewEstimateFromPicker()">
-              <i class="ti ti-plus" aria-hidden="true"></i> New estimate
-            </button>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="import-pdf-link" onclick="startPdfImportTool()" title="Start a new estimate from an iGUIDE floor plan PDF">
+                <i class="ti ti-file-import" aria-hidden="true" style="font-size:15px;"></i><span>Import from PDF</span>
+              </button>
+              <button class="ep-new-btn" onclick="startNewEstimateFromPicker()">
+                <i class="ti ti-plus" aria-hidden="true"></i> New estimate
+              </button>
+            </div>
           </div>
           <div class="ep-grid" id="epGrid"></div>
         </div>
@@ -4773,11 +4841,10 @@
           <button onclick="openEstimatorHome()" title="Back to your saved estimates">&larr; All estimates</button>
           <button onclick="newEstimate()">+ New</button>
           <button onclick="saveEstimate()">Save</button>
-          <span id="autosaveStatus" class="autosave-status" aria-live="polite"></span>
           <button onclick="openSavedModal()">Saved</button>
-          <button class="import-pdf-link" onclick="triggerPdfImport()" title="Auto-fill a new estimate from an iGUIDE floor plan PDF">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 12 15 15"/></svg>
-            <span>Import from PDF</span>
+          <button class="import-pdf-link" data-feature="invoicing" onclick="openInvoicingForEstimate()" title="Invoices, payments and change orders for this project">
+            <i class="ti ti-receipt" aria-hidden="true" style="font-size:15px;"></i>
+            <span>Invoicing</span>
           </button>
           <button onclick="openClientEstimate()">Print / PDF</button>
           <button onclick="openEmailEstimateModal()">Email to Client</button>
@@ -4787,7 +4854,6 @@
           <button data-feature="submit_for_review" id="submitForReviewBtn" onclick="openSubmitForReviewModal()" title="Submit this estimate to Reno to Sold for final review and approval" class="primary submit-review-cta">
             <i class="ti ti-send" style="font-size:16px;vertical-align:-2px;margin-right:6px;" aria-hidden="true"></i>Submit for Review
           </button>
-          <input type="file" id="pdfImportInput" accept="application/pdf,.pdf" style="display:none;" onchange="onPdfFileChosen(event)">
         </div>
 
   <!-- Live Total -->
@@ -4797,6 +4863,7 @@
         <div class="meta">Estimate Total</div>
         <div class="grand" id="grandTotal">$0</div>
         <div class="prop" id="propTitle">Untitled property</div>
+        <div id="autosaveStatus" class="autosave-status no-print" aria-live="polite"></div>
       </div>
       <div class="split-legend" style="margin-top:0;">
         <span><span class="dot" style="background:var(--labour)"></span>Labour <strong id="labourTotal">$0</strong></span>
@@ -5374,6 +5441,7 @@
      normally, or 10/40/20/20/10 when a kitchen reno is part of the scope
      (the extra 20% milestone locks in cabinet production). Custom invoices
      (change orders, extras) can be added separately. -->
+<input type="file" id="pdfImportInput" accept="application/pdf,.pdf" style="display:none;" onchange="onPdfFileChosen(event)">
 <div class="modal-bg" id="invoicingModal" onclick="if(event.target===this)closeInvoicing()">
   <div class="modal" style="max-width:1080px;">
     <h3>
@@ -5760,7 +5828,7 @@
       <span>Import from Floor Plan PDF</span>
       <span class="small-stack">
         <button class="ghost" onclick="closePdfImport()">Cancel</button>
-        <button class="primary" id="pdfApplyBtn" onclick="applyPdfImport()" disabled>Apply to Estimate</button>
+        <button class="primary" id="pdfApplyBtn" onclick="applyPdfImport()" disabled>Create Estimate</button>
       </span>
     </h3>
     <div class="modal-body" id="pdfImportBody">
@@ -16895,7 +16963,7 @@ const OFFICE_EMAIL = "renotosold@gmail.com";
 const OFFICE_COMPANY = "Reno to Sold Inc.";
 
 /* ---------- Supabase cross-device sync ---------- */
-window.RTS_BUILD = "2026-10-30-v20b-quote-summary";
+window.RTS_BUILD = "2026-10-31-v21-invoicing";
 console.log("[build] " + window.RTS_BUILD);
 const SUPABASE_URL = "https://icrnvnmvcdpmhnjorefs.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imljcm52bm12Y2RwbWhuam9yZWZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2ODQwMDgsImV4cCI6MjA5NDI2MDAwOH0.YoeBndWsky8vAW6mLeMziPeH2j2C6c_3VdAvOG_i0kA";
@@ -23171,6 +23239,10 @@ function dashboardCards(){
       desc: "Build a detailed, line-by-line renovation estimate. Save, print, email, or submit for review.",
       action: () => openEstimatorHome() },
 
+    { key: "import_pdf", requireFeature: "estimator", title: "Import from PDF", icon: "ti-file-import",
+      desc: "Upload an iGUIDE floor plan PDF and get a new estimate filled in automatically.",
+      action: () => startPdfImportTool() },
+
     { key: "trim", requireFeature: "trim_calculator",
       title: "Trim calculator", icon: "ti-ruler-measure",
       desc: "Measure door & window casing linear feet. Push results into any estimate's trim fields.",
@@ -27630,6 +27702,18 @@ let pdfTileBasementKitchen = false; // when basement included AND a basement kit
                                     // user can opt to TILE that kitchen instead of flooring it
                                     // with the secondary (basement) material.
 
+/* Standalone "Import from PDF" tool (dashboard, sidebar, estimates list).
+   Saves whatever estimate is open, then always starts a NEW estimate. */
+async function startPdfImportTool(){
+  try { autosaveNow(); } catch(e){}
+  try {
+    if(typeof estimateHasUnsavableChanges === "function" && estimateHasUnsavableChanges()){
+      if(!(await brandedConfirm("The estimate you have open isn't saved yet (it needs a property name, address and total sqft). Import a PDF into a new estimate anyway?", { confirmLabel: "Continue" }))) return;
+    }
+  } catch(e){}
+  triggerPdfImport();
+}
+
 async function triggerPdfImport(){
   if(typeof pdfjsLib === "undefined"){
     await brandedAlert("PDF reader is still loading. Try again in a second.");
@@ -28268,7 +28352,8 @@ async function applyPdfImport(){
   const addressForm  = (document.getElementById("pdfAddress").value || "").trim();
   const sqftForm     = (document.getElementById("pdfSqft").value || "").trim();
 
-  if(!(await brandedConfirm("Apply detected data? Your current estimate will be replaced with a new one filled in from this PDF, with all categories enabled.", { destructive: false, confirmLabel: "Apply" }))) return;
+  // (Standalone tool: this always creates a NEW estimate — the one you had
+  // open was already saved by startPdfImportTool.)
 
   // ---- Start fresh ----
   state = freshState();
@@ -28466,9 +28551,17 @@ async function applyPdfImport(){
   state.potlights.intNewOn        = true;
   state.potlights.intNewCount     = potlightCount ? String(potlightCount) : "";
 
-  // ---- Close modal and render ----
+  // ---- Close modal, open the new estimate in the editor, save it ----
   closePdfImport();
+  estimatorView = "editor";
+  try {
+    if(typeof getCurrentRoute === "function" && getCurrentRoute() !== "estimator") navigateTo("estimator");
+    else applyEstimatorView();
+  } catch(e){}
   renderAll();
+  try {
+    if((state.propName || "").trim() && (state.propAddress || "").trim() && String(state.propSqft || "").trim()) saveEstimate({ silent:true });
+  } catch(e){}
 
   // After renderAll(), set the address in the lookup field and trigger autocomplete suggestions
   // so the user can click a verified GTA address rather than just trusting the raw PDF text.
@@ -28634,14 +28727,124 @@ const INVOICE_HST_RATE_DEFAULT = 0.13;
 const INVOICE_DUE_DAYS_DEFAULT = 7;
 const INVOICE_COUNTER_KEY = "rts_invoice_counter_v1";
 
-/* Generates the next sequential invoice number, e.g. "RTS-INV-0042".
-   Counter persists in localStorage so it survives reloads. Global across
-   all estimates (per user request: not per-project numbering). */
+/* ===============================================================
+   v21 — Invoicing money model (all figures INCLUDE HST unless noted)
+   ---------------------------------------------------------------
+   • Project total   = estimate total (incl. HST) + change orders (incl. HST)
+   • Change orders   = every non-void custom invoice (milestone === "custom")
+   • Payments        = st.payments [{id,date,amount,method,note,allocations:[{invoiceId,amount}]}]
+                       amount is what the client paid, HST included. A payment
+                       is applied ("allocated") to one or more invoices; any
+                       remainder is a credit on account, which is applied to
+                       the next invoice created.
+   • Legacy invoices marked Paid before payments existed count as fully paid.
+   =============================================================== */
+const INV_PAY_METHODS = ["E-transfer","Cheque","Cash","Wire","Credit card","Other"];
+function _invSt(st){ return st || state || {}; }
+function _invList(st){ const s = _invSt(st); return Array.isArray(s.invoices) ? s.invoices : []; }
+function _payList(st){ const s = _invSt(st); return Array.isArray(s.payments) ? s.payments : []; }
+function _r2(n){ return Math.round((+n || 0) * 100) / 100; }
+function activeInvoices(st){ return _invList(st).filter(i => i && i.status !== "void"); }
+function isChangeOrder(inv){ return !!inv && inv.milestone === "custom"; }
+function paymentAllocated(p){ return (Array.isArray(p.allocations) ? p.allocations : []).reduce((a, x) => a + (+x.amount || 0), 0); }
+function paymentUnapplied(p){ return Math.max(0, _r2((+p.amount || 0) - paymentAllocated(p))); }
+function paidOnInvoice(inv, st){
+  let s = 0, hasAlloc = false;
+  _payList(st).forEach(p => (p.allocations || []).forEach(a => { if(a.invoiceId === inv.id){ s += +a.amount || 0; hasAlloc = true; } }));
+  if(!hasAlloc && inv.status === "paid") return +inv.total || 0;   // legacy "Mark Paid"
+  return _r2(s);
+}
+function invoiceBalance(inv, st){ return Math.max(0, _r2((+inv.total || 0) - paidOnInvoice(inv, st))); }
+function unappliedCredit(st){ return _r2(_payList(st).reduce((a, p) => a + paymentUnapplied(p), 0)); }
+/* Totals for one estimate state (defaults to the live one). */
+function projectMoney(st){
+  const s = _invSt(st);
+  let estTotal = 0, estPre = 0;
+  if(s === state){ try { const t = computeTotals(); estTotal = t.total; estPre = t.afterDisc; } catch(e){} }
+  else { const v = estimateTotalFor(s); estTotal = v || 0; estPre = estTotal / 1.13; }
+  const invs = activeInvoices(s);
+  let coTotal = 0, coPre = 0, invoiced = 0, paidInv = 0, overdue = 0;
+  invs.forEach(inv => {
+    if(isChangeOrder(inv)){ coTotal += +inv.total || 0; coPre += +inv.amount || 0; }
+    if(inv.status !== "draft") invoiced += +inv.total || 0;
+    paidInv += paidOnInvoice(inv, s);
+    if(isInvoiceOverdue(inv)) overdue += invoiceBalance(inv, s);
+  });
+  const credit = unappliedCredit(s);
+  const collected = paidInv + credit;
+  const projectTotal = estTotal + coTotal;
+  return {
+    estTotal: _r2(estTotal), estPre: _r2(estPre), coTotal: _r2(coTotal), coPre: _r2(coPre),
+    projectTotal: _r2(projectTotal), projectPre: _r2(estPre + coPre),
+    invoiced: _r2(invoiced), collected: _r2(collected), credit,
+    outstanding: _r2(Math.max(0, invoiced - paidInv)),          // billed, not yet paid
+    remaining: _r2(Math.max(0, projectTotal - collected)),      // left to collect on the whole project
+    overdue: _r2(overdue)
+  };
+}
+/* After any payment change: paid when the balance hits 0. */
+function syncInvoiceStatusFromPayments(inv){
+  if(!inv || inv.status === "void") return;
+  const hasAlloc = _payList().some(p => (p.allocations || []).some(a => a.invoiceId === inv.id));
+  if(!hasAlloc) return;
+  const bal = invoiceBalance(inv);
+  if(bal <= 0.01 && (+inv.total || 0) > 0){
+    if(inv.status !== "paid"){
+      inv.status = "paid";
+      const dates = _payList().filter(p => (p.allocations || []).some(a => a.invoiceId === inv.id)).map(p => p.date || "").sort();
+      inv.paidDate = dates[dates.length - 1] || todayISO();
+    }
+  } else if(inv.status === "paid" || inv.status === "draft"){
+    inv.status = "sent";   // part-paid → it's been issued
+    inv.paidDate = "";
+  }
+}
+/* Apply any credit on account to a (newly created) invoice. */
+function applyCreditToInvoice(inv){
+  let need = invoiceBalance(inv);
+  if(need <= 0) return 0;
+  let used = 0;
+  _payList().slice().sort((a,b) => String(a.date||"").localeCompare(String(b.date||""))).forEach(p => {
+    if(need <= 0.005) return;
+    const free = paymentUnapplied(p);
+    if(free <= 0.005) return;
+    const take = _r2(Math.min(free, need));
+    (p.allocations = p.allocations || []).push({ invoiceId: inv.id, amount: take });
+    need = _r2(need - take); used += take;
+  });
+  if(used > 0) syncInvoiceStatusFromPayments(inv);
+  return used;
+}
+/* Open invoices in the order they should be paid (milestones first, by schedule, then change orders by date). */
+function invoicesInPayOrder(){
+  const order = getMilestoneSchedule().map(m => m.id);
+  return activeInvoices().filter(i => invoiceBalance(i) > 0.005).sort((a, b) => {
+    const ia = order.indexOf(a.milestone), ib = order.indexOf(b.milestone);
+    const ka = ia === -1 ? 99 : ia, kb = ib === -1 ? 99 : ib;
+    if(ka !== kb) return ka - kb;
+    return String(a.createdAt || "").localeCompare(String(b.createdAt || ""));
+  });
+}
+
+/* ---------- Random invoice numbers ----------
+   RTS-YYMM-XXXX with an unambiguous alphabet (no 0/O, 1/I/L). Unique across
+   every invoice on every saved estimate. */
 function nextInvoiceNumber(){
-  const cur = parseInt(localStorage.getItem(INVOICE_COUNTER_KEY) || "0", 10) || 0;
-  const next = cur + 1;
-  localStorage.setItem(INVOICE_COUNTER_KEY, String(next));
-  return "RTS-INV-" + String(next).padStart(4, "0");
+  const used = new Set();
+  try { (loadSavedList() || []).forEach(e => ((e.state && e.state.invoices) || []).forEach(i => used.add(i.number))); } catch(e){}
+  _invList().forEach(i => used.add(i.number));
+  const A = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+  const d = new Date();
+  const ym = String(d.getFullYear()).slice(2) + String(d.getMonth() + 1).padStart(2, "0");
+  for(let n = 0; n < 50; n++){
+    let code = "";
+    const buf = new Uint32Array(4);
+    try { crypto.getRandomValues(buf); } catch(e){ for(let i = 0; i < 4; i++) buf[i] = Math.floor(Math.random() * 1e9); }
+    for(let i = 0; i < 4; i++) code += A[buf[i] % A.length];
+    const num = "RTS-" + ym + "-" + code;
+    if(!used.has(num)) return num;
+  }
+  return "RTS-" + ym + "-" + Date.now().toString(36).toUpperCase().slice(-5);
 }
 
 /* Compute current contract value (post-discount, PRE-HST).
@@ -28696,9 +28899,15 @@ function isInvoiceOverdue(inv){
    probably want to render "overdue" instead of "sent". We don't mutate the
    stored status (paying later doesn't change history) — this is a derived
    read-only field used by pills, filters, and dashboard counts. */
-function invoiceEffectiveStatus(inv){
+function invoiceEffectiveStatus(inv, st){
+  if(!inv) return "draft";
+  if(inv.status === "void") return "void";
+  if(inv.status === "paid") return "paid";
+  const paid = paidOnInvoice(inv, st);
+  if((+inv.total || 0) > 0 && paid >= (+inv.total || 0) - 0.01) return "paid";
   if(isInvoiceOverdue(inv)) return "overdue";
-  return (inv && inv.status) || "draft";
+  if(paid > 0.005) return "partial";
+  return inv.status || "draft";
 }
 
 /* ===== Email Invoice — sends a per-invoice PDF via the existing
@@ -29044,141 +29253,383 @@ function acceptedBidForCurrentEstimate(){
   }catch(e){ return null; }
 }
 
-/* Project Financials — aggregates contract value, invoiced, collected,
-   outstanding A/R, expenses, projected margin. Shared between Invoicing
-   and Expense Tracker. Returns an object with raw numbers + a
-   marginSource indicator so the UI can show a placeholder when there's
-   no accepted bid (the source of truth for cost). */
+/* ---------- Project Financials (incl. HST) ---------- */
 function computeProjectFinancials(){
-  const contract = invoiceContractValue();
-  const invoices = Array.isArray(state.invoices) ? state.invoices : [];
-  let invoiced = 0, collected = 0;
-  invoices.forEach(inv => {
-    if(inv.status === "void" || inv.status === "draft") return;
-    invoiced += +(inv.amount || 0);
-    if(inv.status === "paid") collected += +(inv.amount || 0);
-  });
-  const outstandingAR = invoiced - collected;
-  // Pull expenses from the linked tracker project (still surfaced as its
-  // own number, but it no longer drives the margin calculation).
+  const m = projectMoney();
   let expensesToDate = 0;
   try{
     const estId = state && state._id;
     if(estId && window.ET && typeof ET.getProjectForEstimate === "function"){
       const proj = ET.getProjectForEstimate(estId);
-      if(proj && Array.isArray(proj.expenses)){
-        expensesToDate = proj.expenses.reduce((a,e) => a + (Number(e.amount)||0), 0);
-      }
+      if(proj && Array.isArray(proj.expenses)) expensesToDate = proj.expenses.reduce((a,e) => a + (Number(e.amount)||0), 0);
     }
   }catch(e){}
-  // Projected margin now references the ACCEPTED bid (contractor cost) —
-  // the source of truth for what RTS pays out. Surfaces only when a bid
-  // has been formally accepted via the Bids dashboard.
+  // Margin stays PRE-HST (HST isn't income) — contract pre-HST − accepted bid.
   const acceptedBid = acceptedBidForCurrentEstimate();
   let acceptedBidTotal = null;
   if(acceptedBid){
-    const sub = acceptedBid.submitted_data || {};
-    const summary = sub.bid_summary || {};
+    const summary = ((acceptedBid.submitted_data || {}).bid_summary) || {};
     const t = (typeof rbParseMoney === "function") ? rbParseMoney(summary.total_bid) : parseFloat(summary.total_bid);
     if(isFinite(t) && t > 0) acceptedBidTotal = t;
   }
   const hasAcceptedBid = acceptedBidTotal != null;
-  const projectedMargin = hasAcceptedBid ? (contract - acceptedBidTotal) : null;
-  const marginPct = (hasAcceptedBid && contract > 0) ? (projectedMargin / contract * 100) : null;
-  return {
-    contract, invoiced, collected, outstandingAR,
-    expensesToDate,
-    acceptedBidTotal, hasAcceptedBid,
-    projectedMargin, marginPct
-  };
+  const projectedMargin = hasAcceptedBid ? (m.projectPre - acceptedBidTotal) : null;
+  const marginPct = (hasAcceptedBid && m.projectPre > 0) ? (projectedMargin / m.projectPre * 100) : null;
+  return Object.assign({}, m, {
+    contract: m.projectTotal, outstandingAR: m.outstanding,
+    expensesToDate, acceptedBidTotal, hasAcceptedBid, projectedMargin, marginPct
+  });
 }
-
-/* Render the Project Financials card. Used in BOTH Invoicing modal AND
-   Expense Tracker (top of the page). Pure presentational helper.
-   Projected Margin: shown ONLY when an accepted contractor bid exists
-   (Contract − Accepted Bid Total). Otherwise we display a placeholder
-   message in the same slot so the layout doesn't shift. */
 function renderProjectFinancialsCard(){
   const f = computeProjectFinancials();
   const fmt = (n) => "$" + Math.round(n).toLocaleString("en-US");
-  let marginCellHtml;
-  if(f.hasAcceptedBid){
-    const marginCls = f.projectedMargin >= 0 ? "green" : "red";
-    marginCellHtml = `
-      <div class="pf-stat ${marginCls}" title="Contract − Accepted contractor bid total = your projected profit on this project.">
-        <span class="pf-lbl">Projected Margin (${f.marginPct.toFixed(1)}%)</span>
-        <span class="pf-val">${fmt(f.projectedMargin)}</span>
-      </div>
-    `;
-  } else {
-    marginCellHtml = `
-      <div class="pf-stat" style="grid-column:span 1;">
-        <span class="pf-lbl">Projected Margin</span>
-        <span class="pf-val" style="font-size:11.5px;font-weight:500;color:var(--muted);line-height:1.4;">Generated once a contractor bid is submitted and accepted.</span>
-      </div>
-    `;
-  }
+  const pctPaid = f.projectTotal > 0 ? Math.min(100, f.collected / f.projectTotal * 100) : 0;
+  const margin = f.hasAcceptedBid
+    ? `<div class="pf-stat ${f.projectedMargin >= 0 ? "green" : "red"}" title="Contract before HST − accepted contractor bid"><span class="pf-lbl">Projected margin</span><span class="pf-val">${fmt(f.projectedMargin)}</span><span class="pf-sub">${f.marginPct.toFixed(1)}% · before HST</span></div>`
+    : `<div class="pf-stat"><span class="pf-lbl">Projected margin</span><span class="pf-sub" style="margin-top:2px;">Shows once a contractor bid is accepted.</span></div>`;
   return `
     <div class="pf-card">
-      <div class="pf-card-title">Project Financials</div>
-      <div class="pf-grid">
-        <div class="pf-stat contract">
-          <span class="pf-lbl">Contract</span>
-          <span class="pf-val">${fmt(f.contract)}</span>
+      <div class="pf-card-head">
+        <div class="pf-card-title">Project financials <span>· all amounts include HST</span></div>
+        <div class="pf-progress" title="${pctPaid.toFixed(0)}% collected">
+          <div class="pf-progress-bar"><i style="width:${pctPaid.toFixed(1)}%"></i></div>
+          <span>${pctPaid.toFixed(0)}% collected</span>
         </div>
-        <div class="pf-stat gold">
-          <span class="pf-lbl">Invoiced</span>
-          <span class="pf-val">${fmt(f.invoiced)}</span>
-        </div>
-        <div class="pf-stat green">
-          <span class="pf-lbl">Collected</span>
-          <span class="pf-val">${fmt(f.collected)}</span>
-        </div>
-        <div class="pf-stat ${f.outstandingAR > 0 ? "red" : ""}">
-          <span class="pf-lbl">A/R Outstanding</span>
-          <span class="pf-val">${fmt(f.outstandingAR)}</span>
-        </div>
-        <div class="pf-stat">
-          <span class="pf-lbl">Expenses</span>
-          <span class="pf-val">${fmt(f.expensesToDate)}</span>
-        </div>
-        ${marginCellHtml}
       </div>
-    </div>
-  `;
+      <div class="pf-grid">
+        <div class="pf-stat contract"><span class="pf-lbl">Project total</span><span class="pf-val">${fmt(f.projectTotal)}</span>
+          <span class="pf-sub">Estimate ${fmt(f.estTotal)}${f.coTotal > 0 ? ` + changes ${fmt(f.coTotal)}` : ""}</span></div>
+        <div class="pf-stat gold"><span class="pf-lbl">Invoiced</span><span class="pf-val">${fmt(f.invoiced)}</span></div>
+        <div class="pf-stat green"><span class="pf-lbl">Collected</span><span class="pf-val">${fmt(f.collected)}</span>
+          ${f.credit > 0 ? `<span class="pf-sub">incl. ${fmt(f.credit)} credit</span>` : ""}</div>
+        <div class="pf-stat ${f.outstanding > 0 ? "red" : ""}"><span class="pf-lbl">Outstanding</span><span class="pf-val">${fmt(f.outstanding)}</span><span class="pf-sub">Invoiced, not paid</span></div>
+        <div class="pf-stat"><span class="pf-lbl">Left to collect</span><span class="pf-val">${fmt(f.remaining)}</span><span class="pf-sub">On the whole project</span></div>
+        <div class="pf-stat"><span class="pf-lbl">Expenses</span><span class="pf-val">${fmt(f.expensesToDate)}</span></div>
+        ${margin}
+      </div>
+    </div>`;
 }
 
-/* Open the Invoicing modal. Requires the estimator's current state to be
-   the project we're invoicing for. If unsaved, prompt the user to save. */
-async function openInvoicing(){
-  // No active estimate? Open the All Projects dashboard view instead of
-  // prompting to save. Admin opening Invoicing from the dashboard always
-  // hits this path (no estimate context); they see the cross-project
-  // invoice list and can drill into any specific invoice from there.
-  if(!state || !state._id){
-    _invoicingScope = "all";
-    if(!Array.isArray(state && state.invoices)) {
-      if(state) state.invoices = [];
+/* ---------- Invoicing modal: entry + views ----------
+   Dashboard / sidebar  → All projects only.
+   Estimate "Invoicing" → that project only.
+   Project card in All  → that project, with "← All projects". */
+let _invoicingEntry = "all";     // "all" | "estimate"
+let _invTab = "schedule";        // "schedule" | "invoices" | "payments"
+let _invAllTab = "projects";     // "projects" | "invoices"
+
+async function openInvoicing(opts){
+  opts = opts || {};
+  if(opts.scope === "project"){
+    if(!state || !state._id){
+      try { autosaveNow(); } catch(e){}
+      if(!state || !state._id){ await brandedAlert("Save this estimate first (property name, address and total sqft), then open its invoicing."); return; }
     }
-    const nameEl = document.getElementById("invModalEstimateName");
-    if(nameEl) nameEl.textContent = "All Projects";
-    renderInvoicing();
-    document.getElementById("invoicingModal").classList.add("show");
-    return;
+    if(!Array.isArray(state.invoices)) state.invoices = [];
+    if(!Array.isArray(state.payments)) state.payments = [];
+    _invoicingEntry = "estimate";
+    _invoicingScope = "current";
+    _invTab = "schedule";
+  } else {
+    _invoicingEntry = "all";
+    _invoicingScope = "all";
+    _invAllTab = "projects";
   }
-  if(!Array.isArray(state.invoices)) state.invoices = [];
-  // Opened from a saved estimate → land on that project's own invoicing.
-  // The "All Projects" scope toggle takes them back to the project cards.
-  _invoicingScope = "current";
-  const nameEl = document.getElementById("invModalEstimateName");
-  if(nameEl){
-    const propName = (state.propName || "").trim();
-    const addr = (state.propAddress || "").trim();
-    nameEl.textContent = addr || propName || "Project";
-  }
+  _setInvoicingHeading();
   renderInvoicing();
   document.getElementById("invoicingModal").classList.add("show");
 }
+function openInvoicingForEstimate(){ return openInvoicing({ scope: "project" }); }
+function _setInvoicingHeading(){
+  const nameEl = document.getElementById("invModalEstimateName");
+  if(!nameEl) return;
+  if(_invoicingScope === "all"){ nameEl.textContent = "All projects"; return; }
+  nameEl.textContent = (state.propAddress || "").trim() || (state.propName || "").trim() || "Project";
+}
+function setInvoicingScope(scope){
+  _invoicingScope = (scope === "all") ? "all" : "current";
+  if(_invoicingScope === "all"){ restoreBorrowedInvoicingEstimate(); }
+  _setInvoicingHeading();
+  renderInvoicing();
+}
+function setInvTab(t){ _invTab = t; renderInvoicing(); }
+function setInvAllTab(t){ _invAllTab = t; renderInvoicing(); }
+
+function _invPill(inv){
+  const eff = invoiceEffectiveStatus(inv);
+  const lbl = { partial:"Part-paid" }[eff] || eff;
+  return `<span class="inv-status-pill ${eff}">${escapeHtml(lbl.toUpperCase())}</span>`;
+}
+
+function renderInvoicing(){
+  const body = document.getElementById("invoicingBody");
+  if(!body) return;
+  if(_invoicingScope === "all"){ body.innerHTML = renderInvoicingAllProjects(); return; }
+  if(!Array.isArray(state.payments)) state.payments = [];
+  const fmt = (n) => "$" + Math.round(n).toLocaleString("en-US");
+  const back = _invoicingEntry === "all"
+    ? `<button class="inv-back" onclick="setInvoicingScope('all')">&larr; All projects</button>` : "";
+
+  const contract = invoiceContractValue();
+  const schedule = getMilestoneSchedule();
+  const milestonesHtml = schedule.map((m, idx) => {
+    const inv = findInvoiceByMilestone(m.id);
+    const pre = inv ? (+inv.amount || 0) : contract * (m.pct / 100);
+    const tot = inv ? (+inv.total || 0) : pre * (1 + INVOICE_HST_RATE_DEFAULT);
+    const pct = inv ? inv.percent : m.pct;
+    const paid = inv ? paidOnInvoice(inv) : 0;
+    const handler = inv ? `openInvoiceDetail('${escapeHtmlAttr(inv.id)}')` : `createMilestoneInvoice('${m.id}')`;
+    return `
+      <div class="inv-milestone-card${inv ? "" : " not-issued"}" onclick="${handler}">
+        <div class="ms-pct">${idx + 1} of ${schedule.length} &middot; ${pct}%</div>
+        <div class="ms-name">${escapeHtml(inv ? (inv.milestoneLabel || m.label) : m.label)}</div>
+        <div class="ms-amount">${fmt(tot)} <span>incl. HST</span></div>
+        ${inv && paid > 0 && paid < (+inv.total || 0) - 0.005 ? `<div class="ms-paid">${fmt(paid)} paid · ${fmt(invoiceBalance(inv))} due</div>` : ""}
+        <div class="ms-status-row">
+          ${inv ? _invPill(inv) : `<span class="inv-status-pill uninvoiced">Create invoice</span>`}
+          ${inv ? `<span class="ms-num">${escapeHtml(inv.number || "")}</span>` : ""}
+        </div>
+      </div>`;
+  }).join("");
+
+  const invoices = _invList().slice().sort((a,b) => (a.createdAt || "").localeCompare(b.createdAt || ""));
+  const payments = _payList().slice().sort((a,b) => String(b.date || "").localeCompare(String(a.date || "")));
+  const cos = activeInvoices().filter(isChangeOrder);
+
+  const invRows = invoices.length === 0
+    ? `<div class="inv-empty">No invoices yet. Open the Payment schedule tab and click a milestone to create the first one.</div>`
+    : `<div class="inv-table-wrap"><table class="inv-list-table">
+        <thead><tr><th>Invoice #</th><th>For</th><th>Issued</th><th>Due</th><th>Status</th><th style="text-align:right;">Total</th><th style="text-align:right;">Balance</th></tr></thead>
+        <tbody>${invoices.map(inv => `
+          <tr onclick="openInvoiceDetail('${escapeHtmlAttr(inv.id)}')">
+            <td class="mono">${escapeHtml(inv.number || "—")}</td>
+            <td>${isChangeOrder(inv) ? `<span class="inv-co-tag">Change</span> ` : ""}${escapeHtml(inv.milestoneLabel || "Custom")}</td>
+            <td>${escapeHtml(inv.issuedDate || "—")}</td>
+            <td>${escapeHtml(inv.dueDate || "—")}</td>
+            <td>${_invPill(inv)}</td>
+            <td class="money">${fmt(inv.total || 0)}</td>
+            <td class="money">${inv.status === "void" ? "—" : fmt(invoiceBalance(inv))}</td>
+          </tr>`).join("")}</tbody></table></div>`;
+
+  const invById = {}; _invList().forEach(i => invById[i.id] = i);
+  const payRows = payments.length === 0
+    ? `<div class="inv-empty">No payments recorded yet. Use “Record payment” when the client pays — by any method, including cash.</div>`
+    : `<div class="inv-table-wrap"><table class="inv-list-table">
+        <thead><tr><th>Date</th><th>Method</th><th>Applied to</th><th style="text-align:right;">Amount</th><th style="text-align:right;">HST incl.</th><th></th></tr></thead>
+        <tbody>${payments.map(p => {
+          const applied = (p.allocations || []).map(a => escapeHtml((invById[a.invoiceId] && invById[a.invoiceId].number) || "—") + " " + fmt(a.amount)).join(", ");
+          const credit = paymentUnapplied(p);
+          return `<tr class="no-click">
+            <td>${escapeHtml(p.date || "—")}</td>
+            <td>${escapeHtml(p.method || "—")}${p.note ? `<div class="inv-sub">${escapeHtml(p.note)}</div>` : ""}</td>
+            <td>${applied || ""}${credit > 0 ? `${applied ? "<br>" : ""}<span class="inv-sub">${fmt(credit)} credit on account</span>` : ""}</td>
+            <td class="money">${fmt(p.amount)}</td>
+            <td class="money" style="color:var(--muted);">${fmt((+p.amount || 0) * 0.13 / 1.13)}</td>
+            <td style="text-align:right;"><button class="inv-row-del" title="Delete payment" onclick="deletePayment('${escapeHtmlAttr(p.id)}')">&times;</button></td>
+          </tr>`; }).join("")}</tbody></table></div>`;
+
+  const tab = (k, lbl, n) => `<button class="${_invTab === k ? "active" : ""}" onclick="setInvTab('${k}')">${lbl}${n != null ? ` <b>${n}</b>` : ""}</button>`;
+  const panel = _invTab === "invoices" ? invRows
+    : _invTab === "payments" ? payRows
+    : `<div class="inv-milestones">${milestonesHtml}</div>
+       ${cos.length ? `<div class="inv-co-strip">Change orders: ${cos.map(c => `<a onclick="openInvoiceDetail('${escapeHtmlAttr(c.id)}')">${escapeHtml(c.milestoneLabel || "Change order")} · ${fmt(c.total || 0)}</a>`).join("")}</div>` : ""}`;
+
+  body.innerHTML = `
+    ${back}
+    ${renderProjectFinancialsCard()}
+    <div class="inv-tabbar">
+      <div class="inv-tabs">
+        ${tab("schedule", "Payment schedule")}
+        ${tab("invoices", "Invoices", invoices.length)}
+        ${tab("payments", "Payments", payments.length)}
+      </div>
+      <div class="inv-tab-actions">
+        <button class="inv-act" onclick="openRecordPayment()">+ Record payment</button>
+        <button class="inv-act gold" onclick="createCustomInvoice()">+ Change order / extra</button>
+      </div>
+    </div>
+    <div class="inv-panel">${panel}</div>`;
+}
+
+/* ---------- All projects ---------- */
+function _allInvoiceProjects(){
+  const saved = (typeof loadSavedList === "function") ? (loadSavedList() || []) : [];
+  const liveId = state && state._id;
+  const out = [];
+  saved.forEach(est => {
+    const st = (liveId && est.id === liveId) ? state : (est.state || {});
+    const invs = Array.isArray(st.invoices) ? st.invoices : [];
+    const pays = Array.isArray(st.payments) ? st.payments : [];
+    if(!invs.length && !pays.length) return;
+    out.push({ id: est.id, st, name: (st.propName || est.name || "").trim(), address: (st.propAddress || "").trim() });
+  });
+  return out;
+}
+function renderInvoicingAllProjects(){
+  const fmt = (n) => "$" + Math.round(n).toLocaleString("en-US");
+  const projs = _allInvoiceProjects();
+  const thisYear = String(new Date().getFullYear());
+  let invoicedYtd = 0, collectedYtd = 0, outstanding = 0, overdue = 0, overdueCount = 0;
+  const rows = [];
+  projs.forEach(p => {
+    p.m = projectMoney(p.st);
+    outstanding += p.m.outstanding; overdue += p.m.overdue;
+    (p.st.invoices || []).forEach(inv => {
+      if(inv.status === "void") return;
+      rows.push({ p, inv });
+      if(inv.status !== "draft" && String(inv.issuedDate || "").slice(0,4) === thisYear) invoicedYtd += +inv.total || 0;
+      if(isInvoiceOverdue(inv)) overdueCount++;
+      if(inv.status === "paid" && !(p.st.payments || []).some(x => (x.allocations || []).some(a => a.invoiceId === inv.id)) && String(inv.paidDate || inv.issuedDate || "").slice(0,4) === thisYear) collectedYtd += +inv.total || 0;
+    });
+    (p.st.payments || []).forEach(x => { if(String(x.date || "").slice(0,4) === thisYear) collectedYtd += +x.amount || 0; });
+  });
+  const stats = `
+    <div class="inv-stats-grid">
+      <div class="inv-stat-card"><div class="label">${thisYear} invoiced</div><div class="value">${fmt(invoicedYtd)}</div><div class="sub">Incl. HST</div></div>
+      <div class="inv-stat-card"><div class="label">${thisYear} collected</div><div class="value">${fmt(collectedYtd)}</div><div class="sub">Payments received, incl. HST</div></div>
+      <div class="inv-stat-card${outstanding > 0 ? " warn" : ""}"><div class="label">Outstanding</div><div class="value">${fmt(outstanding)}</div><div class="sub">Invoiced, not yet paid</div></div>
+      <div class="inv-stat-card${overdue > 0 ? " warn" : ""}"><div class="label">Overdue</div><div class="value">${fmt(overdue)}</div><div class="sub">${overdueCount} invoice${overdueCount === 1 ? "" : "s"} past due</div></div>
+    </div>`;
+  projs.sort((a,b) => (b.m.overdue > 0) - (a.m.overdue > 0) || b.m.outstanding - a.m.outstanding);
+  const cards = projs.length === 0
+    ? `<div class="inv-proj-empty">No invoices yet. Open an estimate and click <b>Invoicing</b> to start billing that project.</div>`
+    : `<div class="inv-proj-grid">${projs.map(p => {
+        const pct = p.m.projectTotal > 0 ? Math.min(100, p.m.collected / p.m.projectTotal * 100) : 0;
+        return `
+        <div class="inv-proj-card ${p.m.overdue > 0 ? "has-overdue" : ""}" onclick="openProjectInvoicing('${escapeHtmlAttr(p.id)}')">
+          <div class="ipc-name">${escapeHtml(p.address || p.name || "Untitled project")}</div>
+          ${p.address && p.name ? `<div class="ipc-sub">${escapeHtml(p.name)}</div>` : ""}
+          <div class="ipc-stats">
+            <div class="ipc-stat"><div class="l">Project</div><div class="v">${fmt(p.m.projectTotal)}</div></div>
+            <div class="ipc-stat"><div class="l">Collected</div><div class="v">${fmt(p.m.collected)}</div></div>
+            <div class="ipc-stat${p.m.outstanding > 0 ? " warn" : ""}"><div class="l">Outstanding</div><div class="v">${fmt(p.m.outstanding)}</div></div>
+          </div>
+          <div class="pf-progress-bar sm"><i style="width:${pct.toFixed(1)}%"></i></div>
+          ${p.m.overdue > 0 ? `<div class="ipc-overdue">${fmt(p.m.overdue)} overdue</div>` : ""}
+        </div>`; }).join("")}</div>`;
+  const f = _invAllFilter.status;
+  const shown = rows.filter(r => f === "all" || invoiceEffectiveStatus(r.inv) === f)
+    .sort((a,b) => String(b.inv.issuedDate || "").localeCompare(String(a.inv.issuedDate || "")));
+  const chips = ["all","draft","sent","partial","overdue","paid"].map(s =>
+    `<button class="${f === s ? "active" : ""}" onclick="setInvAllFilter('status','${s}')">${{all:"All",draft:"Draft",sent:"Sent",partial:"Part-paid",overdue:"Overdue",paid:"Paid"}[s]}</button>`).join("");
+  const table = `
+    <div class="inv-chips">${chips}</div>
+    ${shown.length === 0 ? `<div class="inv-empty">No invoices match this filter.</div>` : `
+    <div class="inv-table-wrap"><table class="inv-list-table">
+      <thead><tr><th>Invoice #</th><th>Project</th><th>For</th><th>Issued</th><th>Status</th><th style="text-align:right;">Total</th><th style="text-align:right;">Balance</th></tr></thead>
+      <tbody>${shown.map(r => `
+        <tr onclick="openInvoiceFromAllProjects('${escapeHtmlAttr(r.p.id)}','${escapeHtmlAttr(r.inv.id)}')">
+          <td class="mono">${escapeHtml(r.inv.number || "—")}</td>
+          <td>${escapeHtml(r.p.address || r.p.name || "—")}</td>
+          <td>${escapeHtml(r.inv.milestoneLabel || "")}</td>
+          <td>${escapeHtml(r.inv.issuedDate || "—")}</td>
+          <td>${_invPill(r.inv)}</td>
+          <td class="money">${fmt(r.inv.total || 0)}</td>
+          <td class="money">${fmt(invoiceBalance(r.inv, r.p.st))}</td>
+        </tr>`).join("")}</tbody></table></div>`}`;
+  const tab = (k, lbl, n) => `<button class="${_invAllTab === k ? "active" : ""}" onclick="setInvAllTab('${k}')">${lbl} <b>${n}</b></button>`;
+  return `
+    ${stats}
+    <div class="inv-tabbar"><div class="inv-tabs">${tab("projects", "Projects", projs.length)}${tab("invoices", "All invoices", rows.length)}</div></div>
+    <div class="inv-panel">${_invAllTab === "invoices" ? table : cards}</div>`;
+}
+
+/* ---------- Record payment ---------- */
+function openRecordPayment(prefInvoiceId){
+  if(!Array.isArray(state.payments)) state.payments = [];
+  const open = invoicesInPayOrder();
+  const pref = prefInvoiceId ? _invList().find(i => i.id === prefInvoiceId) : null;
+  const defAmt = pref ? invoiceBalance(pref) : (open[0] ? invoiceBalance(open[0]) : 0);
+  const opts = [`<option value="auto">Automatically — oldest open invoices first</option>`]
+    .concat(open.map(i => `<option value="${escapeHtmlAttr(i.id)}" ${pref && pref.id === i.id ? "selected" : ""}>${escapeHtml(i.number || "")} · ${escapeHtml(i.milestoneLabel || "")} — $${invoiceBalance(i).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})} due</option>`))
+    .concat([`<option value="none">Don't apply — keep as credit on account</option>`]).join("");
+  let m = document.getElementById("recordPaymentModal");
+  if(!m){
+    m = document.createElement("div");
+    m.className = "modal-bg"; m.id = "recordPaymentModal";
+    m.onclick = (e) => { if(e.target === m) closeRecordPayment(); };
+    document.body.appendChild(m);
+  }
+  m.innerHTML = `
+    <div class="modal" style="max-width:560px;">
+      <h3><span>Record payment</span><span class="small-stack"><button class="ghost" onclick="closeRecordPayment()">Cancel</button></span></h3>
+      <div class="modal-body">
+        <div class="rp-grid">
+          <div><label>Amount received (incl. HST)</label><input type="text" inputmode="decimal" id="rpAmount" value="${defAmt ? defAmt.toFixed(2) : ""}" oninput="rpUpdateHst()"></div>
+          <div><label>Date</label><input type="date" id="rpDate" value="${todayISO()}"></div>
+          <div><label>Method</label><select id="rpMethod">${INV_PAY_METHODS.map(x => `<option>${x}</option>`).join("")}</select></div>
+          <div><label>Apply to</label><select id="rpApply">${opts}</select></div>
+          <div style="grid-column:1/-1;"><label>Note (optional)</label><input type="text" id="rpNote" placeholder="e.g. Cheque #1043 / cash received on site"></div>
+        </div>
+        <div class="rp-hst" id="rpHst"></div>
+        <div class="rp-actions"><button class="primary" onclick="saveRecordedPayment()">Save payment</button></div>
+      </div>
+    </div>`;
+  m.classList.add("show");
+  rpUpdateHst();
+}
+function rpUpdateHst(){
+  const el = document.getElementById("rpHst"); if(!el) return;
+  const a = parseFloat(String((document.getElementById("rpAmount") || {}).value || "").replace(/[^0-9.]/g, "")) || 0;
+  el.innerHTML = a > 0 ? `Includes HST of <b>$${(a * 0.13 / 1.13).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}</b> (13%) — remit as usual.` : "";
+}
+function closeRecordPayment(){ const m = document.getElementById("recordPaymentModal"); if(m) m.classList.remove("show"); }
+async function saveRecordedPayment(){
+  const amt = _r2(parseFloat(String(document.getElementById("rpAmount").value || "").replace(/[^0-9.]/g, "")) || 0);
+  if(!(amt > 0)){ await brandedAlert("Enter the amount received."); return; }
+  const p = {
+    id: "pay_" + Date.now().toString(36) + Math.floor(Math.random()*1e6).toString(36),
+    date: document.getElementById("rpDate").value || todayISO(),
+    amount: amt,
+    method: document.getElementById("rpMethod").value,
+    note: (document.getElementById("rpNote").value || "").trim(),
+    allocations: [], createdAt: new Date().toISOString()
+  };
+  const mode = document.getElementById("rpApply").value;
+  let left = amt;
+  const targets = mode === "auto" ? invoicesInPayOrder() : mode === "none" ? [] : _invList().filter(i => i.id === mode);
+  targets.forEach(inv => {
+    if(left <= 0.005) return;
+    const take = _r2(Math.min(left, invoiceBalance(inv)));
+    if(take > 0){ p.allocations.push({ invoiceId: inv.id, amount: take }); left = _r2(left - take); }
+  });
+  state.payments.push(p);
+  targets.forEach(syncInvoiceStatusFromPayments);
+  saveEstimate({ silent:true });
+  closeRecordPayment();
+  _invTab = "payments";
+  renderInvoicing();
+  const dm = document.getElementById("invoiceDetailModal");
+  if(dm && dm.classList.contains("show") && _detailInvId){ const inv = _invList().find(i => i.id === _detailInvId); if(inv) renderInvoiceDetail(inv); }
+  try { flash("Payment recorded" + (left > 0.005 ? " · $" + left.toFixed(2) + " kept as credit" : "")); } catch(e){}
+}
+async function deletePayment(payId){
+  if(!(await brandedConfirm("Delete this payment? Invoices it was applied to will show as unpaid again.", { confirmLabel: "Delete" }))) return;
+  const p = _payList().find(x => x.id === payId);
+  state.payments = _payList().filter(x => x.id !== payId);
+  ((p && p.allocations) || []).forEach(a => { const inv = _invList().find(i => i.id === a.invoiceId); if(inv && inv.status === "paid"){ inv.status = "sent"; inv.paidDate = ""; } if(inv) syncInvoiceStatusFromPayments(inv); });
+  saveEstimate({ silent:true });
+  renderInvoicing();
+}
+
+/* ---------- Project summary shown on milestone invoices ---------- */
+function invoiceProjectSummary(inv){
+  const m = projectMoney();
+  const others = activeInvoices().filter(i => i.id !== inv.id && i.status !== "draft" && String(i.createdAt || "") < String(inv.createdAt || ""));
+  const prevInvoiced = _r2(others.reduce((a, i) => a + (+i.total || 0), 0));
+  const paidToDate = m.collected;
+  const thisBal = invoiceBalance(inv);
+  const schedule = getMilestoneSchedule();
+  const idx = schedule.findIndex(s => s.id === inv.milestone);
+  return {
+    projectTotal: m.projectTotal, estTotal: m.estTotal, coTotal: m.coTotal,
+    prevInvoiced, thisTotal: +inv.total || 0, paidToDate,
+    remainingAfter: _r2(Math.max(0, m.projectTotal - paidToDate - thisBal)),
+    step: idx >= 0 ? (idx + 1) + " of " + schedule.length : "",
+    pct: inv.percent || 0
+  };
+}
+
 
 /* Put the user's workspace back to the estimate they were on before they
    drilled into another project's invoicing (borrow-and-restore). Their invoice
@@ -29229,271 +29680,10 @@ let _invAllFilter = {
    borrowed. */
 let _invoicingBorrowedSnapshot = null;
 
-function setInvoicingScope(scope){
-  _invoicingScope = (scope === "all") ? "all" : "current";
-  renderInvoicing();
-}
 function setInvAllFilter(field, value){
   if(field !== "status" && field !== "year") return;
   _invAllFilter[field] = value;
   renderInvoicing();
-}
-
-function renderInvoicing(){
-  const body = document.getElementById("invoicingBody");
-  if(!body) return;
-
-  // Top scope toggle — always shown. Cleanly delegates to the right renderer.
-  const scopeHtml = `
-    <div class="inv-scope-toggle" role="tablist" aria-label="Invoicing scope">
-      <button class="${_invoicingScope === "current" ? "active" : ""}" onclick="setInvoicingScope('current')" role="tab">Current Project</button>
-      <button class="${_invoicingScope === "all"     ? "active" : ""}" onclick="setInvoicingScope('all')"     role="tab">All Projects</button>
-    </div>
-  `;
-
-  if(_invoicingScope === "all"){
-    body.innerHTML = scopeHtml + renderInvoicingAllProjects();
-    return;
-  }
-
-  // ===== Current-project view (Phase 1 layout, unchanged) =====
-  const contract = invoiceContractValue();
-  const fmt = (n) => "$" + Math.round(n).toLocaleString("en-US");
-
-  // Milestone cards — schedule is dynamic (4 or 5 milestones depending on
-  // whether kitchen reno is part of the scope). See getMilestoneSchedule().
-  const schedule = getMilestoneSchedule();
-  const scheduleLabel = schedule.map(m => m.pct).join(" / ");
-  const milestonesHtml = schedule.map(m => {
-    const inv = findInvoiceByMilestone(m.id);
-    // When an invoice already exists, show its FROZEN percent + amount.
-    // This avoids a confusing card display if the user toggles kitchen
-    // (and therefore the live schedule percentages) after an invoice was
-    // issued — the card stays truthful about what was actually billed.
-    // No invoice → show the live schedule's projection.
-    const displayPct    = inv ? inv.percent : m.pct;
-    const displayAmount = inv ? (inv.amount || +(contract * (inv.percent/100)).toFixed(2))
-                              : +(contract * (m.pct/100)).toFixed(2);
-    const displayLabel  = inv ? (inv.milestoneLabel || m.label) : m.label;
-    // Effective status promotes "sent + past due" to "overdue" for display.
-    const status = inv ? invoiceEffectiveStatus(inv) : "uninvoiced";
-    const statusLabel = inv ? status.toUpperCase() : "Not yet invoiced";
-    const handler = inv
-      ? `openInvoiceDetail('${escapeHtmlAttr(inv.id)}')`
-      : `createMilestoneInvoice('${m.id}')`;
-    return `
-      <div class="inv-milestone-card" onclick="${handler}">
-        <div class="ms-pct">${displayPct}% &mdash; Milestone</div>
-        <div class="ms-name">${escapeHtml(displayLabel)}</div>
-        <div class="ms-amount">${fmt(displayAmount)}</div>
-        <div class="ms-status-row">
-          <span class="inv-status-pill ${status === "uninvoiced" ? "uninvoiced" : status}">${statusLabel}</span>
-          ${inv ? `<span style="font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums;">${escapeHtml(inv.number || "—")}</span>` : ""}
-        </div>
-      </div>
-    `;
-  }).join("");
-
-  // All invoices list — combines milestone + custom
-  const invoices = Array.isArray(state.invoices) ? state.invoices.slice() : [];
-  invoices.sort((a,b) => (a.createdAt || "").localeCompare(b.createdAt || ""));
-  const rowsHtml = invoices.length === 0
-    ? `<tr><td colspan="6" class="inv-list-empty">No invoices issued yet. Click a milestone above to create your first one.</td></tr>`
-    : invoices.map(inv => {
-        const effStatus = invoiceEffectiveStatus(inv);
-        return `
-        <tr onclick="openInvoiceDetail('${escapeHtmlAttr(inv.id)}')">
-          <td>${escapeHtml(inv.number || "—")}</td>
-          <td>${escapeHtml(inv.milestoneLabel || "Custom")}</td>
-          <td>${escapeHtml(inv.issuedDate || "—")}</td>
-          <td>${escapeHtml(inv.dueDate || "—")}</td>
-          <td><span class="inv-status-pill ${effStatus}">${escapeHtml(effStatus.toUpperCase())}</span></td>
-          <td class="money">${fmt(inv.total || 0)}</td>
-        </tr>
-      `;}).join("");
-
-  body.innerHTML = `
-    ${scopeHtml}
-    ${renderProjectFinancialsCard()}
-
-    <div class="inv-schedule-title">Payment Schedule &mdash; ${scheduleLabel}</div>
-    <div class="inv-milestones">${milestonesHtml}</div>
-
-    <div class="inv-list-title">
-      <span>All Invoices</span>
-      <button class="inv-add-custom" onclick="createCustomInvoice()">+ Add Custom Invoice</button>
-    </div>
-    <table class="inv-list-table">
-      <thead>
-        <tr>
-          <th>Invoice #</th>
-          <th>Milestone</th>
-          <th>Issued</th>
-          <th>Due</th>
-          <th>Status</th>
-          <th style="text-align:right;">Total (incl. HST)</th>
-        </tr>
-      </thead>
-      <tbody>${rowsHtml}</tbody>
-    </table>
-  `;
-}
-
-/* ===== All Projects dashboard ============================================
-   Cross-estimate invoice view. Walks every locally-cached estimate
-   (loadSavedList()) — which is kept in sync with the cloud "estimates"
-   table via the normal save/load path — and aggregates every invoice
-   on every estimate's state.invoices array.
-
-   YTD stats are scoped to the current calendar year. Filter chips refine
-   the table without affecting the YTD card numbers (so you can isolate
-   "overdue only" while still seeing the year's headline totals).        */
-function renderInvoicingAllProjects(){
-  const fmt = (n) => "$" + Math.round(n).toLocaleString("en-US");
-  const saved = (typeof loadSavedList === "function") ? loadSavedList() : [];
-
-  // Also include the live (unsaved or in-memory) state, so freshly issued
-  // invoices on the current project appear without needing a save cycle.
-  // Match by _id to dedupe against the saved copy.
-  const liveId = state && state._id;
-  const flat = [];   // [{est, inv}]
-  let foundLive = false;
-  saved.forEach(est => {
-    if(liveId && est.id === liveId){
-      foundLive = true;
-      // Use the LIVE state's invoices (more recent than what saved has)
-      const invs = (state && Array.isArray(state.invoices)) ? state.invoices : [];
-      invs.forEach(inv => flat.push({ est, inv, fromLive:true }));
-    } else {
-      const st  = est && est.state;
-      const invs = (st && Array.isArray(st.invoices)) ? st.invoices : [];
-      invs.forEach(inv => flat.push({ est, inv, fromLive:false }));
-    }
-  });
-  if(!foundLive && state && Array.isArray(state.invoices) && state.invoices.length > 0){
-    // Live estimate isn't in saved list yet — still surface its invoices.
-    const pseudoEst = {
-      id: state._id || "_live",
-      name: state.propName || state.propAddress || "Current (unsaved) project",
-      state
-    };
-    state.invoices.forEach(inv => flat.push({ est: pseudoEst, inv, fromLive:true }));
-  }
-
-  // ---- YTD stats (current calendar year, by issuedDate) ----
-  const thisYear = String(new Date().getFullYear());
-  let invoicedYtd = 0, collectedYtd = 0, outstandingYtd = 0, overdueYtd = 0, overdueCount = 0;
-  flat.forEach(({inv}) => {
-    if(!inv || inv.status === "void" || inv.status === "draft") return;
-    const yr = String((inv.issuedDate || "").slice(0,4));
-    if(yr !== thisYear) return;
-    const amt = +(inv.amount || 0);
-    invoicedYtd += amt;
-    if(inv.status === "paid") collectedYtd += amt;
-    else if(inv.status === "sent") outstandingYtd += amt;
-    if(isInvoiceOverdue(inv)){ overdueYtd += amt; overdueCount++; }
-  });
-
-  // ---- Available year filter values ----
-  const years = new Set();
-  flat.forEach(({inv}) => {
-    const yr = (inv.issuedDate || "").slice(0,4);
-    if(/^\d{4}$/.test(yr)) years.add(yr);
-  });
-  const yearList = Array.from(years).sort().reverse();
-
-  // ---- Build the YTD stats card ----
-  const statsHtml = `
-    <div class="inv-stats-grid">
-      <div class="inv-stat-card">
-        <div class="label">${thisYear} Invoiced</div>
-        <div class="value">${fmt(invoicedYtd)}</div>
-        <div class="sub">All issued invoices (sent + paid) YTD</div>
-      </div>
-      <div class="inv-stat-card">
-        <div class="label">${thisYear} Collected</div>
-        <div class="value">${fmt(collectedYtd)}</div>
-        <div class="sub">Marked Paid YTD</div>
-      </div>
-      <div class="inv-stat-card${outstandingYtd > 0 ? " warn" : ""}">
-        <div class="label">A/R Outstanding</div>
-        <div class="value">${fmt(outstandingYtd)}</div>
-        <div class="sub">Sent &amp; not yet paid (YTD)</div>
-      </div>
-      <div class="inv-stat-card${overdueYtd > 0 ? " warn" : ""}">
-        <div class="label">Overdue</div>
-        <div class="value">${fmt(overdueYtd)}</div>
-        <div class="sub">${overdueCount} invoice${overdueCount===1?"":"s"} past due date</div>
-      </div>
-    </div>
-  `;
-
-  // ---- Group invoices by project (estimate) → one card per project ----
-  const projMap = new Map();   // estId -> aggregate
-  flat.forEach(({est, inv, fromLive}) => {
-    if(!est) return;
-    const id = est.id;
-    if(!projMap.has(id)){
-      const st = est.state || {};
-      projMap.set(id, {
-        id,
-        fromLive: !!fromLive,
-        name:    (st.propName || est.name || "").trim(),
-        address: (st.propAddress || "").trim(),
-        invoiced: 0,      // issued (sent + paid) incl. HST
-        outstanding: 0,   // sent & not paid (incl. overdue), incl. HST
-        overdue: 0,
-        count: 0,
-        lastIssued: ""
-      });
-    }
-    const p = projMap.get(id);
-    p.fromLive = p.fromLive || !!fromLive;
-    p.count++;
-    if(inv){
-      const eff = invoiceEffectiveStatus(inv);
-      const tot = +(inv.total || 0);
-      if(inv.status === "sent" || inv.status === "paid") p.invoiced += tot;
-      if(inv.status === "sent") p.outstanding += tot;
-      if(eff === "overdue") p.overdue += tot;
-      const iss = inv.issuedDate || "";
-      if(iss > p.lastIssued) p.lastIssued = iss;
-    }
-  });
-
-  const projects = Array.from(projMap.values()).sort((a,b) => {
-    // Overdue projects first, then by most recent activity.
-    if((b.overdue>0) !== (a.overdue>0)) return (b.overdue>0) ? 1 : -1;
-    return (b.lastIssued || "").localeCompare(a.lastIssued || "");
-  });
-
-  const cardsHtml = projects.length === 0
-    ? `<div class="inv-proj-empty">No invoices yet on any project. Open a project's invoicing to create the first one.</div>`
-    : projects.map(p => {
-        const title = p.address || p.name || "Untitled project";
-        const sub   = (p.address && p.name) ? p.name : "";
-        return `
-          <div class="inv-proj-card ${p.overdue>0 ? "has-overdue" : ""}" onclick="openProjectInvoicing('${escapeHtmlAttr(p.id)}')" title="Open this project's invoicing">
-            <div class="ipc-name">${escapeHtml(title)}</div>
-            ${sub ? `<div class="ipc-sub">${escapeHtml(sub)}</div>` : ""}
-            <div class="ipc-stats">
-              <div class="ipc-stat"><div class="l">Invoiced</div><div class="v">${fmt(p.invoiced)}</div></div>
-              <div class="ipc-stat${p.outstanding>0 ? " warn" : ""}"><div class="l">Outstanding</div><div class="v">${fmt(p.outstanding)}</div></div>
-              <div class="ipc-stat"><div class="l">Invoices</div><div class="v">${p.count}</div></div>
-            </div>
-            ${p.overdue>0 ? `<div class="ipc-overdue">${fmt(p.overdue)} overdue</div>` : ""}
-          </div>
-        `;
-      }).join("");
-
-  return `
-    ${statsHtml}
-    <div class="inv-list-title">
-      <span>Projects</span>
-      <span style="font-size:11px;color:var(--muted);font-weight:500;letter-spacing:.04em;text-transform:none;">${projects.length} project${projects.length===1?"":"s"} with invoices</span>
-    </div>
-    <div class="inv-proj-grid">${cardsHtml}</div>
-  `;
 }
 
 /* Open a specific project's invoicing (current-project view) from a project
@@ -29510,13 +29700,11 @@ function openProjectInvoicing(estId){
     }
     loadEstimate(estId);   // no-ops safely if the id isn't in the saved list
   }
+  if(!Array.isArray(state.invoices)) state.invoices = [];
+  if(!Array.isArray(state.payments)) state.payments = [];
   _invoicingScope = "current";
-  const nameEl = document.getElementById("invModalEstimateName");
-  if(nameEl){
-    const addr = (state.propAddress || "").trim();
-    const nm   = (state.propName || "").trim();
-    nameEl.textContent = addr || nm || "Project";
-  }
+  _invTab = "schedule";
+  _setInvoicingHeading();
   renderInvoicing();
 }
 
@@ -29525,27 +29713,10 @@ function openProjectInvoicing(estId){
    first (otherwise openInvoiceDetail can't find the invoice on
    state.invoices). Uses the existing loadEstimate path. */
 async function openInvoiceFromAllProjects(estId, invId){
-  // Persist the user's desire to land on this invoice after the load swap.
-  try{ localStorage.setItem("rts_pending_invoice_open", invId); }catch(e){}
-  // Switch to the target estimate.
-  if(typeof loadEstimate === "function"){
-    loadEstimate(estId);
-  } else {
-    await brandedAlert("Can't switch projects — load helper not available.");
-    return;
-  }
-  // Defer the open to give the load + render cycle a tick.
-  setTimeout(() => {
-    try{
-      const pending = localStorage.getItem("rts_pending_invoice_open");
-      localStorage.removeItem("rts_pending_invoice_open");
-      if(pending){
-        _invoicingScope = "current";  // bring them back to per-project view
-        renderInvoicing();
-        openInvoiceDetail(pending);
-      }
-    }catch(e){}
-  }, 250);
+  openProjectInvoicing(estId);        // borrow-and-restore safe
+  _invTab = "invoices";
+  renderInvoicing();
+  openInvoiceDetail(invId);
 }
 
 /* Create a new milestone invoice (called from clicking a milestone card
@@ -29578,6 +29749,7 @@ async function createMilestoneInvoice(milestoneId){
   };
   if(!Array.isArray(state.invoices)) state.invoices = [];
   state.invoices.push(inv);
+  applyCreditToInvoice(inv);   // credit on account (e.g. an early payment) goes here first
   saveEstimate({ silent:true });
   renderInvoicing();
   openInvoiceDetail(inv.id);
@@ -29602,7 +29774,8 @@ function recomputeInvoiceFromLineItems(inv){
 /* Create a new custom invoice (free-form line items, not tied to a milestone).
    Opens straight into the editor with one blank line item to fill in. */
 async function createCustomInvoice(){
-  const name = await brandedPrompt("Custom invoice name (e.g. \"Change Order #1 — Add island countertop\"):", "Change Order", { title: "New custom invoice" });
+  const n = activeInvoices().filter(isChangeOrder).length + 1;
+  const name = await brandedPrompt("Name this change order or extra (e.g. \"Add pot filler\"). It's billed on its own invoice, plus HST, and added to the project total.", "Change Order #" + n, { title: "New change order / extra" });
   if(!name) return;
   const now = new Date().toISOString();
   const issued = todayISO();
@@ -29673,8 +29846,10 @@ function updateInvoiceLineItem(invId, lineId, field, value){
 }
 
 /* Open the detail modal for an invoice (by id). */
+let _detailInvId = null;
 async function openInvoiceDetail(invoiceId){
   const inv = (state.invoices || []).find(x => x.id === invoiceId);
+  _detailInvId = invoiceId;
   if(!inv){ await brandedAlert("Invoice not found."); return; }
   const heading = document.getElementById("invDetailHeading");
   if(heading) heading.textContent = "Invoice " + (inv.number || "—") + " — " + (inv.milestoneLabel || "");
@@ -29777,6 +29952,18 @@ function renderInvoiceDetail(inv){
 
   const isVoid = inv.status === "void";
   const disabled = isVoid ? "disabled" : "";
+  const _paid = paidOnInvoice(inv);
+  const _bal = invoiceBalance(inv);
+  const _ps = isCustom ? null : invoiceProjectSummary(inv);
+  const _psHtml = _ps ? `
+    <div class="inv-proj-summary">
+      <div class="ips-title">Where this invoice fits${_ps.step ? ` <span>· milestone ${_ps.step} · ${_ps.pct}% of the estimate</span>` : ""}</div>
+      <div class="ips-row"><span>Total project cost (incl. HST)${_ps.coTotal > 0 ? ` <em>estimate ${fmtMoneyDec(_ps.estTotal)} + changes ${fmtMoneyDec(_ps.coTotal)}</em>` : ""}</span><b>${fmtMoneyDec(_ps.projectTotal)}</b></div>
+      <div class="ips-row"><span>Previously invoiced</span><b>${fmtMoneyDec(_ps.prevInvoiced)}</b></div>
+      <div class="ips-row hl"><span>This invoice</span><b>${fmtMoneyDec(_ps.thisTotal)}</b></div>
+      <div class="ips-row"><span>Paid to date</span><b>${fmtMoneyDec(_ps.paidToDate)}</b></div>
+      <div class="ips-row"><span>Remaining after this invoice is paid</span><b>${fmtMoneyDec(_ps.remainingAfter)}</b></div>
+    </div>` : "";
 
   body.innerHTML = `
     ${inv.milestoneDesc ? `
@@ -29789,7 +29976,7 @@ function renderInvoiceDetail(inv){
     <div class="inv-detail-meta">
       <div>
         <label>Invoice #</label>
-        <input type="text" value="${escapeHtmlAttr(inv.number || '')}" ${disabled} oninput="updateInvoiceField('${inv.id}','number',this.value)">
+        <input type="text" value="${escapeHtmlAttr(inv.number || '')}" readonly title="Generated automatically" style="background:#1a1a1a;color:var(--ink);cursor:default;font-family:ui-monospace,Menlo,monospace;letter-spacing:.04em;">
       </div>
       <div>
         <label>Status</label>
@@ -29816,13 +30003,12 @@ function renderInvoiceDetail(inv){
         <label>HST Rate (decimal)</label>
         <input type="number" min="0" step="0.01" value="${escapeHtmlAttr(inv.hstRate || 0.13)}" ${disabled} oninput="updateInvoiceHstRate('${inv.id}', this.value)">
       </div>
-      <div>
-        <label>Paid Date</label>
-        <input type="date" value="${escapeHtmlAttr(inv.paidDate || '')}" ${disabled} onchange="updateInvoiceField('${inv.id}','paidDate',this.value)">
-      </div>
-      <div>
-        <label>Payment Method</label>
-        <input type="text" placeholder="e-transfer / cheque / wire" value="${escapeHtmlAttr(inv.paymentMethod || '')}" ${disabled} oninput="updateInvoiceField('${inv.id}','paymentMethod',this.value)">
+      <div style="grid-column:span 2;">
+        <label>Payments</label>
+        <div class="inv-paybox">
+          <span>Paid <b>${fmtMoneyDec(_paid)}</b> &middot; Balance <b>${fmtMoneyDec(_bal)}</b>${inv.paidDate && _bal <= 0.005 ? ` &middot; paid ${escapeHtml(inv.paidDate)}` : ""}</span>
+          <button ${isVoid || _bal <= 0.005 ? "disabled" : ""} onclick="openRecordPayment('${inv.id}')">+ Record payment</button>
+        </div>
       </div>
     </div>
 
@@ -29851,8 +30037,11 @@ function renderInvoiceDetail(inv){
     <div class="inv-totals">
       <div class="inv-totals-row"><span>Subtotal (pre-HST)</span><span class="v" id="inv-detail-subtotal">${fmtMoneyDec(inv.amount || 0)}</span></div>
       <div class="inv-totals-row"><span>HST (${((inv.hstRate||0)*100).toFixed(1)}%)</span><span class="v" id="inv-detail-hst">${fmtMoneyDec(inv.hstAmount || 0)}</span></div>
-      <div class="inv-totals-row grand"><span>Total Due</span><span class="v" id="inv-detail-total">${fmtMoneyDec(inv.total || 0)}</span></div>
+      <div class="inv-totals-row ${_paid > 0.005 ? "" : "grand"}"><span>${_paid > 0.005 ? "Invoice total" : "Total Due"}</span><span class="v" id="inv-detail-total">${fmtMoneyDec(inv.total || 0)}</span></div>
+      ${_paid > 0.005 ? `<div class="inv-totals-row"><span>Payments received</span><span class="v">−${fmtMoneyDec(_paid)}</span></div>
+      <div class="inv-totals-row grand"><span>Balance Due</span><span class="v">${fmtMoneyDec(_bal)}</span></div>` : ""}
     </div>
+    ${_psHtml}
 
     <div class="inv-linked-expenses">
       <div class="lex-title">Linked Expenses</div>
@@ -29870,7 +30059,7 @@ function renderInvoiceDetail(inv){
       <button onclick="previewInvoice('${inv.id}')" title="Preview the invoice exactly as the client will see it">Preview</button>
       <button onclick="downloadInvoicePdf('${inv.id}')">Download PDF</button>
       <button onclick="markInvoiceSent('${inv.id}')" ${inv.status === "sent" || inv.status === "paid" ? "disabled" : ""}>Mark Sent</button>
-      <button onclick="markInvoicePaid('${inv.id}')" ${inv.status === "paid" || isVoid ? "disabled" : ""}>Mark Paid</button>
+      <button onclick="openRecordPayment('${inv.id}')" ${_bal <= 0.005 || isVoid ? "disabled" : ""}>Record Payment</button>
       <button class="ghost" style="margin-left:auto;" onclick="voidInvoice('${inv.id}')" ${isVoid ? "disabled" : ""}>Void Invoice</button>
       <button class="ghost danger" onclick="deleteInvoice('${inv.id}')">Delete</button>
     </div>
@@ -29924,13 +30113,9 @@ function markInvoiceSent(invId){
 }
 
 function markInvoicePaid(invId){
-  const inv = (state.invoices || []).find(x => x.id === invId);
-  if(!inv) return;
-  inv.status = "paid";
-  if(!inv.paidDate) inv.paidDate = todayISO();
-  inv.updatedAt = new Date().toISOString();
-  saveEstimate({ silent:true });
-  renderInvoiceDetail(inv);
+  // Payments are recorded (amount, date, method) so partial and cash
+  // payments are tracked properly. Prefills the invoice's balance.
+  openRecordPayment(invId);
 }
 
 async function voidInvoice(invId){
@@ -29995,6 +30180,8 @@ function buildInvoicePdfEl(inv){
     }))
     .filter(s => s.name || s.email || s.phone);
   const fmtMoneyDec = (n) => "$" + (Math.round(n*100)/100).toLocaleString("en-US", { minimumFractionDigits:2, maximumFractionDigits:2 });
+  const _pdfPaid = paidOnInvoice(inv);
+  const _pdfPs = inv.milestone === "custom" ? null : invoiceProjectSummary(inv);
 
   // Line-item invoices (custom) render one table row per item; everything else
   // (milestone invoices) renders the single scope-of-work row.
@@ -30079,9 +30266,25 @@ function buildInvoicePdfEl(inv){
       <div style="min-width:280px;">
         <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;"><span style="color:#555;">Subtotal</span><span style="font-weight:700;font-variant-numeric:tabular-nums;">${fmtMoneyDec(inv.amount || 0)}</span></div>
         <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;"><span style="color:#555;">HST (${((inv.hstRate||0)*100).toFixed(1)}%)</span><span style="font-weight:700;font-variant-numeric:tabular-nums;">${fmtMoneyDec(inv.hstAmount || 0)}</span></div>
-        <div style="display:flex;justify-content:space-between;padding:10px 0 4px;background:#fbf5e6;margin-top:4px;border-radius:4px;padding-left:10px;padding-right:10px;"><span style="font-weight:800;font-size:14px;">Total Due</span><span style="font-weight:800;font-size:15px;color:#0a0a0a;font-variant-numeric:tabular-nums;">${fmtMoneyDec(inv.total || 0)}</span></div>
+        ${_pdfPaid > 0.005 ? `
+        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;"><span style="color:#555;">Invoice total</span><span style="font-weight:700;font-variant-numeric:tabular-nums;">${fmtMoneyDec(inv.total || 0)}</span></div>
+        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;"><span style="color:#555;">Payments received</span><span style="font-weight:700;font-variant-numeric:tabular-nums;">−${fmtMoneyDec(_pdfPaid)}</span></div>` : ""}
+        <div style="display:flex;justify-content:space-between;padding:10px 0 4px;background:#fbf5e6;margin-top:4px;border-radius:4px;padding-left:10px;padding-right:10px;"><span style="font-weight:800;font-size:14px;">${_pdfPaid > 0.005 ? "Balance Due" : "Total Due"}</span><span style="font-weight:800;font-size:15px;color:#0a0a0a;font-variant-numeric:tabular-nums;">${fmtMoneyDec(_pdfPaid > 0.005 ? invoiceBalance(inv) : (inv.total || 0))}</span></div>
       </div>
     </div>
+    ${_pdfPs ? `
+    <div style="border:1px solid #e6dcc2;border-radius:6px;margin-bottom:16px;overflow:hidden;">
+      <div style="background:#0a0a0a;color:#d4af6a;font-size:10px;letter-spacing:.16em;text-transform:uppercase;font-weight:700;padding:8px 12px;">Project Summary${_pdfPs.step ? ` <span style="color:#bfa46a;letter-spacing:.08em;">&middot; Milestone ${_pdfPs.step} &middot; ${_pdfPs.pct}%</span>` : ""}</div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px;">
+        ${[
+          ["Total project cost (incl. HST)", _pdfPs.projectTotal, false],
+          ["Previously invoiced", _pdfPs.prevInvoiced, false],
+          ["This invoice", _pdfPs.thisTotal, true],
+          ["Paid to date", _pdfPs.paidToDate, false],
+          ["Remaining after this invoice is paid", _pdfPs.remainingAfter, false]
+        ].map(r => `<tr style="${r[2] ? "background:#fbf5e6;" : ""}"><td style="padding:7px 12px;border-top:1px solid #eee;color:${r[2] ? "#0a0a0a" : "#555"};font-weight:${r[2] ? 700 : 400};">${r[0]}</td><td style="padding:7px 12px;border-top:1px solid #eee;text-align:right;font-weight:700;font-variant-numeric:tabular-nums;">${fmtMoneyDec(r[1])}</td></tr>`).join("")}
+      </table>
+    </div>` : ""}
     <!-- Payable To — the client uses this block to know how to send payment. -->
     <div style="background:#0a0a0a;color:#ffffff;border-radius:6px;padding:14px 16px;margin-bottom:16px;">
       <div style="font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:#d4af6a;font-weight:700;margin-bottom:8px;">Payable To</div>
