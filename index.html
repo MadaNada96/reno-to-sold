@@ -720,6 +720,14 @@
   .rp-hst b{color:var(--ink);}
   .rp-actions{display:flex;justify-content:flex-end;margin-top:14px;}
   @media (max-width:540px){ .rp-grid{grid-template-columns:1fr;} }
+  .inv-credit-btn{font-size:11px;padding:4px 10px;border-radius:99px;border:1px solid #2e7e4e;background:#0f2918;color:#5fce86;cursor:pointer;white-space:nowrap;}
+  .inv-credit-btn:hover{background:#163a23;}
+  .inv-credit-bar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 12px;margin-bottom:10px;border:1px solid #2e7e4e;border-radius:8px;background:rgba(95,206,134,.07);font-size:12.5px;color:var(--ink);}
+  .inv-credit-bar b{color:#5fce86;}
+  .inv-receipt-tog{display:inline-flex;align-items:center;gap:5px;text-transform:none;letter-spacing:0;font-weight:500;font-size:11px;color:var(--muted);white-space:nowrap;}
+  .inv-receipt-tog input{margin:0;width:13px !important;height:13px;flex:none;accent-color:var(--gold);}
+  .inv-receipt-tog label{margin:0;font-size:11px;text-transform:none;letter-spacing:0;cursor:pointer;color:var(--muted);}
+  .inv-receipt-val{padding:8px 10px;border:1px solid var(--line-strong);border-radius:8px;background:#0a0a0e;color:var(--gold-bright);font-weight:700;font-size:13px;}
   .inv-paid-status{padding:7px 10px;border:1px solid #2e7e4e;border-radius:8px;background:#0f2918;color:#5fce86;font-weight:700;font-size:13px;}
   .inv-paid-status span{font-weight:400;color:var(--muted);font-size:11px;}
   .inv-paybox{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:7px 10px;border:1px solid var(--line-strong);border-radius:8px;background:#0a0a0e;font-size:12.5px;}
@@ -16998,7 +17006,7 @@ const OFFICE_EMAIL = "renotosold@gmail.com";
 const OFFICE_COMPANY = "Reno to Sold Inc.";
 
 /* ---------- Supabase cross-device sync ---------- */
-window.RTS_BUILD = "2026-11-01-v21c-payments-fix";
+window.RTS_BUILD = "2026-11-02-v22-credits-receipt-changes";
 console.log("[build] " + window.RTS_BUILD);
 const SUPABASE_URL = "https://icrnvnmvcdpmhnjorefs.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imljcm52bm12Y2RwbWhuam9yZWZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2ODQwMDgsImV4cCI6MjA5NDI2MDAwOH0.YoeBndWsky8vAW6mLeMziPeH2j2C6c_3VdAvOG_i0kA";
@@ -28888,6 +28896,30 @@ function reconcileInvoicePayments(){
   return true;
 }
 
+/* "Upon receipt" due dates: dueOnReceipt flag, dueDate kept = issuedDate. */
+function invDueLabel(inv){ return inv && inv.dueOnReceipt ? "Upon receipt" : ((inv && inv.dueDate) || "—"); }
+function setInvoiceDueOnReceipt(invId, on){
+  const inv = _invList().find(x => x.id === invId); if(!inv) return;
+  inv.dueOnReceipt = !!on;
+  inv.dueDate = on ? (inv.issuedDate || todayISO()) : addDaysISO(inv.issuedDate || todayISO(), INVOICE_DUE_DAYS_DEFAULT);
+  inv.updatedAt = new Date().toISOString();
+  saveEstimate({ silent:true });
+  renderInvoiceDetail(inv);
+}
+/* Put available credit on account toward one invoice (oldest credit first). */
+function applyCreditToInvoiceUI(invId){
+  const inv = _invList().find(x => x.id === invId); if(!inv) return;
+  const used = applyCreditToInvoice(inv);
+  if(used > 0){
+    if(inv.status === "draft" && invoiceBalance(inv) > 0.005) inv.status = "sent";
+    saveEstimate({ silent:true });
+    try { flash("Applied $" + used.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}) + " credit to " + (inv.number || "invoice")); } catch(e){}
+  }
+  renderInvoicing();
+  const dm = document.getElementById("invoiceDetailModal");
+  if(dm && dm.classList.contains("show") && _detailInvId === invId) renderInvoiceDetail(inv);
+}
+
 function _releaseAllocations(invId){
   _payList().forEach(p => { if(Array.isArray(p.allocations)) p.allocations = p.allocations.filter(a => a.invoiceId !== invId); });
 }
@@ -29023,7 +29055,7 @@ async function openEmailInvoiceModal(invId){
 
   document.getElementById("emailInvBody").value =
     `${greeting}\n\n`+
-    `Please find attached invoice ${inv.number || ""} for ${amtLine} (incl. HST), due ${inv.dueDate || "on receipt"}.`+
+    `Please find attached invoice ${inv.number || ""} for ${amtLine} (incl. HST), due ${inv.dueOnReceipt ? "upon receipt" : (inv.dueDate || "upon receipt")}.`+
     `${milestoneLine}\n\n`+
     `Payment can be made by cheque (payable to RENO TO SOLD INC.) or e-transfer to renotosold@gmail.com.\n\n`+
     `Thanks,\nMohamed Nada\nReno to Sold Inc.`;
@@ -29473,20 +29505,29 @@ function renderInvoicing(){
   const payments = _payList().slice().sort((a,b) => String(b.date || "").localeCompare(String(a.date || "")));
   const cos = activeInvoices().filter(isChangeOrder);
 
-  const invRows = invoices.length === 0
-    ? `<div class="inv-empty">No invoices yet. Open the Payment schedule tab and click a milestone to create the first one.</div>`
-    : `<div class="inv-table-wrap"><table class="inv-list-table">
-        <thead><tr><th>Invoice #</th><th>For</th><th>Issued</th><th>Due</th><th>Status</th><th style="text-align:right;">Total</th><th style="text-align:right;">Balance</th></tr></thead>
-        <tbody>${invoices.map(inv => `
-          <tr onclick="openInvoiceDetail('${escapeHtmlAttr(inv.id)}')">
-            <td class="mono">${escapeHtml(inv.number || "—")}</td>
-            <td>${isChangeOrder(inv) ? `<span class="inv-co-tag">Change</span> ` : ""}${escapeHtml(inv.milestoneLabel || "Custom")}</td>
-            <td>${escapeHtml(inv.issuedDate || "—")}</td>
-            <td>${escapeHtml(inv.dueDate || "—")}</td>
-            <td>${_invPill(inv)}</td>
-            <td class="money">${fmt(inv.total || 0)}</td>
-            <td class="money">${inv.status === "void" ? "—" : fmt(invoiceBalance(inv))}</td>
-          </tr>`).join("")}</tbody></table></div>`;
+  const credit = unappliedCredit();
+  const invTable = (list, emptyMsg) => list.length === 0 ? `<div class="inv-empty">${emptyMsg}</div>` : `
+    <div class="inv-table-wrap"><table class="inv-list-table">
+      <thead><tr><th>Invoice #</th><th>For</th><th>Issued</th><th>Due</th><th>Status</th><th style="text-align:right;">Total</th><th style="text-align:right;">Balance</th>${credit > 0.005 ? "<th></th>" : ""}</tr></thead>
+      <tbody>${list.map(inv => {
+        const bal = inv.status === "void" ? 0 : invoiceBalance(inv);
+        return `
+        <tr onclick="openInvoiceDetail('${escapeHtmlAttr(inv.id)}')">
+          <td class="mono">${escapeHtml(inv.number || "—")}</td>
+          <td>${escapeHtml(inv.milestoneLabel || "Custom")}</td>
+          <td>${escapeHtml(inv.issuedDate || "—")}</td>
+          <td>${escapeHtml(invDueLabel(inv))}</td>
+          <td>${_invPill(inv)}</td>
+          <td class="money">${fmt(inv.total || 0)}</td>
+          <td class="money">${inv.status === "void" ? "—" : fmt(bal)}</td>
+          ${credit > 0.005 ? `<td style="text-align:right;">${bal > 0.005 ? `<button class="inv-credit-btn" onclick="event.stopPropagation();applyCreditToInvoiceUI('${escapeHtmlAttr(inv.id)}')">Apply credit</button>` : ""}</td>` : ""}
+        </tr>`; }).join("")}</tbody></table></div>`;
+  const creditBar = credit > 0.005
+    ? `<div class="inv-credit-bar"><span><b>${fmt(credit)}</b> credit on account</span><span class="inv-sub">Use “Apply credit” on an invoice to put it toward that invoice.</span></div>` : "";
+  const invRows = creditBar + invTable(invoices.filter(i => !isChangeOrder(i)),
+    "No invoices yet. Open the Payment schedule tab and click a milestone to create the first one.");
+  const coRows = creditBar + invTable(invoices.filter(isChangeOrder),
+    "No change orders yet. Use “+ Change order / extra” to bill extra work. Each one is its own invoice (plus HST) and is added to the project total.");
 
   const invById = {}; _invList().forEach(i => invById[i.id] = i);
   const payRows = payments.length === 0
@@ -29507,9 +29548,9 @@ function renderInvoicing(){
 
   const tab = (k, lbl, n) => `<button class="${_invTab === k ? "active" : ""}" onclick="setInvTab('${k}')">${lbl}${n != null ? ` <b>${n}</b>` : ""}</button>`;
   const panel = _invTab === "invoices" ? invRows
-    : _invTab === "payments" ? payRows
-    : `<div class="inv-milestones">${milestonesHtml}</div>
-       ${cos.length ? `<div class="inv-co-strip">Change orders: ${cos.map(c => `<a onclick="openInvoiceDetail('${escapeHtmlAttr(c.id)}')">${escapeHtml(c.milestoneLabel || "Change order")} · ${fmt(c.total || 0)}</a>`).join("")}</div>` : ""}`;
+    : _invTab === "changes" ? coRows
+    : _invTab === "payments" ? creditBar + payRows
+    : `<div class="inv-milestones">${milestonesHtml}</div>`;
 
   body.innerHTML = `
     ${back}
@@ -29517,7 +29558,8 @@ function renderInvoicing(){
     <div class="inv-tabbar">
       <div class="inv-tabs">
         ${tab("schedule", "Payment schedule")}
-        ${tab("invoices", "Invoices", invoices.length)}
+        ${tab("invoices", "Invoices", invoices.filter(i => !isChangeOrder(i)).length)}
+        ${tab("changes", "Change orders", invoices.filter(isChangeOrder).length)}
         ${tab("payments", "Payments", payments.length)}
       </div>
       <div class="inv-tab-actions">
@@ -29852,6 +29894,7 @@ function recomputeInvoiceFromLineItems(inv){
    Opens straight into the editor with one blank line item to fill in. */
 async function createCustomInvoice(){
   const n = activeInvoices().filter(isChangeOrder).length + 1;
+  _invTab = "changes";
   const name = await brandedPrompt("Name this change order or extra (e.g. \"Add pot filler\"). It's billed on its own invoice, plus HST, and added to the project total.", "Change Order #" + n, { title: "New change order / extra" });
   if(!name) return;
   const now = new Date().toISOString();
@@ -30069,8 +30112,11 @@ function renderInvoiceDetail(inv){
         <input type="date" value="${escapeHtmlAttr(inv.issuedDate || '')}" ${disabled} onchange="updateInvoiceField('${inv.id}','issuedDate',this.value)">
       </div>
       <div>
-        <label>Due Date</label>
-        <input type="date" value="${escapeHtmlAttr(inv.dueDate || '')}" ${disabled} onchange="updateInvoiceField('${inv.id}','dueDate',this.value)">
+        <label style="display:flex;justify-content:space-between;align-items:center;gap:6px;">Due Date
+          <span class="inv-receipt-tog"><input type="checkbox" id="dor-${inv.id}" ${inv.dueOnReceipt ? "checked" : ""} ${disabled} onchange="setInvoiceDueOnReceipt('${inv.id}', this.checked)"><label for="dor-${inv.id}">Upon receipt</label></span></label>
+        ${inv.dueOnReceipt
+          ? `<div class="inv-receipt-val">Upon receipt</div>`
+          : `<input type="date" value="${escapeHtmlAttr(inv.dueDate || '')}" ${disabled} onchange="updateInvoiceField('${inv.id}','dueDate',this.value)">`}
       </div>
       <div>
         <label>Amount $ (pre-HST)${isCustom ? ` <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;">— auto from line items</span>` : ""}</label>
@@ -30084,7 +30130,10 @@ function renderInvoiceDetail(inv){
         <label>Payments</label>
         <div class="inv-paybox">
           <span>Paid <b>${fmtMoneyDec(_paid)}</b> &middot; Balance <b>${fmtMoneyDec(_bal)}</b>${inv.paidDate && _bal <= 0.005 ? ` &middot; paid ${escapeHtml(inv.paidDate)}` : ""}</span>
-          <button ${isVoid || _bal <= 0.005 ? "disabled" : ""} onclick="openRecordPayment('${inv.id}')">+ Record payment</button>
+          <span style="display:flex;gap:6px;">
+            ${unappliedCredit() > 0.005 && _bal > 0.005 && !isVoid ? `<button class="inv-credit-btn" onclick="applyCreditToInvoiceUI('${inv.id}')">Apply credit ($${unappliedCredit().toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})})</button>` : ""}
+            <button ${isVoid || _bal <= 0.005 ? "disabled" : ""} onclick="openRecordPayment('${inv.id}')">+ Record payment</button>
+          </span>
         </div>
       </div>
     </div>
@@ -30148,6 +30197,7 @@ function updateInvoiceField(invId, field, value){
   const inv = (state.invoices || []).find(x => x.id === invId);
   if(!inv) return;
   inv[field] = value;
+  if(field === "issuedDate" && inv.dueOnReceipt) inv.dueDate = value;
   inv.updatedAt = new Date().toISOString();
   saveEstimate({ silent:true });
 }
@@ -30316,7 +30366,7 @@ function buildInvoicePdfEl(inv){
         <div style="font-size:11px;color:#555;margin-top:8px;">Issued</div>
         <div style="font-size:12px;font-weight:600;color:#0a0a0a;">${escapeHtml(inv.issuedDate || "—")}</div>
         <div style="font-size:11px;color:#555;margin-top:6px;">Due</div>
-        <div style="font-size:12px;font-weight:600;color:#0a0a0a;">${escapeHtml(inv.dueDate || "—")}</div>
+        <div style="font-size:12px;font-weight:600;color:#0a0a0a;">${escapeHtml(invDueLabel(inv))}</div>
       </div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:16px;">
