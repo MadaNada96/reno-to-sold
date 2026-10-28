@@ -17011,7 +17011,7 @@ const OFFICE_EMAIL = "renotosold@gmail.com";
 const OFFICE_COMPANY = "Reno to Sold Inc.";
 
 /* ---------- Supabase cross-device sync ---------- */
-window.RTS_BUILD = "2026-11-03-v23-invoice-credits";
+window.RTS_BUILD = "2026-11-04-v23c-invoice-layout";
 console.log("[build] " + window.RTS_BUILD);
 const SUPABASE_URL = "https://icrnvnmvcdpmhnjorefs.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imljcm52bm12Y2RwbWhuam9yZWZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2ODQwMDgsImV4cCI6MjA5NDI2MDAwOH0.YoeBndWsky8vAW6mLeMziPeH2j2C6c_3VdAvOG_i0kA";
@@ -30186,8 +30186,6 @@ function renderInvoiceDetail(inv){
     <div class="inv-proj-summary">
       <div class="ips-title">Where this invoice fits${_ps.step ? ` <span>· milestone ${_ps.step} · ${_ps.pct}% of the estimate</span>` : ""}</div>
       <div class="ips-row"><span>Total project cost (incl. HST)${_ps.coTotal > 0 ? ` <em>estimate ${fmtMoneyDec(_ps.estTotal)} + changes ${fmtMoneyDec(_ps.coTotal)}</em>` : ""}</span><b>${fmtMoneyDec(_ps.projectTotal)}</b></div>
-      <div class="ips-row"><span>Previously invoiced</span><b>${fmtMoneyDec(_ps.prevInvoiced)}</b></div>
-      <div class="ips-row hl"><span>This invoice</span><b>${fmtMoneyDec(_ps.thisTotal)}</b></div>
       <div class="ips-row"><span>Paid to date</span><b>${fmtMoneyDec(_ps.paidToDate)}</b></div>
       <div class="ips-row"><span>Remaining after this invoice is paid</span><b>${fmtMoneyDec(_ps.remainingAfter)}</b></div>
     </div>` : "";
@@ -30422,6 +30420,23 @@ function buildInvoicePdfEl(inv){
   const _pdfPaid = paidOnInvoice(inv);
   const _pdfCredits = (inv.credits || []).filter(c => +c.amount > 0);
   const _pdfPs = inv.milestone === "custom" ? null : invoiceProjectSummary(inv);
+  // Label/value rows used by both summary cards (identical styling = symmetry).
+  const _sumRows = (rows) => rows.map(r => `
+    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:14px;padding:7px 12px;border-top:1px solid #eee;font-size:12px;">
+      <span style="color:#555;">${r[0]}</span><span style="font-weight:700;white-space:nowrap;">${r[1]}</span>
+    </div>`).join("");
+  // Big, unmistakable "what is this invoice for" band.
+  const _bannerKicker = _pdfPs
+    ? (_pdfPs.step ? "Milestone " + _pdfPs.step : "Milestone") + (_pdfPs.pct ? " &middot; " + _pdfPs.pct + "% of estimate" : "")
+    : (inv.milestone === "custom" ? "Change order / extra" : "Invoice");
+  const _banner = `
+    <div style="display:flex;align-items:center;gap:14px;border:1.5px solid #d4af6a;background:#fbf5e6;border-radius:6px;padding:11px 14px;margin-bottom:14px;">
+      ${_pdfPs && _pdfPs.step ? `<div style="flex:none;width:46px;height:46px;border-radius:50%;background:#0a0a0a;color:#d4af6a;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;">${escapeHtml(String(_pdfPs.step).split(" ")[0])}</div>` : ""}
+      <div style="min-width:0;">
+        <div style="font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#a8853f;font-weight:700;">${_bannerKicker}</div>
+        <div style="font-size:16px;font-weight:800;color:#0a0a0a;line-height:1.3;">${escapeHtml(inv.milestoneLabel || "Invoice")}</div>
+      </div>
+    </div>`;
 
   // Line-item invoices (custom) render one table row per item; everything else
   // (milestone invoices) renders the single scope-of-work row.
@@ -30431,7 +30446,7 @@ function buildInvoicePdfEl(inv){
   const hasLineItems = lineItems.length > 0;
   let bodyRows;
   if(hasLineItems){
-    const caption = (inv.milestoneLabel || "").trim();
+    const caption = "";   // the name is already in the banner above the table
     bodyRows =
       (caption ? `<tr><td colspan="2" style="padding:10px 12px;border-bottom:2px solid #0a0a0a;font-weight:700;font-size:12.5px;color:#0a0a0a;">${escapeHtml(caption)}</td></tr>` : "") +
       lineItems.map(li => `
@@ -30449,7 +30464,6 @@ function buildInvoicePdfEl(inv){
             <div style="font-size:11.5px;color:#3b2e10;line-height:1.5;background:#fbf5e6;border-left:3px solid #d4af6a;padding:7px 10px;margin-top:6px;">
               This invoice is associated with the scope of work approved and signed by all parties in the estimate for this project.
             </div>
-            ${inv.percent ? `<div style="font-size:10.5px;color:#a8853f;margin-top:6px;letter-spacing:.10em;text-transform:uppercase;">${inv.percent}% of contract</div>` : ""}
           </td>
           <td style="padding:14px 12px;border-bottom:1px solid #eee;text-align:right;font-weight:700;font-variant-numeric:normal;font-size:14px;color:#0a0a0a;vertical-align:top;">${fmtMoneyDec(inv.amount || 0)}</td>
         </tr>`;
@@ -30493,7 +30507,8 @@ function buildInvoicePdfEl(inv){
         <div style="font-size:13px;font-weight:700;color:#0a0a0a;">${escapeHtml(propAddr || "—")}</div>
       </div>
     </div>
-    <table style="width:100%;border-collapse:collapse;margin-bottom:18px;">
+    ${_banner}
+    <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
       <thead>
         <tr style="background:#0a0a0a;color:#d4af6a;">
           <th style="text-align:left;padding:10px 12px;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;font-weight:700;">Description</th>
@@ -30502,31 +30517,33 @@ function buildInvoicePdfEl(inv){
       </thead>
       <tbody>${bodyRows}</tbody>
     </table>
-    <div style="display:flex;justify-content:flex-end;margin-bottom:18px;">
-      <div style="min-width:280px;">
-        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;"><span style="color:#555;">Subtotal</span><span style="font-weight:700;font-variant-numeric:normal;">${fmtMoneyDec(inv.amount || 0)}</span></div>
-        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;"><span style="color:#555;">HST (${((inv.hstRate||0)*100).toFixed(1)}%)</span><span style="font-weight:700;font-variant-numeric:normal;">${fmtMoneyDec(inv.hstAmount || 0)}</span></div>
-        ${_pdfPaid > 0.005 || _pdfCredits.length ? `
-        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;"><span style="color:#555;">Invoice total</span><span style="font-weight:700;font-variant-numeric:normal;">${fmtMoneyDec(inv.total || 0)}</span></div>` : ""}
-        ${_pdfCredits.map(c => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;"><span style="color:#555;">Credit${c.reason ? ` — ${escapeHtml(c.reason)}` : ""}</span><span style="font-weight:700;font-variant-numeric:normal;">−${fmtMoneyDec(+c.amount || 0)}</span></div>`).join("")}
-        ${_pdfPaid > 0.005 ? `
-        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;"><span style="color:#555;">Payments received</span><span style="font-weight:700;font-variant-numeric:normal;">−${fmtMoneyDec(_pdfPaid)}</span></div>` : ""}
-        <div style="display:flex;justify-content:space-between;padding:10px 0 4px;background:#fbf5e6;margin-top:4px;border-radius:4px;padding-left:10px;padding-right:10px;"><span style="font-weight:800;font-size:14px;">${_pdfPaid > 0.005 || _pdfCredits.length ? "Balance Due" : "Total Due"}</span><span style="font-weight:800;font-size:15px;color:#0a0a0a;font-variant-numeric:normal;">${fmtMoneyDec(_pdfPaid > 0.005 || _pdfCredits.length ? invoiceBalance(inv) : (inv.total || 0))}</span></div>
+    <div style="display:grid;grid-template-columns:${_pdfPs ? "1fr 1fr" : "1fr"};gap:16px;margin-bottom:16px;align-items:stretch;">
+      ${_pdfPs ? `
+      <div style="border:1px solid #e6dcc2;border-radius:6px;overflow:hidden;display:flex;flex-direction:column;">
+        <div style="background:#0a0a0a;color:#d4af6a;font-size:10px;letter-spacing:.16em;text-transform:uppercase;font-weight:700;padding:8px 12px;">Project Summary</div>
+        ${_sumRows([
+          ["Total project cost (incl. HST)", fmtMoneyDec(_pdfPs.projectTotal)],
+          ["Paid to date", fmtMoneyDec(_pdfPs.paidToDate)]
+        ])}
+        <div style="margin-top:auto;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:11px 12px;background:#f4f4f4;border-top:2px solid #0a0a0a;">
+          <span style="font-weight:700;font-size:11.5px;white-space:nowrap;">Remaining after this invoice is paid</span>
+          <span style="font-weight:800;font-size:13.5px;color:#0a0a0a;white-space:nowrap;">${fmtMoneyDec(_pdfPs.remainingAfter)}</span>
+        </div>
+      </div>` : ""}
+      <div style="border:1px solid #e6dcc2;border-radius:6px;overflow:hidden;display:flex;flex-direction:column;">
+        <div style="background:#0a0a0a;color:#d4af6a;font-size:10px;letter-spacing:.16em;text-transform:uppercase;font-weight:700;padding:8px 12px;">This Invoice</div>
+        ${_sumRows([
+          ["Subtotal", fmtMoneyDec(inv.amount || 0)],
+          ["HST (" + ((inv.hstRate||0)*100).toFixed(1) + "%)", fmtMoneyDec(inv.hstAmount || 0)]
+        ].concat(_pdfPaid > 0.005 || _pdfCredits.length ? [["Invoice total", fmtMoneyDec(inv.total || 0)]] : [])
+         .concat(_pdfCredits.map(c => ["Credit" + (c.reason ? " — " + escapeHtml(c.reason) : ""), "−" + fmtMoneyDec(+c.amount || 0)]))
+         .concat(_pdfPaid > 0.005 ? [["Payments received", "−" + fmtMoneyDec(_pdfPaid)]] : []))}
+        <div style="margin-top:auto;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:11px 12px;background:#fbf5e6;border-top:2px solid #d4af6a;">
+          <span style="font-weight:800;font-size:14px;">${_pdfPaid > 0.005 || _pdfCredits.length ? "Balance Due" : "Total Due"}</span>
+          <span style="font-weight:800;font-size:15.5px;color:#0a0a0a;white-space:nowrap;">${fmtMoneyDec(_pdfPaid > 0.005 || _pdfCredits.length ? invoiceBalance(inv) : (inv.total || 0))}</span>
+        </div>
       </div>
     </div>
-    ${_pdfPs ? `
-    <div style="border:1px solid #e6dcc2;border-radius:6px;margin-bottom:16px;overflow:hidden;">
-      <div style="background:#0a0a0a;color:#d4af6a;font-size:10px;letter-spacing:.16em;text-transform:uppercase;font-weight:700;padding:8px 12px;">Project Summary${_pdfPs.step ? ` <span style="color:#bfa46a;letter-spacing:.08em;">&middot; Milestone ${_pdfPs.step} &middot; ${_pdfPs.pct}%</span>` : ""}</div>
-      <table style="width:100%;border-collapse:collapse;font-size:12px;">
-        ${[
-          ["Total project cost (incl. HST)", _pdfPs.projectTotal, false],
-          ["Previously invoiced", _pdfPs.prevInvoiced, false],
-          ["This invoice", _pdfPs.thisTotal, true],
-          ["Paid to date", _pdfPs.paidToDate, false],
-          ["Remaining after this invoice is paid", _pdfPs.remainingAfter, false]
-        ].map(r => `<tr style="${r[2] ? "background:#fbf5e6;" : ""}"><td style="padding:7px 12px;border-top:1px solid #eee;color:${r[2] ? "#0a0a0a" : "#555"};font-weight:${r[2] ? 700 : 400};">${r[0]}</td><td style="padding:7px 12px;border-top:1px solid #eee;text-align:right;font-weight:700;font-variant-numeric:normal;">${fmtMoneyDec(r[1])}</td></tr>`).join("")}
-      </table>
-    </div>` : ""}
     <!-- Payable To — the client uses this block to know how to send payment. -->
     <div style="background:#0a0a0a;color:#ffffff;border-radius:6px;padding:14px 16px;margin-bottom:16px;">
       <div style="font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:#d4af6a;font-weight:700;margin-bottom:8px;">Payable To</div>
