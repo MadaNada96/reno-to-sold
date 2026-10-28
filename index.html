@@ -686,12 +686,12 @@
   .inv-back{background:transparent;border:none;color:var(--gold-bright);font-weight:700;font-size:12px;letter-spacing:.06em;padding:0 0 12px;cursor:pointer;}
   .inv-tabbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;border-bottom:1px solid var(--line-strong);margin:4px 0 14px;}
   .inv-tabs{display:flex;gap:2px;}
-  .inv-tabs button{background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);padding:10px 14px;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;margin-bottom:-1px;}
+  .inv-tabs button{background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);padding:10px 10px;font-size:11.5px;white-space:nowrap;font-weight:700;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;margin-bottom:-1px;}
   .inv-tabs button b{display:inline-block;min-width:18px;padding:1px 6px;margin-left:4px;border-radius:99px;background:#26262c;color:var(--ink);font-size:10.5px;letter-spacing:0;}
   .inv-tabs button.active{color:var(--gold-bright);border-bottom-color:var(--gold);}
   .inv-tabs button.active b{background:rgba(212,175,106,.2);color:var(--gold-bright);}
-  .inv-tab-actions{display:flex;gap:8px;padding-bottom:8px;}
-  .inv-act{font-size:12px;padding:7px 12px;border-radius:8px;}
+  .inv-tab-actions{display:flex;gap:6px;padding-bottom:8px;flex-wrap:wrap;}
+  .inv-act{font-size:11.5px;padding:6px 10px;border-radius:8px;white-space:nowrap;}
   .inv-act.gold{border-color:var(--gold-deep);color:var(--gold-bright);}
   .inv-panel{min-height:120px;}
   .inv-empty{color:var(--muted);font-style:italic;padding:26px 6px;text-align:center;}
@@ -720,6 +720,11 @@
   .rp-hst b{color:var(--ink);}
   .rp-actions{display:flex;justify-content:flex-end;margin-top:14px;}
   @media (max-width:540px){ .rp-grid{grid-template-columns:1fr;} }
+  .inv-subhead{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold-bright);font-weight:700;margin:14px 0 8px;}
+  .inv-subhead:first-child{margin-top:0;}
+  .inv-link{color:var(--gold-bright);cursor:pointer;font-family:ui-monospace,Menlo,monospace;font-size:12px;}
+  .inv-credit-row span em{font-style:normal;font-size:11px;color:var(--muted);margin-left:4px;}
+  .inv-credit-row .v{color:#5fce86;}
   .inv-credit-btn{font-size:11px;padding:4px 10px;border-radius:99px;border:1px solid #2e7e4e;background:#0f2918;color:#5fce86;cursor:pointer;white-space:nowrap;}
   .inv-credit-btn:hover{background:#163a23;}
   .inv-credit-bar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 12px;margin-bottom:10px;border:1px solid #2e7e4e;border-radius:8px;background:rgba(95,206,134,.07);font-size:12.5px;color:var(--ink);}
@@ -17006,7 +17011,7 @@ const OFFICE_EMAIL = "renotosold@gmail.com";
 const OFFICE_COMPANY = "Reno to Sold Inc.";
 
 /* ---------- Supabase cross-device sync ---------- */
-window.RTS_BUILD = "2026-11-02-v22-credits-receipt-changes";
+window.RTS_BUILD = "2026-11-03-v23-invoice-credits";
 console.log("[build] " + window.RTS_BUILD);
 const SUPABASE_URL = "https://icrnvnmvcdpmhnjorefs.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imljcm52bm12Y2RwbWhuam9yZWZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2ODQwMDgsImV4cCI6MjA5NDI2MDAwOH0.YoeBndWsky8vAW6mLeMziPeH2j2C6c_3VdAvOG_i0kA";
@@ -28801,7 +28806,12 @@ function paidOnInvoice(inv, st){
   if(!hasAlloc && inv.status === "paid" && _invSt(st).paymentsV !== 2 && _payList(st).length === 0) return +inv.total || 0;
   return _r2(s);
 }
-function invoiceBalance(inv, st){ return Math.max(0, _r2((+inv.total || 0) - paidOnInvoice(inv, st))); }
+/* Credits (credit notes) on an invoice: price reductions, amounts INCLUDE HST.
+   inv.credits = [{ id, date, amount, reason }]. They lower what's owed and the
+   project total; they are not money received. */
+function creditsOnInvoice(inv){ return _r2((Array.isArray(inv && inv.credits) ? inv.credits : []).reduce((a, c) => a + (+c.amount || 0), 0)); }
+function invoiceNet(inv){ return Math.max(0, _r2((+inv.total || 0) - creditsOnInvoice(inv))); }
+function invoiceBalance(inv, st){ return Math.max(0, _r2(invoiceNet(inv) - paidOnInvoice(inv, st))); }
 function unappliedCredit(st){ return _r2(_payList(st).reduce((a, p) => a + paymentUnapplied(p), 0)); }
 /* Totals for one estimate state (defaults to the live one). */
 function projectMoney(st){
@@ -28810,19 +28820,21 @@ function projectMoney(st){
   if(s === state){ try { const t = computeTotals(); estTotal = t.total; estPre = t.afterDisc; } catch(e){} }
   else { const v = estimateTotalFor(s); estTotal = v || 0; estPre = estTotal / 1.13; }
   const invs = activeInvoices(s);
-  let coTotal = 0, coPre = 0, invoiced = 0, paidInv = 0, overdue = 0;
+  let coTotal = 0, coPre = 0, invoiced = 0, paidInv = 0, overdue = 0, credits = 0;
   invs.forEach(inv => {
     if(isChangeOrder(inv)){ coTotal += +inv.total || 0; coPre += +inv.amount || 0; }
-    if(inv.status !== "draft") invoiced += +inv.total || 0;
+    const cr = creditsOnInvoice(inv); credits += cr;
+    if(inv.status !== "draft") invoiced += invoiceNet(inv);
     paidInv += paidOnInvoice(inv, s);
     if(isInvoiceOverdue(inv)) overdue += invoiceBalance(inv, s);
   });
-  const credit = unappliedCredit(s);
+  const credit = unappliedCredit(s);               // payments received but not applied yet
   const collected = paidInv + credit;
-  const projectTotal = estTotal + coTotal;
+  const projectTotal = estTotal + coTotal - credits;
   return {
     estTotal: _r2(estTotal), estPre: _r2(estPre), coTotal: _r2(coTotal), coPre: _r2(coPre),
-    projectTotal: _r2(projectTotal), projectPre: _r2(estPre + coPre),
+    credits: _r2(credits),
+    projectTotal: _r2(projectTotal), projectPre: _r2(estPre + coPre - credits / 1.13),
     invoiced: _r2(invoiced), collected: _r2(collected), credit,
     outstanding: _r2(Math.max(0, invoiced - paidInv)),          // billed, not yet paid
     remaining: _r2(Math.max(0, projectTotal - collected)),      // left to collect on the whole project
@@ -28833,12 +28845,14 @@ function projectMoney(st){
 function syncInvoiceStatusFromPayments(inv){
   if(!inv || inv.status === "void") return;
   const hasAlloc = _payList().some(p => (p.allocations || []).some(a => a.invoiceId === inv.id));
-  if(!hasAlloc) return;
+  if(!hasAlloc && !(creditsOnInvoice(inv) > 0) && inv.status !== "paid") return;
+  if(!hasAlloc && inv.status === "paid" && _invSt().paymentsV !== 2 && _payList().length === 0) return;   // legacy
   const bal = invoiceBalance(inv);
   if(bal <= 0.01 && (+inv.total || 0) > 0){
     if(inv.status !== "paid"){
       inv.status = "paid";
-      const dates = _payList().filter(p => (p.allocations || []).some(a => a.invoiceId === inv.id)).map(p => p.date || "").sort();
+      const dates = _payList().filter(p => (p.allocations || []).some(a => a.invoiceId === inv.id)).map(p => p.date || "")
+        .concat((inv.credits || []).map(c => c.date || "")).sort();
       inv.paidDate = dates[dates.length - 1] || todayISO();
     }
   } else if(inv.status === "paid" || inv.status === "draft"){
@@ -29013,9 +29027,9 @@ function invoiceEffectiveStatus(inv, st){
   if(inv.status === "void") return "void";
   if(inv.status === "paid" && _invSt(st).paymentsV !== 2 && _payList(st).length === 0) return "paid";   // legacy
   const paid = paidOnInvoice(inv, st);
-  if((+inv.total || 0) > 0 && paid >= (+inv.total || 0) - 0.01) return "paid";
+  if((+inv.total || 0) > 0 && invoiceBalance(inv, st) <= 0.01) return "paid";
   if(isInvoiceOverdue(inv)) return "overdue";
-  if(paid > 0.005) return "partial";
+  if(paid > 0.005 || creditsOnInvoice(inv) > 0.005) return "partial";
   return inv.status || "draft";
 }
 
@@ -29408,10 +29422,10 @@ function renderProjectFinancialsCard(){
       </div>
       <div class="pf-grid">
         <div class="pf-stat contract"><span class="pf-lbl">Project total</span><span class="pf-val">${fmt(f.projectTotal)}</span>
-          <span class="pf-sub">Estimate ${fmt(f.estTotal)}${f.coTotal > 0 ? ` + changes ${fmt(f.coTotal)}` : ""}</span></div>
+          <span class="pf-sub">Estimate ${fmt(f.estTotal)}${f.coTotal > 0 ? ` + changes ${fmt(f.coTotal)}` : ""}${f.credits > 0 ? ` − credits ${fmt(f.credits)}` : ""}</span></div>
         <div class="pf-stat gold"><span class="pf-lbl">Invoiced</span><span class="pf-val">${fmt(f.invoiced)}</span></div>
         <div class="pf-stat green"><span class="pf-lbl">Collected</span><span class="pf-val">${fmt(f.collected)}</span>
-          ${f.credit > 0 ? `<span class="pf-sub">incl. ${fmt(f.credit)} credit</span>` : ""}</div>
+          ${f.credit > 0 ? `<span class="pf-sub">incl. ${fmt(f.credit)} not yet applied</span>` : ""}</div>
         <div class="pf-stat ${f.outstanding > 0 ? "red" : ""}"><span class="pf-lbl">Outstanding</span><span class="pf-val">${fmt(f.outstanding)}</span><span class="pf-sub">Invoiced, not paid</span></div>
         <div class="pf-stat"><span class="pf-lbl">Left to collect</span><span class="pf-val">${fmt(f.remaining)}</span><span class="pf-sub">On the whole project</span></div>
         <div class="pf-stat"><span class="pf-lbl">Expenses</span><span class="pf-val">${fmt(f.expensesToDate)}</span></div>
@@ -29520,10 +29534,10 @@ function renderInvoicing(){
           <td>${_invPill(inv)}</td>
           <td class="money">${fmt(inv.total || 0)}</td>
           <td class="money">${inv.status === "void" ? "—" : fmt(bal)}</td>
-          ${credit > 0.005 ? `<td style="text-align:right;">${bal > 0.005 ? `<button class="inv-credit-btn" onclick="event.stopPropagation();applyCreditToInvoiceUI('${escapeHtmlAttr(inv.id)}')">Apply credit</button>` : ""}</td>` : ""}
+          ${credit > 0.005 ? `<td style="text-align:right;">${bal > 0.005 ? `<button class="inv-credit-btn" onclick="event.stopPropagation();applyCreditToInvoiceUI('${escapeHtmlAttr(inv.id)}')">Apply payment</button>` : ""}</td>` : ""}
         </tr>`; }).join("")}</tbody></table></div>`;
   const creditBar = credit > 0.005
-    ? `<div class="inv-credit-bar"><span><b>${fmt(credit)}</b> credit on account</span><span class="inv-sub">Use “Apply credit” on an invoice to put it toward that invoice.</span></div>` : "";
+    ? `<div class="inv-credit-bar"><span><b>${fmt(credit)}</b> received but not applied to an invoice yet</span><span class="inv-sub">Use “Apply payment” on an invoice to put it toward that invoice.</span></div>` : "";
   const invRows = creditBar + invTable(invoices.filter(i => !isChangeOrder(i)),
     "No invoices yet. Open the Payment schedule tab and click a milestone to create the first one.");
   const coRows = creditBar + invTable(invoices.filter(isChangeOrder),
@@ -29540,16 +29554,31 @@ function renderInvoicing(){
           return `<tr class="no-click">
             <td>${escapeHtml(p.date || "—")}</td>
             <td>${escapeHtml(p.method || "—")}${p.note ? `<div class="inv-sub">${escapeHtml(p.note)}</div>` : ""}</td>
-            <td>${applied || ""}${credit > 0 ? `${applied ? "<br>" : ""}<span class="inv-sub">${fmt(credit)} credit on account</span>` : ""}</td>
+            <td>${applied || ""}${credit > 0 ? `${applied ? "<br>" : ""}<span class="inv-sub">${fmt(credit)} not applied yet</span>` : ""}</td>
             <td class="money">${fmt(p.amount)}</td>
             <td class="money" style="color:var(--muted);">${fmt((+p.amount || 0) * 0.13 / 1.13)}</td>
             <td style="text-align:right;"><button class="inv-row-del" title="Delete payment" onclick="deletePayment('${escapeHtmlAttr(p.id)}')">&times;</button></td>
           </tr>`; }).join("")}</tbody></table></div>`;
 
+  const _allCredits = [];
+  _invList().forEach(inv => (inv.credits || []).forEach(c => _allCredits.push({ inv, c })));
+  _allCredits.sort((a,b) => String(b.c.date || "").localeCompare(String(a.c.date || "")));
+  const creditRows = _allCredits.length === 0 ? "" : `
+    <div class="inv-subhead">Credits</div>
+    <div class="inv-table-wrap"><table class="inv-list-table">
+      <thead><tr><th>Date</th><th>Invoice</th><th>Reason</th><th style="text-align:right;">Amount</th><th style="text-align:right;">HST incl.</th><th></th></tr></thead>
+      <tbody>${_allCredits.map(({inv, c}) => `<tr class="no-click">
+        <td>${escapeHtml(c.date || "—")}</td>
+        <td><a class="inv-link" onclick="openInvoiceDetail('${escapeHtmlAttr(inv.id)}')">${escapeHtml(inv.number || "—")}</a> <span class="inv-sub">${escapeHtml(inv.milestoneLabel || "")}</span></td>
+        <td>${escapeHtml(c.reason || "—")}</td>
+        <td class="money">−${fmt(+c.amount || 0)}</td>
+        <td class="money" style="color:var(--muted);">${fmt((+c.amount || 0) * 0.13 / 1.13)}</td>
+        <td style="text-align:right;"><button class="inv-row-del" title="Remove credit" onclick="deleteInvoiceCredit('${escapeHtmlAttr(inv.id)}','${escapeHtmlAttr(c.id)}')">&times;</button></td>
+      </tr>`).join("")}</tbody></table></div>`;
   const tab = (k, lbl, n) => `<button class="${_invTab === k ? "active" : ""}" onclick="setInvTab('${k}')">${lbl}${n != null ? ` <b>${n}</b>` : ""}</button>`;
   const panel = _invTab === "invoices" ? invRows
     : _invTab === "changes" ? coRows
-    : _invTab === "payments" ? creditBar + payRows
+    : _invTab === "payments" ? creditBar + (payments.length ? `<div class="inv-subhead">Payments</div>` : "") + payRows + creditRows
     : `<div class="inv-milestones">${milestonesHtml}</div>`;
 
   body.innerHTML = `
@@ -29560,9 +29589,10 @@ function renderInvoicing(){
         ${tab("schedule", "Payment schedule")}
         ${tab("invoices", "Invoices", invoices.filter(i => !isChangeOrder(i)).length)}
         ${tab("changes", "Change orders", invoices.filter(isChangeOrder).length)}
-        ${tab("payments", "Payments", payments.length)}
+        ${tab("payments", "Payments & credits", payments.length + _allCredits.length)}
       </div>
       <div class="inv-tab-actions">
+        <button class="inv-act" onclick="openAddCredit()">+ Add credit</button>
         <button class="inv-act" onclick="openRecordPayment()">+ Record payment</button>
         <button class="inv-act gold" onclick="createCustomInvoice()">+ Change order / extra</button>
       </div>
@@ -29661,7 +29691,7 @@ function openRecordPayment(prefInvoiceId){
   const defAmt = pref ? invoiceBalance(pref) : (open[0] ? invoiceBalance(open[0]) : 0);
   const opts = [`<option value="auto">Automatically — oldest open invoices first</option>`]
     .concat(open.map(i => `<option value="${escapeHtmlAttr(i.id)}" ${pref && pref.id === i.id ? "selected" : ""}>${escapeHtml(i.number || "")} · ${escapeHtml(i.milestoneLabel || "")} — $${invoiceBalance(i).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})} due</option>`))
-    .concat([`<option value="none">Don't apply — keep as credit on account</option>`]).join("");
+    .concat([`<option value="none">Don't apply yet — hold it and apply it later</option>`]).join("");
   let m = document.getElementById("recordPaymentModal");
   if(!m){
     m = document.createElement("div");
@@ -29721,7 +29751,7 @@ async function saveRecordedPayment(){
   renderInvoicing();
   const dm = document.getElementById("invoiceDetailModal");
   if(dm && dm.classList.contains("show") && _detailInvId){ const inv = _invList().find(i => i.id === _detailInvId); if(inv) renderInvoiceDetail(inv); }
-  try { flash("Payment recorded" + (left > 0.005 ? " · $" + left.toFixed(2) + " kept as credit" : "")); } catch(e){}
+  try { flash("Payment recorded" + (left > 0.005 ? " · $" + left.toFixed(2) + " held, not applied yet" : "")); } catch(e){}
 }
 async function deletePayment(payId){
   if(!(await brandedConfirm("Delete this payment? Invoices it was applied to will show as unpaid again.", { confirmLabel: "Delete" }))) return;
@@ -29732,18 +29762,94 @@ async function deletePayment(payId){
   renderInvoicing();
 }
 
+/* ---------- Add credit (credit note) to an invoice or change order ----------
+   Lowers what the client owes on that invoice (amount includes HST) and the
+   project total. Not money received — use Record payment for that. */
+function openAddCredit(prefInvoiceId){
+  const list = activeInvoices().filter(i => invoiceBalance(i) > 0.005);
+  if(!list.length){ try { brandedAlert("There are no invoices with a balance to credit."); } catch(e){} return; }
+  const pref = prefInvoiceId ? list.find(i => i.id === prefInvoiceId) : null;
+  const opts = list.map(i => `<option value="${escapeHtmlAttr(i.id)}" ${pref && pref.id === i.id ? "selected" : ""}>${escapeHtml(i.number || "")} · ${isChangeOrder(i) ? "Change order — " : ""}${escapeHtml(i.milestoneLabel || "")} — $${invoiceBalance(i).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})} due</option>`).join("");
+  let m = document.getElementById("addCreditModal");
+  if(!m){
+    m = document.createElement("div");
+    m.className = "modal-bg"; m.id = "addCreditModal";
+    m.onclick = (e) => { if(e.target === m) closeAddCredit(); };
+    document.body.appendChild(m);
+  }
+  m.innerHTML = `
+    <div class="modal" style="max-width:560px;">
+      <h3><span>Add credit</span><span class="small-stack"><button class="ghost" onclick="closeAddCredit()">Cancel</button></span></h3>
+      <div class="modal-body">
+        <div class="rp-hst" style="margin:0 0 12px;">A credit lowers what the client owes on this invoice and the project total. For money you received, use <b>Record payment</b>.</div>
+        <div class="rp-grid">
+          <div style="grid-column:1/-1;"><label>Invoice / change order</label><select id="acInvoice" onchange="acUpdate()">${opts}</select></div>
+          <div><label>Credit amount (incl. HST)</label><input type="text" inputmode="decimal" id="acAmount" placeholder="0.00" oninput="acUpdate()"></div>
+          <div><label>Date</label><input type="date" id="acDate" value="${todayISO()}"></div>
+          <div style="grid-column:1/-1;"><label>Reason (shows on the invoice)</label><input type="text" id="acReason" placeholder="e.g. Goodwill credit / backsplash downgrade"></div>
+        </div>
+        <div class="rp-hst" id="acInfo"></div>
+        <div class="rp-actions"><button class="primary" onclick="saveInvoiceCredit()">Add credit</button></div>
+      </div>
+    </div>`;
+  m.classList.add("show");
+  acUpdate();
+}
+function _acAmount(){ return _r2(parseFloat(String((document.getElementById("acAmount") || {}).value || "").replace(/[^0-9.]/g, "")) || 0); }
+function acUpdate(){
+  const el = document.getElementById("acInfo"); if(!el) return;
+  const inv = _invList().find(i => i.id === (document.getElementById("acInvoice") || {}).value);
+  const a = _acAmount(); if(!inv){ el.innerHTML = ""; return; }
+  const bal = invoiceBalance(inv);
+  const f = (n) => "$" + n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+  el.innerHTML = a > bal + 0.005
+    ? `<span style="color:#ff9090;">That's more than the ${f(bal)} balance on this invoice.</span>`
+    : a > 0 ? `Balance goes from <b>${f(bal)}</b> to <b>${f(bal - a)}</b> · includes HST of ${f(a * 0.13 / 1.13)}` : `Balance on this invoice: <b>${f(bal)}</b>`;
+}
+function closeAddCredit(){ const m = document.getElementById("addCreditModal"); if(m) m.classList.remove("show"); }
+async function saveInvoiceCredit(){
+  const inv = _invList().find(i => i.id === document.getElementById("acInvoice").value);
+  const amt = _acAmount();
+  if(!inv) return;
+  if(!(amt > 0)){ await brandedAlert("Enter the credit amount."); return; }
+  if(amt > invoiceBalance(inv) + 0.005){ await brandedAlert("A credit can't be more than the invoice's balance."); return; }
+  (inv.credits = Array.isArray(inv.credits) ? inv.credits : []).push({
+    id: "cr_" + Date.now().toString(36) + Math.floor(Math.random()*1e6).toString(36),
+    date: document.getElementById("acDate").value || todayISO(), amount: amt,
+    reason: (document.getElementById("acReason").value || "").trim()
+  });
+  state.paymentsV = 2;
+  syncInvoiceStatusFromPayments(inv);
+  inv.updatedAt = new Date().toISOString();
+  saveEstimate({ silent:true });
+  closeAddCredit();
+  renderInvoicing();
+  const dm = document.getElementById("invoiceDetailModal");
+  if(dm && dm.classList.contains("show") && _detailInvId === inv.id) renderInvoiceDetail(inv);
+  try { flash("Credit added to " + (inv.number || "invoice")); } catch(e){}
+}
+async function deleteInvoiceCredit(invId, creditId){
+  if(!(await brandedConfirm("Remove this credit? The invoice balance goes back up.", { confirmLabel: "Remove" }))) return;
+  const inv = _invList().find(i => i.id === invId); if(!inv) return;
+  inv.credits = (inv.credits || []).filter(c => c.id !== creditId);
+  if(inv.status === "paid" && invoiceBalance(inv) > 0.01){ inv.status = "sent"; inv.paidDate = ""; }
+  syncInvoiceStatusFromPayments(inv);
+  saveEstimate({ silent:true });
+  renderInvoiceDetail(inv); renderInvoicing();
+}
+
 /* ---------- Project summary shown on milestone invoices ---------- */
 function invoiceProjectSummary(inv){
   const m = projectMoney();
   const others = activeInvoices().filter(i => i.id !== inv.id && i.status !== "draft" && String(i.createdAt || "") < String(inv.createdAt || ""));
-  const prevInvoiced = _r2(others.reduce((a, i) => a + (+i.total || 0), 0));
+  const prevInvoiced = _r2(others.reduce((a, i) => a + invoiceNet(i), 0));
   const paidToDate = m.collected;
   const thisBal = invoiceBalance(inv);
   const schedule = getMilestoneSchedule();
   const idx = schedule.findIndex(s => s.id === inv.milestone);
   return {
     projectTotal: m.projectTotal, estTotal: m.estTotal, coTotal: m.coTotal,
-    prevInvoiced, thisTotal: +inv.total || 0, paidToDate,
+    prevInvoiced, thisTotal: invoiceNet(inv), paidToDate,
     remainingAfter: _r2(Math.max(0, m.projectTotal - paidToDate - thisBal)),
     step: idx >= 0 ? (idx + 1) + " of " + schedule.length : "",
     pct: inv.percent || 0
@@ -30073,6 +30179,7 @@ function renderInvoiceDetail(inv){
   const isVoid = inv.status === "void";
   const disabled = isVoid ? "disabled" : "";
   const _paid = paidOnInvoice(inv);
+  const _cred = creditsOnInvoice(inv);
   const _bal = invoiceBalance(inv);
   const _ps = isCustom ? null : invoiceProjectSummary(inv);
   const _psHtml = _ps ? `
@@ -30127,11 +30234,12 @@ function renderInvoiceDetail(inv){
         <input type="number" min="0" step="0.01" value="${escapeHtmlAttr(inv.hstRate || 0.13)}" ${disabled} oninput="updateInvoiceHstRate('${inv.id}', this.value)">
       </div>
       <div style="grid-column:span 2;">
-        <label>Payments</label>
+        <label>Payments &amp; credits</label>
         <div class="inv-paybox">
-          <span>Paid <b>${fmtMoneyDec(_paid)}</b> &middot; Balance <b>${fmtMoneyDec(_bal)}</b>${inv.paidDate && _bal <= 0.005 ? ` &middot; paid ${escapeHtml(inv.paidDate)}` : ""}</span>
+          <span>Paid <b>${fmtMoneyDec(_paid)}</b>${_cred > 0 ? ` &middot; Credits <b>${fmtMoneyDec(_cred)}</b>` : ""} &middot; Balance <b>${fmtMoneyDec(_bal)}</b>${inv.paidDate && _bal <= 0.005 ? ` &middot; paid ${escapeHtml(inv.paidDate)}` : ""}</span>
           <span style="display:flex;gap:6px;">
-            ${unappliedCredit() > 0.005 && _bal > 0.005 && !isVoid ? `<button class="inv-credit-btn" onclick="applyCreditToInvoiceUI('${inv.id}')">Apply credit ($${unappliedCredit().toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})})</button>` : ""}
+            ${unappliedCredit() > 0.005 && _bal > 0.005 && !isVoid ? `<button class="inv-credit-btn" onclick="applyCreditToInvoiceUI('${inv.id}')">Apply held payment ($${unappliedCredit().toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})})</button>` : ""}
+            <button ${isVoid || _bal <= 0.005 ? "disabled" : ""} onclick="openAddCredit('${inv.id}')">+ Add credit</button>
             <button ${isVoid || _bal <= 0.005 ? "disabled" : ""} onclick="openRecordPayment('${inv.id}')">+ Record payment</button>
           </span>
         </div>
@@ -30163,9 +30271,10 @@ function renderInvoiceDetail(inv){
     <div class="inv-totals">
       <div class="inv-totals-row"><span>Subtotal (pre-HST)</span><span class="v" id="inv-detail-subtotal">${fmtMoneyDec(inv.amount || 0)}</span></div>
       <div class="inv-totals-row"><span>HST (${((inv.hstRate||0)*100).toFixed(1)}%)</span><span class="v" id="inv-detail-hst">${fmtMoneyDec(inv.hstAmount || 0)}</span></div>
-      <div class="inv-totals-row ${_paid > 0.005 ? "" : "grand"}"><span>${_paid > 0.005 ? "Invoice total" : "Total Due"}</span><span class="v" id="inv-detail-total">${fmtMoneyDec(inv.total || 0)}</span></div>
-      ${_paid > 0.005 ? `<div class="inv-totals-row"><span>Payments received</span><span class="v">−${fmtMoneyDec(_paid)}</span></div>
-      <div class="inv-totals-row grand"><span>Balance Due</span><span class="v">${fmtMoneyDec(_bal)}</span></div>` : ""}
+      <div class="inv-totals-row ${_paid + _cred > 0.005 ? "" : "grand"}"><span>${_paid + _cred > 0.005 ? "Invoice total" : "Total Due"}</span><span class="v" id="inv-detail-total">${fmtMoneyDec(inv.total || 0)}</span></div>
+      ${(inv.credits || []).map(c => `<div class="inv-totals-row inv-credit-row"><span>Credit${c.reason ? ` — ${escapeHtml(c.reason)}` : ""} <em>${escapeHtml(c.date || "")}</em> <button class="inv-row-del" title="Remove credit" onclick="deleteInvoiceCredit('${inv.id}','${escapeHtmlAttr(c.id)}')">&times;</button></span><span class="v">−${fmtMoneyDec(+c.amount || 0)}</span></div>`).join("")}
+      ${_paid > 0.005 ? `<div class="inv-totals-row"><span>Payments received</span><span class="v">−${fmtMoneyDec(_paid)}</span></div>` : ""}
+      ${_paid + _cred > 0.005 ? `<div class="inv-totals-row grand"><span>Balance Due</span><span class="v">${fmtMoneyDec(_bal)}</span></div>` : ""}
     </div>
     ${_psHtml}
 
@@ -30311,6 +30420,7 @@ function buildInvoicePdfEl(inv){
     .filter(s => s.name || s.email || s.phone);
   const fmtMoneyDec = (n) => "$" + (Math.round(n*100)/100).toLocaleString("en-US", { minimumFractionDigits:2, maximumFractionDigits:2 });
   const _pdfPaid = paidOnInvoice(inv);
+  const _pdfCredits = (inv.credits || []).filter(c => +c.amount > 0);
   const _pdfPs = inv.milestone === "custom" ? null : invoiceProjectSummary(inv);
 
   // Line-item invoices (custom) render one table row per item; everything else
@@ -30396,10 +30506,12 @@ function buildInvoicePdfEl(inv){
       <div style="min-width:280px;">
         <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;"><span style="color:#555;">Subtotal</span><span style="font-weight:700;font-variant-numeric:normal;">${fmtMoneyDec(inv.amount || 0)}</span></div>
         <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;"><span style="color:#555;">HST (${((inv.hstRate||0)*100).toFixed(1)}%)</span><span style="font-weight:700;font-variant-numeric:normal;">${fmtMoneyDec(inv.hstAmount || 0)}</span></div>
+        ${_pdfPaid > 0.005 || _pdfCredits.length ? `
+        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;"><span style="color:#555;">Invoice total</span><span style="font-weight:700;font-variant-numeric:normal;">${fmtMoneyDec(inv.total || 0)}</span></div>` : ""}
+        ${_pdfCredits.map(c => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;"><span style="color:#555;">Credit${c.reason ? ` — ${escapeHtml(c.reason)}` : ""}</span><span style="font-weight:700;font-variant-numeric:normal;">−${fmtMoneyDec(+c.amount || 0)}</span></div>`).join("")}
         ${_pdfPaid > 0.005 ? `
-        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;"><span style="color:#555;">Invoice total</span><span style="font-weight:700;font-variant-numeric:normal;">${fmtMoneyDec(inv.total || 0)}</span></div>
         <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;"><span style="color:#555;">Payments received</span><span style="font-weight:700;font-variant-numeric:normal;">−${fmtMoneyDec(_pdfPaid)}</span></div>` : ""}
-        <div style="display:flex;justify-content:space-between;padding:10px 0 4px;background:#fbf5e6;margin-top:4px;border-radius:4px;padding-left:10px;padding-right:10px;"><span style="font-weight:800;font-size:14px;">${_pdfPaid > 0.005 ? "Balance Due" : "Total Due"}</span><span style="font-weight:800;font-size:15px;color:#0a0a0a;font-variant-numeric:normal;">${fmtMoneyDec(_pdfPaid > 0.005 ? invoiceBalance(inv) : (inv.total || 0))}</span></div>
+        <div style="display:flex;justify-content:space-between;padding:10px 0 4px;background:#fbf5e6;margin-top:4px;border-radius:4px;padding-left:10px;padding-right:10px;"><span style="font-weight:800;font-size:14px;">${_pdfPaid > 0.005 || _pdfCredits.length ? "Balance Due" : "Total Due"}</span><span style="font-weight:800;font-size:15px;color:#0a0a0a;font-variant-numeric:normal;">${fmtMoneyDec(_pdfPaid > 0.005 || _pdfCredits.length ? invoiceBalance(inv) : (inv.total || 0))}</span></div>
       </div>
     </div>
     ${_pdfPs ? `
