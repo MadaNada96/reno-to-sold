@@ -658,6 +658,143 @@
     text-transform:none;letter-spacing:0;
   }
   /* =============================
+     Block estimator (v25)
+     ============================= */
+  .blk-only{display:none}
+  #view-estimator.est-blocks .blk-only{display:block}
+  #view-estimator.est-blocks > #totalCard,
+  #view-estimator.est-blocks > #topSavingsBanner,
+  #view-estimator.est-blocks > #propertyInfoPanel,
+  #view-estimator.est-blocks > #categories,
+  #view-estimator.est-blocks > #cat-discount{display:none !important}
+  #view-estimator.est-blocks.blk-starting #blkSum,
+  #view-estimator.est-blocks.blk-starting #blkGrid{display:none !important}
+  #view-estimator.est-blocks:not(.blk-starting) #blkStart{display:none !important}
+  .blk-mode-btn{border-style:dashed !important}
+
+  #blkSum{position:sticky;top:8px;z-index:20;background:linear-gradient(180deg,#050506,#0b0b0d);border:1px solid var(--gold-deep);border-radius:14px;padding:12px 16px;box-shadow:0 8px 24px rgba(0,0,0,.45);margin:12px 0 4px}
+  .blk-sum-top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+  .blk-prop b{color:var(--ink);font-weight:700}
+  .blk-edit{background:none;border:none;color:var(--gold);font-size:12px;padding:0 0 0 6px;cursor:pointer}
+  #blkSavedHost .autosave-status{margin-top:0}
+  .blk-sum-main{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-top:6px}
+  .blk-total{font-size:32px;font-weight:800;color:var(--gold-bright);line-height:1;background:none;border:none;padding:0;display:flex;align-items:baseline;gap:6px;cursor:pointer}
+  .blk-total small{font-size:10.5px;color:var(--muted);font-weight:600;letter-spacing:.12em;text-transform:uppercase}
+  .blk-total i{font-size:13px;color:var(--muted);transition:transform .2s}
+  .blk-total.open i{transform:rotate(180deg)}
+  .blk-mini{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+  .blk-mini b{color:var(--ink);font-weight:600}
+  .blk-mini .neg,.blk-brow .neg{color:#ff9b6a}
+  .blk-save{margin-left:auto;display:flex;align-items:center;gap:10px;border:none;border-radius:999px;padding:9px 16px 9px 16px;background:linear-gradient(135deg,#f2d79a,#c9a056);color:#141006;font-weight:800;cursor:pointer;animation:blk-glow 2.6s ease-in-out infinite;text-align:left}
+  .blk-save .lbl{display:block;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:800;opacity:.75}
+  .blk-save .amt{display:block;font-size:19px}
+  .blk-save .amt.sm{font-size:13px}
+  .blk-save.empty{background:transparent;color:var(--gold-bright);border:1px dashed var(--gold-deep);animation:none}
+  @keyframes blk-glow{0%,100%{box-shadow:0 0 0 0 rgba(232,201,137,0)}50%{box-shadow:0 0 18px 2px rgba(232,201,137,.35)}}
+  .blk-break{display:none;margin-top:10px;border-top:1px solid var(--line);padding-top:8px;max-width:520px}
+  .blk-break.open{display:block}
+  .blk-brow{display:flex;justify-content:space-between;font-size:13px;padding:4px 0;color:var(--muted)}
+  .blk-brow b{color:var(--ink);font-weight:600}
+  .blk-brow.tot{border-top:1px solid var(--line);margin-top:4px;padding-top:8px;color:var(--gold-bright);font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+  .blk-brow.tot b{color:var(--gold-bright);font-weight:800}
+  .blk-lm{display:flex;align-items:center;gap:12px;margin-top:10px;font-size:11.5px;color:var(--muted);flex-wrap:wrap}
+  .blk-bar{flex:1;min-width:160px;height:6px;border-radius:9px;overflow:hidden;display:flex;background:#26262c}
+  .blk-bar i{display:block;height:100%}
+  .blk-lm .k{display:inline-flex;align-items:center;gap:5px}
+  .blk-lm .k i{width:9px;height:9px;border-radius:2px;display:inline-block}
+  .blk-lm b{color:var(--ink)}
+  .blk-lm .eq b{color:var(--gold-bright)}
+
+  .blk-gridhead{display:flex;justify-content:space-between;align-items:baseline;margin:18px 2px 10px}
+  .blk-gridhead h3,.blk-add h3{margin:0;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--gold-bright)}
+  .blk-gridhead span{font-size:12px;color:var(--muted)}
+  .blk-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+  .blk-card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 15px 13px;cursor:pointer;transition:border-color .15s,transform .15s,box-shadow .15s;display:flex;flex-direction:column;gap:6px;min-height:150px}
+  .blk-card:hover{border-color:var(--gold-deep);transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.35)}
+  .blk-card.active{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset}
+  .blk-card-top{display:flex;align-items:center;gap:8px}
+  .blk-ic{width:28px;height:28px;border-radius:8px;background:rgba(212,175,106,.12);display:flex;align-items:center;justify-content:center;color:var(--gold-bright);font-size:16px;flex:none}
+  .blk-name{font-size:12px;letter-spacing:.14em;text-transform:uppercase;font-weight:700;color:var(--gold-bright);flex:1;min-width:0}
+  .blk-sw{width:34px;height:19px;border-radius:99px;background:#3a3a42;position:relative;border:none;flex:none;cursor:pointer;padding:0}
+  .blk-sw::after{content:"";position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:#fff;transition:left .15s}
+  .blk-sw.on{background:linear-gradient(90deg,#b8924c,#e8c989)}
+  .blk-sw.on::after{left:17px}
+  .blk-sw:disabled{opacity:.4;cursor:not-allowed}
+  .blk-amt{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+  .blk-amt b{font-size:22px;font-weight:800;color:var(--ink)}
+  .blk-amt span{font-size:11.5px;color:var(--muted)}
+  .blk-share{height:3px;background:#26262c;border-radius:9px;overflow:hidden}
+  .blk-share i{display:block;height:100%;background:var(--gold-deep)}
+  .blk-stats{display:flex;flex-wrap:wrap;gap:3px 10px;font-size:12px;color:var(--muted);line-height:1.45}
+  .blk-stats b{color:var(--ink);font-weight:700}
+  .blk-stats .blk-ba b{color:var(--gold-bright)}
+  .blk-badges{display:flex;gap:5px;flex-wrap:wrap;margin-top:auto;padding-top:4px}
+  .blk-badge{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;padding:3px 7px;border-radius:5px;background:rgba(212,175,106,.12);color:var(--gold-bright)}
+  .blk-badge.warn{background:rgba(255,155,106,.12);color:#ff9b6a}
+  .blk-add{margin-top:18px}
+  .blk-tiles{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .blk-tile{border:1px dashed var(--line-strong);background:transparent;color:var(--muted);border-radius:999px;padding:7px 13px;font-size:12.5px;cursor:pointer}
+  .blk-tile:hover{border-color:var(--gold);color:var(--gold-bright)}
+
+  .blk-start-card{width:min(760px,100%);margin:18px auto;background:var(--panel);border:1px solid var(--gold-deep);border-radius:16px;padding:24px;box-shadow:0 20px 50px rgba(0,0,0,.45)}
+  .blk-k{font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--gold-bright);font-weight:800}
+  .blk-start-card h2{margin:4px 0;font-size:24px}
+  .blk-start-card p{margin:0 0 14px;color:var(--muted);font-size:13.5px}
+  #blkStartHost #propertyInfoPanel{margin:0;border:none;background:transparent;box-shadow:none;padding:0}
+  #blkStartHost #propertyInfoPanel > h2{display:none}
+  .blk-start-actions{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:16px}
+  .blk-go{opacity:.55}
+  .blk-go.ready{opacity:1}
+  .blk-hint{font-size:11.5px;color:var(--muted);margin-top:10px}
+
+  .blk-scrim{position:fixed;inset:0;background:rgba(0,0,0,.45);opacity:0;pointer-events:none;transition:opacity .2s;z-index:900}
+  .blk-scrim.show{opacity:1;pointer-events:auto}
+  .blk-panel{position:fixed;top:0;right:0;height:100%;width:min(560px,100%);background:var(--panel);border-left:1px solid var(--gold-deep);z-index:910;transform:translateX(100%);transition:transform .25s cubic-bezier(.2,.8,.2,1);display:flex;flex-direction:column;box-shadow:-20px 0 40px rgba(0,0,0,.5)}
+  .blk-panel.show{transform:none}
+  .blk-p-head{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+  .blk-p-head .blk-ic{width:34px;height:34px}
+  .blk-p-title{flex:1;min-width:0}
+  .blk-p-title .k{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:700}
+  .blk-p-title .n{font-size:17px;font-weight:800;color:var(--gold-bright)}
+  .blk-x{background:#0e0e11;border:1px solid var(--line-strong);color:var(--ink);border-radius:8px;width:34px;height:34px;font-size:16px;cursor:pointer}
+  .blk-pbd{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;padding:10px 16px;border-bottom:1px solid var(--line);background:#111114}
+  .blk-pbd div{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:700}
+  .blk-pbd div b{display:block;font-size:14px;letter-spacing:0;color:var(--ink);margin-top:2px;white-space:nowrap}
+  .blk-pbd div.neg b{color:#ff9b6a}
+  .blk-pbd div.tot b{color:var(--gold-bright)}
+  .blk-lock{background:rgba(245,200,120,.08);border-bottom:1px solid #c98e2a;color:#f5c878;font-size:12px;padding:8px 16px}
+  .blk-p-body{flex:1;overflow:auto;padding:14px 16px}
+  #blkPanelHost .cat-body{display:block !important;padding:0;border:none}
+  #blkPanelHost #propertyInfoPanel{margin:0}
+  #blkPanelHost #cat-discount{margin:0}
+  #blkPanelHost.blk-locked{pointer-events:none;opacity:.75}
+  .blk-p-foot{border-top:1px solid var(--line);padding:12px 16px;display:flex;gap:8px;align-items:center}
+  .blk-nav{flex:1;background:#0e0e11;border:1px solid var(--line-strong);color:var(--ink);border-radius:10px;padding:9px 12px;font-size:13px;text-align:left;cursor:pointer;min-width:0}
+  .blk-nav.next{text-align:right}
+  .blk-nav small{display:block;font-size:10px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase}
+  .blk-done{padding:11px 20px}
+  /* Desktop: no dimming — the summary bar and total stay readable beside the
+     panel while you edit; clicking outside the panel closes it. */
+  @media (min-width:1100px){
+    .blk-scrim{background:transparent}
+    .blk-panel{width:min(520px,44vw)}
+  }
+  @media (max-width:700px){
+    .blk-total{font-size:27px}
+    .blk-mini{display:none}
+    .blk-save{margin-left:0;width:100%;justify-content:center}
+    .blk-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+    .blk-card{min-height:0;padding:11px}
+    .blk-ic{display:none}
+    .blk-name{font-size:10.5px;letter-spacing:.08em}
+    .blk-amt b{font-size:17px}
+    .blk-stats{font-size:11px}
+    .blk-pbd{grid-template-columns:repeat(3,minmax(0,1fr))}
+    .blk-panel{width:100%}
+  }
+  @media print{ .blk-only,.blk-panel,.blk-scrim{display:none !important} }
+
+  /* =============================
      Suppliers (v24)
      ============================= */
   .sup-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:14px;}
@@ -4933,7 +5070,13 @@
           <button data-feature="submit_for_review" id="submitForReviewBtn" onclick="openSubmitForReviewModal()" title="Submit this estimate to Reno to Sold for final review and approval" class="primary submit-review-cta">
             <i class="ti ti-send" style="font-size:16px;vertical-align:-2px;margin-right:6px;" aria-hidden="true"></i>Submit for Review
           </button>
+          <button id="blkModeBtn" class="blk-mode-btn" onclick="blkSetMode(blkOn() ? 'classic' : 'blocks')" title="Switch between the block view and the classic long page"></button>
         </div>
+
+  <!-- Block estimator (v25): summary bar, new-estimate start card, section grid -->
+  <div id="blkSum" class="blk-only no-print"></div>
+  <div id="blkStart" class="blk-only no-print"></div>
+  <div id="blkGrid" class="blk-only no-print"></div>
 
   <!-- Live Total -->
   <div class="total-card" id="totalCard">
@@ -5095,6 +5238,20 @@
     </main><!-- /app-view -->
   </div><!-- /app-shell -->
 </div><!-- /.app -->
+
+<!-- Block estimator side panel (v25) -->
+<div class="blk-scrim no-print" id="blkScrim" onclick="blkClosePanel()"></div>
+<aside class="blk-panel no-print" id="blkPanel" aria-label="Section editor">
+  <div class="blk-p-head">
+    <span class="blk-ic"><i id="blkPIc" class="ti ti-square" aria-hidden="true"></i></span>
+    <div class="blk-p-title"><div class="k" id="blkPK">Section</div><div class="n" id="blkPN"></div></div>
+    <button class="blk-x" onclick="blkClosePanel()" aria-label="Close">&times;</button>
+  </div>
+  <div class="blk-pbd" id="blkPBd"></div>
+  <div class="blk-lock" id="blkLockNote" style="display:none;">🔒 This estimate is under review — view only.</div>
+  <div class="blk-p-body" id="blkPanelBody"><div id="blkPanelHost"></div></div>
+  <div class="blk-p-foot" id="blkPanelFoot"></div>
+</aside>
 
 <!-- Contractor Bid Sheet (full-screen overlay) -->
 
@@ -17096,7 +17253,7 @@ const OFFICE_EMAIL = "renotosold@gmail.com";
 const OFFICE_COMPANY = "Reno to Sold Inc.";
 
 /* ---------- Supabase cross-device sync ---------- */
-window.RTS_BUILD = "2026-11-05-v24-suppliers";
+window.RTS_BUILD = "2026-11-06-v25-block-estimator";
 console.log("[build] " + window.RTS_BUILD);
 const SUPABASE_URL = "https://icrnvnmvcdpmhnjorefs.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imljcm52bm12Y2RwbWhuam9yZWZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2ODQwMDgsImV4cCI6MjA5NDI2MDAwOH0.YoeBndWsky8vAW6mLeMziPeH2j2C6c_3VdAvOG_i0kA";
@@ -28784,6 +28941,369 @@ try { INVOICE_MILESTONES; } catch (e) {
     configurable: true
   });
 }
+</script>
+
+<script>
+/* ======================================================================
+   BLOCK ESTIMATOR (v25) — card grid + side panel layout for the estimator.
+   Pure presentation layer: all numbers come from computeTotals() and the
+   section forms are the EXISTING .cat-body nodes, moved into the side panel
+   while open and moved back on close. No calculation code changes.
+   "Classic view" switch keeps the old long page available for now.
+   ====================================================================== */
+const BLK_PREF_KEY = "rts_estimator_layout";
+const BLK_ICONS = { painting:"ti-brush", doorsTrims:"ti-door", flooring:"ti-layout-grid", tiling:"ti-grid-dots",
+  kitchen:"ti-tools-kitchen-2", bathroom:"ti-bath", potlights:"ti-bulb", wallRemoval:"ti-hammer",
+  cleaning:"ti-sparkles", miscellaneous:"ti-dots" };
+const BLK = { open: null, bdOpen: false, homes: {} };
+
+function blkOn(){ try { return localStorage.getItem(BLK_PREF_KEY) !== "classic"; } catch(e){ return true; } }
+function blkSetMode(mode){
+  try { localStorage.setItem(BLK_PREF_KEY, mode); } catch(e){}
+  blkApplyMode();
+  try { renderTotals(); } catch(e){}
+  try { flash(mode === "classic" ? "Classic view" : "Block view"); } catch(e){}
+}
+function blkApplyMode(){
+  const v = document.getElementById("view-estimator"); if(!v) return;
+  const on = blkOn();
+  v.classList.toggle("est-blocks", on);
+  const btn = document.getElementById("blkModeBtn");
+  if(btn) btn.innerHTML = on ? `<i class="ti ti-list" aria-hidden="true"></i> Classic view` : `<i class="ti ti-layout-grid" aria-hidden="true"></i> Block view`;
+  if(!on){ blkClosePanel(); blkRestore("propertyInfoPanel"); blkRestore("autosaveStatus"); }
+}
+
+/* ---------- move existing nodes in / out (remember their home) ---------- */
+function blkHost(id, target){
+  const el = document.getElementById(id); if(!el || !target) return null;
+  if(!BLK.homes[id] || !BLK.homes[id].marker.parentNode){
+    const marker = document.createComment("blk-home:" + id);
+    el.parentNode.insertBefore(marker, el);
+    BLK.homes[id] = { marker };
+  }
+  if(el.parentNode !== target) target.appendChild(el);
+  return el;
+}
+function blkRestore(id){
+  const h = BLK.homes[id]; const el = document.getElementById(id);
+  if(!h || !el || !h.marker.parentNode) return;
+  h.marker.parentNode.insertBefore(el, h.marker);
+  h.marker.remove(); delete BLK.homes[id];
+}
+/* renderCategories() rebuilds every .cat — keep the panel pointed at the fresh form. */
+function blkBeforeCategoriesRender(){
+  if(BLK.open && BLK.open.type === "cat"){
+    const id = "cat-body-" + BLK.open.cat; const h = BLK.homes[id];
+    const el = document.getElementById(id);
+    if(el && h && el.parentNode !== null && !document.getElementById("categories").contains(el)) el.remove();
+    if(h && h.marker.parentNode) h.marker.remove();
+    delete BLK.homes[id];
+  }
+}
+function blkAfterCategoriesRender(){
+  if(BLK.open && BLK.open.type === "cat"){
+    const host = document.getElementById("blkPanelHost");
+    const el = blkHost("cat-body-" + BLK.open.cat, host);
+    if(el) el.classList.remove("hidden");
+  }
+}
+
+/* ---------- numbers ---------- */
+function blkSectionNums(t, cat){
+  const r = t.perCat[cat] || { labour:0, material:0 };
+  const raw = r.labour + r.material;
+  const ex = (t.extras && t.extras[cat]) || 0;
+  const disc = categoryDiscountInfo(t, cat).disc;
+  const sub = raw + ex, after = sub - disc, hst = after * 0.13;
+  return { raw, ex, labour:r.labour, material:r.material, sub, disc, after, hst, total: after + hst };
+}
+function blkStats(cat){
+  const st = (v, l) => `<span><b>${escapeHtml(String(v))}</b> ${l}</span>`;
+  const n = (v) => Math.round(num(v)).toLocaleString("en-US");
+  const s = state[cat] || {};
+  try {
+    switch(cat){
+      case "painting": {
+        const out = [st(n(paintingSqft()), "sqft walls"), st(s.coats === "two" ? 3 : 2, "coats")];
+        if(s.ceiling) out.push(st(n(s.ceilingSqft || paintingSqft()), "sqft ceiling"));
+        if(s.trim) out.push(st(n(s.trimLinFt), "LF trim"));
+        if(s.doors) out.push(st(n(s.doorCount), "doors"));
+        if(s.popcorn) out.push(st(n(s.popcornSqft), "sqft popcorn"));
+        return out.join("");
+      }
+      case "doorsTrims": {
+        const doors = s.newInteriorDoors ? (s.newDoors ? num(s.newDoorCount) : 0) + (s.newSolidDoors ? num(s.newSolidDoorCount) : 0) : 0;
+        const out = [];
+        if(doors) out.push(st(doors, "doors"));
+        if(s.newWindowTrim) out.push(st(n(s.newWindowTrimLinFt), "LF window trim"));
+        if(s.newDoorTrim) out.push(st(n(s.newDoorTrimLinFt), "LF door trim"));
+        return out.join("") || `<span>Nothing added yet</span>`;
+      }
+      case "flooring": {
+        const lbl = { vinyl:"Vinyl", laminate:"Laminate", engineered:"Engineered hardwood", hardwood:"Hardwood" }[s.type] || s.type || "";
+        return st(n(s.sqft || state.propSqft), "sqft") + (lbl ? `<span>${escapeHtml(lbl)}</span>` : "") + (s.baseboards ? st(n(s.baseboardLinFt), "LF baseboards") : "");
+      }
+      case "tiling": return st(n(s.sqft), "sqft") + `<span>${s.tier === "premium" ? "Large-format porcelain" : "Standard tile"}</span>`;
+      case "kitchen": {
+        const d = deriveKitchen(s);
+        return `<span>${s.tier === "custom" ? "Custom" : "Semi-custom"} · ${s.layout === "U" ? "U-shape" : "L-shape"}</span>`
+          + st(d.baseLF || 0, "LF") + (s.counter ? `<span>${s.counterTier === "custom" ? "Premium" : "Standard"} quartz</span>` : "")
+          + (s.island ? st(Math.round(d.islandLenFt || 0) + "′", "island") : "")
+          + (s.basement && s.basement.enabled ? `<span>+ basement kitchen</span>` : "");
+      }
+      case "bathroom": return (s.rooms || []).map((b, i) => `<span class="blk-ba">#${i + 1} <b>${n(b.floorTileSqft)}</b> sqft</span>`).join("");
+      case "potlights": {
+        const out = [];
+        const pots = (s.intNewOn ? num(s.intNewCount) : 0) + (s.intReplaceOn ? num(s.intReplaceCount) : 0);
+        if(pots) out.push(st(pots, "pot lights"));
+        if(s.extEnabled) out.push(st((s.extNewOn ? num(s.extNewCount) : 0) + (s.extReplaceOn ? num(s.extReplaceCount) : 0), "exterior"));
+        if(s.switchEnabled) out.push(st(n(s.switchCount), "switches"));
+        if(s.dimmerEnabled) out.push(st(n(s.dimmerCount), "dimmers"));
+        if(s.plugEnabled) out.push(st(n(s.plugCount), "plugs"));
+        return out.join("") || `<span>Nothing added yet</span>`;
+      }
+      case "wallRemoval": {
+        const w = s.walls || []; const lf = w.reduce((a, x) => a + num(x.linearFt), 0);
+        return st(w.length, w.length === 1 ? "wall" : "walls") + st(n(lf), "LF") + (w.some(x => x.loadBearing) ? `<span>load-bearing</span>` : "");
+      }
+      case "cleaning": return st(n(s.sqft || state.propSqft), "sqft") + (s.carpet ? `<span>carpets</span>` : "") + (s.declutter ? `<span>declutter</span>` : "");
+      case "miscellaneous": return st((s.items || []).length, "items") + (miscBypassActive() ? `<span>no discount</span>` : "");
+    }
+  } catch(e){}
+  return "";
+}
+function blkBadges(cat, t){
+  const b = [];
+  if(t.proposed && t.proposed[cat] != null) b.push(["Special price", ""]);
+  const xs = (typeof extraChargeList === "function") ? extraChargeList(cat).filter(it => extraChargeAmount(it) > 0) : [];
+  if(xs.length && state.enabled[cat]) b.push(["+" + xs.length + " extra" + (xs.length === 1 ? "" : "s"), ""]);
+  if(cat === "miscellaneous" && miscBypassActive()) b.push(["Not discounted", "warn"]);
+  return b.map(x => `<span class="blk-badge ${x[1]}">${x[0]}</span>`).join("");
+}
+
+/* ---------- render ---------- */
+function renderBlocks(){
+  const v = document.getElementById("view-estimator");
+  if(!v || !blkOn()) return;
+  if(typeof PL !== "undefined" && PL && PL._hosting) return;
+  const t = computeTotals();
+  const f = fmt;
+  const cats = Object.keys(CATEGORY_META);
+  const starting = !state._id;
+  v.classList.toggle("blk-starting", starting);
+
+  // ---- summary bar ----
+  const sum = document.getElementById("blkSum");
+  if(sum){
+    const s0 = (state.sellers || [])[0] || {};
+    const prop = [state.propAddress, state.propSqft ? Math.round(num(state.propSqft)).toLocaleString("en-US") + " sqft" : "", s0.name].filter(x => (x || "").toString().trim()).map(escapeHtml).join(" · ");
+    const lines = quoteSummaryLines(t);
+    const miscM = (t.perCat.miscellaneous ? t.perCat.miscellaneous.material + t.perCat.miscellaneous.labour : 0);
+    const mat = Math.max(0, t.material - (t.perCat.miscellaneous ? t.perCat.miscellaneous.material : 0));
+    const pc = (x) => t.subtotal > 0 ? (x / t.subtotal * 100).toFixed(2) + "%" : "0%";
+    if(!sum.dataset.built){
+      sum.innerHTML = `
+        <div class="blk-sum-top">
+          <div class="blk-prop"><b id="blkPropName"></b><span id="blkPropRest"></span>
+            <button class="blk-edit" onclick="blkOpenProperty()"><i class="ti ti-pencil" aria-hidden="true"></i> Edit</button></div>
+          <div id="blkSavedHost"></div>
+        </div>
+        <div class="blk-sum-main">
+          <button class="blk-total" id="blkTotalBtn" onclick="blkToggleBreak()"><span id="blkTotal"></span><small>Total incl. HST</small><i class="ti ti-chevron-down" aria-hidden="true"></i></button>
+          <div class="blk-mini" id="blkMini"></div>
+          <button class="blk-save" id="blkSavePill" onclick="blkOpenSavings()"></button>
+        </div>
+        <div class="blk-break" id="blkBreak"></div>
+        <div class="blk-lm" id="blkLM"></div>`;
+      sum.dataset.built = "1";
+    }
+    blkHost("autosaveStatus", document.getElementById("blkSavedHost"));
+    document.getElementById("blkPropName").textContent = (state.propName || "").trim() || "Untitled property";
+    document.getElementById("blkPropRest").innerHTML = prop ? " · " + prop : "";
+    document.getElementById("blkTotal").textContent = f(t.total);
+    document.getElementById("blkMini").innerHTML = `<span>Subtotal <b>${f(t.subtotal)}</b></span>${t.discount > 0 ? `<span>Discounts <b class="neg">−${f(t.discount)}</b></span>` : ""}<span>HST <b>${f(t.hst)}</b></span>`;
+    document.getElementById("blkSavePill").innerHTML = t.discount > 0
+      ? `<span><span class="lbl">Client saves</span><span class="amt">${f(t.discount)}</span></span><i class="ti ti-chevron-right" aria-hidden="true"></i>`
+      : `<span><span class="lbl">Client savings</span><span class="amt sm">Add a discount</span></span><i class="ti ti-chevron-right" aria-hidden="true"></i>`;
+    document.getElementById("blkSavePill").classList.toggle("empty", !(t.discount > 0));
+    const br = document.getElementById("blkBreak");
+    br.classList.toggle("open", BLK.bdOpen);
+    br.innerHTML = `<div class="blk-brow"><span>Subtotal</span><b>${f(t.subtotal)}</b></div>`
+      + lines.map(l => `<div class="blk-brow"><span>${l.label}${l.pct ? ` (${l.pct})` : ""}</span><b class="${l.amount < 0 ? "neg" : ""}">${l.amount < 0 ? "−" + f(-l.amount) : f(l.amount)}</b></div>`).join("")
+      + `<div class="blk-brow"><span>HST (13%)</span><b>${f(t.hst)}</b></div><div class="blk-brow tot"><span>Total</span><b>${f(t.total)}</b></div>`;
+    document.getElementById("blkTotalBtn").classList.toggle("open", BLK.bdOpen);
+    document.getElementById("blkLM").innerHTML = `
+      <div class="blk-bar"><i style="width:${pc(t.labour)};background:var(--labour, #b8924c)"></i><i style="width:${pc(mat)};background:var(--material, #f5f1e6)"></i><i style="width:${pc(miscM)};background:#5fa3ce"></i><i style="width:${pc(t.extrasTotal || 0)};background:#8a6fb5"></i></div>
+      <span class="k"><i style="background:var(--labour, #b8924c)"></i>Labour <b>${f(t.labour)}</b></span>
+      <span class="k"><i style="background:var(--material, #f5f1e6)"></i>Material <b>${f(mat)}</b></span>
+      ${miscM > 0 ? `<span class="k"><i style="background:#5fa3ce"></i>Misc. items <b>${f(miscM)}</b></span>` : ""}
+      ${t.extrasTotal > 0 ? `<span class="k"><i style="background:#8a6fb5"></i>Extras <b>${f(t.extrasTotal)}</b></span>` : ""}
+      <span class="eq">= Subtotal <b>${f(t.subtotal)}</b></span>`;
+  }
+
+  // ---- start screen (new, unsaved estimate) ----
+  const start = document.getElementById("blkStart");
+  if(start){
+    if(starting){
+      if(!start.dataset.built){
+        start.innerHTML = `
+          <div class="blk-start-card">
+            <div class="blk-k">New estimate</div>
+            <h2>Start with the property</h2>
+            <p>Name, address and total sqft — then every section opens up. Seller details can be added now or later.</p>
+            <div id="blkStartHost"></div>
+            <div class="blk-start-actions">
+              <button class="import-pdf-link" onclick="startPdfImportTool()"><i class="ti ti-file-import" aria-hidden="true" style="font-size:15px;"></i><span>Import from iGUIDE PDF instead</span></button>
+              <button class="primary blk-go" id="blkGo" onclick="blkStartEstimate()">Start estimate <i class="ti ti-arrow-right" aria-hidden="true"></i></button>
+            </div>
+            <div class="blk-hint">All sections start switched on — switch off anything that isn't part of the job.</div>
+          </div>`;
+        start.dataset.built = "1";
+      }
+      blkHost("propertyInfoPanel", document.getElementById("blkStartHost"));
+      const ok = (state.propName || "").trim() && (state.propAddress || "").trim() && String(state.propSqft || "").trim();
+      const go = document.getElementById("blkGo"); if(go) go.classList.toggle("ready", !!ok);
+    } else if(BLK.homes.propertyInfoPanel && !(BLK.open && BLK.open.type === "property")){
+      blkRestore("propertyInfoPanel");
+    }
+  }
+
+  // ---- grid ----
+  const grid = document.getElementById("blkGrid");
+  if(grid){
+    const locked = (typeof isEstimateLocked === "function") && isEstimateLocked();
+    const on = cats.filter(c => state.enabled[c]), off = cats.filter(c => !state.enabled[c]);
+    const totalAfter = t.afterDisc || 1;
+    grid.innerHTML = `
+      <div class="blk-gridhead"><h3>Sections</h3><span>${on.length} on · click a card to ${locked ? "view" : "edit"}</span></div>
+      <div class="blk-grid">${on.map(c => {
+        const nn = blkSectionNums(t, c), share = nn.after / totalAfter * 100;
+        return `<div class="blk-card${BLK.open && BLK.open.cat === c ? " active" : ""}" onclick="blkOpenCat('${c}')">
+          <div class="blk-card-top"><span class="blk-ic"><i class="ti ${BLK_ICONS[c] || "ti-square"}" aria-hidden="true"></i></span>
+            <span class="blk-name">${escapeHtml(CATEGORY_META[c].title)}</span>
+            <button class="blk-sw on" title="Turn off" ${locked ? "disabled" : ""} onclick="event.stopPropagation();blkToggle('${c}',false)"></button></div>
+          <div class="blk-amt"><b>${f(nn.after)}</b><span>${share.toFixed(0)}% of project</span></div>
+          <div class="blk-share"><i style="width:${Math.min(100, share * 2).toFixed(1)}%"></i></div>
+          <div class="blk-stats">${blkStats(c)}</div>
+          <div class="blk-badges">${blkBadges(c, t)}</div>
+        </div>`; }).join("")}</div>
+      ${off.length ? `<div class="blk-add"><h3>Add a section</h3><div class="blk-tiles">${off.map(c => `<button class="blk-tile" ${locked ? "disabled" : ""} onclick="blkToggle('${c}',true)">+ ${escapeHtml(CATEGORY_META[c].title)}</button>`).join("")}</div></div>` : ""}`;
+  }
+
+  if(BLK.open) blkPanelTop(t);
+}
+function blkToggleBreak(){ BLK.bdOpen = !BLK.bdOpen; renderBlocks(); }
+function blkToggle(cat, val){
+  if(!val && BLK.open && BLK.open.cat === cat) blkClosePanel();
+  const sw = document.getElementById("sw-" + cat); if(sw) sw.checked = !!val;
+  setEnabled(cat, !!val);
+  if(val) blkOpenCat(cat);
+}
+async function blkStartEstimate(){
+  const ok = (state.propName || "").trim() && (state.propAddress || "").trim() && String(state.propSqft || "").trim();
+  if(!ok){ saveEstimate(); return; }        // shows exactly what's missing
+  Object.keys(CATEGORY_META).forEach(c => { state.enabled[c] = true; });
+  saveEstimate({ silent:true });
+  blkRestore("propertyInfoPanel");
+  try { renderAll(); } catch(e){ renderTotals(); }
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+/* ---------- side panel ---------- */
+function blkOrder(){ return Object.keys(CATEGORY_META).filter(c => state.enabled[c]); }
+function blkOpenCat(cat){
+  if(!state.enabled[cat]) return;
+  blkReleaseHosted();
+  BLK.open = { type:"cat", cat };
+  const host = document.getElementById("blkPanelHost");
+  const el = blkHost("cat-body-" + cat, host);
+  if(el) el.classList.remove("hidden");
+  blkShowPanel();
+}
+function blkOpenProperty(){
+  blkReleaseHosted();
+  BLK.open = { type:"property", cat:null };
+  blkHost("propertyInfoPanel", document.getElementById("blkPanelHost"));
+  blkShowPanel();
+}
+function blkOpenSavings(){
+  blkReleaseHosted();
+  BLK.open = { type:"savings", cat:null };
+  blkHost("cat-discount", document.getElementById("blkPanelHost"));
+  blkShowPanel();
+}
+function blkReleaseHosted(){
+  if(!BLK.open) return;
+  if(BLK.open.type === "cat") blkRestore("cat-body-" + BLK.open.cat);
+  if(BLK.open.type === "property") blkRestore("propertyInfoPanel");
+  if(BLK.open.type === "savings") blkRestore("cat-discount");
+}
+function blkShowPanel(){
+  const p = document.getElementById("blkPanel"), s = document.getElementById("blkScrim");
+  p.classList.add("show"); s.classList.add("show"); document.body.classList.add("blk-panel-open");
+  const locked = (typeof isEstimateLocked === "function") && isEstimateLocked();
+  document.getElementById("blkPanelHost").classList.toggle("blk-locked", !!locked && BLK.open.type !== "savings");
+  document.getElementById("blkLockNote").style.display = locked ? "" : "none";
+  document.getElementById("blkPanelBody").scrollTop = 0;
+  blkPanelFoot(); renderBlocks();
+}
+function blkClosePanel(){
+  if(!BLK.open) return;
+  blkReleaseHosted();
+  BLK.open = null;
+  const p = document.getElementById("blkPanel"), s = document.getElementById("blkScrim");
+  if(p) p.classList.remove("show"); if(s) s.classList.remove("show");
+  document.body.classList.remove("blk-panel-open");
+  try { renderTotals(); } catch(e){}
+}
+function blkPanelTop(t){
+  const k = document.getElementById("blkPK"), n = document.getElementById("blkPN"), ic = document.getElementById("blkPIc"), bd = document.getElementById("blkPBd");
+  if(!k) return;
+  const f = fmt;
+  const cell = (lbl, val, cls) => `<div class="${cls || ""}">${lbl}<b>${val}</b></div>`;
+  if(BLK.open.type === "cat"){
+    const c = BLK.open.cat, nn = blkSectionNums(t, c);
+    k.textContent = "Section"; n.textContent = CATEGORY_META[c].title; ic.className = "ti " + (BLK_ICONS[c] || "ti-square");
+    bd.innerHTML = cell("Subtotal", f(nn.sub)) + cell("− Discounts", nn.disc > 0 ? "−" + f(nn.disc) : "$0", nn.disc > 0 ? "neg" : "")
+      + cell("= After disc.", f(nn.after)) + cell("+ HST 13%", f(nn.hst)) + cell("= Total", f(nn.total), "tot");
+  } else if(BLK.open.type === "savings"){
+    k.textContent = "Discounts"; n.textContent = "Client savings"; ic.className = "ti ti-discount-2";
+    bd.innerHTML = cell("Subtotal", f(t.subtotal)) + cell("− Discounts", "−" + f(t.discount), "neg") + cell("= After disc.", f(t.afterDisc)) + cell("+ HST 13%", f(t.hst)) + cell("= Total", f(t.total), "tot");
+  } else {
+    k.textContent = "Estimate"; n.textContent = "Property & seller"; ic.className = "ti ti-home";
+    bd.innerHTML = cell("Total", f(t.total), "tot") + cell("Sections on", blkOrder().length) + cell("Sqft", Math.round(num(state.propSqft)).toLocaleString("en-US"));
+  }
+}
+function blkPanelFoot(){
+  const ft = document.getElementById("blkPanelFoot"); if(!ft) return;
+  if(!BLK.open || BLK.open.type !== "cat"){ ft.innerHTML = `<span style="flex:1"></span><button class="primary blk-done" onclick="blkClosePanel()">Done</button>`; return; }
+  const L = blkOrder(), i = L.indexOf(BLK.open.cat), p = L[i - 1], nx = L[i + 1];
+  ft.innerHTML = `${p ? `<button class="blk-nav" onclick="blkOpenCat('${p}')"><small>‹ Previous</small>${escapeHtml(CATEGORY_META[p].title)}</button>` : `<span style="flex:1"></span>`}
+    <button class="primary blk-done" onclick="blkClosePanel()">Done</button>
+    ${nx ? `<button class="blk-nav next" onclick="blkOpenCat('${nx}')"><small>Next ›</small>${escapeHtml(CATEGORY_META[nx].title)}</button>` : `<span style="flex:1"></span>`}`;
+}
+document.addEventListener("keydown", (e) => {
+  if(!BLK.open) return;
+  if(e.key === "Escape"){ blkClosePanel(); return; }
+  if(BLK.open.type === "cat" && (e.key === "ArrowRight" || e.key === "ArrowLeft") && !/INPUT|SELECT|TEXTAREA/.test((document.activeElement || {}).tagName || "")){
+    const L = blkOrder(), i = L.indexOf(BLK.open.cat), nx = L[i + (e.key === "ArrowRight" ? 1 : -1)];
+    if(nx) blkOpenCat(nx);
+  }
+});
+
+/* ---------- hooks into the existing estimator ---------- */
+(function(){
+  const _rc = renderCategories;
+  renderCategories = function(){ blkBeforeCategoriesRender(); const r = _rc.apply(this, arguments); blkAfterCategoriesRender(); return r; };
+  const _rt = renderTotals;
+  renderTotals = function(){ const r = _rt.apply(this, arguments); try { renderBlocks(); } catch(e){ console.warn("renderBlocks:", e); } return r; };
+  const _av = applyEstimatorView;
+  applyEstimatorView = function(){ if(estimatorView !== "editor") blkClosePanel(); return _av.apply(this, arguments); };
+  // Starting a fresh estimate shows the start screen again.
+  const sb = document.getElementById("blkStart"); if(sb) delete sb.dataset.built;
+})();
+blkApplyMode();
+
 </script>
 
 <script>
