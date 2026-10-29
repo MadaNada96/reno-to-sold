@@ -677,7 +677,12 @@
   .blk-prop b{color:var(--ink);font-weight:700}
   .blk-edit{background:none;border:none;color:var(--gold);font-size:12px;padding:0 0 0 6px;cursor:pointer}
   #blkSavedHost .autosave-status{margin-top:0}
-  .blk-sum-main{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-top:6px}
+  /* Left: total row + labour/material line. Right: savings pill, centred
+     vertically between them. */
+  .blk-sum-body{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 22px;align-items:center;margin-top:6px}
+  .blk-sum-left{min-width:0}
+  .blk-sum-right{display:flex;align-items:center;justify-content:center}
+  .blk-sum-main{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
   .blk-total{font-size:32px;font-weight:800;color:var(--gold-bright);line-height:1;background:none;border:none;padding:0;display:flex;align-items:baseline;gap:6px;cursor:pointer}
   .blk-total small{font-size:10.5px;color:var(--muted);font-weight:600;letter-spacing:.12em;text-transform:uppercase}
   .blk-total i{font-size:13px;color:var(--muted);transition:transform .2s}
@@ -685,7 +690,7 @@
   .blk-mini{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
   .blk-mini b{color:var(--ink);font-weight:600}
   .blk-mini .neg,.blk-brow .neg{color:#ff9b6a}
-  .blk-save{margin-left:auto;display:flex;align-items:center;gap:10px;border:none;border-radius:999px;padding:9px 16px 9px 16px;background:linear-gradient(135deg,#f2d79a,#c9a056);color:#141006;font-weight:800;cursor:pointer;animation:blk-glow 2.6s ease-in-out infinite;text-align:left}
+  .blk-save{display:flex;align-items:center;gap:10px;border:none;border-radius:999px;padding:9px 16px 9px 16px;background:linear-gradient(135deg,#f2d79a,#c9a056);color:#141006;font-weight:800;cursor:pointer;animation:blk-glow 2.6s ease-in-out infinite;text-align:left}
   .blk-save .lbl{display:block;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:800;opacity:.75}
   .blk-save .amt{display:block;font-size:19px}
   .blk-save .amt.sm{font-size:13px}
@@ -698,7 +703,8 @@
   .blk-brow.tot{border-top:1px solid var(--line);margin-top:4px;padding-top:8px;color:var(--gold-bright);font-weight:800;letter-spacing:.08em;text-transform:uppercase}
   .blk-brow.tot b{color:var(--gold-bright);font-weight:800}
   .blk-lm{display:flex;align-items:center;gap:12px;margin-top:10px;font-size:11.5px;color:var(--muted);flex-wrap:wrap}
-  .blk-bar{flex:1;min-width:160px;height:6px;border-radius:9px;overflow:hidden;display:flex;background:#26262c}
+  .blk-bar{flex:1 1 110px;min-width:90px;max-width:240px;height:6px;border-radius:9px;overflow:hidden;display:flex;background:#26262c}
+  .blk-lm{column-gap:10px}
   .blk-bar i{display:block;height:100%}
   .blk-lm .k{display:inline-flex;align-items:center;gap:5px}
   .blk-lm .k i{width:9px;height:9px;border-radius:2px;display:inline-block}
@@ -782,7 +788,8 @@
   @media (max-width:700px){
     .blk-total{font-size:27px}
     .blk-mini{display:none}
-    .blk-save{margin-left:0;width:100%;justify-content:center}
+    .blk-sum-body{grid-template-columns:1fr}
+    .blk-save{width:100%;justify-content:center}
     .blk-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
     .blk-card{min-height:0;padding:11px}
     .blk-ic{display:none}
@@ -17253,7 +17260,7 @@ const OFFICE_EMAIL = "renotosold@gmail.com";
 const OFFICE_COMPANY = "Reno to Sold Inc.";
 
 /* ---------- Supabase cross-device sync ---------- */
-window.RTS_BUILD = "2026-11-06-v25-block-estimator";
+window.RTS_BUILD = "2026-11-06-v25b-summary-layout";
 console.log("[build] " + window.RTS_BUILD);
 const SUPABASE_URL = "https://icrnvnmvcdpmhnjorefs.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imljcm52bm12Y2RwbWhuam9yZWZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2ODQwMDgsImV4cCI6MjA5NDI2MDAwOH0.YoeBndWsky8vAW6mLeMziPeH2j2C6c_3VdAvOG_i0kA";
@@ -29108,13 +29115,17 @@ function renderBlocks(){
             <button class="blk-edit" onclick="blkOpenProperty()"><i class="ti ti-pencil" aria-hidden="true"></i> Edit</button></div>
           <div id="blkSavedHost"></div>
         </div>
-        <div class="blk-sum-main">
-          <button class="blk-total" id="blkTotalBtn" onclick="blkToggleBreak()"><span id="blkTotal"></span><small>Total incl. HST</small><i class="ti ti-chevron-down" aria-hidden="true"></i></button>
-          <div class="blk-mini" id="blkMini"></div>
-          <button class="blk-save" id="blkSavePill" onclick="blkOpenSavings()"></button>
-        </div>
-        <div class="blk-break" id="blkBreak"></div>
-        <div class="blk-lm" id="blkLM"></div>`;
+        <div class="blk-sum-body">
+          <div class="blk-sum-left">
+            <div class="blk-sum-main">
+              <button class="blk-total" id="blkTotalBtn" onclick="blkToggleBreak()"><span id="blkTotal"></span><small>Total incl. HST</small><i class="ti ti-chevron-down" aria-hidden="true"></i></button>
+              <div class="blk-mini" id="blkMini"></div>
+            </div>
+            <div class="blk-break" id="blkBreak"></div>
+            <div class="blk-lm" id="blkLM"></div>
+          </div>
+          <div class="blk-sum-right"><button class="blk-save" id="blkSavePill" onclick="blkOpenSavings()"></button></div>
+        </div>`;
       sum.dataset.built = "1";
     }
     blkHost("autosaveStatus", document.getElementById("blkSavedHost"));
