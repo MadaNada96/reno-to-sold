@@ -4843,6 +4843,29 @@
     .tk-kpi b{font-size:18px;}
     .tk-toolbar{gap:8px;}
   }
+  /* Tasks v26c — plan type choice, estimated windows */
+  .tk-cr-modes{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;}
+  .tk-cr-mode{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;background:var(--panel-2);border:1px solid var(--line-strong);border-radius:12px;padding:13px 14px;color:var(--ink);font:inherit;cursor:pointer;}
+  .tk-cr-mode i{font-size:20px;color:var(--gold-bright);}
+  .tk-cr-mode b{font-size:13.5px;}
+  .tk-cr-mode span{font-size:11.5px;color:var(--muted);line-height:1.45;}
+  .tk-cr-mode.on{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset;background:rgba(212,175,106,.07);}
+  .tk-cr-finish{display:flex;align-items:center;gap:10px;background:rgba(212,175,106,.08);border:1px solid rgba(212,175,106,.35);border-radius:10px;padding:8px 12px;flex:1;min-width:220px;}
+  .tk-cr-finish i{font-size:20px;color:var(--gold-bright);}
+  .tk-cr-finish span{display:block;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700;}
+  .tk-cr-finish b{font-size:17px;color:var(--gold-bright);}
+  .tk-cr-finish small{display:block;font-size:11px;color:var(--muted);}
+  .tk-cr-sec{display:flex;justify-content:space-between;gap:10px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:12.5px;}
+  .tk-cr-sec b{color:var(--gold-bright);}
+  .tk-cr-sec span{color:var(--muted);font-size:11.5px;text-align:right;}
+  .tk-gempty{border-style:dashed;}
+  .tk-gempty .blk-amt b{color:var(--muted);}
+  .tk-est-note{display:flex;gap:10px;align-items:flex-start;background:rgba(212,175,106,.07);border:1px solid rgba(212,175,106,.3);border-radius:10px;padding:10px 12px;margin:4px 0 10px;}
+  .tk-est-note i{font-size:18px;color:var(--gold-bright);margin-top:1px;}
+  .tk-est-note b{display:block;font-size:12.5px;color:var(--ink-strong);}
+  .tk-est-note span{display:block;font-size:11.5px;color:var(--muted);margin-top:2px;line-height:1.45;}
+  .tk-p-add.ghost{border-style:solid;background:transparent;color:var(--gold-bright);margin-top:8px;}
+  @media (max-width:700px){ .tk-cr-modes{grid-template-columns:1fr;} .tk-cr-sec{flex-direction:column;align-items:flex-start;} .tk-cr-sec span{text-align:left;} }
   @media (max-width:760px){
     .tk-row{flex-wrap:wrap;align-items:flex-start;}
     .tk-main{flex:1 1 calc(100% - 40px);}
@@ -17516,7 +17539,7 @@ const OFFICE_EMAIL = "renotosold@gmail.com";
 const OFFICE_COMPANY = "Reno to Sold Inc.";
 
 /* ---------- Supabase cross-device sync ---------- */
-window.RTS_BUILD = "2026-11-07-v26b-task-blocks";
+window.RTS_BUILD = "2026-11-08-v26c-blank-plans";
 console.log("[build] " + window.RTS_BUILD);
 const SUPABASE_URL = "https://icrnvnmvcdpmhnjorefs.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imljcm52bm12Y2RwbWhuam9yZWZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2ODQwMDgsImV4cCI6MjA5NDI2MDAwOH0.YoeBndWsky8vAW6mLeMziPeH2j2C6c_3VdAvOG_i0kA";
@@ -29867,16 +29890,32 @@ function tkBuildItems(sugs, existing){
   }));
 }
 /* Project health for a plan. */
-function tkStats(plan){
+/* What the estimate's scope implies: schedules the full suggested plan in memory
+   (nothing saved) and returns the finish date plus a window per section and phase.
+   Blank plans use this for their projected finish and the empty blocks' dates. */
+function tkEstimate(st, startDate, replanFrom){
+  const sugs = tkSuggest(st); if(!sugs.length) return { finish:"", cat:{}, phase:{}, days:0 };
+  const plan = { startDate: startDate || tkNextMonday(), replanFrom: replanFrom || "", items: tkBuildItems(sugs, []) };
+  tkSchedule(plan);
+  const out = { finish:"", cat:{}, phase:{}, days:0 };
+  const grow = (o, k, it) => { const w = o[k] || (o[k] = { from:"", to:"", n:0 }); if(!w.from || it.start < w.from) w.from = it.start; if(it.due > w.to) w.to = it.due; w.n++; };
+  plan.items.forEach(it => { if(it.due > out.finish) out.finish = it.due; grow(out.cat, it.cat, it); grow(out.phase, it.phase, it); });
+  out.days = out.finish ? tkBizBetween(tkFirstBiz(plan.startDate), out.finish) + 1 : 0;
+  return out;
+}
+function tkStats(plan, st){
   const items = (plan && plan.items) || [], today = tkToday();
   const done = items.filter(i => i.status === "done").length;
   const overdue = items.filter(i => i.status !== "done" && i.due && i.due < today);
   const blocked = items.filter(i => i.status === "blocked");
   const doing = items.filter(i => i.status === "doing");
-  const finish = items.reduce((m, i) => i.due && i.due > m ? i.due : m, "");
+  const taskFinish = items.reduce((m, i) => i.due && i.due > m ? i.due : m, "");
+  const blank = !!(plan && plan.mode === "blank");
+  const est = blank && st ? tkEstimate(st, plan.startDate, plan.replanFrom) : null;
+  const finish = est && est.finish > taskFinish ? est.finish : taskFinish;
   const open = items.filter(i => i.status !== "done").sort((a, b) => String(a.start).localeCompare(String(b.start)));
   const nextMs = items.filter(i => i.milestone && i.status !== "done").sort((a, b) => String(a.due).localeCompare(String(b.due)))[0] || null;
-  return { total: items.length, done, pct: items.length ? Math.round(done / items.length * 100) : 0, overdue, blocked, doing, finish, open, nextMs,
+  return { total: items.length, done, pct: items.length ? Math.round(done / items.length * 100) : 0, overdue, blocked, doing, finish, taskFinish, estFinish: est ? est.finish : "", blank, open, nextMs,
     health: overdue.length ? "behind" : blocked.length ? "blocked" : "ontrack" };
 }
 /* ---------- data access (live estimate or a saved one) ---------- */
@@ -29986,11 +30025,11 @@ function tkRenderAll(){
       <div class="tk-kpi"><span>Due this week</span><b>${b.today.length + b.week.length}</b></div>
       <div class="tk-kpi${blocked ? " warn" : ""}"><span>Blocked</span><b>${blocked}</b></div>
       <div class="tk-kpi"><span>In progress</span><b>${doing}</b></div>
-      <div class="tk-kpi"><span>Active projects</span><b>${planned.filter(e => tkStats(e.st.tasks).pct < 100).length}</b></div>
+      <div class="tk-kpi"><span>Active projects</span><b>${planned.filter(e => tkStats(e.st.tasks, e.st).pct < 100).length}</b></div>
     </div>
     <div class="tk-gridhead"><h3>This week</h3><span>Tap a block to see its tasks</span></div>${week}
     <div class="tk-block"><div class="tk-block-h">Projects</div>
-      ${planned.length ? `<div class="tk-pgrid">${planned.map(e => { const s = tkStats(e.st.tasks); return `
+      ${planned.length ? `<div class="tk-pgrid">${planned.map(e => { const s = tkStats(e.st.tasks, e.st); return `
         <div class="tk-pcard" onclick="tkOpenProject('${tkEsc(e.id)}')">
           <div class="tk-pname">${tkEsc(e.address || e.name)}</div>
           ${e.address && e.name ? `<div class="tk-psub">${tkEsc(e.name)}</div>` : ""}
@@ -30011,11 +30050,11 @@ function tkRenderProject(id){
   const head = `<button class="tk-back" onclick="tkClosePanel();TK.view='all';renderTasks()">← All tasks</button>
     <div class="tk-head"><div><h2 class="tk-h">${tkEsc(e.address || e.name)}</h2><div class="tk-sub">${tkEsc(e.name)} · <a class="tk-link" onclick="tkOpenEstimate('${tkEsc(id)}')">Open estimate</a></div></div></div>`;
   if(!plan) return head + `<div class="tk-noplan"><h3>No task plan yet</h3><p>Create one from this estimate: every section that's switched on becomes a set of tasks, organised by phase and scheduled from your start date.</p><button class="tk-btn gold lg" onclick="tkOpenCreate('${tkEsc(id)}')">Create task plan</button></div>`;
-  const s = tkStats(plan), newSugs = tkNewSuggestions(id).length;
+  const s = tkStats(plan, e.st), newSugs = tkNewSuggestions(id).length, newSecs = tkNewSections(id);
   const kpis = `<div class="tk-kpis">
     <div class="tk-kpi wide"><span>Progress</span><b>${s.pct}%</b><div class="tk-prog"><i style="width:${s.pct}%"></i></div><small>${s.done} of ${s.total} tasks · ${tkHealth(s)}</small></div>
     <div class="tk-kpi"><span>Start</span><input type="date" value="${tkEsc(plan.startDate)}" onchange="tkSetStart('${tkEsc(id)}',this.value)"></div>
-    <div class="tk-kpi"><span>Projected finish</span><b>${tkFmtDate(s.finish)}</b><small>${s.finish ? tkBizBetween(plan.startDate, s.finish) + 1 + " working days" : ""}</small></div>
+    <div class="tk-kpi"><span>Projected finish</span><b>${tkFmtDate(s.finish)}</b><small>${s.finish ? tkBizBetween(plan.startDate, s.finish) + 1 + " working days" : ""}${s.blank ? (s.taskFinish > s.estFinish ? " · your tasks run past the estimate's timeline" : " · from the estimate's scope") : ""}</small></div>
     <div class="tk-kpi mh${s.overdue.length ? " late" : ""}"><span>Overdue</span><b>${s.overdue.length}</b></div>
     <div class="tk-kpi mh${s.blocked.length ? " warn" : ""}"><span>Blocked</span><b>${s.blocked.length}</b></div>
     <div class="tk-kpi wide"><span>Next milestone</span><b class="sm">${s.nextMs ? tkEsc(s.nextMs.title) : "—"}</b><small>${s.nextMs ? tkFmtDate(s.nextMs.due) : ""}</small></div>
@@ -30026,22 +30065,26 @@ function tkRenderProject(id){
     <div class="tk-acts">
       ${s.overdue.length ? `<button class="tk-btn" onclick="tkReplan('${tkEsc(id)}')" title="Push every unfinished task so nothing starts before today">Re-plan from today</button>` : ""}
       ${newSugs ? `<button class="tk-btn" onclick="tkOpenSync('${tkEsc(id)}')">Sync with estimate <b class="tk-dot">${newSugs}</b></button>` : ""}
+      ${newSecs.length ? `<button class="tk-btn" onclick="tkAddSections('${tkEsc(id)}')" title="${tkEsc(newSecs.map(k => TK_CAT_TITLE()[k] || k).join(", "))}">Add new sections from estimate <b class="tk-dot">${newSecs.length}</b></button>` : ""}
       <button class="tk-btn gold" onclick="tkOpenEditor('${tkEsc(id)}', null)">+ Add task</button>
     </div></div>`;
-  return head + kpis + tools + (TK.tab === "board" ? tkRenderBoard(e, plan) : tkRenderBlocks(e, plan)) +
+  return head + kpis + tools + (TK.tab === "board" ? (plan.items.length ? tkRenderBoard(e, plan) : `<div class="tk-empty">No tasks yet — open a block to add some.</div>`) : tkRenderBlocks(e, plan)) +
     `<div class="tk-foot"><a class="tk-link danger" onclick="tkDeletePlan('${tkEsc(id)}')">Delete this task plan</a></div>`;
 }
 /* ---------- blocks + slide-out panel ---------- */
 const TK_PHASE_IC = { pre:"ti-clipboard-list", demo:"ti-hammer", rough:"ti-plug-connected", close:"ti-shield-check", finish:"ti-paint", handover:"ti-key" };
 const TK_BUCKETS = [["overdue","Overdue","ti-alert-triangle"],["today","Today","ti-calendar-event"],["week","Rest of this week","ti-calendar-week"],["next","Next week","ti-calendar-plus"]];
-function tkGroups(plan, by){
+function tkGroups(plan, by, st){
+  const blank = plan.mode === "blank", est = blank && st ? tkEstimate(st, plan.startDate, plan.replanFrom) : null;
   if(by === "cat"){
     const order = ["general"].concat(Object.keys(CATEGORY_META)), titles = TK_CAT_TITLE();
-    const keys = order.filter(k => plan.items.some(i => i.cat === k)).concat(Array.from(new Set(plan.items.map(i => i.cat))).filter(k => order.indexOf(k) === -1));
-    return keys.map(k => ({ kind:"cat", key:k, name: titles[k] || k, sub:"", icon: k === "general" ? "ti-briefcase" : (BLK_ICONS[k] || "ti-square"), items: plan.items.filter(i => i.cat === k) }));
+    const has = (k) => plan.items.some(i => i.cat === k) || (blank && (plan.sections || []).indexOf(k) !== -1);
+    const keys = order.filter(has).concat(Array.from(new Set(plan.items.map(i => i.cat))).filter(k => order.indexOf(k) === -1));
+    return keys.map(k => ({ kind:"cat", key:k, name: titles[k] || k, sub:"", icon: k === "general" ? "ti-briefcase" : (BLK_ICONS[k] || "ti-square"), items: plan.items.filter(i => i.cat === k), est: est && est.cat[k] }));
   }
-  return TK_PHASES.map(([k, name, sub]) => ({ kind:"phase", key:k, name, sub, icon: TK_PHASE_IC[k], items: plan.items.filter(i => i.phase === k) })).filter(g => g.items.length);
+  return TK_PHASES.map(([k, name, sub]) => ({ kind:"phase", key:k, name, sub, icon: TK_PHASE_IC[k], items: plan.items.filter(i => i.phase === k), est: est && est.phase[k] })).filter(g => g.items.length || (blank && g.est));
 }
+function tkEstLine(w){ return w && w.from ? `Est. ${tkFmtDate(w.from)} → ${tkFmtDate(w.to)} · ${tkBizBetween(w.from, w.to) + 1} working day${tkBizBetween(w.from, w.to) ? "s" : ""}` : ""; }
 function tkGroupNums(items){
   const today = tkToday(), done = items.filter(i => i.status === "done").length;
   const from = items.reduce((m, i) => !m || (i.start && i.start < m) ? i.start : m, ""), to = items.reduce((m, i) => i.due > m ? i.due : m, "");
@@ -30051,14 +30094,21 @@ function tkGroupNums(items){
     blocked: open.filter(i => i.status === "blocked").length, next: open[0] || null };
 }
 function tkRenderBlocks(e, plan){
-  return `<div class="blk-grid tk-bgrid">${tkGroups(plan, TK.group).map(g => {
-    const n = tkGroupNums(g.items), complete = n.done === n.total;
+  return `<div class="blk-grid tk-bgrid">${tkGroups(plan, TK.group, e.st).map(g => {
+    const n = tkGroupNums(g.items), complete = n.total > 0 && n.done === n.total;
+    const on0 = TK.panel && TK.panel.kind === g.kind && TK.panel.key === g.key;
+    if(!n.total) return `<div class="blk-card tk-gcard tk-gempty${on0 ? " active" : ""}" onclick="tkOpenPanel('${g.kind}','${tkEsc(g.key)}')">
+      <div class="blk-card-top"><span class="blk-ic"><i class="ti ${g.icon}" aria-hidden="true"></i></span><span class="blk-name">${tkEsc(g.name)}</span><span class="tk-gcount">0</span></div>
+      <div class="blk-amt"><b>${g.est ? `${tkFmtDate(g.est.from)} → ${tkFmtDate(g.est.to)}` : "No dates yet"}</b></div>
+      <div class="blk-stats"><span>${g.est ? "Estimated from the estimate · " + (tkBizBetween(g.est.from, g.est.to) + 1) + " working days" : ""}</span></div>
+      <div class="blk-badges"><span class="blk-badge">+ Add tasks</span></div>
+    </div>`;
     const on = TK.panel && TK.panel.kind === g.kind && TK.panel.key === g.key;
     return `<div class="blk-card tk-gcard${on ? " active" : ""}${complete ? " complete" : ""}" onclick="tkOpenPanel('${g.kind}','${tkEsc(g.key)}')">
       <div class="blk-card-top"><span class="blk-ic"><i class="ti ${g.icon}" aria-hidden="true"></i></span><span class="blk-name">${tkEsc(g.name)}</span><span class="tk-gcount">${n.done}/${n.total}</span></div>
       <div class="blk-amt"><b>${tkFmtDate(n.from)} → ${tkFmtDate(n.to)}</b></div>
       <div class="blk-share"><i style="width:${n.pct}%"></i></div>
-      <div class="blk-stats"><span><b>${n.pct}%</b> done</span>${n.next ? `<span class="tk-gnext">Next: <b>${tkEsc(n.next.title)}</b></span>` : ""}</div>
+      <div class="blk-stats"><span><b>${n.pct}%</b> done</span>${g.est && g.est.from ? `<span>Est. ${tkFmtDate(g.est.from)} → ${tkFmtDate(g.est.to)}</span>` : ""}${n.next ? `<span class="tk-gnext">Next: <b>${tkEsc(n.next.title)}</b></span>` : ""}</div>
       <div class="blk-badges">${complete ? `<span class="blk-badge ok">Complete ✓</span>` : ""}${n.overdue ? `<span class="blk-badge late">${n.overdue} overdue</span>` : ""}${n.blocked ? `<span class="blk-badge warn">${n.blocked} blocked</span>` : ""}${n.doing ? `<span class="blk-badge doing">${n.doing} in progress</span>` : ""}${!complete && !n.overdue && !n.blocked && !n.doing ? `<span class="blk-badge">On track</span>` : ""}</div>
     </div>`; }).join("")}</div>`;
 }
@@ -30095,7 +30145,7 @@ function tkPanelSiblings(){
   const P = TK.panel; if(!P) return [];
   if(P.kind === "bucket"){ const b = tkBuckets(); return TK_BUCKETS.map(([k, name, ic]) => ({ kind:"bucket", key:k, name, sub:"", icon:ic, rows: b[k] })); }
   const plan = tkPlan(P.pid); if(!plan) return [];
-  return tkGroups(plan, P.kind);
+  const e = tkEntry(P.pid); return tkGroups(plan, P.kind, e && e.st);
 }
 function tkRenderPanel(){
   const P = TK.panel; if(!P) return; const { p } = tkPanelEls();
@@ -30115,9 +30165,11 @@ function tkRenderPanel(){
     <div class="blk-pbd">${cell("Tasks", n.total)}${cell("Done", n.done + " · " + n.pct + "%")}${cell("Overdue", n.overdue, n.overdue ? "neg" : "")}${cell("Starts", tkFmtDate(n.from))}${cell("Finishes", tkFmtDate(n.to), "tot")}</div>
     <div class="blk-p-body tk-p-body">
       ${g.sub ? `<div class="tk-sub" style="margin-bottom:6px;">${tkEsc(g.sub)}</div>` : ""}
-      ${open.map(r => tkRow(r, P.kind === "bucket")).join("") || `<div class="tk-empty sm">${rows.length ? "Everything here is done ✓" : "Nothing here."}</div>`}
+      ${g.est && !rows.length ? `<div class="tk-est-note"><i class="ti ti-calendar-time" aria-hidden="true"></i><div><b>${tkEsc(tkEstLine(g.est))}</b><span>Based on what's in the estimate. New tasks you add here start on ${tkFmtDate(g.est.from)} unless you change it.</span></div></div>` : ""}
+      ${open.map(r => tkRow(r, P.kind === "bucket")).join("") || `<div class="tk-empty sm">${rows.length ? "Everything here is done ✓" : (P.kind === "bucket" ? "Nothing here." : "No tasks yet.")}</div>`}
       ${done.length ? `<div class="tk-done-h">Done · ${done.length}</div>${done.map(r => tkRow(r, P.kind === "bucket")).join("")}` : ""}
       ${P.kind !== "bucket" ? `<button class="tk-btn tk-p-add" onclick="tkOpenEditor('${tkEsc(P.pid)}', null, {${P.kind}:'${tkEsc(P.key)}'})">+ Add a task to ${tkEsc(g.name)}</button>` : ""}
+      ${P.kind !== "bucket" && tkGroupSuggestions(P.pid, P.kind, P.key).length ? `<button class="tk-btn tk-p-add ghost" onclick="tkSuggestInto('${tkEsc(P.pid)}','${P.kind}','${tkEsc(P.key)}')"><i class="ti ti-sparkles" aria-hidden="true"></i> Suggest tasks for ${tkEsc(g.name)} (${tkGroupSuggestions(P.pid, P.kind, P.key).length})</button>` : ""}
     </div>
     <div class="blk-p-foot">
       ${prev ? `<button class="blk-nav" onclick="tkOpenPanel('${prev.kind}','${tkEsc(prev.key)}')"><small>‹ Previous</small>${tkEsc(prev.name)}</button>` : `<span style="flex:1"></span>`}
@@ -30177,31 +30229,66 @@ function tkModal(id){
   if(!m){ m = document.createElement("div"); m.className = "modal-bg"; m.id = id; m.onclick = (ev) => { if(ev.target === m) m.classList.remove("show"); }; document.body.appendChild(m); }
   return m;
 }
-function tkNewSuggestions(id){
+function tkNewSections(id){
+  const e = tkEntry(id), plan = tkPlan(id); if(!e || !plan || plan.mode !== "blank") return [];
+  const have = new Set(plan.sections || []);
+  return Array.from(new Set(tkSuggest(e.st).map(s => s.cat))).filter(k => !have.has(k));
+}
+function tkAddSections(id){
+  const add = tkNewSections(id); if(!add.length) return;
+  tkMutate(id, (s) => { s.tasks.sections = (s.tasks.sections || []).concat(add); });
+  tkRefresh(); try { flash(add.length + " section" + (add.length === 1 ? "" : "s") + " added"); } catch(e){}
+}
+/* Suggested tasks for one block that aren't in the plan yet (used by "Suggest tasks for …"). */
+function tkGroupSuggestions(id, kind, key){
   const e = tkEntry(id), plan = tkPlan(id); if(!e || !plan) return [];
+  const have = new Set(plan.items.map(i => i.key).filter(Boolean));
+  return tkSuggest(e.st).filter(s => (kind === "cat" ? s.cat === key : s.phase === key) && !have.has(s.key));
+}
+function tkSuggestInto(id, kind, key){
+  const picks = tkGroupSuggestions(id, kind, key); if(!picks.length) return;
+  tkMutate(id, (s) => {
+    s.tasks.items = s.tasks.items.concat(tkBuildItems(picks, s.tasks.items));
+    s.tasks.dismissed = (s.tasks.dismissed || []).filter(k => !picks.some(p => p.key === k));
+  });
+  tkRefresh(); try { flash(picks.length + " suggested task" + (picks.length === 1 ? "" : "s") + " added — edit or delete any you don't need"); } catch(e){}
+}
+function tkNewSuggestions(id){
+  const e = tkEntry(id), plan = tkPlan(id); if(!e || !plan || plan.mode === "blank") return [];
   const have = new Set(plan.items.map(i => i.key).filter(Boolean)), dismissed = new Set(plan.dismissed || []);
   return tkSuggest(e.st).filter(s => !have.has(s.key) && !dismissed.has(s.key));
 }
-function tkOpenCreate(id){ const e = tkEntry(id); if(!e) return; TK.create = { id, mode:"create", sugs: tkSuggest(e.st), off: new Set(), start: tkNextMonday() }; tkRenderCreate(); }
+function tkOpenCreate(id){ const e = tkEntry(id); if(!e) return; TK.create = { id, mode:"create", kind:"suggested", sugs: tkSuggest(e.st), off: new Set(), start: tkNextMonday() }; tkRenderCreate(); }
 function tkOpenSync(id){ TK.create = { id, mode:"sync", sugs: tkNewSuggestions(id), off: new Set() }; tkRenderCreate(); }
 function tkRenderCreate(){
-  const c = TK.create, m = tkModal("tkCreateModal"), titles = TK_CAT_TITLE();
+  const c = TK.create, m = tkModal("tkCreateModal"), titles = TK_CAT_TITLE(), e = tkEntry(c.id);
   const groups = []; c.sugs.forEach(s => { let g = groups.find(x => x.cat === s.cat); if(!g){ g = { cat: s.cat, items: [] }; groups.push(g); } g.items.push(s); });
-  const n = c.sugs.filter(s => !c.off.has(s.key)).length;
-  m.innerHTML = `<div class="modal" style="max-width:760px;">
-    <h3><span>${c.mode === "sync" ? "Add new tasks from the estimate" : "Create task plan"}</span><span class="small-stack"><button class="ghost" onclick="document.getElementById('tkCreateModal').classList.remove('show')">Cancel</button></span></h3>
-    <div class="modal-body">
-      ${c.mode === "create" ? `<div class="tk-cr-top"><div><label>Project start date</label><input type="date" id="tkCrStart" value="${c.start}" onchange="TK.create.start=this.value"></div>
-        <div class="tk-sub">Suggested from the sections switched on in this estimate. Untick anything you don't need — you can edit names, people, durations and dates after.</div></div>`
-        : `<div class="tk-sub" style="margin-bottom:10px;">These sections or items were added to the estimate after the plan was made.</div>`}
-      <div class="tk-cr-groups">${groups.map(g => `<div class="tk-cr-g">
+  const n = c.sugs.filter(s => !c.off.has(s.key)).length, blank = c.mode === "create" && c.kind === "blank";
+  const est = c.mode === "create" && e ? tkEstimate(e.st, c.start) : null;
+  const finishLine = est && est.finish ? `<div class="tk-cr-finish"><i class="ti ti-flag-3" aria-hidden="true"></i><div><span>Projected finish</span><b>${tkFmtDate(est.finish)}</b><small>${est.days} working days from the estimate's scope · weekends & stat holidays skipped</small></div></div>` : "";
+  const list = blank
+    ? `<div class="tk-cr-groups">${groups.map(g => { const w = est.cat[g.cat]; return `<div class="tk-cr-sec"><b>${tkEsc(titles[g.cat] || g.cat)}</b><span>${w ? `${tkFmtDate(w.from)} → ${tkFmtDate(w.to)} · ${tkBizBetween(w.from, w.to) + 1} working days` : ""}</span></div>`; }).join("")}</div>`
+    : `<div class="tk-cr-groups">${groups.map(g => `<div class="tk-cr-g">
         <div class="tk-cr-gh"><b>${tkEsc(titles[g.cat] || g.cat)}</b><span>${g.items.filter(s => !c.off.has(s.key)).length}/${g.items.length}</span>
           <a class="tk-link" onclick="tkCrAll('${g.cat}',true)">All</a><a class="tk-link" onclick="tkCrAll('${g.cat}',false)">None</a></div>
         ${g.items.map(s => `<label class="tk-cr-item${c.off.has(s.key) ? " off" : ""}"><input type="checkbox" ${c.off.has(s.key) ? "" : "checked"} onchange="tkCrToggle('${tkEsc(s.key)}')">
           <span class="t">${s.milestone ? "◆ " : ""}${tkEsc(s.title)}</span><span class="ph">${tkEsc((TK_PHASES.find(p => p[0] === s.phase) || [,""])[1])}</span>${tkWho(s.assignee)}<span class="d">${s.dur ? s.dur + " d" : "milestone"}</span></label>`).join("")}
-      </div>`).join("") || `<div class="tk-empty sm">Nothing new to add.</div>`}</div>
-      <div class="sf-actions"><span class="tk-sub">${n} task${n === 1 ? "" : "s"} selected</span>
-        <button class="primary" ${n ? "" : "disabled"} onclick="tkCreateGo()">${c.mode === "sync" ? "Add " + n + " task" + (n === 1 ? "" : "s") : "Create plan (" + n + " tasks)"}</button></div>
+      </div>`).join("") || `<div class="tk-empty sm">Nothing new to add.</div>`}</div>`;
+  const go = c.mode === "sync" ? "Add " + n + " task" + (n === 1 ? "" : "s") : blank ? `Create plan (${groups.length} sections, no tasks)` : "Create plan (" + n + " tasks)";
+  m.innerHTML = `<div class="modal" style="max-width:760px;">
+    <h3><span>${c.mode === "sync" ? "Add new tasks from the estimate" : "Create task plan"}</span><span class="small-stack"><button class="ghost" onclick="document.getElementById('tkCreateModal').classList.remove('show')">Cancel</button></span></h3>
+    <div class="modal-body">
+      ${c.mode === "create" ? `
+        <div class="tk-cr-modes">
+          <button class="tk-cr-mode${blank ? "" : " on"}" onclick="TK.create.kind='suggested';tkRenderCreate()"><i class="ti ti-sparkles" aria-hidden="true"></i><b>Suggested tasks</b><span>Pre-load ${c.sugs.length} tasks from the estimate. Untick what you don't need.</span></button>
+          <button class="tk-cr-mode${blank ? " on" : ""}" onclick="TK.create.kind='blank';tkRenderCreate()"><i class="ti ti-layout-grid-add" aria-hidden="true"></i><b>Sections only</b><span>One empty block per section in the estimate. You add every task yourself.</span></button>
+        </div>
+        <div class="tk-cr-top"><div><label>Project start date</label><input type="date" id="tkCrStart" value="${c.start}" onchange="TK.create.start=this.value||TK.create.start;tkRenderCreate()"></div>${finishLine}</div>
+        <div class="tk-sub" style="margin-bottom:10px;">${blank ? "Each section gets an estimated window from the estimate's scope, so you know when its work should happen. The projected finish keeps updating as the estimate changes." : "Suggested from the sections switched on in this estimate — you can edit names, people, durations and dates after."}</div>`
+        : `<div class="tk-sub" style="margin-bottom:10px;">These sections or items were added to the estimate after the plan was made.</div>`}
+      ${list}
+      <div class="sf-actions"><span class="tk-sub">${blank ? groups.length + " sections" : n + " task" + (n === 1 ? "" : "s") + " selected"}</span>
+        <button class="primary" ${(blank ? groups.length : n) ? "" : "disabled"} onclick="tkCreateGo()">${go}</button></div>
     </div></div>`;
   m.classList.add("show");
 }
@@ -30210,11 +30297,12 @@ function tkCrAll(cat, val){ TK.create.sugs.filter(s => s.cat === cat).forEach(s 
 function tkCreateGo(){
   const c = TK.create, picked = c.sugs.filter(s => !c.off.has(s.key)), skipped = c.sugs.filter(s => c.off.has(s.key)).map(s => s.key);
   tkMutate(c.id, (s) => {
-    if(c.mode === "create"){ s.tasks = { v:1, startDate: c.start || tkNextMonday(), replanFrom:"", createdAt: new Date().toISOString(), dismissed: skipped, items: tkBuildItems(picked, []) }; }
+    if(c.mode === "create" && c.kind === "blank"){ s.tasks = { v:1, mode:"blank", sections: Array.from(new Set(c.sugs.map(x => x.cat))), startDate: c.start || tkNextMonday(), replanFrom:"", createdAt: new Date().toISOString(), dismissed: [], items: [] }; }
+    else if(c.mode === "create"){ s.tasks = { v:1, mode:"suggested", startDate: c.start || tkNextMonday(), replanFrom:"", createdAt: new Date().toISOString(), dismissed: skipped, items: tkBuildItems(picked, []) }; }
     else { s.tasks.items = s.tasks.items.concat(tkBuildItems(picked, s.tasks.items)); s.tasks.dismissed = (s.tasks.dismissed || []).concat(skipped); }
   });
   document.getElementById("tkCreateModal").classList.remove("show");
-  TK.view = c.id; TK.tab = "blocks";
+  TK.view = c.id; TK.tab = "blocks"; if(c.mode === "create") TK.group = c.kind === "blank" ? "cat" : "phase";
   if(getCurrentRoute() !== "tasks") navigateTo("tasks"); else renderTasks();
   try { flash(c.mode === "create" ? "Task plan created" : "Tasks added"); } catch(e){}
 }
@@ -30241,7 +30329,21 @@ function tkOpenEditor(id, tid, preset){
   const plan = tkPlan(id); if(!plan) return;
   const it = tid ? plan.items.find(i => i.id === tid) : null;
   TK.editing = { id, tid, d: it ? JSON.parse(JSON.stringify(it)) : { id: tkNewId(), key:"", cat:"general", phase:"finish", title:"", detail:"", assignee:{ type:"team", name:(currentProfile && currentProfile.full_name) || "" }, status:"todo", dur:1, after:[], pinStart:"", notes:"" }, depOpen:false, depQ:"" };
-  if(!it && preset){ if(preset.phase) TK.editing.d.phase = preset.phase; if(preset.cat) TK.editing.d.cat = preset.cat; }
+  if(!it && preset){
+    const d = TK.editing.d, e = tkEntry(id);
+    if(preset.phase) d.phase = preset.phase;
+    if(preset.cat){ d.cat = preset.cat;
+      // Default phase = where most of this section's work normally sits
+      const cnt = {}; tkSuggest(e.st).filter(x => x.cat === preset.cat).forEach(x => cnt[x.phase] = (cnt[x.phase] || 0) + 1);
+      const best = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a])[0]; if(best) d.phase = best; }
+    if(plan.mode === "blank" && e){
+      const est = tkEstimate(e.st, plan.startDate, plan.replanFrom), w = preset.cat ? est.cat[preset.cat] : est.phase[preset.phase];
+      const mine = plan.items.filter(x => preset.cat ? x.cat === preset.cat : x.phase === preset.phase);
+      // First task in an empty block starts on the block's estimated start; later ones follow the last one.
+      if(!mine.length && w && w.from) d.pinStart = w.from;
+      else if(mine.length){ const last = mine.slice().sort((a, b) => String(b.due).localeCompare(String(a.due)))[0]; d.after = [last.id]; }
+    }
+  }
   tkLoadTeam().then(() => { if(TK.editing && TK.editing.id === id) tkRenderEditor(); });
   tkRenderEditor();
 }
