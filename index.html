@@ -4614,6 +4614,210 @@
   .cln-group{margin-top:10px;}
   .cln-group-t{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);font-weight:700;margin-bottom:4px;}
   .cln-group ul{margin:0;padding-left:18px;color:var(--ink);font-size:12.5px;line-height:1.6;}
+
+  /* ====================================================================
+     TASKS (v26) — project plans built from the estimate. Team only.
+     ==================================================================== */
+  #view-tasks{max-width:1100px;margin:0 auto;}
+  .tk-head{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;margin:4px 0 14px;flex-wrap:wrap;}
+  .tk-h{font-size:18px;font-weight:700;color:var(--gold-bright);letter-spacing:.06em;margin:0 0 4px;text-transform:uppercase;}
+  .tk-sub{font-size:12px;color:var(--muted);line-height:1.5;}
+  .tk-link{color:var(--gold-bright);cursor:pointer;text-decoration:underline;text-underline-offset:2px;font-size:12px;}
+  .tk-link.danger{color:var(--danger);}
+  .tk-back{background:none;border:0;color:var(--gold-bright);font:inherit;font-size:12px;cursor:pointer;padding:0;margin:0 0 10px;letter-spacing:.04em;}
+  .tk-empty{color:var(--muted);text-align:center;padding:40px 16px;font-size:13px;}
+  .tk-empty.sm{padding:14px;font-size:12px;}
+  .tk-btn{background:var(--panel-2);border:1px solid var(--line-strong);color:var(--ink);font:inherit;font-size:12px;font-weight:600;padding:8px 13px;border-radius:9px;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;}
+  .tk-btn:hover{border-color:var(--gold-deep);}
+  .tk-btn.gold{background:var(--gold-grad);color:#0a0a0a;border-color:transparent;}
+  .tk-btn.sm{padding:4px 9px;font-size:11px;}
+  .tk-btn.lg{padding:12px 20px;font-size:13px;}
+  .tk-dot{background:var(--gold);color:#0a0a0a;border-radius:9px;padding:0 6px;font-size:10px;}
+
+  /* KPI strip */
+  .tk-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px;}
+  .tk-kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:4px;min-width:0;}
+  .tk-kpi.wide{grid-column:span 2;}
+  .tk-kpi span{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.14em;font-weight:600;}
+  .tk-kpi b{font-size:22px;color:var(--ink-strong);font-weight:700;line-height:1.15;}
+  .tk-kpi b.sm{font-size:14px;line-height:1.3;}
+  .tk-kpi small{font-size:11px;color:var(--muted);}
+  .tk-kpi.late{border-color:rgba(226,109,109,.55);} .tk-kpi.late b{color:#f08c8c;}
+  .tk-kpi.warn{border-color:rgba(232,170,80,.55);} .tk-kpi.warn b{color:#efb75e;}
+  .tk-kpi input[type=date]{background:var(--panel-2);border:1px solid var(--line-strong);color:var(--ink);border-radius:8px;padding:6px 8px;font:inherit;font-size:13px;color-scheme:dark;width:100%;}
+
+  .tk-prog{height:7px;background:var(--panel-2);border-radius:5px;overflow:hidden;margin:4px 0 2px;}
+  .tk-prog.thin{height:3px;margin:0 0 6px;}
+  .tk-prog i{display:block;height:100%;background:var(--gold-grad);border-radius:5px;}
+  .tk-health{font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:4px;white-space:nowrap;}
+  .tk-health.ok{background:rgba(110,190,130,.14);color:#8fd3a2;}
+  .tk-health.behind{background:rgba(226,109,109,.15);color:#f08c8c;}
+  .tk-health.blocked{background:rgba(232,170,80,.15);color:#efb75e;}
+
+  /* Blocks / buckets */
+  .tk-block{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:16px;}
+  .tk-block-h{font-size:11px;color:var(--gold-bright);text-transform:uppercase;letter-spacing:.16em;font-weight:700;margin-bottom:10px;}
+  .tk-bucket{margin-bottom:12px;}
+  .tk-bucket:last-child{margin-bottom:0;}
+  .tk-bucket-h{font-size:11.5px;font-weight:700;color:var(--ink);margin:4px 0 4px;letter-spacing:.04em;}
+  .tk-bucket-h b{color:var(--muted);font-weight:600;margin-left:4px;}
+  .tk-bucket.late .tk-bucket-h{color:#f08c8c;}
+
+  /* Task row */
+  .tk-row{display:flex;align-items:center;gap:12px;padding:10px 4px;border-top:1px solid var(--line);}
+  .tk-row:first-of-type{border-top:0;}
+  .tk-bucket-h + .tk-row{border-top:0;}
+  .tk-check{flex:0 0 22px;width:22px;height:22px;border-radius:50%;border:1.5px solid var(--line-strong);background:transparent;color:#0a0a0a;font-size:13px;font-weight:800;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;}
+  .tk-check:hover{border-color:var(--gold);}
+  .tk-check.on{background:var(--gold-grad);border-color:transparent;}
+  .tk-main{flex:1;min-width:0;cursor:pointer;}
+  .tk-title{font-size:13.5px;font-weight:600;color:var(--ink-strong);line-height:1.35;}
+  .tk-row.done .tk-title{color:var(--muted);text-decoration:line-through;}
+  .tk-ms{color:var(--gold);margin-right:5px;}
+  .tk-meta{display:flex;gap:8px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-top:2px;min-width:0;}
+  .tk-detail{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:420px;}
+  .tk-cat{color:var(--gold-bright);font-weight:600;}
+  .tk-proj{color:var(--gold-bright);font-weight:600;cursor:pointer;}
+  .tk-proj:hover{text-decoration:underline;}
+  .tk-side{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;flex:0 0 auto;max-width:52%;}
+  .tk-who{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:12px;white-space:nowrap;max-width:170px;overflow:hidden;text-overflow:ellipsis;}
+  .tk-who i{font-size:13px;}
+  .tk-who.team{background:rgba(212,175,106,.13);color:var(--gold-bright);}
+  .tk-who.trade{background:rgba(120,160,220,.14);color:#9fbff0;}
+  .tk-who.client{background:rgba(170,130,210,.15);color:#c9a8ec;}
+  .tk-who.none{background:var(--panel-2);color:var(--muted);}
+  .tk-date{font-size:11.5px;color:var(--ink);white-space:nowrap;font-variant-numeric:tabular-nums;}
+  .tk-st{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;padding:3px 8px;border-radius:6px;white-space:nowrap;}
+  .tk-st.todo{background:var(--panel-2);color:var(--muted);}
+  .tk-st.doing{background:rgba(120,160,220,.16);color:#9fbff0;}
+  .tk-st.blocked{background:rgba(232,170,80,.16);color:#efb75e;}
+  .tk-st.done{background:rgba(110,190,130,.14);color:#8fd3a2;}
+  .tk-st.late{background:rgba(226,109,109,.16);color:#f08c8c;}
+
+  /* Project cards */
+  .tk-pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;}
+  .tk-pcard{background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:14px;cursor:pointer;transition:border-color .15s,transform .15s;}
+  .tk-pcard:hover{border-color:var(--gold-deep);transform:translateY(-1px);}
+  .tk-pname{font-size:14px;font-weight:700;color:var(--ink-strong);}
+  .tk-psub{font-size:11.5px;color:var(--muted);margin-top:2px;}
+  .tk-pcard .tk-prog{margin:10px 0 8px;}
+  .tk-pline{font-size:11.5px;color:var(--muted);margin-top:4px;line-height:1.5;}
+  .tk-pline b{color:var(--ink);}
+  .tk-ready-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:12.5px;}
+  .tk-ready-row:first-child{border-top:0;}
+  .tk-ready-row span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);}
+  .tk-ready-row span b{color:var(--ink);}
+  .tk-noplan{background:var(--panel);border:1px dashed var(--gold-deep);border-radius:14px;padding:34px 20px;text-align:center;}
+  .tk-noplan h3{margin:0 0 6px;color:var(--gold-bright);font-size:15px;}
+  .tk-noplan p{color:var(--muted);font-size:12.5px;max-width:460px;margin:0 auto 16px;line-height:1.6;}
+
+  /* Project toolbar + tabs */
+  .tk-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
+  .tk-tabs{display:inline-flex;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:3px;}
+  .tk-tabs button{background:none;border:0;color:var(--muted);font:inherit;font-size:12px;font-weight:600;padding:7px 14px;border-radius:8px;cursor:pointer;}
+  .tk-tabs button.on{background:var(--gold-grad);color:#0a0a0a;}
+  .tk-acts{display:flex;gap:8px;flex-wrap:wrap;}
+  .tk-foot{text-align:center;margin:20px 0 6px;}
+
+  /* List by phase */
+  .tk-phase{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px 6px;margin-bottom:12px;}
+  .tk-phase.complete{opacity:.72;}
+  .tk-phase-h{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:6px;}
+  .tk-phase-h b{font-size:13px;color:var(--gold-bright);letter-spacing:.06em;text-transform:uppercase;}
+  .tk-phase-h > div:first-child span{font-size:11px;color:var(--muted);margin-left:8px;}
+  .tk-phase-r{display:flex;gap:10px;font-size:11.5px;color:var(--muted);}
+  .tk-pc{color:var(--ink);font-weight:700;}
+
+  /* Board */
+  .tk-board{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-items:start;}
+  .tk-col{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px;min-height:120px;transition:border-color .15s,background .15s;}
+  .tk-col.over{border-color:var(--gold);background:rgba(212,175,106,.06);}
+  .tk-col-h{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;margin:2px 2px 10px;color:var(--muted);}
+  .tk-col-h b{margin-left:4px;color:var(--ink);}
+  .tk-col-h.doing{color:#9fbff0;} .tk-col-h.blocked{color:#efb75e;} .tk-col-h.done{color:#8fd3a2;}
+  .tk-col-more{width:100%;background:none;border:1px dashed var(--line-strong);color:var(--muted);font:inherit;font-size:11.5px;padding:8px;border-radius:8px;cursor:pointer;}
+  .tk-col-more:hover{color:var(--gold-bright);border-color:var(--gold-deep);}
+  .tk-col-empty{color:var(--line-strong);text-align:center;padding:14px 0;}
+  .tk-card{background:var(--panel-2);border:1px solid var(--line);border-left:3px solid var(--line-strong);border-radius:9px;padding:9px 10px;margin-bottom:8px;cursor:grab;}
+  .tk-card:hover{border-color:var(--gold-deep);}
+  .tk-card.late{border-left-color:var(--danger);}
+  .tk-col[data-st=doing] .tk-card{border-left-color:#7fa6e0;}
+  .tk-col[data-st=blocked] .tk-card{border-left-color:#e3a64a;}
+  .tk-col[data-st=done] .tk-card{border-left-color:#6fbf86;opacity:.75;}
+  .tk-card-t{font-size:12.5px;font-weight:600;color:var(--ink-strong);line-height:1.35;}
+  .tk-card-m{display:flex;justify-content:space-between;gap:6px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin:5px 0 7px;}
+  .tk-card-m .tk-date{font-size:11px;}
+  .tk-card-b{display:flex;justify-content:space-between;align-items:center;gap:6px;}
+  .tk-card-b .tk-who{max-width:120px;}
+  .tk-mv{display:flex;gap:4px;}
+  .tk-mv button{width:24px;height:24px;border-radius:6px;border:1px solid var(--line-strong);background:var(--panel);color:var(--ink);cursor:pointer;font-size:14px;line-height:1;padding:0;}
+  .tk-mv button:hover{border-color:var(--gold);}
+
+  /* Create / sync modal */
+  .tk-cr-top{display:flex;gap:16px;align-items:flex-end;margin-bottom:14px;flex-wrap:wrap;}
+  .tk-cr-top label,.tk-ed label{display:block;font-size:11px;color:var(--gold-bright);text-transform:uppercase;letter-spacing:.14em;font-weight:600;margin-bottom:6px;}
+  .tk-cr-top .tk-sub{flex:1;min-width:220px;}
+  .tk-cr-top input,.tk-ed input,.tk-ed textarea{background:var(--panel-2);border:1px solid var(--line-strong);color:var(--ink);border-radius:8px;padding:9px 10px;font:inherit;font-size:13px;color-scheme:dark;width:100%;box-sizing:border-box;}
+  .tk-cr-top input{width:auto;}
+  .tk-cr-groups{display:flex;flex-direction:column;gap:10px;max-height:52vh;overflow:auto;padding-right:4px;}
+  .tk-cr-g{border:1px solid var(--line);border-radius:10px;padding:8px 10px;}
+  .tk-cr-gh{display:flex;align-items:center;gap:10px;font-size:12.5px;margin-bottom:4px;}
+  .tk-cr-gh b{color:var(--gold-bright);flex:1;}
+  .tk-cr-gh span{color:var(--muted);font-size:11px;}
+  .tk-cr-item{display:flex;align-items:center;gap:10px;padding:6px 2px;border-top:1px solid var(--line);font-size:12.5px;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500;margin:0;}
+  .tk-cr-item .ph{text-transform:uppercase;letter-spacing:.08em;}
+  .tk-cr-item input{accent-color:#d4af6a;width:16px;height:16px;flex:0 0 16px;}
+  .tk-cr-item .t{flex:1;min-width:0;color:var(--ink);}
+  .tk-cr-item .ph{font-size:10.5px;color:var(--muted);white-space:nowrap;}
+  .tk-cr-item .d{font-size:11px;color:var(--muted);width:72px;text-align:right;white-space:nowrap;}
+  .tk-cr-item.off .t{color:var(--muted);text-decoration:line-through;}
+  .tk-cr-item.off .tk-who{opacity:.45;}
+
+  /* Editor */
+  .tk-f{margin-bottom:14px;}
+  .tk-2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .tk-pills{display:flex;flex-wrap:wrap;gap:6px;}
+  .tk-pills button{background:var(--panel-2);border:1px solid var(--line-strong);color:var(--ink);font:inherit;font-size:12px;font-weight:600;padding:7px 12px;border-radius:18px;cursor:pointer;}
+  .tk-pills button.on{background:var(--gold-grad);color:#0a0a0a;border-color:transparent;}
+  .tk-sugg{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;}
+  .tk-sugg button{background:none;border:1px dashed var(--line-strong);color:var(--muted);font:inherit;font-size:11px;padding:4px 9px;border-radius:12px;cursor:pointer;}
+  .tk-sugg button:hover{color:var(--gold-bright);border-color:var(--gold-deep);}
+  .tk-hint{font-size:11px;color:var(--muted);margin-top:4px;}
+  .tk-auto{font-size:12px;color:var(--ink);padding:9px 0 4px;}
+  .tk-deps{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
+  .tk-dep{display:inline-flex;align-items:center;gap:6px;background:var(--panel-2);border:1px solid var(--line-strong);border-radius:14px;padding:4px 6px 4px 10px;font-size:11.5px;}
+  .tk-dep button{background:none;border:0;color:var(--muted);cursor:pointer;font-size:14px;line-height:1;padding:0 2px;}
+  .tk-dep-pick{margin-top:8px;border:1px solid var(--line);border-radius:10px;padding:8px;}
+  .tk-dep-pick #tkDepList{display:flex;flex-direction:column;max-height:200px;overflow:auto;margin-top:6px;}
+  .tk-dep-pick #tkDepList button{background:none;border:0;border-top:1px solid var(--line);color:var(--ink);font:inherit;font-size:12px;text-align:left;padding:7px 4px;cursor:pointer;display:flex;justify-content:space-between;gap:8px;}
+  .tk-dep-pick #tkDepList button:hover{color:var(--gold-bright);}
+  .tk-dep-pick small{color:var(--muted);}
+  .tk-ed .sf-actions .ghost.danger{color:var(--danger);}
+
+  /* Dashboard block */
+  #dashTasks{margin-bottom:16px;}
+  .tk-dash{background:var(--panel);border:1px solid var(--gold-deep);border-radius:14px;padding:14px 16px;box-shadow:var(--gold-glow);}
+  .tk-dash-h{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap;}
+  .tk-dash-h b{display:block;font-size:13px;color:var(--gold-bright);letter-spacing:.1em;text-transform:uppercase;}
+  .tk-dash-h span{font-size:12px;color:var(--muted);}
+  .tk-dash-h em{font-style:normal;}
+  .tk-dash-h em.late{color:#f08c8c;font-weight:700;}
+  .tk-more{font-size:11.5px;color:var(--muted);padding:8px 4px 0;border-top:1px solid var(--line);}
+
+  @media (max-width:760px){
+    .tk-row{flex-wrap:wrap;align-items:flex-start;}
+    .tk-main{flex:1 1 calc(100% - 40px);}
+    .tk-side{max-width:none;flex:1 1 100%;justify-content:flex-start;padding-left:34px;}
+    .tk-detail{max-width:100%;white-space:normal;}
+    .tk-kpi.wide{grid-column:span 2;}
+    .tk-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}
+    .tk-board{grid-template-columns:1fr;}
+    .tk-2{grid-template-columns:1fr;}
+    .tk-cr-item{flex-wrap:wrap;}
+    .tk-cr-item .t{flex:1 1 calc(100% - 30px);}
+    .tk-cr-item .ph{padding-left:26px;}
+    .tk-acts{width:100%;}
+  }
 </style>
 </head>
 <body>
@@ -4770,6 +4974,11 @@
         <span class="sb-item-label">Suppliers</span>
       </button>
 
+      <button class="sb-item" data-route="tasks" data-team-only="true" data-label="Tasks" onclick="TK.view='all';navigateTo('tasks')">
+        <i class="ti ti-list-check" aria-hidden="true"></i>
+        <span class="sb-item-label">Tasks</span>
+      </button>
+
       <button class="sb-item" data-route="invoicing" data-feature="invoicing" data-label="Invoicing" onclick="navigateTo('invoicing')">
         <i class="ti ti-receipt" aria-hidden="true"></i>
         <span class="sb-item-label">Invoicing</span>
@@ -4837,8 +5046,12 @@
           </div>
         </div>
         <div id="dashTour" style="display:none;"></div>
+        <div id="dashTasks" data-team-only="true" style="display:none;"></div>
         <div id="dashGrid" class="dash-grid"></div>
       </div>
+
+      <!-- Tasks view (v26) — project plans built from each estimate. Team only. -->
+      <div id="view-tasks" class="view"></div>
 
       <!-- My Submissions view — agents see their own submitted estimates with status. -->
       <div id="view-my-submissions" class="view">
@@ -5068,6 +5281,10 @@
           <button class="import-pdf-link" data-feature="invoicing" onclick="openInvoicingForEstimate()" title="Invoices, payments and change orders for this project">
             <i class="ti ti-receipt" aria-hidden="true" style="font-size:15px;"></i>
             <span>Invoicing</span>
+          </button>
+          <button class="import-pdf-link" data-team-only="true" onclick="tkFromEstimate()" title="This project's task plan and timeline">
+            <i class="ti ti-list-check" aria-hidden="true" style="font-size:15px;"></i>
+            <span>Tasks</span>
           </button>
           <button onclick="openClientEstimate()">Print / PDF</button>
           <button onclick="openEmailEstimateModal()">Email to Client</button>
@@ -17260,7 +17477,7 @@ const OFFICE_EMAIL = "renotosold@gmail.com";
 const OFFICE_COMPANY = "Reno to Sold Inc.";
 
 /* ---------- Supabase cross-device sync ---------- */
-window.RTS_BUILD = "2026-11-06-v25b-summary-layout";
+window.RTS_BUILD = "2026-11-07-v26-tasks";
 console.log("[build] " + window.RTS_BUILD);
 const SUPABASE_URL = "https://icrnvnmvcdpmhnjorefs.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imljcm52bm12Y2RwbWhuam9yZWZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2ODQwMDgsImV4cCI6MjA5NDI2MDAwOH0.YoeBndWsky8vAW6mLeMziPeH2j2C6c_3VdAvOG_i0kA";
@@ -22562,7 +22779,7 @@ async function confirmSubmissionDecision(){
 /* PRE-LISTING PACKAGES — the whole tool lives in packages/prelisting.js
    (loaded at the bottom of this file). Only small hooks stay here. */
 
-const VALID_ROUTES = ["dashboard", "estimator", "my-submissions", "bids", "invoicing", "tracker", "trim", "materials", "suppliers", "packages", "brokerage", "brk-agents", "brk-seats", "brk-branding"];
+const VALID_ROUTES = ["dashboard", "estimator", "my-submissions", "bids", "invoicing", "tracker", "trim", "materials", "suppliers", "tasks", "packages", "brokerage", "brk-agents", "brk-seats", "brk-branding"];
 const DEFAULT_ROUTE = "dashboard";
 /* Tool routes — these use existing overlay/modal code rather than
    .view containers. The router opens/closes them via helper hooks
@@ -22642,6 +22859,7 @@ function renderRoute(){
   }
   if(route === "brokerage"){ history.replaceState({route:"brk-agents"}, "", "#/brk-agents"); return renderRoute(); }
   if(route === "suppliers" && currentProfile && !isAdmin()){ history.replaceState({route:"dashboard"}, "", "#/dashboard"); return renderRoute(); }
+  if(route === "tasks" && currentProfile && !(isAdmin() || isStaff())){ history.replaceState({route:"dashboard"}, "", "#/dashboard"); return renderRoute(); }
   // Internal tools: the sidebar hides them, and a typed URL must not open them either.
   const _toolFeature = { materials:"materials_catalog", bids:"contractor_bids", invoicing:"invoicing", tracker:"expense_tracker", trim:"trim_calculator" }[route];
   if(_toolFeature && currentProfile && !canUse(_toolFeature)){
@@ -22694,6 +22912,8 @@ function renderRoute(){
     else { const v = document.getElementById("view-packages"); if(v && !v.innerHTML.trim()) v.innerHTML = '<p style="color:var(--muted);text-align:center;padding:40px 16px;">Loading Pre-Listing Packages… If this doesn\'t go away, packages/prelisting.js may be missing from the site.</p>'; }
   } else if(route === "suppliers"){
     try { openSuppliers(); } catch(e){ console.error("route suppliers:", e); }
+  } else if(route === "tasks"){
+    try { renderTasks(); } catch(e){ console.error("route tasks:", e); }
   } else if(route === "trim"){
     try { renderTrim(); } catch(e){ console.error("route trim:", e); }
   } else if(route === "materials"){
@@ -23563,6 +23783,11 @@ function dashboardCards(){
       desc: "Your suppliers & vendors. Send clients a branded guide with tap-to-navigate links.",
       action: () => navigateTo("suppliers") },
 
+    { key: "tasks", teamOnly: true,
+      title: "Tasks", icon: "ti-list-check",
+      desc: "Every project's plan by phase, with who's doing what and when. Built from the estimate.",
+      action: () => { TK.view = "all"; navigateTo("tasks"); } },
+
     { key: "invoicing", requireFeature: "invoicing",
       title: "Invoicing", icon: "ti-receipt",
       desc: "Issue milestone invoices and track what's paid, due, or overdue.",
@@ -23601,6 +23826,7 @@ function dashboardCards(){
 
   return allCards.filter(c => {
     if(c.adminOnly && !isAdmin()) return false;
+    if(c.teamOnly && !(isAdmin() || isStaff())) return false;
     if(c.requireFeature && !canUse(c.requireFeature)) return false;
     return true;
   });
@@ -27533,6 +27759,9 @@ function applyFeatureGates(){
     const adminEls = document.querySelectorAll("[data-admin-only=\"true\"]");
     const userIsAdmin = isAdmin();
     adminEls.forEach(el => { el.style.display = userIsAdmin ? "" : "none"; });
+    // Team-only elements (admin + staff): Tasks
+    const userIsTeam = userIsAdmin || isStaff();
+    document.querySelectorAll("[data-team-only=\"true\"]").forEach(el => { if(el.id === "dashTasks") return; el.style.display = userIsTeam ? "" : "none"; });
     // Also hide the floating "Internal Mode" lock icon for non-admins.
     // Internal Mode is a legacy admin-only gate; only admins ever need it.
     ["openPinModalBtn","lockBtn"].forEach(id => {
@@ -27554,6 +27783,7 @@ function applyFeatureGates(){
       const _r = getCurrentRoute();
       const _tf = { materials:"materials_catalog", bids:"contractor_bids", invoicing:"invoicing", tracker:"expense_tracker", trim:"trim_calculator", packages:"prelisting_packages" }[_r];
       if(_tf && currentProfile && !canUse(_tf)) navigateTo("dashboard");
+      else if(_r === "tasks"){ if(currentProfile && !userIsTeam) navigateTo("dashboard"); else if(typeof renderTasks === "function") renderTasks(); }
       else if(_r === "dashboard") renderDashboard();
       else if(/^brk-/.test(_r) && typeof renderBrokeragePage === "function"){
         if(currentProfile && !canUse("brokerage_admin")) navigateTo("dashboard");
@@ -29314,6 +29544,663 @@ document.addEventListener("keydown", (e) => {
   const sb = document.getElementById("blkStart"); if(sb) delete sb.dataset.built;
 })();
 blkApplyMode();
+
+</script>
+
+<script>
+/* ===== Tasks (v26) ===== */
+/* ======================================================================
+   TASKS (v26) — project task plans built from a saved estimate.
+   Admin + staff only. A plan lives on the estimate (state.tasks) so it
+   saves and syncs with the estimate like invoices do.
+     state.tasks = { v:1, startDate:"YYYY-MM-DD", replanFrom:"", createdAt, items:[ITEM] }
+     ITEM = { id, key, cat, phase, title, detail, assignee:{type:"team"|"trade"|"client", name},
+              status:"todo"|"doing"|"blocked"|"done", dur (business days, 0 = milestone),
+              after:[ids], pinStart:"YYYY-MM-DD"|"", start, due, doneAt, notes, milestone }
+   Dates are scheduled in business days (Mon–Fri) from the dependencies.
+   ====================================================================== */
+const TK_PHASES = [
+  ["pre",      "Pre-construction",       "Selections, orders, permits & scheduling"],
+  ["demo",     "Demolition & prep",      "Protection, removals & disposal"],
+  ["rough",    "Rough-ins & structure",  "Framing, plumbing, electrical"],
+  ["close",    "Inspections & close-up", "Inspections, drywall & waterproofing"],
+  ["finish",   "Finishes",               "Paint, floors, tile, cabinets, fixtures"],
+  ["handover", "Close-out & handover",   "Deficiencies, clean, walkthrough, invoice"]
+];
+const TK_STATUS = [["todo","To do"],["doing","In progress"],["blocked","Blocked"],["done","Done"]];
+const TK_CAT_TITLE = () => Object.assign({ general:"Project" }, Object.fromEntries(Object.keys(CATEGORY_META).map(k => [k, CATEGORY_META[k].title])));
+
+/* ---------- business-day calendar ---------- */
+function tkParse(iso){ const [y,m,d] = String(iso||"").split("-").map(Number); return new Date(y||1970,(m||1)-1,d||1); }
+function tkISO(dt){ const z = dt.getTimezoneOffset()*60000; return new Date(dt.getTime()-z).toISOString().slice(0,10); }
+/* Ontario statutory holidays (observed dates) — no work scheduled on them. */
+const TK_HOL = {};
+function tkHolidays(y){
+  if(TK_HOL[y]) return TK_HOL[y];
+  const out = new Set(), iso = (d) => tkISO(d);
+  const nthMon = (m, n) => { const d = new Date(y, m, 1); while(d.getDay() !== 1) d.setDate(d.getDate()+1); d.setDate(d.getDate() + 7*(n-1)); return d; };
+  const observed = (m, day) => { const d = new Date(y, m, day); if(d.getDay() === 6) d.setDate(d.getDate()+2); else if(d.getDay() === 0) d.setDate(d.getDate()+1); return d; };
+  // Easter (anonymous Gregorian algorithm) → Good Friday
+  const a = y % 19, b = Math.floor(y/100), c = y % 100, d0 = Math.floor(b/4), e = b % 4, f = Math.floor((b+8)/25), g = Math.floor((b-f+1)/3),
+        h = (19*a + b - d0 - g + 15) % 30, i = Math.floor(c/4), k = c % 4, l = (32 + 2*e + 2*i - h - k) % 7, m = Math.floor((a + 11*h + 22*l)/451),
+        em = Math.floor((h + l - 7*m + 114)/31) - 1, ed = ((h + l - 7*m + 114) % 31) + 1;
+  const gf = new Date(y, em, ed); gf.setDate(gf.getDate()-2);
+  const vic = new Date(y, 4, 24); while(vic.getDay() !== 1) vic.setDate(vic.getDate()-1);
+  const xmas = new Date(y, 11, 25), box = new Date(y, 11, 26);
+  let xo = new Date(xmas), bo = new Date(box);
+  if(xmas.getDay() === 6){ xo = new Date(y, 11, 27); bo = new Date(y, 11, 28); }
+  else if(xmas.getDay() === 0){ xo = new Date(y, 11, 26); bo = new Date(y, 11, 27); }
+  else if(box.getDay() === 6){ bo = new Date(y, 11, 28); }
+  [observed(0,1), nthMon(1,3), gf, vic, observed(6,1), nthMon(7,1), nthMon(8,1), nthMon(9,2), xo, bo].forEach(d => out.add(iso(d)));
+  return (TK_HOL[y] = out);
+}
+function tkIsBiz(dt){ const g = dt.getDay(); return g !== 0 && g !== 6 && !tkHolidays(dt.getFullYear()).has(tkISO(dt)); }
+function tkFirstBiz(iso){ const d = tkParse(iso); while(!tkIsBiz(d)) d.setDate(d.getDate()+1); return tkISO(d); }
+function tkAddBiz(iso, n){ const d = tkParse(tkFirstBiz(iso)); let k = n; while(k > 0){ d.setDate(d.getDate()+1); if(tkIsBiz(d)) k--; } return tkISO(d); }
+function tkBizBetween(aIso, bIso){ // business days from a to b (b >= a)
+  let a = tkParse(tkFirstBiz(aIso)), b = tkParse(bIso), n = 0;
+  if(b <= a) return 0;
+  while(a < b){ a.setDate(a.getDate()+1); if(tkIsBiz(a) && a <= b) n++; }
+  return n;
+}
+function tkNextMonday(){ const d = new Date(); d.setDate(d.getDate() + ((8 - d.getDay()) % 7 || 7)); return tkISO(d); }
+function tkFmtDate(iso){ if(!iso) return "—"; const d = tkParse(iso); return d.toLocaleDateString("en-CA", { month:"short", day:"numeric" }); }
+function tkToday(){ return tkISO(new Date()); }
+
+/* ---------- suggested tasks from the estimate ---------- */
+function tkSuggest(st){
+  st = st || state;
+  const out = [];
+  const N = (v) => (typeof num === "function" ? num(v) : parseFloat(v) || 0);
+  const client = ((st.sellers || [])[0] || {}).name || "Homeowner";
+  const pm = (currentProfile && currentProfile.full_name) || "Reno to Sold";
+  const T = (key, cat, phase, title, who, dur, after, extra) => out.push(Object.assign({ key, cat, phase, title, assignee: who, dur, after: after || [] }, extra || {}));
+  const team = { type:"team", name: pm }, cl = { type:"client", name: client };
+  const trade = (n) => ({ type:"trade", name: n });
+  const on = (c) => !!(st.enabled && st.enabled[c]);
+  const propSqft = N(st.propSqft);
+
+  // ---- Project (always) ----
+  T("deposit","general","pre","Contract signed & deposit received", team, 0, [], { milestone:true, detail:"Deposit invoice paid — locks the start date." });
+  T("kickoff","general","pre","Kick-off meeting with homeowner", team, 1, ["deposit"], { detail:"Confirm scope, schedule, site access, parking, pets and working hours." });
+  T("schedule","general","pre","Book trades & lock the schedule", team, 2, ["kickoff"]);
+  T("bin","general","pre","Order disposal bin", team, 1, ["kickoff"]);
+  T("protect","general","demo","Site protection — floors, dust barriers, cover fixtures", trade("General labour"), 1, ["schedule","bin"]);
+
+  // ---- Painting ----
+  if(on("painting")){
+    const p = st.painting || {};
+    const sq = p.scope === "custom" ? N(p.sqft) : propSqft;
+    T("p_colours","painting","pre","Choose paint colours", cl, 3, ["kickoff"]);
+    T("p_order","painting","pre","Order paint & supplies", team, 1, ["p_colours"]);
+    if(p.popcorn) T("p_popcorn","painting","demo",`Popcorn ceiling removal (${Math.round(N(p.popcornSqft)).toLocaleString()} sqft)`, trade("Painter"), Math.max(1, Math.ceil(N(p.popcornSqft)/600)), ["protect"]);
+    T("p_prep","painting","finish",`Patch, sand & prime (${Math.round(sq).toLocaleString()} sqft)`, trade("Painter"), Math.max(1, Math.ceil(sq/1500)), ["phase:close","protect","p_order"].concat(p.popcorn ? ["p_popcorn"] : []));
+    if(p.ceiling) T("p_ceiling","painting","finish",`Paint ceilings (${Math.round(N(p.ceilingSqft) || sq).toLocaleString()} sqft)`, trade("Painter"), Math.max(1, Math.ceil((N(p.ceilingSqft) || sq)/1200)), ["p_prep"]);
+    T("p_walls","painting","finish",`Paint walls — ${p.coats === "two" ? 3 : 2} coats (${Math.round(sq).toLocaleString()} sqft)`, trade("Painter"), Math.max(1, Math.ceil(sq/(p.coats === "two" ? 650 : 850))), [p.ceiling ? "p_ceiling" : "p_prep"]);
+    if(p.trim) T("p_trim","painting","finish",`Paint baseboards & trim (${Math.round(N(p.trimLinFt)).toLocaleString()} LF)`, trade("Painter"), Math.max(1, Math.ceil(N(p.trimLinFt)/450)), ["p_walls","dt_caulk","f_base"]);
+    if(p.doors) T("p_doors","painting","finish",`Paint interior doors (${N(p.doorCount)})`, trade("Painter"), Math.max(1, Math.ceil(N(p.doorCount)/8)), ["p_walls","dt_install"]);
+    if(p.extDoors) T("p_extdoors","painting","finish",`Paint exterior doors (${N(p.extDoorCount)})`, trade("Painter"), 1, ["p_walls"]);
+    if(p.garageDoors) T("p_garage","painting","finish",`Paint garage doors (${N(p.garageDoorCount)})`, trade("Painter"), 1, ["p_walls"]);
+  }
+  // ---- Doors & Trims ----
+  if(on("doorsTrims")){
+    const d = st.doorsTrims || {};
+    const doors = d.newInteriorDoors ? (d.newDoors ? N(d.newDoorCount) : 0) + (d.newSolidDoors ? N(d.newSolidDoorCount) : 0) : 0;
+    T("dt_select","doorsTrims","pre","Choose door style & hardware", cl, 2, ["kickoff"]);
+    T("dt_measure","doorsTrims","pre","Measure door openings & window trim", trade("Carpenter"), 1, ["kickoff"]);
+    T("dt_order","doorsTrims","pre","Order doors & trim (≈2 weeks lead time)", team, 10, ["dt_select","dt_measure"]);
+    T("dt_remove","doorsTrims","demo","Remove old doors & trim", trade("Carpenter"), 1, ["protect"]);
+    if(doors) T("dt_install","doorsTrims","finish",`Install doors & hardware (${doors} doors)`, trade("Carpenter"), Math.max(1, Math.ceil(doors/6)), ["dt_order","phase:close"]);
+    if(d.newWindowTrim) T("dt_trim","doorsTrims","finish",`Install window trim/casing (${Math.round(N(d.newWindowTrimLinFt))} LF)`, trade("Carpenter"), Math.max(1, Math.ceil(N(d.newWindowTrimLinFt)/250)), ["dt_order","phase:close"]);
+    if(d.newDoorTrim) T("dt_doortrim","doorsTrims","finish",`Install door casing (${Math.round(N(d.newDoorTrimLinFt))} LF)`, trade("Carpenter"), Math.max(1, Math.ceil(N(d.newDoorTrimLinFt)/250)), ["dt_order","phase:close"]);
+    T("dt_caulk","doorsTrims","finish","Caulk & fill trim, ready for paint", trade("Carpenter"), 1, ["dt_install","dt_trim","dt_doortrim"]);
+  }
+  // ---- Flooring ----
+  if(on("flooring")){
+    const f = st.flooring || {};
+    const sq = N(f.sqft) || propSqft;
+    T("f_select","flooring","pre","Choose flooring at supplier", cl, 3, ["kickoff"]);
+    T("f_order","flooring","pre",`Order flooring (${Math.round(sq*1.1).toLocaleString()} sqft incl. 10% waste)`, team, 5, ["f_select"]);
+    T("f_remove","flooring","demo",`Remove & dispose existing flooring (${Math.round(sq).toLocaleString()} sqft)`, trade("Flooring installer"), Math.max(1, Math.ceil(sq/900)), ["protect"]);
+    T("f_level","flooring","rough","Level & prep subfloor", trade("Flooring installer"), 1, ["f_remove"]);
+    T("f_acclimate","flooring","finish","Deliver & acclimate flooring (48–72 h)", trade("Flooring installer"), 2, ["f_order","f_level"]);
+    T("f_install","flooring","finish",`Install flooring (${Math.round(sq).toLocaleString()} sqft)`, trade("Flooring installer"), Math.max(1, Math.ceil(sq/450)), ["f_acclimate","p_walls","phase:close"]);
+    if(f.baseboards) T("f_base","flooring","finish",`Install baseboards & transitions (${Math.round(N(f.baseboardLinFt))} LF)`, trade("Carpenter"), Math.max(1, Math.ceil(N(f.baseboardLinFt)/350)), ["f_install"]);
+  }
+  // ---- Tiling ----
+  if(on("tiling")){
+    const t = st.tiling || {}; const sq = N(t.sqft);
+    T("t_select","tiling","pre","Choose tile", cl, 3, ["kickoff"]);
+    T("t_order","tiling","pre","Order tile & setting materials", team, 5, ["t_select"]);
+    T("t_remove","tiling","demo","Remove existing tile", trade("Tile setter"), 1, ["protect"]);
+    T("t_prep","tiling","rough","Prep substrate & membrane", trade("Tile setter"), 1, ["t_remove"]);
+    T("t_install","tiling","finish",`Lay tile (${Math.round(sq).toLocaleString()} sqft)`, trade("Tile setter"), Math.max(1, Math.ceil(sq/90)), ["t_order","t_prep","phase:close"]);
+    T("t_grout","tiling","finish","Grout & seal", trade("Tile setter"), 1, ["t_install"]);
+  }
+  // ---- Kitchen ----
+  if(on("kitchen")){
+    const k = st.kitchen || {}; let lf = 0;
+    try { lf = deriveKitchen(k).baseLF || 0; } catch(e){}
+    T("k_measure","kitchen","pre","Kitchen measure & design", trade("Kitchen designer"), 3, ["kickoff"]);
+    T("k_approve","kitchen","pre","Homeowner approves kitchen design", cl, 2, ["k_measure"], { milestone:true, detail:"Triggers the 'Kitchen design approved' milestone invoice." });
+    T("k_production","kitchen","pre","Cabinets in production (≈5 weeks lead time)", trade("Cabinet maker"), 25, ["k_approve"]);
+    T("k_select","kitchen","pre","Choose countertop" + (k.backsplash ? " & backsplash" : ""), cl, 3, ["k_approve"]);
+    T("k_demo","kitchen","demo","Demo & dispose existing kitchen", trade("General labour"), 2, ["protect"]);
+    T("k_rough","kitchen","rough","Kitchen plumbing & electrical adjustments", trade("Plumber / Electrician"), 2, ["k_demo"]);
+    T("k_install","kitchen","finish",(lf ? `Cabinet delivery & install (${lf} LF${k.island ? " + island" : ""})` : `Cabinet delivery & install${k.island ? " (incl. island)" : ""}`), trade("Cabinet installer"), Math.max(2, Math.ceil(lf/12) + 1), ["k_production","k_rough","phase:close"]);
+    if(k.counter !== false){
+      T("k_template","kitchen","finish","Countertop template", trade("Countertop fabricator"), 1, ["k_install"]);
+      T("k_counter","kitchen","finish","Countertop fabrication & install (≈8 days)", trade("Countertop fabricator"), 8, ["k_template","k_select"]);
+    }
+    if(k.backsplash) T("k_backsplash","kitchen","finish","Backsplash install", trade(k.backsplashMaterial === "tile" ? "Tile setter" : "Countertop fabricator"), 2, ["k_counter"]);
+    if(k.undercabLighting) T("k_undercab","kitchen","finish","Under-cabinet lighting", trade("Electrician"), 1, ["k_backsplash","k_counter"]);
+    T("k_hookup","kitchen","finish","Sink, faucet & appliance hook-up", trade("Plumber"), 1, ["k_counter","k_install"]);
+    if(k.basement && k.basement.enabled){
+      T("kb_design","kitchen","pre","Basement kitchen — design & order", trade("Kitchen designer"), 3, ["k_approve"]);
+      T("kb_install","kitchen","finish","Basement kitchen — cabinets & countertop install", trade("Cabinet installer"), 3, ["kb_design","k_production","phase:close"]);
+    }
+  }
+  // ---- Bathrooms (one set per room) ----
+  if(on("bathroom")){
+    (((st.bathroom || {}).rooms) || []).forEach((b, i) => {
+      const n = i + 1, pfx = "b" + n + "_", L = `Bathroom #${n} — `;
+      const shower = !!b.standUpShower, newRough = shower && b.showerType === "new";
+      const tileSq = N(b.floorTileSqft) + N(b.wallTileSqft);
+      T(pfx+"select","bathroom","pre",L + "choose vanity, fixtures & tile", cl, 3, ["kickoff"]);
+      T(pfx+"order","bathroom","pre",L + "order vanity, fixtures & tile", team, 7, [pfx+"select"]);
+      T(pfx+"demo","bathroom","demo",L + "demo", trade("General labour"), 1, ["protect"]);
+      T(pfx+"rough","bathroom","rough",L + "plumbing rough-in", trade("Plumber"), newRough || b.doubleVanity ? 2 : 1, [pfx+"demo"]);
+      if(newRough) T(pfx+"inspect","bathroom","close",L + "plumbing inspection", team, 1, [pfx+"rough"]);
+      if(shower) T(pfx+"wp","bathroom","close",L + (b.curbless ? "linear drain, sloped subfloor & waterproofing" : "shower waterproofing"), trade("Tile setter"), b.curbless ? 2 : 1, [newRough ? pfx+"inspect" : pfx+"rough"]);
+      T(pfx+"tile","bathroom","finish",L + `tile floor & walls (${Math.round(tileSq)} sqft)`, trade("Tile setter"), Math.max(2, Math.ceil(tileSq/60)), [shower ? pfx+"wp" : pfx+"rough", pfx+"order"]);
+      T(pfx+"fixtures","bathroom","finish",L + "install vanity, toilet & fixtures", trade("Plumber"), 1, [pfx+"tile"]);
+      if(shower) T(pfx+"glass","bathroom","finish",L + "glass shower — measure & install (≈1 week)", trade("Glass installer"), 6, [pfx+"tile"]);
+      T(pfx+"finish","bathroom","finish",L + "mirror, light & accessories", trade("General labour"), 1, [pfx+"fixtures"]);
+    });
+  }
+  // ---- Lighting & Electrical ----
+  if(on("potlights")){
+    const e = st.potlights || {};
+    const pots = (e.intNewOn ? N(e.intNewCount) : 0) + (e.intReplaceOn ? N(e.intReplaceCount) : 0) + (e.extEnabled ? (e.extNewOn ? N(e.extNewCount) : 0) + (e.extReplaceOn ? N(e.extReplaceCount) : 0) : 0);
+    T("e_layout","potlights","pre","Lighting layout walkthrough", trade("Electrician"), 1, ["kickoff"]);
+    T("e_permit","potlights","pre","ESA permit / notification", team, 1, ["e_layout"]);
+    T("e_rough","potlights","rough",`Cut in & wire pot lights (${pots})`, trade("Electrician"), Math.max(1, Math.ceil(pots/20)), ["protect","e_permit"]);
+    T("e_inspect","potlights","close","ESA inspection", team, 1, ["e_rough"]);
+    if(e.switchEnabled || e.dimmerEnabled || e.plugEnabled) T("e_devices","potlights","finish","Install switches, dimmers & plugs", trade("Electrician"), 1, ["phase:close","p_walls"]);
+    T("e_trim","potlights","finish","Install pot light trims & test", trade("Electrician"), 1, ["p_ceiling","p_walls","phase:close"]);
+  }
+  // ---- Wall removal ----
+  if(on("wallRemoval")){
+    const w = st.wallRemoval || {}; const walls = w.walls || [];
+    const lb = walls.some(x => x.loadBearing), lf = walls.reduce((a, x) => a + N(x.linearFt), 0), elec = walls.some(x => x.electricalInWall);
+    if(w.includeEngineer || lb) T("w_engineer","wallRemoval","pre","Engineer drawings for beam", team, 5, ["kickoff"]);
+    if(w.includePermit) T("w_permit","wallRemoval","pre","Building permit", team, 10, ["w_engineer","kickoff"]);
+    if(w.includeAsbestosTest) T("w_asbestos","wallRemoval","pre","Asbestos test", team, 3, ["kickoff"]);
+    if(lb) T("w_shore","wallRemoval","rough","Temporary shoring", trade("Framer"), 1, ["w_permit","w_asbestos","protect"]);
+    T("w_remove","wallRemoval","rough",`Remove wall${walls.length === 1 ? "" : "s"} (${Math.round(lf)} LF)`, trade("Framer"), 2, [lb ? "w_shore" : "protect","w_permit","w_asbestos"]);
+    if(lb) T("w_beam","wallRemoval","rough","Install beam / LVL", trade("Framer"), 2, ["w_remove"]);
+    if(elec) T("w_relocate","wallRemoval","rough","Relocate electrical / HVAC", trade("Electrician"), 1, ["w_remove"]);
+    if(w.includePermit) T("w_inspect","wallRemoval","close","Framing inspection", team, 1, ["w_beam","w_remove","w_relocate"]);
+    T("w_drywall","wallRemoval","close","Drywall patch & finish", trade("Drywaller"), 3, ["w_inspect","w_beam","w_remove","w_relocate"]);
+  }
+  // ---- Miscellaneous (one task per line item) ----
+  if(on("miscellaneous")){
+    (((st.miscellaneous || {}).items) || []).forEach((it, i) => {
+      const d = (it.name || it.desc || it.description || ("Item " + (i + 1))).toString().trim();
+      T("m_" + (it.id || d.toLowerCase().replace(/[^a-z0-9]+/g, "_").slice(0, 40)), "miscellaneous", "rough", d, trade("General labour"), 2, ["protect"], { detail: (it.description && it.description !== d) ? String(it.description) : "" });
+    });
+  }
+  // ---- Close-out ----
+  T("deficiency","general","handover","Deficiency walkthrough & punch list", team, 1, ["phase:finish"]);
+  T("fixdef","general","handover","Complete deficiencies", trade("General labour"), 2, ["deficiency"]);
+  if(on("cleaning")){
+    const c = st.cleaning || {};
+    if(c.declutter) T("c_declutter","cleaning","pre","Declutter", trade("Cleaner"), 2, ["kickoff"]);
+    if(c.carpet) T("c_carpet","cleaning","handover","Carpet cleaning", trade("Cleaner"), 1, ["fixdef"]);
+    T("c_deep","cleaning","handover",`Deep clean (${Math.round(N(c.sqft) || propSqft).toLocaleString()} sqft)`, trade("Cleaner"), 1, ["fixdef","c_carpet"]);
+  } else {
+    T("finalclean","general","handover","Final construction clean", trade("Cleaner"), 1, ["fixdef"]);
+  }
+  T("walkthrough","general","handover","Final walkthrough & sign-off with homeowner", cl, 1, [on("cleaning") ? "c_deep" : "finalclean"], { milestone:true });
+  T("finalinvoice","general","handover","Send final invoice", team, 0, ["walkthrough"], { milestone:true });
+  T("photos","general","handover","Book listing photos / staging", team, 1, ["walkthrough"]);
+  return out;
+}
+
+/* ---------- scheduler (earliest start from dependencies) ---------- */
+function tkSchedule(plan){
+  const items = plan.items || []; const byId = {}; items.forEach(i => byId[i.id] = i);
+  const start0 = tkFirstBiz(plan.startDate || tkToday());
+  const replan = plan.replanFrom ? tkBizBetween(start0, tkFirstBiz(plan.replanFrom)) : 0;
+  const memo = {}, visiting = {};
+  const phaseIds = (ph) => items.filter(i => i.phase === ph).map(i => i.id);
+  const deps = (it) => {
+    let ids = [];
+    (it.after || []).forEach(a => {
+      if(String(a).indexOf("phase:") === 0){ ids = ids.concat(phaseIds(a.slice(6)).filter(x => x !== it.id)); }
+      else if(byId[a]) ids.push(a);
+    });
+    return ids;
+  };
+  const endIdx = (id) => { const s = startIdx(id); return s + Math.max(0, +byId[id].dur || 0); };
+  const startIdx = (id) => {
+    if(memo[id] != null) return memo[id];
+    if(visiting[id]) return 0;            // cycle guard
+    visiting[id] = true;
+    const it = byId[id];
+    let s = 0;
+    deps(it).forEach(d => { s = Math.max(s, endIdx(d)); });
+    if(it.pinStart) s = Math.max(s, tkBizBetween(start0, tkFirstBiz(it.pinStart)));
+    if(replan && it.status !== "done") s = Math.max(s, replan);
+    visiting[id] = false; memo[id] = s; return s;
+  };
+  items.forEach(it => {
+    const s = startIdx(it.id), d = Math.max(0, +it.dur || 0);
+    it.start = tkAddBiz(start0, s);
+    it.due = tkAddBiz(start0, s + Math.max(0, d - 1));
+  });
+  return plan;
+}
+function tkNewId(){ return "tk_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+/* Turn suggestions into plan items (keys → ids for dependencies). */
+/* Resolve a suggestion's dependency keys to ids. When a task it waits on isn't in
+   the plan (section off, or unticked at review), fall back to the phase before so
+   it never jumps to day one. */
+const TK_PREV_PHASE = { demo:"pre", rough:"demo", close:"rough", finish:"close", handover:"finish" };
+function tkDepsFor(s, keyToId){
+  const raw = s.after || [];
+  const out = raw.map(a => String(a).indexOf("phase:") === 0 ? a : keyToId[a]).filter(Boolean);
+  if(raw.length && out.filter(a => String(a).indexOf("phase:") !== 0).length === 0 && !out.length){
+    if(s.phase === "pre"){ if(keyToId.kickoff && s.key !== "kickoff") out.push(keyToId.kickoff); else if(keyToId.deposit && s.key !== "deposit") out.push(keyToId.deposit); }
+    else if(s.phase === "demo"){ if(keyToId.protect && s.key !== "protect") out.push(keyToId.protect); else out.push("phase:pre"); }
+    else out.push("phase:" + TK_PREV_PHASE[s.phase]);
+  }
+  return out;
+}
+function tkBuildItems(sugs, existing){
+  const keyToId = {}; (existing || []).forEach(i => { if(i.key) keyToId[i.key] = i.id; });
+  const made = sugs.map(s => { const id = tkNewId() + Math.random().toString(36).slice(2,4); keyToId[s.key] = id; return { s, id }; });
+  return made.map(({ s, id }) => ({
+    id, key: s.key, cat: s.cat, phase: s.phase, title: s.title, detail: s.detail || "", assignee: s.assignee,
+    status: "todo", dur: s.dur, milestone: !!s.milestone, pinStart: "", notes: "",
+    after: tkDepsFor(s, keyToId)
+  }));
+}
+/* Project health for a plan. */
+function tkStats(plan){
+  const items = (plan && plan.items) || [], today = tkToday();
+  const done = items.filter(i => i.status === "done").length;
+  const overdue = items.filter(i => i.status !== "done" && i.due && i.due < today);
+  const blocked = items.filter(i => i.status === "blocked");
+  const doing = items.filter(i => i.status === "doing");
+  const finish = items.reduce((m, i) => i.due && i.due > m ? i.due : m, "");
+  const open = items.filter(i => i.status !== "done").sort((a, b) => String(a.start).localeCompare(String(b.start)));
+  const nextMs = items.filter(i => i.milestone && i.status !== "done").sort((a, b) => String(a.due).localeCompare(String(b.due)))[0] || null;
+  return { total: items.length, done, pct: items.length ? Math.round(done / items.length * 100) : 0, overdue, blocked, doing, finish, open, nextMs,
+    health: overdue.length ? "behind" : blocked.length ? "blocked" : "ontrack" };
+}
+/* ---------- data access (live estimate or a saved one) ---------- */
+const TK = { view: "all", tab: "list", team: null, editing: null, create: null };
+function tkCanUse(){ return !!(currentProfile && (isAdmin() || isStaff())); }
+function tkEntries(){
+  let list = []; try { list = loadSavedList() || []; } catch(e){}
+  const liveId = state && state._id;
+  return list.map(e => {
+    const st = (liveId && e.id === liveId) ? state : (e.state || {});
+    return { id: e.id, st, name: (st.propName || e.name || "Untitled").trim(), address: (st.propAddress || "").trim(), savedAt: e.savedAt };
+  });
+}
+function tkEntry(id){ return tkEntries().find(e => e.id === id) || null; }
+function tkPlan(id){ const e = tkEntry(id); return e && e.st && e.st.tasks && Array.isArray(e.st.tasks.items) ? e.st.tasks : null; }
+/* Change one project's plan and save it (live estimate → saveEstimate; other → saved list + cloud). */
+function tkMutate(id, fn){
+  if(state && state._id === id){
+    fn(state); if(state.tasks) tkSchedule(state.tasks);
+    saveEstimate({ silent:true });
+  } else {
+    const list = loadSavedList(); const e = list.find(x => x.id === id); if(!e) return;
+    e.state = e.state || {}; fn(e.state); if(e.state.tasks) tkSchedule(e.state.tasks);
+    e.savedAt = new Date().toISOString();
+    persistSavedList(list);
+    try { if(currentUser && supa) upsertCloudEstimate(e); } catch(err){}
+  }
+}
+
+/* ---------- small render helpers ---------- */
+const tkEsc = (s) => escapeHtml(String(s == null ? "" : s));
+function tkWho(a){
+  if(!a || !a.name) return `<span class="tk-who none">Unassigned</span>`;
+  const ic = { team:"ti-user-star", trade:"ti-tool", client:"ti-home" }[a.type] || "ti-user";
+  return `<span class="tk-who ${tkEsc(a.type)}"><i class="ti ${ic}" aria-hidden="true"></i>${tkEsc(a.name)}</span>`;
+}
+function tkStatusPill(it){
+  const today = tkToday();
+  const late = it.status !== "done" && it.due && it.due < today;
+  const lbl = late ? "Overdue" : (TK_STATUS.find(s => s[0] === it.status) || [,"To do"])[1];
+  return `<span class="tk-st ${late ? "late" : it.status}">${lbl}</span>`;
+}
+function tkDates(it){
+  if(it.milestone || !(+it.dur)) return `<span class="tk-date">◆ ${tkFmtDate(it.due)}</span>`;
+  return `<span class="tk-date">${tkFmtDate(it.start)} → ${tkFmtDate(it.due)}</span>`;
+}
+function tkHealth(s){
+  return s.health === "behind" ? `<span class="tk-health behind">Behind · ${s.overdue.length} overdue</span>`
+    : s.health === "blocked" ? `<span class="tk-health blocked">${s.blocked.length} blocked</span>`
+    : `<span class="tk-health ok">On track</span>`;
+}
+
+/* ---------- main view ---------- */
+function renderTasks(){
+  const host = document.getElementById("view-tasks"); if(!host) return;
+  if(!tkCanUse()){ host.innerHTML = `<div class="tk-empty">Tasks are available to the Reno to Sold team.</div>`; return; }
+  if(TK.view !== "all" && !tkEntry(TK.view)) TK.view = "all";
+  host.innerHTML = TK.view === "all" ? tkRenderAll() : tkRenderProject(TK.view);
+}
+function tkAllOpen(){
+  const rows = [];
+  tkEntries().forEach(e => { const p = e.st.tasks; if(!p || !Array.isArray(p.items)) return;
+    p.items.forEach(it => { if(it.status !== "done") rows.push({ e, it }); }); });
+  return rows;
+}
+function tkWeekBounds(){
+  const d = new Date(); const day = d.getDay() || 7;
+  const mon = new Date(d); mon.setDate(d.getDate() - day + 1);
+  const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+  const nsun = new Date(mon); nsun.setDate(mon.getDate() + 13);
+  return { today: tkToday(), sun: tkISO(sun), nsun: tkISO(nsun) };
+}
+function tkBuckets(){
+  const w = tkWeekBounds(), rows = tkAllOpen();
+  const b = { overdue:[], today:[], week:[], next:[] };
+  rows.forEach(r => {
+    const due = r.it.due || "", st = r.it.start || "";
+    if(due && due < w.today) b.overdue.push(r);
+    else if(due === w.today || (st <= w.today && due >= w.today && r.it.status === "doing")) b.today.push(r);
+    else if(st && st <= w.sun) b.week.push(r);
+    else if(st && st <= w.nsun) b.next.push(r);
+  });
+  Object.values(b).forEach(a => a.sort((x, y) => String(x.it.due).localeCompare(String(y.it.due))));
+  return b;
+}
+function tkRow(r, withProject){
+  const it = r.it, done = it.status === "done";
+  return `<div class="tk-row${done ? " done" : ""}">
+    <button class="tk-check${done ? " on" : ""}" title="${done ? "Mark not done" : "Mark done"}" onclick="tkToggleDone('${tkEsc(r.e.id)}','${tkEsc(it.id)}')">${done ? "✓" : ""}</button>
+    <div class="tk-main" onclick="tkOpenEditor('${tkEsc(r.e.id)}','${tkEsc(it.id)}')">
+      <div class="tk-title">${it.milestone ? `<span class="tk-ms">◆</span>` : ""}${tkEsc(it.title)}</div>
+      <div class="tk-meta">${withProject ? `<a class="tk-proj" onclick="event.stopPropagation();tkOpenProject('${tkEsc(r.e.id)}')">${tkEsc(r.e.name)}</a>` : `<span class="tk-cat">${tkEsc(TK_CAT_TITLE()[it.cat] || it.cat)}</span>`}${it.detail ? `<span class="tk-detail">${tkEsc(it.detail)}</span>` : ""}</div>
+    </div>
+    <div class="tk-side">${tkWho(it.assignee)}${tkDates(it)}${tkStatusPill(it)}</div>
+  </div>`;
+}
+function tkRenderAll(){
+  const b = tkBuckets(), ents = tkEntries();
+  const planned = ents.filter(e => e.st.tasks && Array.isArray(e.st.tasks.items));
+  const unplanned = ents.filter(e => !(e.st.tasks && Array.isArray(e.st.tasks.items))).slice(0, 12);
+  let blocked = 0, doing = 0; planned.forEach(e => e.st.tasks.items.forEach(i => { if(i.status === "blocked") blocked++; if(i.status === "doing") doing++; }));
+  const sect = (title, arr, cls) => arr.length ? `<div class="tk-bucket ${cls || ""}"><div class="tk-bucket-h">${title} <b>${arr.length}</b></div>${arr.map(r => tkRow(r, true)).join("")}</div>` : "";
+  const week = sect("Overdue", b.overdue, "late") + sect("Today", b.today) + sect("Rest of this week", b.week) + sect("Next week", b.next);
+  return `
+    <div class="tk-head"><div><h2 class="tk-h">Tasks</h2><div class="tk-sub">Every project's plan, built from its estimate. Overdue and this week's work across all projects is at the top.</div></div></div>
+    <div class="tk-kpis">
+      <div class="tk-kpi${b.overdue.length ? " late" : ""}"><span>Overdue</span><b>${b.overdue.length}</b></div>
+      <div class="tk-kpi"><span>Due this week</span><b>${b.today.length + b.week.length}</b></div>
+      <div class="tk-kpi${blocked ? " warn" : ""}"><span>Blocked</span><b>${blocked}</b></div>
+      <div class="tk-kpi"><span>In progress</span><b>${doing}</b></div>
+      <div class="tk-kpi"><span>Active projects</span><b>${planned.filter(e => tkStats(e.st.tasks).pct < 100).length}</b></div>
+    </div>
+    <div class="tk-block"><div class="tk-block-h">This week</div>${week || `<div class="tk-empty sm">Nothing due this week or next. 🎉</div>`}</div>
+    <div class="tk-block"><div class="tk-block-h">Projects</div>
+      ${planned.length ? `<div class="tk-pgrid">${planned.map(e => { const s = tkStats(e.st.tasks); return `
+        <div class="tk-pcard" onclick="tkOpenProject('${tkEsc(e.id)}')">
+          <div class="tk-pname">${tkEsc(e.address || e.name)}</div>
+          ${e.address && e.name ? `<div class="tk-psub">${tkEsc(e.name)}</div>` : ""}
+          <div class="tk-prog"><i style="width:${s.pct}%"></i></div>
+          <div class="tk-pline"><b>${s.pct}%</b> done · ${s.done}/${s.total} tasks ${tkHealth(s)}</div>
+          <div class="tk-pline">Finish <b>${tkFmtDate(s.finish)}</b>${s.nextMs ? ` · Next: ${tkEsc(s.nextMs.title)} (${tkFmtDate(s.nextMs.due)})` : ""}</div>
+        </div>`; }).join("")}</div>` : `<div class="tk-empty sm">No task plans yet.</div>`}
+    </div>
+    ${unplanned.length ? `<div class="tk-block"><div class="tk-block-h">Ready for a plan</div><div class="tk-ready">${unplanned.map(e => `
+      <div class="tk-ready-row"><span><b>${tkEsc(e.name)}</b>${e.address ? ` · ${tkEsc(e.address)}` : ""}</span><button class="tk-btn gold" onclick="tkOpenCreate('${tkEsc(e.id)}')">Create task plan</button></div>`).join("")}</div></div>` : ""}`;
+}
+
+/* ---------- project view ---------- */
+function tkOpenProject(id){ TK.view = id; if(typeof getCurrentRoute === "function" && getCurrentRoute() !== "tasks") navigateTo("tasks"); else renderTasks(); window.scrollTo({ top: 0, behavior: "smooth" }); }
+function tkSetTab(t){ TK.tab = t; renderTasks(); }
+function tkRenderProject(id){
+  const e = tkEntry(id), plan = tkPlan(id);
+  const head = `<button class="tk-back" onclick="TK.view='all';renderTasks()">← All tasks</button>
+    <div class="tk-head"><div><h2 class="tk-h">${tkEsc(e.address || e.name)}</h2><div class="tk-sub">${tkEsc(e.name)} · <a class="tk-link" onclick="tkOpenEstimate('${tkEsc(id)}')">Open estimate</a></div></div></div>`;
+  if(!plan) return head + `<div class="tk-noplan"><h3>No task plan yet</h3><p>Create one from this estimate: every section that's switched on becomes a set of tasks, organised by phase and scheduled from your start date.</p><button class="tk-btn gold lg" onclick="tkOpenCreate('${tkEsc(id)}')">Create task plan</button></div>`;
+  const s = tkStats(plan), newSugs = tkNewSuggestions(id).length;
+  const kpis = `<div class="tk-kpis">
+    <div class="tk-kpi wide"><span>Progress</span><b>${s.pct}%</b><div class="tk-prog"><i style="width:${s.pct}%"></i></div><small>${s.done} of ${s.total} tasks · ${tkHealth(s)}</small></div>
+    <div class="tk-kpi"><span>Start</span><input type="date" value="${tkEsc(plan.startDate)}" onchange="tkSetStart('${tkEsc(id)}',this.value)"></div>
+    <div class="tk-kpi"><span>Projected finish</span><b>${tkFmtDate(s.finish)}</b><small>${s.finish ? tkBizBetween(plan.startDate, s.finish) + 1 + " working days" : ""}</small></div>
+    <div class="tk-kpi${s.overdue.length ? " late" : ""}"><span>Overdue</span><b>${s.overdue.length}</b></div>
+    <div class="tk-kpi${s.blocked.length ? " warn" : ""}"><span>Blocked</span><b>${s.blocked.length}</b></div>
+    <div class="tk-kpi wide"><span>Next milestone</span><b class="sm">${s.nextMs ? tkEsc(s.nextMs.title) : "—"}</b><small>${s.nextMs ? tkFmtDate(s.nextMs.due) : ""}</small></div>
+  </div>`;
+  const tools = `<div class="tk-toolbar">
+    <div class="tk-tabs"><button class="${TK.tab === "list" ? "on" : ""}" onclick="tkSetTab('list')">List by phase</button><button class="${TK.tab === "board" ? "on" : ""}" onclick="tkSetTab('board')">Board</button></div>
+    <div class="tk-acts">
+      ${s.overdue.length ? `<button class="tk-btn" onclick="tkReplan('${tkEsc(id)}')" title="Push every unfinished task so nothing starts before today">Re-plan from today</button>` : ""}
+      ${newSugs ? `<button class="tk-btn" onclick="tkOpenSync('${tkEsc(id)}')">Sync with estimate <b class="tk-dot">${newSugs}</b></button>` : ""}
+      <button class="tk-btn gold" onclick="tkOpenEditor('${tkEsc(id)}', null)">+ Add task</button>
+    </div></div>`;
+  return head + kpis + tools + (TK.tab === "board" ? tkRenderBoard(e, plan) : tkRenderList(e, plan)) +
+    `<div class="tk-foot"><a class="tk-link danger" onclick="tkDeletePlan('${tkEsc(id)}')">Delete this task plan</a></div>`;
+}
+function tkRenderList(e, plan){
+  return TK_PHASES.map(([ph, name, sub]) => {
+    const items = plan.items.filter(i => i.phase === ph).sort((a, b) => String(a.start).localeCompare(String(b.start)) || String(a.due).localeCompare(String(b.due)));
+    if(!items.length) return "";
+    const done = items.filter(i => i.status === "done").length;
+    const from = items.reduce((m, i) => !m || i.start < m ? i.start : m, ""), to = items.reduce((m, i) => i.due > m ? i.due : m, "");
+    return `<div class="tk-phase${done === items.length ? " complete" : ""}">
+      <div class="tk-phase-h"><div><b>${name}</b><span>${sub}</span></div><div class="tk-phase-r"><span>${tkFmtDate(from)} → ${tkFmtDate(to)}</span><span class="tk-pc">${done}/${items.length}</span></div></div>
+      <div class="tk-prog thin"><i style="width:${Math.round(done / items.length * 100)}%"></i></div>
+      ${items.map(it => tkRow({ e, it }, false)).join("")}
+    </div>`;
+  }).join("");
+}
+function tkRenderBoard(e, plan){
+  const today = tkToday();
+  return `<div class="tk-board">${TK_STATUS.map(([k, lbl], ci) => {
+    const all = plan.items.filter(i => i.status === k).sort((a, b) => String(a.due).localeCompare(String(b.due)));
+    const cap = (TK.boardAll && TK.boardAll[k]) ? all.length : 10, items = all.slice(0, cap), more = all.length - items.length;
+    return `<div class="tk-col" data-st="${k}" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')" ondrop="tkDrop(event,'${tkEsc(e.id)}','${k}')">
+      <div class="tk-col-h ${k}">${lbl} <b>${all.length}</b></div>
+      ${items.map(it => `<div class="tk-card${it.due < today && k !== "done" ? " late" : ""}" draggable="true" ondragstart="event.dataTransfer.setData('text/plain','${tkEsc(it.id)}')" onclick="tkOpenEditor('${tkEsc(e.id)}','${tkEsc(it.id)}')">
+        <div class="tk-card-t">${it.milestone ? "◆ " : ""}${tkEsc(it.title)}</div>
+        <div class="tk-card-m"><span class="tk-cat">${tkEsc(TK_CAT_TITLE()[it.cat] || it.cat)}</span>${tkDates(it)}</div>
+        <div class="tk-card-b">${tkWho(it.assignee)}<span class="tk-mv">
+          ${ci > 0 ? `<button title="Move left" onclick="event.stopPropagation();tkSetStatus('${tkEsc(e.id)}','${tkEsc(it.id)}','${TK_STATUS[ci - 1][0]}')">‹</button>` : ""}
+          ${ci < TK_STATUS.length - 1 ? `<button title="Move right" onclick="event.stopPropagation();tkSetStatus('${tkEsc(e.id)}','${tkEsc(it.id)}','${TK_STATUS[ci + 1][0]}')">›</button>` : ""}</span></div>
+      </div>`).join("") || `<div class="tk-col-empty">—</div>`}
+      ${more ? `<button class="tk-col-more" onclick="TK.boardAll=TK.boardAll||{};TK.boardAll['${k}']=true;renderTasks()">Show ${more} more (later dates)</button>` : (all.length > 10 ? `<button class="tk-col-more" onclick="TK.boardAll['${k}']=false;renderTasks()">Show less</button>` : "")}
+    </div>`; }).join("")}</div>`;
+}
+function tkDrop(ev, id, st){ ev.preventDefault(); const tid = ev.dataTransfer.getData("text/plain"); if(tid) tkSetStatus(id, tid, st); }
+
+/* ---------- actions ---------- */
+function tkSetStatus(id, tid, st){
+  tkMutate(id, (s) => { const it = s.tasks.items.find(i => i.id === tid); if(!it) return; it.status = st; it.doneAt = st === "done" ? tkToday() : ""; });
+  tkRefresh();
+}
+function tkToggleDone(id, tid){
+  const p = tkPlan(id); const it = p && p.items.find(i => i.id === tid); if(!it) return;
+  tkSetStatus(id, tid, it.status === "done" ? "todo" : "done");
+}
+function tkSetStart(id, v){ if(!v) return; tkMutate(id, (s) => { s.tasks.startDate = v; s.tasks.replanFrom = ""; }); tkRefresh(); }
+function tkReplan(id){ tkMutate(id, (s) => { s.tasks.replanFrom = tkToday(); }); tkRefresh(); try { flash("Unfinished tasks re-planned from today"); } catch(e){} }
+async function tkDeletePlan(id){
+  if(!(await brandedConfirm("Delete this project's task plan? Tasks, statuses and dates will be removed. The estimate isn't affected.", { confirmLabel:"Delete plan", destructive:true }))) return;
+  tkMutate(id, (s) => { delete s.tasks; }); tkRefresh();
+}
+function tkRefresh(){
+  try { if(typeof getCurrentRoute === "function" && getCurrentRoute() === "tasks") renderTasks(); } catch(e){}
+  try { renderDashTasks(); } catch(e){}
+}
+function tkOpenEstimate(id){ try { loadEstimate(id); } catch(e){} navigateTo("estimator"); }
+function tkFromEstimate(){
+  if(!state._id){ try { autosaveNow(); } catch(e){} }
+  if(!state._id){ brandedAlert("Save this estimate first (name, address and sqft), then open its tasks."); return; }
+  TK.view = state._id; navigateTo("tasks");
+}
+
+/* ---------- create / sync plan ---------- */
+function tkModal(id){
+  let m = document.getElementById(id);
+  if(!m){ m = document.createElement("div"); m.className = "modal-bg"; m.id = id; m.onclick = (ev) => { if(ev.target === m) m.classList.remove("show"); }; document.body.appendChild(m); }
+  return m;
+}
+function tkNewSuggestions(id){
+  const e = tkEntry(id), plan = tkPlan(id); if(!e || !plan) return [];
+  const have = new Set(plan.items.map(i => i.key).filter(Boolean)), dismissed = new Set(plan.dismissed || []);
+  return tkSuggest(e.st).filter(s => !have.has(s.key) && !dismissed.has(s.key));
+}
+function tkOpenCreate(id){ const e = tkEntry(id); if(!e) return; TK.create = { id, mode:"create", sugs: tkSuggest(e.st), off: new Set(), start: tkNextMonday() }; tkRenderCreate(); }
+function tkOpenSync(id){ TK.create = { id, mode:"sync", sugs: tkNewSuggestions(id), off: new Set() }; tkRenderCreate(); }
+function tkRenderCreate(){
+  const c = TK.create, m = tkModal("tkCreateModal"), titles = TK_CAT_TITLE();
+  const groups = []; c.sugs.forEach(s => { let g = groups.find(x => x.cat === s.cat); if(!g){ g = { cat: s.cat, items: [] }; groups.push(g); } g.items.push(s); });
+  const n = c.sugs.filter(s => !c.off.has(s.key)).length;
+  m.innerHTML = `<div class="modal" style="max-width:760px;">
+    <h3><span>${c.mode === "sync" ? "Add new tasks from the estimate" : "Create task plan"}</span><span class="small-stack"><button class="ghost" onclick="document.getElementById('tkCreateModal').classList.remove('show')">Cancel</button></span></h3>
+    <div class="modal-body">
+      ${c.mode === "create" ? `<div class="tk-cr-top"><div><label>Project start date</label><input type="date" id="tkCrStart" value="${c.start}" onchange="TK.create.start=this.value"></div>
+        <div class="tk-sub">Suggested from the sections switched on in this estimate. Untick anything you don't need — you can edit names, people, durations and dates after.</div></div>`
+        : `<div class="tk-sub" style="margin-bottom:10px;">These sections or items were added to the estimate after the plan was made.</div>`}
+      <div class="tk-cr-groups">${groups.map(g => `<div class="tk-cr-g">
+        <div class="tk-cr-gh"><b>${tkEsc(titles[g.cat] || g.cat)}</b><span>${g.items.filter(s => !c.off.has(s.key)).length}/${g.items.length}</span>
+          <a class="tk-link" onclick="tkCrAll('${g.cat}',true)">All</a><a class="tk-link" onclick="tkCrAll('${g.cat}',false)">None</a></div>
+        ${g.items.map(s => `<label class="tk-cr-item${c.off.has(s.key) ? " off" : ""}"><input type="checkbox" ${c.off.has(s.key) ? "" : "checked"} onchange="tkCrToggle('${tkEsc(s.key)}')">
+          <span class="t">${s.milestone ? "◆ " : ""}${tkEsc(s.title)}</span><span class="ph">${tkEsc((TK_PHASES.find(p => p[0] === s.phase) || [,""])[1])}</span>${tkWho(s.assignee)}<span class="d">${s.dur ? s.dur + " d" : "milestone"}</span></label>`).join("")}
+      </div>`).join("") || `<div class="tk-empty sm">Nothing new to add.</div>`}</div>
+      <div class="sf-actions"><span class="tk-sub">${n} task${n === 1 ? "" : "s"} selected</span>
+        <button class="primary" ${n ? "" : "disabled"} onclick="tkCreateGo()">${c.mode === "sync" ? "Add " + n + " task" + (n === 1 ? "" : "s") : "Create plan (" + n + " tasks)"}</button></div>
+    </div></div>`;
+  m.classList.add("show");
+}
+function tkCrToggle(k){ const o = TK.create.off; o.has(k) ? o.delete(k) : o.add(k); tkRenderCreate(); }
+function tkCrAll(cat, val){ TK.create.sugs.filter(s => s.cat === cat).forEach(s => val ? TK.create.off.delete(s.key) : TK.create.off.add(s.key)); tkRenderCreate(); }
+function tkCreateGo(){
+  const c = TK.create, picked = c.sugs.filter(s => !c.off.has(s.key)), skipped = c.sugs.filter(s => c.off.has(s.key)).map(s => s.key);
+  tkMutate(c.id, (s) => {
+    if(c.mode === "create"){ s.tasks = { v:1, startDate: c.start || tkNextMonday(), replanFrom:"", createdAt: new Date().toISOString(), dismissed: skipped, items: tkBuildItems(picked, []) }; }
+    else { s.tasks.items = s.tasks.items.concat(tkBuildItems(picked, s.tasks.items)); s.tasks.dismissed = (s.tasks.dismissed || []).concat(skipped); }
+  });
+  document.getElementById("tkCreateModal").classList.remove("show");
+  TK.view = c.id; TK.tab = "list";
+  if(getCurrentRoute() !== "tasks") navigateTo("tasks"); else renderTasks();
+  try { flash(c.mode === "create" ? "Task plan created" : "Tasks added"); } catch(e){}
+}
+
+/* ---------- task editor ---------- */
+async function tkLoadTeam(){
+  if(TK.team) return TK.team;
+  TK.team = [];
+  try { const r = await restFetch("profiles?select=full_name,email,role&role=in.(admin,staff)&order=full_name.asc"); TK.team = (r || []).map(x => x.full_name || x.email).filter(Boolean); } catch(e){}
+  return TK.team;
+}
+function tkSuggestNames(type, id){
+  const set = new Set(), e = tkEntry(id);
+  if(type === "team"){ (TK.team || []).forEach(n => set.add(n)); if(currentProfile && currentProfile.full_name) set.add(currentProfile.full_name); }
+  if(type === "client"){ ((e && e.st.sellers) || []).forEach(x => x && x.name && set.add(x.name)); set.add("Homeowner"); }
+  if(type === "trade"){
+    tkEntries().forEach(en => ((en.st.tasks && en.st.tasks.items) || []).forEach(i => i.assignee && i.assignee.type === "trade" && i.assignee.name && set.add(i.assignee.name)));
+    try { (_receivedBidsCache || []).filter(b => b.status === "accepted" && b.contractor_company).forEach(b => set.add(b.contractor_company)); } catch(err){}
+    try { ((typeof SUP !== "undefined" && SUP.list) || []).forEach(sp => set.add(sp.name)); } catch(err){}
+  }
+  return Array.from(set).slice(0, 14);
+}
+function tkOpenEditor(id, tid){
+  const plan = tkPlan(id); if(!plan) return;
+  const it = tid ? plan.items.find(i => i.id === tid) : null;
+  TK.editing = { id, tid, d: it ? JSON.parse(JSON.stringify(it)) : { id: tkNewId(), key:"", cat:"general", phase:"finish", title:"", detail:"", assignee:{ type:"team", name:(currentProfile && currentProfile.full_name) || "" }, status:"todo", dur:1, after:[], pinStart:"", notes:"" }, depOpen:false, depQ:"" };
+  tkLoadTeam().then(() => { if(TK.editing && TK.editing.id === id) tkRenderEditor(); });
+  tkRenderEditor();
+}
+function tkRenderEditor(){
+  const E = TK.editing, d = E.d, plan = tkPlan(E.id), m = tkModal("tkEditModal");
+  const others = plan.items.filter(i => i.id !== d.id);
+  const deps = (d.after || []).filter(a => String(a).indexOf("phase:") !== 0).map(a => others.find(o => o.id === a)).filter(Boolean);
+  const phaseDeps = (d.after || []).filter(a => String(a).indexOf("phase:") === 0);
+  const q = (E.depQ || "").toLowerCase();
+  const pick = others.filter(o => !d.after.includes(o.id) && (!q || o.title.toLowerCase().includes(q))).slice(0, 12);
+  const pills = (key, opts, cur) => `<div class="pill-row tk-pills">${opts.map(o => `<button class="${o[0] === cur ? "on" : ""}" onclick="tkEd('${key}','${o[0]}')">${o[1]}</button>`).join("")}</div>`;
+  m.innerHTML = `<div class="modal" style="max-width:620px;">
+    <h3><span>${E.tid ? "Task" : "New task"}</span><span class="small-stack"><button class="ghost" onclick="document.getElementById('tkEditModal').classList.remove('show')">Cancel</button></span></h3>
+    <div class="modal-body tk-ed">
+      <div class="tk-f"><label>Task</label><input type="text" value="${tkEsc(d.title)}" oninput="TK.editing.d.title=this.value" placeholder="e.g. Order vanity"></div>
+      <div class="tk-f"><label>Status</label>${pills("status", TK_STATUS, d.status)}</div>
+      <div class="tk-f"><label>Phase</label>${pills("phase", TK_PHASES.map(p => [p[0], p[1]]), d.phase)}</div>
+      <div class="tk-f"><label>Who</label>${pills("atype", [["team","Team"],["trade","Trade"],["client","Client"]], d.assignee.type)}
+        <input type="text" value="${tkEsc(d.assignee.name)}" oninput="TK.editing.d.assignee.name=this.value" placeholder="Name" style="margin-top:8px;">
+        <div class="tk-sugg">${tkSuggestNames(d.assignee.type, E.id).map(n => `<button onclick="TK.editing.d.assignee.name=${tkEsc(JSON.stringify(n))};tkRenderEditor()">${tkEsc(n)}</button>`).join("")}</div></div>
+      <div class="tk-2">
+        <div class="tk-f"><label>Duration (working days)</label><input type="number" inputmode="numeric" min="0" value="${+d.dur || 0}" oninput="TK.editing.d.dur=Math.max(0,parseInt(this.value)||0)"><div class="tk-hint">0 = milestone (a moment, not work)</div></div>
+        <div class="tk-f"><label>Start</label>${d.pinStart ? `<input type="date" value="${tkEsc(d.pinStart)}" onchange="TK.editing.d.pinStart=this.value"><a class="tk-link" onclick="TK.editing.d.pinStart='';tkRenderEditor()">Back to automatic</a>`
+          : `<div class="tk-auto">Automatic — after its dependencies${d.start ? ` (${tkFmtDate(d.start)})` : ""}</div><a class="tk-link" onclick="TK.editing.d.pinStart='${tkEsc(d.start || plan.startDate)}';tkRenderEditor()">Set a date</a>`}</div>
+      </div>
+      <div class="tk-f"><label>Starts after</label>
+        <div class="tk-deps">${phaseDeps.map(p => `<span class="tk-dep">All of ${tkEsc((TK_PHASES.find(x => x[0] === p.slice(6)) || [,p])[1])}<button onclick="tkEdDep('${tkEsc(p)}')">×</button></span>`).join("")}
+          ${deps.map(o => `<span class="tk-dep">${tkEsc(o.title)}<button onclick="tkEdDep('${tkEsc(o.id)}')">×</button></span>`).join("") || (phaseDeps.length ? "" : `<span class="tk-hint">Nothing — starts on the project start date</span>`)}
+          <button class="tk-btn sm" onclick="TK.editing.depOpen=!TK.editing.depOpen;tkRenderEditor()">+ Add</button></div>
+        ${E.depOpen ? `<div class="tk-dep-pick"><input type="text" placeholder="Search tasks…" value="${tkEsc(E.depQ)}" oninput="TK.editing.depQ=this.value;tkRenderEditorKeep()">
+          <div id="tkDepList">${pick.map(o => `<button onclick="tkEdDep('${tkEsc(o.id)}')">${tkEsc(o.title)} <small>${tkFmtDate(o.due)}</small></button>`).join("")}</div></div>` : ""}</div>
+      <div class="tk-f"><label>Notes</label><textarea rows="2" oninput="TK.editing.d.detail=this.value" placeholder="Details, measurements, supplier, access…">${tkEsc(d.detail)}</textarea></div>
+      <div class="sf-actions">${E.tid ? `<button class="ghost danger" onclick="tkDeleteTask()">Delete task</button>` : "<span></span>"}<button class="primary" onclick="tkSaveTask()">${E.tid ? "Save" : "Add task"}</button></div>
+    </div></div>`;
+  m.classList.add("show");
+}
+function tkRenderEditorKeep(){ const E = TK.editing; tkRenderEditor(); const inp = document.querySelector("#tkEditModal .tk-dep-pick input"); if(inp){ inp.focus(); inp.setSelectionRange(E.depQ.length, E.depQ.length); } }
+function tkEd(k, v){
+  const d = TK.editing.d;
+  if(k === "atype"){ if(d.assignee.type !== v){ d.assignee = { type: v, name: "" }; } }
+  else d[k] = v;
+  tkRenderEditor();
+}
+function tkEdDep(x){ const a = TK.editing.d.after; const i = a.indexOf(x); i === -1 ? a.push(x) : a.splice(i, 1); TK.editing.depOpen = false; TK.editing.depQ = ""; tkRenderEditor(); }
+function tkSaveTask(){
+  const E = TK.editing, d = E.d;
+  if(!d.title.trim()){ brandedAlert("Give the task a name."); return; }
+  d.doneAt = d.status === "done" ? (d.doneAt || tkToday()) : "";
+  d.milestone = !(+d.dur);
+  tkMutate(E.id, (s) => { const items = s.tasks.items; const i = items.findIndex(x => x.id === d.id); if(i === -1) items.push(d); else items[i] = d; });
+  document.getElementById("tkEditModal").classList.remove("show");
+  tkRefresh();
+}
+async function tkDeleteTask(){
+  const E = TK.editing;
+  if(!(await brandedConfirm("Delete this task? Tasks that waited on it will start on their other dependencies instead.", { confirmLabel:"Delete", destructive:true }))) return;
+  tkMutate(E.id, (s) => {
+    s.tasks.items = s.tasks.items.filter(x => x.id !== E.d.id);
+    s.tasks.items.forEach(x => { x.after = (x.after || []).filter(a => a !== E.d.id); });
+    if(E.d.key){ s.tasks.dismissed = (s.tasks.dismissed || []).concat([E.d.key]); }
+  });
+  document.getElementById("tkEditModal").classList.remove("show");
+  tkRefresh();
+}
+
+/* ---------- dashboard block ---------- */
+function renderDashTasks(){
+  const host = document.getElementById("dashTasks"); if(!host) return;
+  if(!tkCanUse()){ host.style.display = "none"; host.innerHTML = ""; return; }
+  host.style.display = "";
+  const b = tkBuckets(), rows = b.overdue.concat(b.today, b.week).slice(0, 6);
+  const total = b.overdue.length + b.today.length + b.week.length;
+  host.innerHTML = `<div class="tk-dash">
+    <div class="tk-dash-h"><div><b>This week's tasks</b><span>${b.overdue.length ? `<em class="late">${b.overdue.length} overdue</em> · ` : ""}${b.today.length + b.week.length} due this week</span></div>
+      <button class="tk-btn" onclick="TK.view='all';navigateTo('tasks')">Open Tasks →</button></div>
+    ${rows.length ? rows.map(r => tkRow(r, true)).join("") + (total > rows.length ? `<div class="tk-more">+ ${total - rows.length} more this week</div>` : "") : `<div class="tk-empty sm">Nothing due this week. Create a task plan from any saved estimate in Tasks.</div>`}
+  </div>`;
+}
+(function(){
+  const _rd = renderDashboard;
+  renderDashboard = function(){ const r = _rd.apply(this, arguments); try { renderDashTasks(); } catch(e){ console.warn("renderDashTasks:", e); } return r; };
+})();
 
 </script>
 
