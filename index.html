@@ -4866,6 +4866,25 @@
   .tk-est-note span{display:block;font-size:11.5px;color:var(--muted);margin-top:2px;line-height:1.45;}
   .tk-p-add.ghost{border-style:solid;background:transparent;color:var(--gold-bright);margin-top:8px;}
   @media (max-width:700px){ .tk-cr-modes{grid-template-columns:1fr;} .tk-cr-sec{flex-direction:column;align-items:flex-start;} .tk-cr-sec span{text-align:left;} }
+  /* Tasks v26d — quick delete, select, undo */
+  .tk-del{width:28px;height:28px;flex:0 0 28px;border-radius:7px;border:1px solid transparent;background:transparent;color:var(--muted);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;font-size:15px;opacity:.55;transition:opacity .15s,color .15s,border-color .15s;}
+  .tk-row:hover .tk-del{opacity:1;}
+  .tk-del:hover{color:#f08c8c;border-color:rgba(226,109,109,.5);background:rgba(226,109,109,.08);opacity:1;}
+  .tk-dash .tk-del{display:none;}
+  .tk-del-b{width:24px;height:24px;border-radius:6px;border:1px solid var(--line-strong);background:var(--panel);color:var(--muted);cursor:pointer;font-size:13px;padding:0;display:inline-flex;align-items:center;justify-content:center;}
+  .tk-del-b:hover{color:#f08c8c;border-color:rgba(226,109,109,.6);}
+  .tk-pick{flex:0 0 22px;width:22px;height:22px;border-radius:6px;border:1.5px solid var(--line-strong);background:transparent;color:#0a0a0a;font-size:13px;font-weight:800;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;}
+  .tk-pick.on{background:#e26d6d;border-color:transparent;color:#fff;}
+  .tk-row.selecting .tk-main{cursor:pointer;}
+  .tk-row.picked{background:rgba(226,109,109,.07);}
+  .tk-selbar{display:flex;justify-content:space-between;align-items:center;font-size:11.5px;color:var(--muted);padding:2px 0 8px;border-bottom:1px solid var(--line);margin-bottom:2px;}
+  .tk-selbar b{color:var(--ink);}
+  .tk-btn.danger{background:#b94a4a;border-color:transparent;color:#fff;}
+  .tk-btn.danger:disabled{opacity:.45;cursor:not-allowed;}
+  .tk-undo{position:fixed;left:50%;bottom:22px;transform:translate(-50%,30px);opacity:0;pointer-events:none;z-index:1200;background:#16161b;border:1px solid var(--gold-deep);border-radius:12px;padding:10px 12px 10px 16px;display:flex;align-items:center;gap:16px;font-size:13px;color:var(--ink);box-shadow:0 10px 30px rgba(0,0,0,.55);transition:opacity .2s,transform .2s;}
+  .tk-undo.show{opacity:1;transform:translate(-50%,0);pointer-events:auto;}
+  .tk-undo button{background:var(--gold-grad);color:#0a0a0a;border:0;border-radius:8px;padding:7px 14px;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;}
+  @media (max-width:760px){ .tk-del{opacity:1;margin-left:auto;} }
   @media (max-width:760px){
     .tk-row{flex-wrap:wrap;align-items:flex-start;}
     .tk-main{flex:1 1 calc(100% - 40px);}
@@ -17539,7 +17558,7 @@ const OFFICE_EMAIL = "renotosold@gmail.com";
 const OFFICE_COMPANY = "Reno to Sold Inc.";
 
 /* ---------- Supabase cross-device sync ---------- */
-window.RTS_BUILD = "2026-11-08-v26c-blank-plans";
+window.RTS_BUILD = "2026-11-08-v26d-quick-delete";
 console.log("[build] " + window.RTS_BUILD);
 const SUPABASE_URL = "https://icrnvnmvcdpmhnjorefs.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imljcm52bm12Y2RwbWhuam9yZWZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2ODQwMDgsImV4cCI6MjA5NDI2MDAwOH0.YoeBndWsky8vAW6mLeMziPeH2j2C6c_3VdAvOG_i0kA";
@@ -30002,16 +30021,57 @@ function tkBuckets(){
   return b;
 }
 function tkRow(r, withProject){
-  const it = r.it, done = it.status === "done";
-  return `<div class="tk-row${done ? " done" : ""}">
-    <button class="tk-check${done ? " on" : ""}" title="${done ? "Mark not done" : "Mark done"}" onclick="tkToggleDone('${tkEsc(r.e.id)}','${tkEsc(it.id)}')">${done ? "✓" : ""}</button>
-    <div class="tk-main" onclick="tkOpenEditor('${tkEsc(r.e.id)}','${tkEsc(it.id)}')">
+  const it = r.it, done = it.status === "done", ref = `'${tkEsc(r.e.id)}','${tkEsc(it.id)}'`;
+  const sel = r.inPanel && TK.sel, picked = sel && TK.sel.has(r.e.id + "|" + it.id);
+  return `<div class="tk-row${done ? " done" : ""}${sel ? " selecting" : ""}${picked ? " picked" : ""}">
+    ${sel ? `<button class="tk-pick${picked ? " on" : ""}" title="Select" onclick="tkSelToggle(${ref})">${picked ? "✓" : ""}</button>`
+          : `<button class="tk-check${done ? " on" : ""}" title="${done ? "Mark not done" : "Mark done"}" onclick="tkToggleDone(${ref})">${done ? "✓" : ""}</button>`}
+    <div class="tk-main" onclick="${sel ? `tkSelToggle(${ref})` : `tkOpenEditor(${ref})`}">
       <div class="tk-title">${it.milestone ? `<span class="tk-ms">◆</span>` : ""}${tkEsc(it.title)}</div>
       <div class="tk-meta">${withProject ? `<a class="tk-proj" onclick="event.stopPropagation();tkOpenProject('${tkEsc(r.e.id)}')">${tkEsc(r.e.name)}</a>` : `<span class="tk-cat">${tkEsc(TK.panel && TK.panel.kind === "cat" ? (TK_PHASES.find(p => p[0] === it.phase) || [,""])[1] : (TK_CAT_TITLE()[it.cat] || it.cat))}</span>`}${it.detail ? `<span class="tk-detail">${tkEsc(it.detail)}</span>` : ""}</div>
     </div>
-    <div class="tk-side">${tkWho(it.assignee)}${tkDates(it)}${tkStatusPill(it)}</div>
+    <div class="tk-side">${tkWho(it.assignee)}${tkDates(it)}${tkStatusPill(it)}${sel ? "" : `<button class="tk-del" title="Delete task" aria-label="Delete task" onclick="event.stopPropagation();tkQuickDelete([[${ref}]])"><i class="ti ti-trash" aria-hidden="true"></i></button>`}</div>
   </div>`;
 }
+/* ---------- quick delete (no dialog) + undo ---------- */
+function tkQuickDelete(pairs){
+  const byPid = {}; pairs.forEach(([pid, tid]) => (byPid[pid] = byPid[pid] || []).push(tid));
+  const snaps = [];
+  Object.keys(byPid).forEach(pid => {
+    const plan = tkPlan(pid); if(!plan) return;
+    snaps.push({ pid, items: JSON.parse(JSON.stringify(plan.items)), dismissed: (plan.dismissed || []).slice() });
+    const kill = new Set(byPid[pid]);
+    tkMutate(pid, (s) => {
+      const gone = s.tasks.items.filter(x => kill.has(x.id));
+      s.tasks.items = s.tasks.items.filter(x => !kill.has(x.id));
+      s.tasks.items.forEach(x => { x.after = (x.after || []).filter(a => !kill.has(a)); });
+      s.tasks.dismissed = (s.tasks.dismissed || []).concat(gone.map(x => x.key).filter(Boolean));
+    });
+  });
+  if(TK.sel) TK.sel = null;
+  tkRefresh();
+  tkUndoToast(pairs.length === 1 ? "Task deleted" : pairs.length + " tasks deleted", snaps);
+}
+function tkUndoToast(msg, snaps){
+  let t = document.getElementById("tkUndo");
+  if(!t){ t = document.createElement("div"); t.id = "tkUndo"; t.className = "tk-undo no-print"; document.body.appendChild(t); }
+  TK.undo = snaps;
+  t.innerHTML = `<span>${tkEsc(msg)}</span><button onclick="tkUndo()">Undo</button>`;
+  t.classList.add("show");
+  clearTimeout(TK.undoT); TK.undoT = setTimeout(() => { t.classList.remove("show"); TK.undo = null; }, 7000);
+}
+function tkUndo(){
+  const snaps = TK.undo; if(!snaps) return; TK.undo = null;
+  snaps.forEach(sn => tkMutate(sn.pid, (s) => { if(s.tasks){ s.tasks.items = sn.items; s.tasks.dismissed = sn.dismissed; } }));
+  const t = document.getElementById("tkUndo"); if(t) t.classList.remove("show");
+  tkRefresh(); try { flash("Restored"); } catch(e){}
+}
+/* ---------- select several in the panel ---------- */
+function tkSelStart(){ TK.sel = new Set(); tkRenderPanel(); }
+function tkSelCancel(){ TK.sel = null; tkRenderPanel(); }
+function tkSelToggle(pid, tid){ const k = pid + "|" + tid; TK.sel.has(k) ? TK.sel.delete(k) : TK.sel.add(k); tkRenderPanel(); }
+function tkSelAll(on){ (TK.panelRows || []).forEach(r => { const k = r.e.id + "|" + r.it.id; on ? TK.sel.add(k) : TK.sel.delete(k); }); tkRenderPanel(); }
+function tkSelDelete(){ if(!TK.sel || !TK.sel.size) return; tkQuickDelete(Array.from(TK.sel).map(k => k.split("|"))); }
 function tkRenderAll(){
   const b = tkBuckets(), ents = tkEntries();
   const planned = ents.filter(e => e.st.tasks && Array.isArray(e.st.tasks.items));
@@ -30131,12 +30191,12 @@ function tkPanelEls(){
   return { p, s: document.getElementById("tkScrim") };
 }
 function tkOpenPanel(kind, key){
-  TK.panel = { kind, key, pid: kind === "bucket" ? null : TK.view };
+  TK.panel = { kind, key, pid: kind === "bucket" ? null : TK.view }; TK.sel = null;
   tkRenderPanel(); const { p, s } = tkPanelEls(); p.classList.add("show"); s.classList.add("show");
   document.querySelectorAll(".tk-gcard").forEach(c => c.classList.remove("active")); try { renderTasks(); } catch(e){}
 }
 function tkClosePanel(){
-  TK.panel = null; const p = document.getElementById("tkPanel"), s = document.getElementById("tkScrim");
+  TK.panel = null; TK.sel = null; const p = document.getElementById("tkPanel"), s = document.getElementById("tkScrim");
   if(p) p.classList.remove("show"); if(s) s.classList.remove("show");
   document.querySelectorAll(".tk-gcard.active").forEach(c => c.classList.remove("active"));
 }
@@ -30157,7 +30217,13 @@ function tkRenderPanel(){
   else { const e = tkEntry(P.pid); rows = g.items.slice().sort((a, b) => String(a.start).localeCompare(String(b.start)) || String(a.due).localeCompare(String(b.due))).map(it => ({ e, it })); kindLbl = (P.kind === "phase" ? "Phase" : "Section") + " · " + (e.address || e.name); }
   const n = tkGroupNums(rows.map(r => r.it));
   const cell = (lbl, val, cls) => `<div class="${cls || ""}">${lbl}<b>${val}</b></div>`;
+  rows.forEach(r => r.inPanel = true); TK.panelRows = rows;
+  if(TK.sel){ const live = new Set(rows.map(r => r.e.id + "|" + r.it.id)); Array.from(TK.sel).forEach(k => { if(!live.has(k)) TK.sel.delete(k); }); }
   const open = rows.filter(r => r.it.status !== "done"), done = rows.filter(r => r.it.status === "done");
+  const nSel = TK.sel ? TK.sel.size : 0;
+  const selBar = !rows.length ? "" : TK.sel
+    ? `<div class="tk-selbar"><span><b>${nSel}</b> selected</span><a class="tk-link" onclick="tkSelAll(${nSel < rows.length})">${nSel < rows.length ? "Select all" : "Clear"}</a></div>`
+    : `<div class="tk-selbar"><span>${rows.length} task${rows.length === 1 ? "" : "s"}</span><a class="tk-link" onclick="tkSelStart()">Select to delete</a></div>`;
   p.innerHTML = `
     <div class="blk-p-head"><span class="blk-ic"><i class="ti ${g.icon}" aria-hidden="true"></i></span>
       <div class="blk-p-title"><div class="k">${tkEsc(kindLbl)}</div><div class="n">${tkEsc(g.name)}</div></div>
@@ -30165,16 +30231,19 @@ function tkRenderPanel(){
     <div class="blk-pbd">${cell("Tasks", n.total)}${cell("Done", n.done + " · " + n.pct + "%")}${cell("Overdue", n.overdue, n.overdue ? "neg" : "")}${cell("Starts", tkFmtDate(n.from))}${cell("Finishes", tkFmtDate(n.to), "tot")}</div>
     <div class="blk-p-body tk-p-body">
       ${g.sub ? `<div class="tk-sub" style="margin-bottom:6px;">${tkEsc(g.sub)}</div>` : ""}
+      ${selBar}
       ${g.est && !rows.length ? `<div class="tk-est-note"><i class="ti ti-calendar-time" aria-hidden="true"></i><div><b>${tkEsc(tkEstLine(g.est))}</b><span>Based on what's in the estimate. New tasks you add here start on ${tkFmtDate(g.est.from)} unless you change it.</span></div></div>` : ""}
       ${open.map(r => tkRow(r, P.kind === "bucket")).join("") || `<div class="tk-empty sm">${rows.length ? "Everything here is done ✓" : (P.kind === "bucket" ? "Nothing here." : "No tasks yet.")}</div>`}
       ${done.length ? `<div class="tk-done-h">Done · ${done.length}</div>${done.map(r => tkRow(r, P.kind === "bucket")).join("")}` : ""}
-      ${P.kind !== "bucket" ? `<button class="tk-btn tk-p-add" onclick="tkOpenEditor('${tkEsc(P.pid)}', null, {${P.kind}:'${tkEsc(P.key)}'})">+ Add a task to ${tkEsc(g.name)}</button>` : ""}
-      ${P.kind !== "bucket" && tkGroupSuggestions(P.pid, P.kind, P.key).length ? `<button class="tk-btn tk-p-add ghost" onclick="tkSuggestInto('${tkEsc(P.pid)}','${P.kind}','${tkEsc(P.key)}')"><i class="ti ti-sparkles" aria-hidden="true"></i> Suggest tasks for ${tkEsc(g.name)} (${tkGroupSuggestions(P.pid, P.kind, P.key).length})</button>` : ""}
+      ${!TK.sel && P.kind !== "bucket" ? `<button class="tk-btn tk-p-add" onclick="tkOpenEditor('${tkEsc(P.pid)}', null, {${P.kind}:'${tkEsc(P.key)}'})">+ Add a task to ${tkEsc(g.name)}</button>` : ""}
+      ${!TK.sel && P.kind !== "bucket" && tkGroupSuggestions(P.pid, P.kind, P.key).length ? `<button class="tk-btn tk-p-add ghost" onclick="tkSuggestInto('${tkEsc(P.pid)}','${P.kind}','${tkEsc(P.key)}')"><i class="ti ti-sparkles" aria-hidden="true"></i> Suggest tasks for ${tkEsc(g.name)} (${tkGroupSuggestions(P.pid, P.kind, P.key).length})</button>` : ""}
     </div>
-    <div class="blk-p-foot">
+    <div class="blk-p-foot">${TK.sel ? `
+      <button class="tk-btn" style="flex:1;justify-content:center;padding:11px;" onclick="tkSelCancel()">Cancel</button>
+      <button class="tk-btn danger" style="flex:2;justify-content:center;padding:11px;" ${nSel ? "" : "disabled"} onclick="tkSelDelete()"><i class="ti ti-trash" aria-hidden="true"></i> Delete ${nSel || ""} task${nSel === 1 ? "" : "s"}</button>` : `
       ${prev ? `<button class="blk-nav" onclick="tkOpenPanel('${prev.kind}','${tkEsc(prev.key)}')"><small>‹ Previous</small>${tkEsc(prev.name)}</button>` : `<span style="flex:1"></span>`}
       ${next ? `<button class="blk-nav next" onclick="tkOpenPanel('${next.kind}','${tkEsc(next.key)}')"><small>Next ›</small>${tkEsc(next.name)}</button>` : `<span style="flex:1"></span>`}
-      <button class="tk-btn gold blk-done" onclick="tkClosePanel()">Done</button>
+      <button class="tk-btn gold blk-done" onclick="tkClosePanel()">Done</button>`}
     </div>`;
 }
 function tkRenderBoard(e, plan){
@@ -30187,7 +30256,7 @@ function tkRenderBoard(e, plan){
       ${items.map(it => `<div class="tk-card${it.due < today && k !== "done" ? " late" : ""}" draggable="true" ondragstart="event.dataTransfer.setData('text/plain','${tkEsc(it.id)}')" onclick="tkOpenEditor('${tkEsc(e.id)}','${tkEsc(it.id)}')">
         <div class="tk-card-t">${it.milestone ? "◆ " : ""}${tkEsc(it.title)}</div>
         <div class="tk-card-m"><span class="tk-cat">${tkEsc(TK_CAT_TITLE()[it.cat] || it.cat)}</span>${tkDates(it)}</div>
-        <div class="tk-card-b">${tkWho(it.assignee)}<span class="tk-mv">
+        <div class="tk-card-b">${tkWho(it.assignee)}<span class="tk-mv"><button class="tk-del-b" title="Delete task" onclick="event.stopPropagation();tkQuickDelete([['${tkEsc(e.id)}','${tkEsc(it.id)}']])"><i class="ti ti-trash" aria-hidden="true"></i></button>
           ${ci > 0 ? `<button title="Move left" onclick="event.stopPropagation();tkSetStatus('${tkEsc(e.id)}','${tkEsc(it.id)}','${TK_STATUS[ci - 1][0]}')">‹</button>` : ""}
           ${ci < TK_STATUS.length - 1 ? `<button title="Move right" onclick="event.stopPropagation();tkSetStatus('${tkEsc(e.id)}','${tkEsc(it.id)}','${TK_STATUS[ci + 1][0]}')">›</button>` : ""}</span></div>
       </div>`).join("") || `<div class="tk-col-empty">—</div>`}
@@ -30397,16 +30466,10 @@ function tkSaveTask(){
   document.getElementById("tkEditModal").classList.remove("show");
   tkRefresh();
 }
-async function tkDeleteTask(){
-  const E = TK.editing;
-  if(!(await brandedConfirm("Delete this task? Tasks that waited on it will start on their other dependencies instead.", { confirmLabel:"Delete", destructive:true }))) return;
-  tkMutate(E.id, (s) => {
-    s.tasks.items = s.tasks.items.filter(x => x.id !== E.d.id);
-    s.tasks.items.forEach(x => { x.after = (x.after || []).filter(a => a !== E.d.id); });
-    if(E.d.key){ s.tasks.dismissed = (s.tasks.dismissed || []).concat([E.d.key]); }
-  });
+function tkDeleteTask(){
+  const E = TK.editing; if(!E || !E.tid) return;
   document.getElementById("tkEditModal").classList.remove("show");
-  tkRefresh();
+  tkQuickDelete([[E.id, E.d.id]]);
 }
 
 /* ---------- dashboard block ---------- */
