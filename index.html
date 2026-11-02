@@ -4804,6 +4804,45 @@
   .tk-dash-h em.late{color:#f08c8c;font-weight:700;}
   .tk-more{font-size:11.5px;color:var(--muted);padding:8px 4px 0;border-top:1px solid var(--line);}
 
+  /* Tasks v26b — blocks + slide-out panel */
+  #tkEditModal,#tkCreateModal{z-index:1000;}
+  .tk-gridhead{display:flex;justify-content:space-between;align-items:baseline;margin:4px 2px 10px;}
+  .tk-gridhead h3{margin:0;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--gold-bright);}
+  .tk-gridhead span{font-size:12px;color:var(--muted);}
+  .tk-bgrid{margin-bottom:16px;}
+  .tk-gcard{min-height:150px;}
+  .tk-gcard .blk-amt b{font-size:17px;}
+  .tk-gcount{font-size:11px;font-weight:700;color:var(--ink);background:var(--panel-2);border:1px solid var(--line-strong);border-radius:10px;padding:2px 8px;}
+  .tk-gnext{display:block;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .tk-gnext b{font-weight:600;}
+  .tk-gcard.complete{opacity:.7;}
+  .tk-gcard.late{border-color:rgba(226,109,109,.55);}
+  .tk-gcard.late .blk-amt b{color:#f08c8c;}
+  .tk-gcard.empty{opacity:.6;}
+  .tk-gpeek{font-size:12px;color:var(--ink);line-height:1.5;display:flex;flex-direction:column;gap:2px;min-width:0;}
+  .tk-gpeek div{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .tk-gpeek .muted{color:var(--muted);}
+  .blk-badge.ok{background:rgba(110,190,130,.14);color:#8fd3a2;}
+  .blk-badge.late{background:rgba(226,109,109,.16);color:#f08c8c;}
+  .blk-badge.doing{background:rgba(120,160,220,.16);color:#9fbff0;}
+  .tk-tabs.sm button{padding:6px 11px;font-size:11.5px;}
+  .tk-toolbar > .tk-tabs + .tk-tabs{margin-right:auto;}
+  .tk-p-body .tk-row{flex-wrap:wrap;align-items:flex-start;padding:10px 0;}
+  .tk-p-body .tk-main{flex:1 1 calc(100% - 40px);}
+  .tk-p-body .tk-side{max-width:none;flex:1 1 100%;justify-content:flex-start;padding-left:34px;}
+  .tk-p-body .tk-detail{white-space:normal;max-width:100%;}
+  .tk-done-h{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:16px 0 2px;padding-top:10px;border-top:1px solid var(--line);}
+  .tk-p-add{width:100%;justify-content:center;margin-top:14px;border-style:dashed;}
+  @media (max-width:700px){
+    .tk-gcard{min-height:0;}
+    .tk-gcard .blk-amt b{font-size:13.5px;}
+    .tk-gcount{padding:1px 6px;}
+    .tk-kpi.mh{display:none;}
+    .tk-kpis{gap:8px;margin-bottom:12px;}
+    .tk-kpi{padding:10px 12px;}
+    .tk-kpi b{font-size:18px;}
+    .tk-toolbar{gap:8px;}
+  }
   @media (max-width:760px){
     .tk-row{flex-wrap:wrap;align-items:flex-start;}
     .tk-main{flex:1 1 calc(100% - 40px);}
@@ -17477,7 +17516,7 @@ const OFFICE_EMAIL = "renotosold@gmail.com";
 const OFFICE_COMPANY = "Reno to Sold Inc.";
 
 /* ---------- Supabase cross-device sync ---------- */
-window.RTS_BUILD = "2026-11-07-v26-tasks";
+window.RTS_BUILD = "2026-11-07-v26b-task-blocks";
 console.log("[build] " + window.RTS_BUILD);
 const SUPABASE_URL = "https://icrnvnmvcdpmhnjorefs.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imljcm52bm12Y2RwbWhuam9yZWZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2ODQwMDgsImV4cCI6MjA5NDI2MDAwOH0.YoeBndWsky8vAW6mLeMziPeH2j2C6c_3VdAvOG_i0kA";
@@ -22880,6 +22919,7 @@ function renderRoute(){
   // gets re-opened below. If we're navigating to a normal .view
   // route, the overlays stay closed and the .view content shows.
   closeAllToolOverlays();
+  try { if(route !== "tasks" && typeof tkClosePanel === "function") tkClosePanel(); } catch(e){}
 
   // Toggle .active on the correct view (only for the "normal" routes
   // that have a .view container in the shell). Tool routes don't
@@ -29840,7 +29880,7 @@ function tkStats(plan){
     health: overdue.length ? "behind" : blocked.length ? "blocked" : "ontrack" };
 }
 /* ---------- data access (live estimate or a saved one) ---------- */
-const TK = { view: "all", tab: "list", team: null, editing: null, create: null };
+const TK = { view: "all", tab: "blocks", group: "phase", panel: null, team: null, editing: null, create: null };
 function tkCanUse(){ return !!(currentProfile && (isAdmin() || isStaff())); }
 function tkEntries(){
   let list = []; try { list = loadSavedList() || []; } catch(e){}
@@ -29928,7 +29968,7 @@ function tkRow(r, withProject){
     <button class="tk-check${done ? " on" : ""}" title="${done ? "Mark not done" : "Mark done"}" onclick="tkToggleDone('${tkEsc(r.e.id)}','${tkEsc(it.id)}')">${done ? "✓" : ""}</button>
     <div class="tk-main" onclick="tkOpenEditor('${tkEsc(r.e.id)}','${tkEsc(it.id)}')">
       <div class="tk-title">${it.milestone ? `<span class="tk-ms">◆</span>` : ""}${tkEsc(it.title)}</div>
-      <div class="tk-meta">${withProject ? `<a class="tk-proj" onclick="event.stopPropagation();tkOpenProject('${tkEsc(r.e.id)}')">${tkEsc(r.e.name)}</a>` : `<span class="tk-cat">${tkEsc(TK_CAT_TITLE()[it.cat] || it.cat)}</span>`}${it.detail ? `<span class="tk-detail">${tkEsc(it.detail)}</span>` : ""}</div>
+      <div class="tk-meta">${withProject ? `<a class="tk-proj" onclick="event.stopPropagation();tkOpenProject('${tkEsc(r.e.id)}')">${tkEsc(r.e.name)}</a>` : `<span class="tk-cat">${tkEsc(TK.panel && TK.panel.kind === "cat" ? (TK_PHASES.find(p => p[0] === it.phase) || [,""])[1] : (TK_CAT_TITLE()[it.cat] || it.cat))}</span>`}${it.detail ? `<span class="tk-detail">${tkEsc(it.detail)}</span>` : ""}</div>
     </div>
     <div class="tk-side">${tkWho(it.assignee)}${tkDates(it)}${tkStatusPill(it)}</div>
   </div>`;
@@ -29938,8 +29978,7 @@ function tkRenderAll(){
   const planned = ents.filter(e => e.st.tasks && Array.isArray(e.st.tasks.items));
   const unplanned = ents.filter(e => !(e.st.tasks && Array.isArray(e.st.tasks.items))).slice(0, 12);
   let blocked = 0, doing = 0; planned.forEach(e => e.st.tasks.items.forEach(i => { if(i.status === "blocked") blocked++; if(i.status === "doing") doing++; }));
-  const sect = (title, arr, cls) => arr.length ? `<div class="tk-bucket ${cls || ""}"><div class="tk-bucket-h">${title} <b>${arr.length}</b></div>${arr.map(r => tkRow(r, true)).join("")}</div>` : "";
-  const week = sect("Overdue", b.overdue, "late") + sect("Today", b.today) + sect("Rest of this week", b.week) + sect("Next week", b.next);
+  const week = `<div class="blk-grid tk-bgrid">${TK_BUCKETS.map(([k, name, ic]) => tkBucketCard(k, name, ic, b[k])).join("")}</div>`;
   return `
     <div class="tk-head"><div><h2 class="tk-h">Tasks</h2><div class="tk-sub">Every project's plan, built from its estimate. Overdue and this week's work across all projects is at the top.</div></div></div>
     <div class="tk-kpis">
@@ -29949,7 +29988,7 @@ function tkRenderAll(){
       <div class="tk-kpi"><span>In progress</span><b>${doing}</b></div>
       <div class="tk-kpi"><span>Active projects</span><b>${planned.filter(e => tkStats(e.st.tasks).pct < 100).length}</b></div>
     </div>
-    <div class="tk-block"><div class="tk-block-h">This week</div>${week || `<div class="tk-empty sm">Nothing due this week or next. 🎉</div>`}</div>
+    <div class="tk-gridhead"><h3>This week</h3><span>Tap a block to see its tasks</span></div>${week}
     <div class="tk-block"><div class="tk-block-h">Projects</div>
       ${planned.length ? `<div class="tk-pgrid">${planned.map(e => { const s = tkStats(e.st.tasks); return `
         <div class="tk-pcard" onclick="tkOpenProject('${tkEsc(e.id)}')">
@@ -29965,11 +30004,11 @@ function tkRenderAll(){
 }
 
 /* ---------- project view ---------- */
-function tkOpenProject(id){ TK.view = id; if(typeof getCurrentRoute === "function" && getCurrentRoute() !== "tasks") navigateTo("tasks"); else renderTasks(); window.scrollTo({ top: 0, behavior: "smooth" }); }
-function tkSetTab(t){ TK.tab = t; renderTasks(); }
+function tkOpenProject(id){ tkClosePanel(); TK.view = id; if(typeof getCurrentRoute === "function" && getCurrentRoute() !== "tasks") navigateTo("tasks"); else renderTasks(); window.scrollTo({ top: 0, behavior: "smooth" }); }
+function tkSetTab(t){ tkClosePanel(); TK.tab = t; renderTasks(); }
 function tkRenderProject(id){
   const e = tkEntry(id), plan = tkPlan(id);
-  const head = `<button class="tk-back" onclick="TK.view='all';renderTasks()">← All tasks</button>
+  const head = `<button class="tk-back" onclick="tkClosePanel();TK.view='all';renderTasks()">← All tasks</button>
     <div class="tk-head"><div><h2 class="tk-h">${tkEsc(e.address || e.name)}</h2><div class="tk-sub">${tkEsc(e.name)} · <a class="tk-link" onclick="tkOpenEstimate('${tkEsc(id)}')">Open estimate</a></div></div></div>`;
   if(!plan) return head + `<div class="tk-noplan"><h3>No task plan yet</h3><p>Create one from this estimate: every section that's switched on becomes a set of tasks, organised by phase and scheduled from your start date.</p><button class="tk-btn gold lg" onclick="tkOpenCreate('${tkEsc(id)}')">Create task plan</button></div>`;
   const s = tkStats(plan), newSugs = tkNewSuggestions(id).length;
@@ -29977,32 +30016,114 @@ function tkRenderProject(id){
     <div class="tk-kpi wide"><span>Progress</span><b>${s.pct}%</b><div class="tk-prog"><i style="width:${s.pct}%"></i></div><small>${s.done} of ${s.total} tasks · ${tkHealth(s)}</small></div>
     <div class="tk-kpi"><span>Start</span><input type="date" value="${tkEsc(plan.startDate)}" onchange="tkSetStart('${tkEsc(id)}',this.value)"></div>
     <div class="tk-kpi"><span>Projected finish</span><b>${tkFmtDate(s.finish)}</b><small>${s.finish ? tkBizBetween(plan.startDate, s.finish) + 1 + " working days" : ""}</small></div>
-    <div class="tk-kpi${s.overdue.length ? " late" : ""}"><span>Overdue</span><b>${s.overdue.length}</b></div>
-    <div class="tk-kpi${s.blocked.length ? " warn" : ""}"><span>Blocked</span><b>${s.blocked.length}</b></div>
+    <div class="tk-kpi mh${s.overdue.length ? " late" : ""}"><span>Overdue</span><b>${s.overdue.length}</b></div>
+    <div class="tk-kpi mh${s.blocked.length ? " warn" : ""}"><span>Blocked</span><b>${s.blocked.length}</b></div>
     <div class="tk-kpi wide"><span>Next milestone</span><b class="sm">${s.nextMs ? tkEsc(s.nextMs.title) : "—"}</b><small>${s.nextMs ? tkFmtDate(s.nextMs.due) : ""}</small></div>
   </div>`;
   const tools = `<div class="tk-toolbar">
-    <div class="tk-tabs"><button class="${TK.tab === "list" ? "on" : ""}" onclick="tkSetTab('list')">List by phase</button><button class="${TK.tab === "board" ? "on" : ""}" onclick="tkSetTab('board')">Board</button></div>
+    <div class="tk-tabs"><button class="${TK.tab !== "board" ? "on" : ""}" onclick="tkSetTab('blocks')">Blocks</button><button class="${TK.tab === "board" ? "on" : ""}" onclick="tkSetTab('board')">Board</button></div>
+    ${TK.tab !== "board" ? `<div class="tk-tabs sm"><button class="${TK.group === "phase" ? "on" : ""}" onclick="TK.group='phase';renderTasks()">By phase</button><button class="${TK.group === "cat" ? "on" : ""}" onclick="TK.group='cat';renderTasks()">By section</button></div>` : ""}
     <div class="tk-acts">
       ${s.overdue.length ? `<button class="tk-btn" onclick="tkReplan('${tkEsc(id)}')" title="Push every unfinished task so nothing starts before today">Re-plan from today</button>` : ""}
       ${newSugs ? `<button class="tk-btn" onclick="tkOpenSync('${tkEsc(id)}')">Sync with estimate <b class="tk-dot">${newSugs}</b></button>` : ""}
       <button class="tk-btn gold" onclick="tkOpenEditor('${tkEsc(id)}', null)">+ Add task</button>
     </div></div>`;
-  return head + kpis + tools + (TK.tab === "board" ? tkRenderBoard(e, plan) : tkRenderList(e, plan)) +
+  return head + kpis + tools + (TK.tab === "board" ? tkRenderBoard(e, plan) : tkRenderBlocks(e, plan)) +
     `<div class="tk-foot"><a class="tk-link danger" onclick="tkDeletePlan('${tkEsc(id)}')">Delete this task plan</a></div>`;
 }
-function tkRenderList(e, plan){
-  return TK_PHASES.map(([ph, name, sub]) => {
-    const items = plan.items.filter(i => i.phase === ph).sort((a, b) => String(a.start).localeCompare(String(b.start)) || String(a.due).localeCompare(String(b.due)));
-    if(!items.length) return "";
-    const done = items.filter(i => i.status === "done").length;
-    const from = items.reduce((m, i) => !m || i.start < m ? i.start : m, ""), to = items.reduce((m, i) => i.due > m ? i.due : m, "");
-    return `<div class="tk-phase${done === items.length ? " complete" : ""}">
-      <div class="tk-phase-h"><div><b>${name}</b><span>${sub}</span></div><div class="tk-phase-r"><span>${tkFmtDate(from)} → ${tkFmtDate(to)}</span><span class="tk-pc">${done}/${items.length}</span></div></div>
-      <div class="tk-prog thin"><i style="width:${Math.round(done / items.length * 100)}%"></i></div>
-      ${items.map(it => tkRow({ e, it }, false)).join("")}
+/* ---------- blocks + slide-out panel ---------- */
+const TK_PHASE_IC = { pre:"ti-clipboard-list", demo:"ti-hammer", rough:"ti-plug-connected", close:"ti-shield-check", finish:"ti-paint", handover:"ti-key" };
+const TK_BUCKETS = [["overdue","Overdue","ti-alert-triangle"],["today","Today","ti-calendar-event"],["week","Rest of this week","ti-calendar-week"],["next","Next week","ti-calendar-plus"]];
+function tkGroups(plan, by){
+  if(by === "cat"){
+    const order = ["general"].concat(Object.keys(CATEGORY_META)), titles = TK_CAT_TITLE();
+    const keys = order.filter(k => plan.items.some(i => i.cat === k)).concat(Array.from(new Set(plan.items.map(i => i.cat))).filter(k => order.indexOf(k) === -1));
+    return keys.map(k => ({ kind:"cat", key:k, name: titles[k] || k, sub:"", icon: k === "general" ? "ti-briefcase" : (BLK_ICONS[k] || "ti-square"), items: plan.items.filter(i => i.cat === k) }));
+  }
+  return TK_PHASES.map(([k, name, sub]) => ({ kind:"phase", key:k, name, sub, icon: TK_PHASE_IC[k], items: plan.items.filter(i => i.phase === k) })).filter(g => g.items.length);
+}
+function tkGroupNums(items){
+  const today = tkToday(), done = items.filter(i => i.status === "done").length;
+  const from = items.reduce((m, i) => !m || (i.start && i.start < m) ? i.start : m, ""), to = items.reduce((m, i) => i.due > m ? i.due : m, "");
+  const open = items.filter(i => i.status !== "done").sort((a, b) => String(a.start).localeCompare(String(b.start)));
+  return { total: items.length, done, pct: items.length ? Math.round(done / items.length * 100) : 0, from, to,
+    overdue: open.filter(i => i.due && i.due < today).length, doing: open.filter(i => i.status === "doing").length,
+    blocked: open.filter(i => i.status === "blocked").length, next: open[0] || null };
+}
+function tkRenderBlocks(e, plan){
+  return `<div class="blk-grid tk-bgrid">${tkGroups(plan, TK.group).map(g => {
+    const n = tkGroupNums(g.items), complete = n.done === n.total;
+    const on = TK.panel && TK.panel.kind === g.kind && TK.panel.key === g.key;
+    return `<div class="blk-card tk-gcard${on ? " active" : ""}${complete ? " complete" : ""}" onclick="tkOpenPanel('${g.kind}','${tkEsc(g.key)}')">
+      <div class="blk-card-top"><span class="blk-ic"><i class="ti ${g.icon}" aria-hidden="true"></i></span><span class="blk-name">${tkEsc(g.name)}</span><span class="tk-gcount">${n.done}/${n.total}</span></div>
+      <div class="blk-amt"><b>${tkFmtDate(n.from)} → ${tkFmtDate(n.to)}</b></div>
+      <div class="blk-share"><i style="width:${n.pct}%"></i></div>
+      <div class="blk-stats"><span><b>${n.pct}%</b> done</span>${n.next ? `<span class="tk-gnext">Next: <b>${tkEsc(n.next.title)}</b></span>` : ""}</div>
+      <div class="blk-badges">${complete ? `<span class="blk-badge ok">Complete ✓</span>` : ""}${n.overdue ? `<span class="blk-badge late">${n.overdue} overdue</span>` : ""}${n.blocked ? `<span class="blk-badge warn">${n.blocked} blocked</span>` : ""}${n.doing ? `<span class="blk-badge doing">${n.doing} in progress</span>` : ""}${!complete && !n.overdue && !n.blocked && !n.doing ? `<span class="blk-badge">On track</span>` : ""}</div>
+    </div>`; }).join("")}</div>`;
+}
+function tkBucketCard(k, name, ic, rows){
+  const on = TK.panel && TK.panel.kind === "bucket" && TK.panel.key === k;
+  const projects = new Set(rows.map(r => r.e.id)).size;
+  return `<div class="blk-card tk-gcard${on ? " active" : ""}${k === "overdue" && rows.length ? " late" : ""}${rows.length ? "" : " empty"}" onclick="tkOpenPanel('bucket','${k}')">
+    <div class="blk-card-top"><span class="blk-ic"><i class="ti ${ic}" aria-hidden="true"></i></span><span class="blk-name">${name}</span></div>
+    <div class="blk-amt"><b>${rows.length}</b><span>task${rows.length === 1 ? "" : "s"}${rows.length ? ` · ${projects} project${projects === 1 ? "" : "s"}` : ""}</span></div>
+    <div class="tk-gpeek">${rows.slice(0, 3).map(r => `<div>${r.it.milestone ? "◆ " : ""}${tkEsc(r.it.title)}</div>`).join("") || `<div class="muted">Nothing here</div>`}${rows.length > 3 ? `<div class="muted">+ ${rows.length - 3} more</div>` : ""}</div>
+  </div>`;
+}
+function tkPanelEls(){
+  let p = document.getElementById("tkPanel");
+  if(!p){
+    const s = document.createElement("div"); s.className = "blk-scrim no-print"; s.id = "tkScrim"; s.onclick = tkClosePanel; document.body.appendChild(s);
+    p = document.createElement("aside"); p.className = "blk-panel tk-panel no-print"; p.id = "tkPanel"; p.setAttribute("aria-label", "Tasks"); document.body.appendChild(p);
+    document.addEventListener("keydown", (ev) => { if(ev.key === "Escape" && TK.panel && !document.querySelector(".modal-bg.show")) tkClosePanel(); });
+  }
+  return { p, s: document.getElementById("tkScrim") };
+}
+function tkOpenPanel(kind, key){
+  TK.panel = { kind, key, pid: kind === "bucket" ? null : TK.view };
+  tkRenderPanel(); const { p, s } = tkPanelEls(); p.classList.add("show"); s.classList.add("show");
+  document.querySelectorAll(".tk-gcard").forEach(c => c.classList.remove("active")); try { renderTasks(); } catch(e){}
+}
+function tkClosePanel(){
+  TK.panel = null; const p = document.getElementById("tkPanel"), s = document.getElementById("tkScrim");
+  if(p) p.classList.remove("show"); if(s) s.classList.remove("show");
+  document.querySelectorAll(".tk-gcard.active").forEach(c => c.classList.remove("active"));
+}
+/* The groups the panel can step through (for ‹ prev / next ›). */
+function tkPanelSiblings(){
+  const P = TK.panel; if(!P) return [];
+  if(P.kind === "bucket"){ const b = tkBuckets(); return TK_BUCKETS.map(([k, name, ic]) => ({ kind:"bucket", key:k, name, sub:"", icon:ic, rows: b[k] })); }
+  const plan = tkPlan(P.pid); if(!plan) return [];
+  return tkGroups(plan, P.kind);
+}
+function tkRenderPanel(){
+  const P = TK.panel; if(!P) return; const { p } = tkPanelEls();
+  const sibs = tkPanelSiblings(), idx = sibs.findIndex(g => g.key === P.key);
+  if(idx === -1){ tkClosePanel(); return; }
+  const g = sibs[idx], prev = sibs[idx - 1], next = sibs[idx + 1];
+  let rows, kindLbl;
+  if(P.kind === "bucket"){ rows = g.rows; kindLbl = "This week · all projects"; }
+  else { const e = tkEntry(P.pid); rows = g.items.slice().sort((a, b) => String(a.start).localeCompare(String(b.start)) || String(a.due).localeCompare(String(b.due))).map(it => ({ e, it })); kindLbl = (P.kind === "phase" ? "Phase" : "Section") + " · " + (e.address || e.name); }
+  const n = tkGroupNums(rows.map(r => r.it));
+  const cell = (lbl, val, cls) => `<div class="${cls || ""}">${lbl}<b>${val}</b></div>`;
+  const open = rows.filter(r => r.it.status !== "done"), done = rows.filter(r => r.it.status === "done");
+  p.innerHTML = `
+    <div class="blk-p-head"><span class="blk-ic"><i class="ti ${g.icon}" aria-hidden="true"></i></span>
+      <div class="blk-p-title"><div class="k">${tkEsc(kindLbl)}</div><div class="n">${tkEsc(g.name)}</div></div>
+      <button class="blk-x" onclick="tkClosePanel()" aria-label="Close">✕</button></div>
+    <div class="blk-pbd">${cell("Tasks", n.total)}${cell("Done", n.done + " · " + n.pct + "%")}${cell("Overdue", n.overdue, n.overdue ? "neg" : "")}${cell("Starts", tkFmtDate(n.from))}${cell("Finishes", tkFmtDate(n.to), "tot")}</div>
+    <div class="blk-p-body tk-p-body">
+      ${g.sub ? `<div class="tk-sub" style="margin-bottom:6px;">${tkEsc(g.sub)}</div>` : ""}
+      ${open.map(r => tkRow(r, P.kind === "bucket")).join("") || `<div class="tk-empty sm">${rows.length ? "Everything here is done ✓" : "Nothing here."}</div>`}
+      ${done.length ? `<div class="tk-done-h">Done · ${done.length}</div>${done.map(r => tkRow(r, P.kind === "bucket")).join("")}` : ""}
+      ${P.kind !== "bucket" ? `<button class="tk-btn tk-p-add" onclick="tkOpenEditor('${tkEsc(P.pid)}', null, {${P.kind}:'${tkEsc(P.key)}'})">+ Add a task to ${tkEsc(g.name)}</button>` : ""}
+    </div>
+    <div class="blk-p-foot">
+      ${prev ? `<button class="blk-nav" onclick="tkOpenPanel('${prev.kind}','${tkEsc(prev.key)}')"><small>‹ Previous</small>${tkEsc(prev.name)}</button>` : `<span style="flex:1"></span>`}
+      ${next ? `<button class="blk-nav next" onclick="tkOpenPanel('${next.kind}','${tkEsc(next.key)}')"><small>Next ›</small>${tkEsc(next.name)}</button>` : `<span style="flex:1"></span>`}
+      <button class="tk-btn gold blk-done" onclick="tkClosePanel()">Done</button>
     </div>`;
-  }).join("");
 }
 function tkRenderBoard(e, plan){
   const today = tkToday();
@@ -30041,6 +30162,7 @@ async function tkDeletePlan(id){
 function tkRefresh(){
   try { if(typeof getCurrentRoute === "function" && getCurrentRoute() === "tasks") renderTasks(); } catch(e){}
   try { renderDashTasks(); } catch(e){}
+  try { if(TK.panel) tkRenderPanel(); } catch(e){}
 }
 function tkOpenEstimate(id){ try { loadEstimate(id); } catch(e){} navigateTo("estimator"); }
 function tkFromEstimate(){
@@ -30092,7 +30214,7 @@ function tkCreateGo(){
     else { s.tasks.items = s.tasks.items.concat(tkBuildItems(picked, s.tasks.items)); s.tasks.dismissed = (s.tasks.dismissed || []).concat(skipped); }
   });
   document.getElementById("tkCreateModal").classList.remove("show");
-  TK.view = c.id; TK.tab = "list";
+  TK.view = c.id; TK.tab = "blocks";
   if(getCurrentRoute() !== "tasks") navigateTo("tasks"); else renderTasks();
   try { flash(c.mode === "create" ? "Task plan created" : "Tasks added"); } catch(e){}
 }
@@ -30115,10 +30237,11 @@ function tkSuggestNames(type, id){
   }
   return Array.from(set).slice(0, 14);
 }
-function tkOpenEditor(id, tid){
+function tkOpenEditor(id, tid, preset){
   const plan = tkPlan(id); if(!plan) return;
   const it = tid ? plan.items.find(i => i.id === tid) : null;
   TK.editing = { id, tid, d: it ? JSON.parse(JSON.stringify(it)) : { id: tkNewId(), key:"", cat:"general", phase:"finish", title:"", detail:"", assignee:{ type:"team", name:(currentProfile && currentProfile.full_name) || "" }, status:"todo", dur:1, after:[], pinStart:"", notes:"" }, depOpen:false, depQ:"" };
+  if(!it && preset){ if(preset.phase) TK.editing.d.phase = preset.phase; if(preset.cat) TK.editing.d.cat = preset.cat; }
   tkLoadTeam().then(() => { if(TK.editing && TK.editing.id === id) tkRenderEditor(); });
   tkRenderEditor();
 }
